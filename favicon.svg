@@ -1,0 +1,29 @@
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- SUPERVUOTO favicon: simplified void sigil — black disc + glowing accretion ring.
+       Built to read at 16px on dark and light browser chrome. -->
+  <defs>
+    <linearGradient id="fav-accretion" x1="10" y1="22" x2="90" y2="78" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7c3aed"/>
+      <stop offset="0.55" stop-color="#a78bfa"/>
+      <stop offset="1" stop-color="#22d3ee"/>
+    </linearGradient>
+    <radialGradient id="fav-halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0.6" stop-color="#7c3aed" stop-opacity="0"/>
+      <stop offset="0.85" stop-color="#7c3aed" stop-opacity="0.4"/>
+      <stop offset="1" stop-color="#22d3ee" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- halo so the mark holds together on any background -->
+  <circle cx="50" cy="50" r="49" fill="url(#fav-halo)"/>
+
+  <!-- glow echo behind the accretion ring -->
+  <circle cx="50" cy="50" r="36" fill="none" stroke="#22d3ee" stroke-width="14" opacity="0.18"/>
+
+  <!-- accretion ring: thick enough to survive 16px -->
+  <circle cx="50" cy="50" r="36" fill="none" stroke="url(#fav-accretion)" stroke-width="7"/>
+
+  <!-- the void -->
+  <circle cx="50" cy="50" r="28" fill="#050208"/>
+  <circle cx="50" cy="50" r="28" fill="none" stroke="#a78bfa" stroke-width="1.5" opacity="0.5"/>
+</svg>
