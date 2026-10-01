@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Punchliner</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Punchliner · bass, pad and lead lines on demand</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+  <main class="pl">
+    <section class="pl-song">
+      <div class="pl-song-main">
+        <div class="pl-id">
+          <input id="set-name" class="pl-setname" maxlength="40" spellcheck="false" title="Name of this set: used for the .mid and the Move Set" />
+          <select id="genre" class="pl-genre" title="Genre preset: tempo, progression, bass engine, pad rhythm and lead style"></select>
+          <span id="saved" class="pl-saved" title="Everything is kept in this browser: reopen the page tomorrow and it is all here">autosaved</span>
+        </div>
+        <div class="pl-chords">
+          <div id="chords" class="pl-chips"></div>
+          <div id="mood" class="pl-mood"></div>
+        </div>
+        <div class="pl-transport">
+          <button id="btn-play" class="pl-play" title="Play / stop (Space · Move: Play)">▶</button>
+          <button id="btn-regen" class="primary" title="New seeds for all three parts (Move: Shift + Capture)">↻ Regenerate all</button>
+          <button id="btn-undo" title="Undo (⌘Z · Move: Undo)">undo</button>
+          <button id="btn-export" title="One .mid with three tracks: lead, pad, bass. With takes: all takes in a row, a marker at each (Move: Record)">⤓ .mid</button>
+          <button id="btn-move" title="A Move Set named like this set: track 1 left empty for drums, lead, pad and bass on tracks 2–4, one scene per take">⤓ Move Set</button>
+        </div>
+        <p id="move-hint" class="pl-movehint" hidden>Downloaded. Open <a href="http://move.local" target="_blank" rel="noopener">move.local</a> → <b>Sets</b> and drag the <b>.ablbundle</b> onto the list (or Upload). The Set appears on the Move with this name. Track 1 is empty for your drums (load a kit there); lead, pad and bass are on tracks 2–4 with Analog Drift, pick sounds on the Move. <span id="move-takes"></span></p>
+      </div>
+      <div class="pl-song-opts">
+        <div class="pl-group">
+          <span class="pl-group-t">harmony</span>
+          <label class="pl-f">key <select id="key"></select></label>
+          <label class="pl-f">scale <select id="scale"></select></label>
+          <label class="pl-f pl-grow">progression <select id="prog"></select></label>
+          <div class="pl-f">bars per chord <div id="per" class="seg"></div></div>
+          <div class="pl-f">chords <div id="ext" class="seg"></div></div>
+        </div>
+        <div class="pl-group">
+          <span class="pl-group-t">time</span>
+          <div class="pl-f">length <div id="bars" class="seg"></div></div>
+          <label class="pl-f">bpm <input id="bpm" type="number" min="40" max="240" value="124" /></label>
+          <label class="pl-f">swing % <input id="swing" type="number" min="50" max="75" value="50" /></label>
+          <label class="switch pl-kick" title="A kick/snare guide in the genre's skeleton, only for listening: it is not exported"><input id="kick" type="checkbox" checked /> <span>kick guide</span></label>
+        </div>
+      </div>
+    </section>
+    <section class="pl-takesbar">
+      <span class="pl-box-t">takes</span>
+      <div id="takes" class="pl-takes"></div>
+      <button id="btn-keep" class="pl-keep" title="Freeze all three lines as a take (K · Move: Capture)">📸 keep take</button>
+      <button id="btn-update" class="pl-update" hidden title="Save what you hear now over the selected take"></button>
+      <span id="takes-note" class="pl-takes-note"></span>
+    </section>
+    <section class="pl-work">
+      <div class="pl-rollcard">
+        <div class="pl-roll-wrap"><canvas id="roll" class="pl-roll"></canvas></div>
+        <p class="hint pl-rollhint">One lane per part, each zoomed to its own range. Click a lane to select it · click empty space to add a note (drag right for length) · click a note to delete it · click a bar number to edit that bar on the Move.</p>
+        <div class="pl-boxes">
+          <div class="pl-box">
+            <div class="pl-box-h"><span class="pl-box-t">phrase ending</span><div id="end-parts" class="pl-chipsel"></div></div>
+            <div class="pl-box-row"><div id="end-type" class="seg"></div><div class="pl-f pl-inline">every <div id="end-every" class="seg"></div></div></div>
+            <p id="end-desc" class="pl-desc"></p>
+          </div>
+          <div class="pl-box pl-chaos">
+            <div class="pl-box-h"><span class="pl-box-t">chaos</span><div id="chaos-parts" class="pl-chipsel"></div></div>
+            <div class="pl-box-row"><div id="chaos-gauges" class="gauges four"></div><div class="pl-chaos-btns"><div class="pl-dice"><button id="chaos-roll" class="pl-die" title="Roll the dice: same amounts, new seed">🎲</button><input id="chaos-seed" type="number" min="1" max="999999" title="Chaos seed: type one back to get the same damage again" /></div><button id="chaos-clear" title="All chaos to zero">clear</button></div></div>
+            <p class="pl-desc">Damage on top of the line, with its own dice: mutate = wrong notes and octave jumps, ratchet = notes become repeats, scatter = drops, nudges and wild velocities, glitch = stutters and reversed beats.</p>
+          </div>
+        </div>
+      </div>
+      <aside id="parts" class="pl-parts"></aside>
+    </section>
+    <details class="glossary pl-help">
+      <summary>Move controls</summary>
+      <table>
+        <tr><th>Track 1 · 2 · 3</th><td>select lead · pad · bass</td><th>Track 4</th><td>kick guide on / off</td></tr>
+        <tr><th>Step buttons</th><td>the 16 steps of the current bar (lit = a note starts there)</td><th>◀ ▶</th><td>previous / next bar · Shift: genre</td></tr>
+        <tr><th>Pads</th><td>the scale, rows a fourth apart, root bottom-left. Press to hear</td><th>Hold step + pad</th><td>add / remove that note on that step</td></tr>
+        <tr><th>Hold step + knob 1</th><td>length of the notes on that step</td><th>Hold step + knob 2</th><td>their velocity</td></tr>
+        <tr><th>Knob 1 · 2 · 3</th><td>density · movement · octave</td><th>Knob 4</th><td>pattern · Shift: sound</td></tr>
+        <tr><th>Shift + knob 1 · 2</th><td>phrase ending type · every</td><th>Shift + knob 5–8</th><td>chaos: mutate · ratchet · scatter · glitch</td></tr>
+        <tr><th>Knob 5 · 6</th><td>progression · key</td><th>Knob 7 · 8</th><td>swing · master tempo</td></tr>
+        <tr><th>Capture</th><td>keep take · Shift: regenerate all (not the locked ones)</td><th>Duplicate</th><td>regenerate this part</td></tr>
+        <tr><th>+ / −</th><td>next / previous take</td><th>Shift + track 1–3</th><td>lock that part</td></tr>
+        <tr><th>Undo</th><td>undo</td><th></th><td></td></tr>
+        <tr><th>Play</th><td>start / stop</td><th>Mute</th><td>mute this part · Shift: solo</td></tr>
+        <tr><th>Record</th><td>export .mid</td><th>Wheel</th><td>shift the pad layout an octave</td></tr>
+      </table>
+    </details>
+  </main>
+  <script src="./vendor/tone/Tone.js"></script>
+  <script type="module" src="./src/punch/app.js"></script>
+  <script type="module" src="./src/analytics.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

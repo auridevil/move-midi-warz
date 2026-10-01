@@ -37,6 +37,7 @@ SysEx. The page performs Live's handshake and switches the Move to control mode;
 index.html                  launcher
 drums.html / src/drums/     finger drumming: exercises data, kit, drill engine (grader), page
 poly.html  / src/poly/      Orbits: lanes model, voices, kits, page
+punchliner.html / src/punch/ Punchliner: line generator, endings + chaos, preview sounds, .mid and Move Set (.ablbundle) writers
 chaos.html / src/chaos/     Entropy Engine: stochastic field, Tone voices, page
 lights.html / src/games/    Lights Out (+ generative arp)
 doom.html  / src/doom/      Doom via js-dos; games/doom/ holds the runtime and the shareware bundle
@@ -48,6 +49,13 @@ tools/smoke.mjs             headless console check of every page
 GAMES.md                    ideas list for pad-native games
 ```
 The Move driver is a separate package: **[movewire](https://github.com/auridevil/movewire)** (MIT, zero deps, tests, protocol reference).
+
+## Punchliner → Move
+**⤓ Move Set** downloads `<set name>.ablbundle` (track 1 empty for drums, lead, pad, bass as clips on tracks 2–4). Open
+[move.local](http://move.local) → Sets and drag it onto the list; the file name becomes the Set name. Move Manager
+has no API a web page can call (pairing cookie, no CORS), so it is a download + drag.
+Format facts from [MidiToMove](https://github.com/OnjLouis/MidiToMove) (MIT); `src/punch/move-drift.json`, the
+Analog Drift track chain, comes from a Move-saved Set in [extending-move](https://github.com/charlesvestal/extending-move) (MIT).
 
 ## Analytics
 
