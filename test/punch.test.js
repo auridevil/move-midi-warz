@@ -157,3 +157,15 @@ test('takes: Move Set puts take i in slot i on every track, named scenes; .mid m
   const m = readMidi(writeMidi({ bpm: 120, parts: [{ name: 'L', ch: 1, notes: [{ p: 60, s: 128, d: 2, v: 90 }] }], markers: [{ s: 0, text: 'verse' }, { s: 128, text: 'drop' }] }));
   assert.deepEqual(m.tracks[0].markers.map(x => [x.t, x.text]), [[0, 'verse'], [128 * 24, 'drop']]);
 });
+
+test('italo octave bass, bossa anticipation, arp follows the chords', () => {
+  const f = frame({ key: 9, scale: 'minor', prog: 'i VI III VII', per: 1, bars: 8 });
+  const oct = genBass(f, { pattern: 'octave', density: 100, movement: 0, seed: 2 });
+  assert.equal(oct.filter(n => n.s < 16).length, 8); assert.equal(oct[1].p - oct[0].p, 12);
+  const fb = frame({ key: 0, scale: 'major', prog: 'I vi ii V', per: 1, bars: 8 });
+  const bossa = genBass(fb, { pattern: 'bossa', density: 0, movement: 0, seed: 2 });
+  assert.equal(bossa.find(n => n.s === 14).p % 12, 9); // A, the vi, arrives an eighth early
+  const arp = genLead(f, { pattern: 'arp', density: 100, seed: 2 });
+  for (const n of arp) assert.ok(chordPcs(f, Math.floor(n.s / 16)).includes(n.p % 12));
+  assert.equal(arp.length, 8 * 16);
+});

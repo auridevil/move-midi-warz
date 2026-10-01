@@ -40,6 +40,7 @@ export const PROGRESSIONS = [
   { id: 'ii V I', mood: 'jazz, resolves', genres: 'liquid dnb, deep house', major: true },
   { id: 'I IV', mood: 'sunny, static', genres: 'house, garage', major: true },
   { id: 'I V', mood: 'tonic and dominant, festive', genres: 'cumbia, ska', major: true },
+  { id: 'I vi ii V', mood: 'the turnaround, round and round', genres: 'bossa nova, doo-wop, jazz', major: true },
   { id: 'I IV V IV', mood: 'dancefloor folk', genres: 'cumbia, ska, rocksteady', major: true },
 ];
 
@@ -57,12 +58,16 @@ export const BASS_PATTERNS = {
   boom: 'Boom: hip hop bass, root on the one, an answer on the "and" of two or three, a passing note into the next chord.',
   jumpup: 'Jump up: a two-bar call-and-response riff with octave jumps and slides. Bouncy, honky, a bit rude.',
   cumbia: 'Cumbia: root on one, fifth on three, a pickup on the "and" of four into the next bar.',
+  octave: 'Octave: eighths jumping between the root and its octave. The italo disco engine.',
+  bossa: 'Bossa: root on one, fifth on three, held, with an anticipation of the next chord. Soft, walking.',
+  gfunk: 'G-funk: a funky two-bar line with octave pops and slides between notes. Melodic, laid back.',
   unison: 'Unison: doubles the lead/riff an octave or two down, cleaner. The metal bass.',
 };
 export const PAD_PATTERNS = {
   long: 'Long: each chord held for its whole length. Techno, trip hop, ambient: usually better than you think.',
   push: 'Pushed: every chord arrives an eighth early. House, garage, funk.',
   stabs: 'Stabs: short repeated chords inside the bar. The progression becomes percussion.',
+  bossa: 'Bossa comping: the guitar rhythm of bossa nova, a syncopated two-bar figure of soft chords.',
   skank: 'Skank: short chords on beats two and four. Reggae and dub: the chord is percussion.',
   offbeat: 'Offbeat: short chords on every offbeat eighth. Cumbia guitar and accordion, ska.',
   drone: 'Drone: root and fifth held under everything, buried. Mood, not melody.',
@@ -72,6 +77,7 @@ export const LEAD_PATTERNS = {
   pedal: 'Pedal: one note with an interesting rhythm. The chords change what it means.',
   anthem: 'Anthem: a motif doubled an octave up with a third above. Only works on a good motif.',
   bells: 'Bells: four notes looped every two bars, minor and repetitive. It serves the groove.',
+  arp: 'Arp: the chord broken into sixteenths, up and down. Italo, hyperpop, synth pop.',
   acid: 'Acid: a one-bar sixteenth figure on four notes, accents and slides.',
   riff: 'Riff (sludge): two or three power-chord notes every two bars, left to ring. Repeat it until it weighs.',
   palm: 'Palm-muted riff (death): rhythm first, chugs on the root, chromatic accents in a narrow range. Riff B = same rhythm, new pitches.',
@@ -87,9 +93,11 @@ export const GENRES = {
   trance: { name: 'Trance', bpm: 138, scale: 'harmonic', prog: 'i VI III VII', per: 2, ext: 3, bass: 'donk', pad: 'long', lead: 'anthem', kick: 'four', swing: 0, density: 55, movement: 30 },
   psytrance: { name: 'Psytrance', bpm: 145, scale: 'phrygian', prog: 'i', per: 4, ext: 3, bass: 'rolling', pad: 'drone', lead: 'acid', kick: 'four', swing: 0, density: 70, movement: 0 },
   fullon: { name: 'Full-on psytrance', bpm: 146, scale: 'harmonic', prog: 'i', per: 4, ext: 3, bass: 'rolling', pad: 'drone', lead: 'motif', kick: 'four', swing: 0, density: 80, movement: 35, sounds: { lead: 'supersaw' } },
+  hardcore: { name: 'Hardcore (gabber)', bpm: 180, scale: 'minor', prog: 'i VI VII i', per: 2, ext: 3, bass: 'donk', pad: 'stabs', lead: 'anthem', kick: 'four', swing: 0, density: 60, movement: 30, sounds: { pad: 'stab', lead: 'supersaw', bass: 'fuzz' }, mute: ['bass'] },
   progpsy: { name: 'Progressive psy', bpm: 136, scale: 'minor', prog: 'i VII', per: 4, ext: 3, bass: 'donk', pad: 'long', lead: 'motif', kick: 'four', swing: 0, density: 35, movement: 10 },
   triphop: { name: 'Trip hop', bpm: 85, scale: 'minor', prog: 'i iv', per: 2, ext: 9, bass: 'dub', pad: 'long', lead: 'motif', kick: 'broken', swing: 56, density: 25, movement: 30 },
   dub: { name: 'Dub', bpm: 75, scale: 'minor', prog: 'i iv', per: 2, ext: 3, bass: 'roots', pad: 'skank', lead: 'motif', kick: 'onedrop', swing: 54, density: 45, movement: 50, sounds: { bass: 'sub', pad: 'organ', lead: 'flute' } },
+  westcoast: { name: 'West coast hip hop (G-funk)', bpm: 92, scale: 'dorian', prog: 'i7 iv7', per: 2, ext: 9, bass: 'gfunk', pad: 'long', lead: 'motif', kick: 'boombap', swing: 58, density: 45, movement: 55, leadOct: 5, sounds: { bass: 'saw mono', pad: 'e-piano', lead: 'whistle' } },
   hiphop: { name: 'Hip hop (boom bap)', bpm: 90, scale: 'minor', prog: 'i iv', per: 2, ext: 7, bass: 'boom', pad: 'stabs', lead: 'motif', kick: 'boombap', swing: 56, density: 40, movement: 30, sounds: { pad: 'e-piano' } },
   lofi: { name: 'Lo-fi hip hop', bpm: 80, scale: 'dorian', prog: 'i7 iv7', per: 2, ext: 9, bass: 'boom', pad: 'long', lead: 'motif', kick: 'boombap', swing: 60, density: 30, movement: 25, sounds: { bass: 'sub', pad: 'lo-fi keys', lead: 'bell' }, chaos: { scatter: 12 } },
   abstract: { name: 'Abstract hip hop', bpm: 86, scale: 'minor', prog: 'i VI iv VII', per: 1, ext: 9, bass: 'boom', pad: 'stabs', lead: 'chop', kick: 'boombap', swing: 62, density: 35, movement: 55, sounds: { pad: 'e-piano', lead: 'bell' }, chaos: { mutate: 10, scatter: 25, glitch: 20 } },
@@ -101,6 +109,9 @@ export const GENRES = {
   footwork: { name: 'Footwork', bpm: 160, scale: 'minor', prog: 'i', per: 4, ext: 3, bass: 'dub', pad: 'stabs', lead: 'chop', kick: 'footwork', swing: 0, density: 30, movement: 20, mute: ['pad'] },
   jumpup: { name: 'Drum & bass (jump up)', bpm: 174, scale: 'phrygian', prog: 'i', per: 4, ext: 3, bass: 'jumpup', pad: 'drone', lead: 'pedal', kick: 'broken', swing: 0, density: 60, movement: 65, sounds: { bass: 'fm' }, mute: ['pad'] },
   neuro: { name: 'Neurofunk', bpm: 176, scale: 'phrygian', prog: 'i', per: 4, ext: 3, bass: 'reese', pad: 'drone', lead: 'acid', kick: 'broken', swing: 0, density: 50, movement: 25 },
+  italodisco: { name: 'Italo disco', bpm: 118, scale: 'minor', prog: 'i VI III VII', per: 1, ext: 3, bass: 'octave', pad: 'long', lead: 'arp', kick: 'four', swing: 0, density: 50, movement: 30, sounds: { bass: 'saw mono', pad: 'strings', lead: 'square' } },
+  hyperpop: { name: 'Hyperpop', bpm: 160, scale: 'major', prog: 'I V vi IV', per: 1, ext: 3, bass: '808', pad: 'stabs', lead: 'arp', kick: 'half', swing: 0, density: 65, movement: 55, sounds: { bass: '808', pad: 'stab', lead: 'supersaw' }, chaos: { mutate: 10, ratchet: 25, glitch: 25 } },
+  bossanova: { name: 'Bossa nova', bpm: 130, scale: 'major', prog: 'I vi ii V', per: 1, ext: 9, bass: 'bossa', pad: 'bossa', lead: 'motif', kick: 'bossa', swing: 0, density: 35, movement: 35, sounds: { bass: 'pluck', pad: 'e-piano', lead: 'flute' } },
   cumbia: { name: 'Cumbia', bpm: 95, scale: 'harmonic', prog: 'i V', per: 2, ext: 3, bass: 'cumbia', pad: 'offbeat', lead: 'motif', kick: 'cumbia', swing: 0, density: 50, movement: 45, sounds: { bass: 'pluck', pad: 'organ', lead: 'flute' } },
   sludge: { name: 'Sludge', bpm: 64, scale: 'minor', prog: 'i iv', per: 2, ext: 5, bass: 'unison', pad: 'long', lead: 'riff', kick: 'broken', swing: 0, density: 30, movement: 30, leadOct: 2, bassOct: 1, mute: ['pad'] },
   ambientblack: { name: 'Ambient black metal', bpm: 100, scale: 'minor', prog: 'i VI III VII', per: 2, ext: 3, bass: 'sub', pad: 'long', lead: 'tremolo', kick: 'broken', swing: 0, density: 50, movement: 30, leadOct: 4 },
@@ -118,6 +129,7 @@ export const KICKS = {
   onedrop: { kick: [8], snare: [8] },
   boombap: { kick: [0, 7, 10], snare: [4, 12] },
   cumbia: { kick: [0, 8], snare: [6, 14] },
+  bossa: { kick: [0, 6, 8, 14], snare: [3, 6, 10, 12] },
   double: { kick: [...Array(16).keys()], snare: [4, 12] },
   blast: { kick: [0, 2, 4, 6, 8, 10, 12, 14], snare: [1, 3, 5, 7, 9, 11, 13, 15] },
 };
@@ -200,7 +212,7 @@ export function genBass(f, { pattern = 'donk', density = 40, movement = 25, octa
   const add = (p, s, d, v, g) => notes.push({ p, s, d, v: clampV(v), ...(g ? { g: true } : {}) });
   // psytrance rule: one note, at most a change every four bars
   const psyRoot = (bar) => rootIn(f, Math.floor(bar / 4) * 4, base);
-  let rootsRiff = null, jumpRiff = null;
+  let rootsRiff = null, jumpRiff = null, gfunkRiff = null;
   if (pattern === 'unison') {
     // the lowest note of every lead onset, dropped into the bass octave; long notes stay long
     const byStart = new Map(); for (const n of lead) if (!byStart.has(n.s) || byStart.get(n.s).p > n.p) byStart.set(n.s, n);
@@ -271,6 +283,21 @@ export function genBass(f, { pattern = 'donk', density = 40, movement = 25, octa
       add(root, o, 3, 108); add(fifth, o + 8, 3, 100);
       if (D > 0.4 && r.chance(D)) add(r.chance(0.5) ? root + 12 : fifth, o + 6, 1, 80);
       add(r.chance(M) ? snap(f, bar, nextRoot - 2) : fifth, o + 14, 2, 90); // pickup into the next bar
+    } else if (pattern === 'octave') {
+      const root = rootIn(f, bar, base);
+      for (let s = 0; s < STEPS; s += 2) { const up = (s / 2) % 2 === 1; if (D < 0.4 && s % 4 === 2 && r.chance(0.4 - D)) continue; add(up ? root + 12 : root, o + s, 1 + (r.chance(D) ? 1 : 0), up ? 100 : 108); }
+      if (M > 0.4 && r.chance(M - 0.3)) { const last = notes[notes.length - 1]; last.p = root + 7; } // a fifth now and then
+    } else if (pattern === 'bossa') {
+      const root = rootIn(f, bar, base); const nextRoot = rootIn(f, Math.min(f.bars - 1, bar + 1), base);
+      const change = bar + 1 < f.bars && f.perBar[bar + 1] !== f.perBar[bar];
+      add(root, o, 6, 96); add(root + 7 - 12 * (root + 7 > base + 19 ? 1 : 0), o + 8, change ? 5 : 7, 88);
+      if (change) add(nextRoot, o + 14, 2, 84); // the anticipation: the next chord arrives an eighth early
+      else if (D > 0.5) add(root + 12, o + 14, 2, 76);
+    } else if (pattern === 'gfunk') {
+      if (bar % 2 === 0) {
+        const riff = gfunkRiff ??= makeRiff(r, D, M, [3, 4, 6, 7, 10, 11, 12, 14, 16, 19, 22, 23, 26, 28, 30], [12, 7, 10, 3, 5, 12, 0], 0).map(n => ({ ...n, g: r.chance(0.25 + M * 0.4) }));
+        for (const n of riff) { const b = bar + Math.floor(n.s / STEPS); if (b >= f.bars) continue; add(snap(f, b, rootIn(f, b, base) + n.i), o + n.s, n.d, n.v, n.g); }
+      }
     } else if (pattern === 'reese') {
       // held for the chord, retriggered every two bars (every bar with movement)
       const every = M > 0.5 ? 1 : 2;
@@ -327,6 +354,10 @@ export function genPad(f, { pattern = 'long', density = 40, octave = 3, seed = 1
       addChord(v, o - early, len + early - (pattern === 'push' ? 2 : 0), 84);
       // density adds a re-strike halfway through long chords
       if (pattern === 'push' && D > 0.5 && cl >= 2) { const s = o + len / 2 - 2; addChord(v, s, 2, 70); }
+    } else if (pattern === 'bossa') {
+      const v = chordStart(f, bar) || !prev ? chordAt(bar) : prev;
+      const hits = bar % 2 === 0 ? [0, 3, 6, 10, 12] : [2, 6, 9, 12]; // the two-bar comping figure
+      for (const s of hits) addChord(v, o + s, s === 0 || s === 12 ? 2 : 1, s === 0 ? 86 : 74);
     } else if (pattern === 'skank' || pattern === 'offbeat') {
       const v = chordStart(f, bar) || !prev ? chordAt(bar) : prev;
       const hits = pattern === 'skank' ? [4, 12, ...(D > 0.6 ? [5, 13] : [])] : [2, 6, 10, 14];
@@ -344,6 +375,7 @@ export function genLead(f, { pattern = 'motif', density = 40, movement = 30, oct
   const r = rng(seed ^ 0x1EAD), D = density / 100, M = movement / 100;
   const center = 12 * (octave + 1) + pc(f.key) + 0; // tonic in the lead octave
   const notes = [];
+  if (pattern === 'arp') return cleanup(arpPhrase(f, r, D, M, center).map(({ strong, ...n }) => n), f.total);
   const phraseBars = { acid: 1, bells: 2, riff: 2, palm: 4, tremolo: 8, chop: 1 }[pattern] ?? Math.min(4, f.bars);
   let phrase;
   if (pattern === 'acid') phrase = acidPhrase(f, r, D, M, center);
@@ -351,6 +383,7 @@ export function genLead(f, { pattern = 'motif', density = 40, movement = 30, oct
   else if (pattern === 'palm') phrase = palmPhrase(f, r, D, M, center);
   else if (pattern === 'tremolo') phrase = tremoloPhrase(f, r, D, M, center);
   else if (pattern === 'chop') phrase = chopPhrase(f, r, D, M, center);
+  else if (pattern === 'arp') phrase = arpPhrase(f, r, D, M, center);
   else if (pattern === 'pedal') phrase = pedalPhrase(f, r, D, center, phraseBars);
   else phrase = motifPhrase(f, r, D, M, center, phraseBars, pattern === 'bells');
   for (let start = 0; start < f.bars; start += phraseBars) {
@@ -478,6 +511,19 @@ function tremoloPhrase(f, r, D, M, center) {
     let p = win[idx];
     if (s % STEPS === 0) { const ct = notesIn(chordPcs(f, bar), win[0] - 2, win[win.length - 1] + 2); if (ct.length && !ct.includes(p)) p = nearest(ct, p); }
     for (let k = 0; k < unit; k++) out.push({ p, s: s + k, d: 1, v: clampV(k % 4 === 0 ? 100 : 82 + r.int(-6, 6)), strong: false });
+  }
+  return out;
+}
+/** Arp: every bar, the bar's chord in sixteenths over two octaves (up, down or up-down), some steps resting at low density. */
+function arpPhrase(f, r, D, M, center) {
+  const shape = r.pick(['up', 'updown', 'down', 'updown']); const out = [];
+  for (let bar = 0; bar < f.bars; bar++) {
+    const tones = notesIn(chordPcs(f, bar), center - 1, center + 13 + Math.round(M * 6)).slice(0, 7); if (!tones.length) continue;
+    const seq = shape === 'up' ? tones : shape === 'down' ? [...tones].reverse() : [...tones, ...tones.slice(1, -1).reverse()];
+    for (let s = 0; s < STEPS; s++) {
+      if (D < 0.6 && s % 2 === 1 && r.chance(0.6 - D)) continue;
+      out.push({ p: seq[(bar * STEPS + s) % seq.length], s: bar * STEPS + s, d: 1, v: clampV(s % 4 === 0 ? 104 : 80 + r.int(-6, 6)), strong: false });
+    }
   }
   return out;
 }

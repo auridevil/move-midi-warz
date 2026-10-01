@@ -42,11 +42,13 @@ export const SOUNDS = {
     { name: 'pluck', make: (T, o) => poly(T, o, T.Synth, { volume: -10, options: { oscillator: { type: 'triangle' }, envelope: env(0.002, 0.25, 0, 0.2) } }, [], 6) },
     { name: 'acid', make: (T, o) => mono(T, o, { volume: -12, oscillator: { type: 'sawtooth' }, filter: { Q: 10, type: 'lowpass', rolloff: -24 }, envelope: env(0.003, 0.15, 0.4, 0.05), filterEnvelope: { attack: 0.003, decay: 0.15, sustain: 0.15, release: 0.1, baseFrequency: 300, octaves: 3.5 } }) },
     { name: 'flute', make: (T, o) => poly(T, o, T.Synth, { volume: -10, options: { oscillator: { type: 'sine' }, envelope: env(0.06, 0.2, 0.8, 0.3) } }, [new T.Vibrato({ frequency: 5, depth: 0.08 })], 6) },
+    { name: 'whistle', make: (T, o) => ({ ...mono(T, o, { volume: -12, portamento: 0.09, oscillator: { type: 'sine' }, filter: { type: 'lowpass', frequency: 5000 }, envelope: env(0.03, 0.2, 0.9, 0.3), filterEnvelope: { baseFrequency: 3000, octaves: 1, attack: 0.01, decay: 0.2, sustain: 1, release: 0.2 } }, [new T.Vibrato({ frequency: 5.5, depth: 0.1 })]), glide: 0.09 }) },
     { name: 'guitar', make: (T, o) => mono(T, o, { volume: -16, oscillator: { type: 'fatsawtooth', count: 2, spread: 15 }, filter: { type: 'lowpass', frequency: 3000 }, envelope: env(0.003, 0.4, 0.7, 0.15), filterEnvelope: { baseFrequency: 1200, octaves: 1.5, attack: 0.005, decay: 0.2, sustain: 0.6, release: 0.2 } }, [new T.Distortion({ distortion: 0.9, wet: 1 }), new T.Filter({ type: 'highpass', frequency: 120 })]) },
   ],
 };
 const BY_PATTERN = { sub: 'sub', dub: 'sub', garage: 'sub', halftime: 'sub', '808': '808', reese: 'reese', unison: 'fuzz', rolling: 'saw mono', donk: 'saw mono', double: 'saw mono',
   drone: 'dark drone', stabs: 'stab', push: 'e-piano', long: 'warm saw',
+  octave: 'saw mono', bossa: 'pluck', gfunk: 'saw mono', arp: 'square',
   roots: 'sub', boom: 'fm', jumpup: 'fm', cumbia: 'pluck', skank: 'organ', offbeat: 'stab',
   bells: 'bell', acid: 'acid', anthem: 'supersaw', riff: 'guitar', palm: 'guitar', tremolo: 'guitar', chop: 'pluck', pedal: 'pluck', motif: 'square' };
 /** Default sound index for a part playing a pattern. */

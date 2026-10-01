@@ -104,7 +104,7 @@ const mtof = (p) => T.Frequency(p, 'midi').toFrequency();
 function play(part, n, time) {
   const dur = Math.max(0.03, n.d * stepSec() - 0.01), v = n.v / 127;
   const V = audio.voice[part]; if (!V) return;
-  if (V.mono && 'portamento' in V.synth) { const prev = last[part]; V.synth.portamento = prev?.g ? 0.07 : 0; last[part] = n; }
+  if (V.mono && 'portamento' in V.synth) { const prev = last[part]; V.synth.portamento = V.glide ?? (prev?.g ? 0.07 : 0); last[part] = n; } // a gliding voice always slides
   V.synth.triggerAttackRelease(mtof(n.p), dur, time, v);
 }
 let last = {};
@@ -126,10 +126,11 @@ function audition(part, p, v = 100) { if (!awake) return wake().then(() => audit
 // ---------------- UI: frame controls ----------------
 const keyNames = NOTE_NAMES;
 const FAMILIES = [
-  ['Four on the floor', ['house', 'techno', 'progtechno', 'trance', 'progpsy', 'psytrance', 'fullon']],
-  ['Hip hop, dub, slow', ['hiphop', 'lofi', 'abstract', 'triphop', 'dub']],
+  ['Four on the floor', ['house', 'techno', 'progtechno', 'trance', 'progpsy', 'psytrance', 'fullon', 'hardcore']],
+  ['Disco & pop', ['italodisco', 'hyperpop']],
+  ['Hip hop, dub, slow', ['hiphop', 'westcoast', 'lofi', 'abstract', 'triphop', 'dub']],
   ['Broken beat, bass music', ['garage', 'dubstep', 'trap', 'footwork', 'jungle', 'dnb', 'jumpup', 'neuro']],
-  ['Latin', ['cumbia']],
+  ['Latin & Brazil', ['cumbia', 'bossanova']],
   ['Metal', ['sludge', 'ambientblack', 'death', 'black']],
 ];
 { const listed = new Set(FAMILIES.flatMap(([, ids]) => ids)); const rest = Object.keys(GENRES).filter(id => !listed.has(id)); if (rest.length) FAMILIES.push(['Other', rest]); }
