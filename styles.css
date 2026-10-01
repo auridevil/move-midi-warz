@@ -214,7 +214,8 @@ body.chaos::before { display: none; }
 #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
 .readout { position: fixed; left: 24px; top: 74px; z-index: 3; font: 400 11px/1.9 var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.82); text-shadow: -1px 0 rgba(103,232,249,.7), 1px 0 rgba(240,171,252,.7); white-space: pre; pointer-events: none; }
-.hud { position: fixed; right: 24px; top: 74px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; max-width: 420px; }
+.hud { position: fixed; right: 24px; top: 74px; bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; max-width: 440px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }

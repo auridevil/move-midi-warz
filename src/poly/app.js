@@ -78,7 +78,10 @@ $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
 
 // ---- tempo ----
-function applyTempo(bpm, publish = true) { tempo = bpm; if (publish) setTempo(bpm, 'poly'); retime(); readout(); }
+function applyTempo(bpm, publish = true) {
+  tempo = Math.min(240, Math.max(40, Math.round(bpm))); if (publish) setTempo(tempo, 'poly'); retime();
+  const sl = $('tempo'), tv = $('tempo-val'); if (sl) sl.value = tempo; if (tv) tv.textContent = tempo; readout();
+}
 onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false); });
 const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
 
@@ -219,4 +222,5 @@ function readout() {
   const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}`), sline];
   $('readout').textContent = lines.join('\n');
 }
+window.__poly = { move, m, applyTempo };
 readout(); draw();
