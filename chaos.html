@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Entropy Engine</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="chaos">
+  <canvas id="cv"></canvas>
+  <header class="bar chaos-bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">entropy engine · a synth that mostly decides for itself</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <div id="readout" class="readout" aria-live="polite"></div>
+  <div class="stressbar" title="stress: main-thread jank, audio scheduling lateness, voice load"><i id="stress"></i></div>
+
+  <div class="hud">
+    <button id="btn-audio" class="primary big-btn">⏻ wake the engine</button>
+    <div class="hud-row">
+      <button id="btn-seed">seed</button>
+      <button id="btn-auto">auto ◌</button>
+      <button id="btn-freeze">freeze</button>
+      <button id="btn-mutate">mutate</button>
+      <button id="btn-tap">tap tempo</button>
+      <button id="btn-reset">reset</button>
+    </div>
+    <details class="drawer">
+      <summary>no Move? knobs</summary>
+      <div id="sliders" class="sliders"></div>
+      <p class="hint">Every tap plays its own note at once, then injects energy (keys 1–8 / q–i / a–k / z–,). Energy spreads, decays and fires more notes by chance; the arp cycles through whatever is charged. Shift+pad pins a cell as a permanent source. Step buttons gate the 16 steps.</p>
+    </details>
+    <details class="drawer">
+      <summary>Move controls</summary>
+      <table class="gtable">
+        <tr><th>Pads</th><td>inject energy · Shift+pad = pin</td><th>Steps</th><td>toggle the 16-step gate</td></tr>
+        <tr><th>Knob 1</th><td>entropy</td><th>Knob 5</th><td>morph (timbre)</td></tr>
+        <tr><th>Knob 2</th><td>diffusion</td><th>Knob 6</th><td>crush / distortion</td></tr>
+        <tr><th>Knob 3</th><td>decay</td><th>Knob 7</th><td>space (delay + reverb)</td></tr>
+        <tr><th>Knob 4</th><td>density</td><th>Knob 8</th><td>master tempo (±1 bpm), shared with the other pages</td></tr>
+        <tr><th>Record</th><td>tap tempo (blinks on the beat)</td><th></th><td></td></tr>
+        <tr><th>Wheel</th><td>arp amount (off · 4n · 8n · 16n + octaves)</td><th>Shift + wheel</th><td>pitch drift</td></tr>
+        <tr><th>Volume</th><td>volume</td><th>◀ ▶</th><td>octave −3 … +3 (keys [ ])</td></tr>
+        <tr><th>Play</th><td>auto-seed on/off</td><th>Mute</th><td>freeze</td></tr>
+        <tr><th>Capture</th><td>mutate everything</td><th>Undo</th><td>reset the field</td></tr>
+      </table>
+    </details>
+  </div>
+  <script src="./vendor/tone/Tone.js"></script>
+  <script type="module" src="./src/chaos/app.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

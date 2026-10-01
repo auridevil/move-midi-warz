@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Lights Out</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="drums">
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Lights Out</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+  <main class="dlayout">
+    <section class="board">
+      <div class="board-head">
+        <div class="ex-pick">
+          <select id="size" class="big"><option value="4">4 × 4 (left block)</option><option value="8" selected>4 × 8 (all pads)</option></select>
+          <label class="knob">Level <input id="level" type="number" min="1" max="20" value="4" /></label>
+          <span class="meta">level = how many random presses scrambled the board</span>
+        </div>
+        <div class="transport">
+          <label class="switch"><input id="arp" type="checkbox" checked /> <span>Arp</span></label>
+          <label class="knob">Arp vol <input id="arp-vol" type="range" min="0" max="100" value="50" style="width:90px" /></label>
+          <button id="btn-hint">Hint</button>
+          <button id="btn-undo">Undo</button>
+          <button id="btn-new" class="primary">New puzzle</button>
+        </div>
+      </div>
+      <p class="note">Press a pad: it and its four neighbours flip. Turn every light off. Fewest presses wins. The arpeggio is the board: lit pads are its notes, every press reshapes it, clearing the board resolves it.</p>
+      <div class="board-body">
+        <div id="lo" class="lo"></div>
+        <div class="lo-side">
+          <div class="quality">
+            <div class="q big"><b id="moves">0</b><span>presses</span></div>
+            <div class="q"><b id="lit">0</b><span>lights on</span></div>
+            <div class="q"><b id="par">—</b><span>par</span></div>
+            <div class="q"><b id="best">—</b><span>best here</span></div>
+          </div>
+          <div id="msg" class="feedback big"></div>
+          <details class="glossary" open>
+            <summary>Move controls</summary>
+            <table>
+              <tr><th>Pads</th><td>press to flip</td><th>Play</th><td>new puzzle</td></tr>
+              <tr><th>Undo</th><td>undo last press</td><th>Capture</th><td>hint (a pad blinks white)</td></tr>
+              <tr><th>Knob 1</th><td>level</td><th>Layout</th><td>4×4 / 4×8</td></tr>
+              <tr><th>Mute</th><td>arp on / off</td><th>Knob 8</th><td>arp volume</td></tr>
+            </table>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./src/games/lightsout.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

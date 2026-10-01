@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Move Trainer</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Melodic drills</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Web MIDI: not started</span>
+      <select id="conn-mode" title="How to talk to the Move">
+        <option value="control">Control Live mode (LEDs + knobs)</option>
+        <option value="standalone">Standalone MIDI out (pads only)</option>
+      </select>
+      <select id="midi-input" title="MIDI input"></select>
+      <button id="btn-connect">Connect</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <h2>Pad mirror <small id="layout-info"></small></h2>
+      <div id="pads" class="pads"></div>
+      <div class="row gap">
+        <label>Root <select id="root"></select></label>
+        <label>Scale <select id="scale"></select></label>
+        <label>Row offset (degrees) <input id="row-offset" type="number" min="1" max="7" value="3" /></label>
+        <label>Bottom-left octave <input id="base-octave" type="number" min="0" max="7" value="3" /></label>
+      </div>
+      <div class="row gap" id="cal-row">
+        <button id="btn-cal">Calibrate</button>
+        <span id="cal-msg" class="hint">Standalone mode only: hit bottom-left pad → pad above it → pad right of bottom-left.</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Trainer</h2>
+      <div class="row gap">
+        <label>Mode
+          <select id="mode">
+            <option value="note-hunt">Note hunt</option>
+            <option value="interval">Intervals</option>
+            <option value="chord">Chords</option>
+            <option value="rhythm">Rhythm (metronome)</option>
+          </select>
+        </label>
+        <label>BPM <input id="bpm" type="number" min="40" max="240" value="90" /></label>
+        <label>Volume <input id="vol" type="range" min="0" max="100" value="50" /></label>
+        <button id="btn-start">Start</button>
+        <button id="btn-stop" disabled>Stop</button>
+      </div>
+      <p class="hint">On the Move: <b>Play</b> = start/stop · <b>knob 1</b> = BPM · <b>volume knob</b> = browser volume · <b>Layout</b> = next drill.</p>
+      <div id="target" class="target">—</div>
+      <div id="feedback" class="feedback"></div>
+      <div class="stats">
+        <div><b id="st-hits">0</b><span>hits</span></div>
+        <div><b id="st-miss">0</b><span>misses</span></div>
+        <div><b id="st-streak">0</b><span>streak</span></div>
+        <div><b id="st-avg">—</b><span>avg ms</span></div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Protocol probe <small>Control Live mode</small></h2>
+      <div class="row gap">
+        <button class="probe" data-p="identity">Identity request</button>
+        <button class="probe" data-p="getmode">Get mode</button>
+        <button class="probe" data-p="ctrl">Mode → control</button>
+        <button class="probe" data-p="standalone">Mode → standalone</button>
+        <button class="probe" data-p="wake">Wake display</button>
+        <button class="probe" data-p="ledtest">LED test</button>
+        <button class="probe" data-p="clear">Clear LEDs</button>
+      </div>
+      <dl class="kv">
+        <dt>Identity</dt><dd id="p-identity">—</dd>
+        <dt>Control mode</dt><dd id="p-mode">—</dd>
+        <dt>SysEx allowed</dt><dd id="p-sysex">—</dd>
+        <dt>Last input</dt><dd id="p-last">—</dd>
+      </dl>
+    </section>
+
+    <section class="panel">
+      <h2>MIDI monitor <button id="btn-clear" class="mini">clear</button></h2>
+      <pre id="log" class="log"></pre>
+    </section>
+  </main>
+
+  <script type="module" src="./src/app.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

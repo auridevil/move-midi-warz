@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Finger Drumming</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="drums">
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Finger drumming</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+
+  <main class="dlayout">
+    <section class="board">
+      <div class="board-head">
+        <div class="ex-pick">
+          <select id="exercise" class="big"></select><button class="info" type="button" data-info="33 exercises in four scales. Scale 0: first steps, one sound at a time. Scale 1: hitting, one hand plays the whole groove. Scale 2: the hands split into different jobs. Scale 3: the left hand takes the lead. Move to the next only after 8 clean bars twice in a row. ◀ ▶ on the Move." aria-label="info">i</button>
+          <span id="ex-meta" class="meta"></span>
+        </div>
+        <div class="transport">
+          <label class="knob">BPM <button class="info" type="button" data-info="Tempo. Each exercise starts at its default tempo. The rule: +5 after 8 clean bars twice, −10 after a mistake, never more. Knob 1 on the Move." aria-label="info">i</button><input id="bpm" type="number" min="40" max="240" value="90" /></label>
+          <label class="knob">Swing <button class="info" type="button" data-info="Delays every off-beat 16th. 50 = straight. Boom bap sits around 55, UK garage between 55 and 65. The cues and the grading follow the swing, so being off the straight grid is not a mistake here. Knob 2 on the Move." aria-label="info">i</button><input id="swing" type="number" min="50" max="75" value="50" /></label>
+          <button id="btn-preview" title="hear the exercise played by the kit, nothing graded">♪ Preview</button><button class="info" type="button" data-info="Preview: the kit plays the exercise, LEDs and playhead run, nothing is graded; play along freely. Press Start (or Play on the Move) while previewing and grading begins at the next pattern start, with the preview kept underneath you at low volume, in sync. Start alone: you hear the click and your own hits only." aria-label="info">i</button>
+          <button id="btn-start" class="primary">▶ Start</button>
+          <button id="btn-stop" disabled>■ Stop</button>
+        </div>
+      </div>
+      <p id="ex-note" class="note"></p>
+      <div class="board-body">
+        <div class="kitwrap"><div id="kit" class="kit"></div><div class="kitcap">the Move's left 16 pads</div></div>
+        <div id="grid" class="dgrid"></div>
+      </div>
+      <div class="board-foot">
+        <label class="switch"><input id="feedback-on" type="checkbox" checked /> <span>Live feedback</span> <small>off = play, judge later in the take</small></label><button class="info" type="button" data-info="The judge. On: cells and pads flash green (tight and right dynamics), yellow (inside the window but loose, or wrong dynamics), red (extra or missed hit), and the line under 'Now' tells you by how many ms. Off: nothing is shown while you play, but every hit is still recorded in the stats and the last take. Mute button on the Move." aria-label="info">i</button>
+        <label class="switch"><input id="click" type="checkbox" checked /> <span>Click</span></label><button class="info" type="button" data-info="Metronome on the four beats, accent on beat 1. Turn it off for the hard version of 'the gap', or to play over a track." aria-label="info">i</button>
+        <label class="switch"><input id="sounds" type="checkbox" checked /> <span>Kit sounds</span></label><button class="info" type="button" data-info="The browser plays a synthesized drum for each pad. The Move is silent while it is in control mode, so this is the only sound you get." aria-label="info">i</button>
+        <label class="knob">Treatment <button class="info" type="button" data-info="Ways to vary an exercise without learning a new pattern. Pick one and the explanation appears below." aria-label="info">i</button><select id="treatment"></select></label>
+        <label class="knob">Kit <select id="kit-preset"></select></label><button class="info" type="button" data-info="Synth kit flavour. Knobs 3–6 on the Move shape it live: kick pitch, snare snap, hat length, tone. The readout shows the current values." aria-label="info">i</button>
+        <button id="btn-kit-test" class="mini" title="kick, snare, hat">test kit</button>
+        <span id="kit-readout" class="meta"></span>
+        <label class="knob">Timing <button class="info" type="button" data-info="How wide the window around each expected hit is. Normal = ±45% of a step, capped between 60 and 120 ms; a hit counts as 'tight' inside half of that. Strict shrinks the window by 30%, loose widens it by 40%. Outside the window a hit is 'extra' and the expected one is 'missed'." aria-label="info">i</button><select id="tolerance"><option value="0.7">strict</option><option value="1" selected>normal</option><option value="1.4">loose</option></select></label>
+        <span id="choice-info" class="choice-info"></span>
+        <span class="legend"><i class="sw r"></i> right hand <i class="sw l"></i> left hand <i class="sw ghost"></i> ghost · Move: <b>Play</b> start/stop · <b>Mute</b> feedback on/off · <b>knob 1</b> bpm · <b>knob 2</b> swing · <b>◀ ▶</b> exercise</span>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Now <button class="info" type="button" data-info="What is happening in the current run. Clean streak is the number that matters: the level-up rule is 8 clean bars, twice in a row. The squares below are one per bar, green = clean, red = at least one error." aria-label="info">i</button></h2>
+      <div id="levelup" class="banner" hidden></div>
+      <div id="feedback" class="feedback big"></div>
+      <div class="quality">
+        <div class="q big"><b id="q-session">—</b><span>session quality</span><em id="q-grade"></em></div>
+        <div class="q"><b id="q-bar">—</b><span>last bar</span></div>
+        <div class="q"><b id="q-16">—</b><span>last 16 bars</span></div>
+        <button class="info" type="button" data-info="Quality is 0–100 per bar: how many expected hits you played, how close to the grid (within the timing window), whether the dynamics were right, minus extra hits. A silent bar is 100 if you stayed silent. Session = mean of all bars since Start; last 16 = rolling mean. Grade: S ≥ 95, A ≥ 85, B ≥ 70, C ≥ 50, else D." aria-label="info">i</button>
+      </div>
+      <div id="best" class="hint best"></div>
+      <div class="stats">
+        <div title="bars played since Start"><b id="st-bar">0</b><span>bar</span></div>
+        <div title="consecutive clean bars: every hit tight, right dynamics, nothing extra, nothing missed"><b id="st-streak">0</b><span>clean streak</span></div>
+        <div title="longest clean streak in this run"><b id="st-best">0</b><span>best streak</span></div>
+        <div title="average distance from the grid in the last bar, in ms, early or late"><b id="st-dev">—</b><span>avg |ms|</span></div>
+      </div>
+      <div class="stats small">
+        <div title="hits inside the window but ahead of the tight zone"><b id="st-early">0</b><span>early</span></div>
+        <div title="hits inside the window but behind the tight zone"><b id="st-late">0</b><span>late</span></div>
+        <div title="hits with the wrong velocity band: full 100–127, soft 60–90, ghost 15–40 (±10)"><b id="st-dyn">0</b><span>dynamics</span></div>
+        <div title="expected hits with nothing played inside the window"><b id="st-miss">0</b><span>missed</span></div>
+        <div title="hits nobody asked for, or too far from any expected one"><b id="st-extra">0</b><span>extra</span></div>
+      </div>
+      <div id="bars" class="barsrow" title="one square per bar: green = clean"></div>
+      <p class="hint">8 clean bars, twice in a row → +5 bpm. A mistake → −10 and again.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Last take <small>every hit, as played</small> <button class="info" type="button" data-info="Your recording of the run, as a picture. One dot per hit: above the line = early, below = late, dot size = velocity. Green = tight and right dynamics, white = in the window but loose, yellow = wrong dynamics. A red bar is an extra hit. The green band is the tight zone. Drawn when you press Stop." aria-label="info">i</button> <button id="btn-clear-take" class="mini">clear</button></h2>
+      <svg id="take" class="take" viewBox="0 0 1000 120" preserveAspectRatio="none"></svg>
+      <h2>Diary <button id="btn-diary-save" class="mini">save entry</button> <button class="info" type="button" data-info="Saves today's date, exercise, bpm, best streak and bars played, in this browser only. One line per session is enough: in a month it is the proof you are improving." aria-label="info">i</button></h2>
+      <ol id="diary" class="diary"></ol>
+    </section>
+
+    <details class="panel panel-wide progress" open>
+      <summary>Progress · all exercises <button class="info" type="button" data-info="Overall numbers across every exercise and treatment, from this browser's history. Quality per day = mean of all bar scores played that day. The table merges treatments: best streak at its bpm, best session quality, fastest level-up, bars played." aria-label="info">i</button> <button id="btn-progress-clear" class="mini">clear history</button></summary>
+      <div class="quality">
+        <div class="q big"><b id="ov-quality">—</b><span>overall quality</span><em id="ov-grade"></em></div>
+        <div class="q"><b id="ov-today">—</b><span>today</span></div>
+        <div class="q"><b id="ov-bars">0</b><span>bars total</span></div>
+        <div class="q"><b id="ov-ex">0</b><span>exercises practised</span></div>
+        <div class="q"><b id="ov-days">0</b><span>days</span></div>
+      </div>
+      <div id="days" class="days"></div>
+      <table id="progress" class="ptable"></table>
+    </details>
+    <details class="panel panel-wide logbox">
+      <summary>MIDI log</summary>
+      <pre id="log" class="log" style="height:110px"></pre>
+    </details>
+  </main>
+  <script type="module" src="./src/drums/app.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+{
+  "name": "move-keymap",
+  "version": "0.1.0",
+  "description": "Turn an Ableton Move (via movewire) into a keyboard/mouse for browser games. Pads, step buttons, buttons and encoders map to key actions; sinks for DOM KeyboardEvents and js-dos. Zero dependencies.",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "node --test \"test/*.test.js\"",
+    "check": "for f in src/*.js test/*.js; do node --check $f || exit 1; done"
+  },
+  "peerDependencies": {
+    "movewire": "*"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

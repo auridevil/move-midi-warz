@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="launcher">
+  <main class="launch">
+    <h1>MIDI Warz <span class="sub">your Ableton Move, plugged into the browser</span></h1>
+    <div class="cards">
+      <a class="card" href="./drums.html">
+        <div class="art art-drums"></div>
+        <h2>Finger drumming</h2>
+        <p>34 exercises in four scales, pads lit as cues, timing and dynamics graded, your last take drawn.</p>
+        <span class="go">Practise →</span>
+      </a>
+      <a class="card" href="./lights.html">
+        <div class="art art-lights"></div>
+        <h2>Lights Out</h2>
+        <p>The pads are the lights. Press one, its neighbours flip. Clear the board in as few presses as par.</p>
+        <span class="go">Play →</span>
+      </a>
+      <a class="card" href="./chaos.html">
+        <div class="art art-chaos"></div>
+        <h2>Entropy Engine</h2>
+        <p>A Tone.js synth that mostly decides for itself. Pads inject energy, it spreads, decays and fires notes by chance. Knobs bend the odds.</p>
+        <span class="go">Disturb →</span>
+      </a>
+      <a class="card" href="./poly.html">
+        <div class="art art-poly"></div>
+        <h2>Orbits</h2>
+        <p>A polyrhythm drum machine. Four lanes, each its own length and its own speed against the master tempo. Euclidean fills, rotation, probability.</p>
+        <span class="go">Sequence →</span>
+      </a>
+      <a class="card" href="./doom.html">
+        <div class="art art-doom"></div>
+        <h2>Doom</h2>
+        <p>Shareware Doom in DOSBox. Pads are the keyboard: move, strafe, fire, weapons. Wheel turns.</p>
+        <span class="go">Play →</span>
+      </a>
+    </div>
+    <p class="hint tempo-line">master tempo <b id="tempo">—</b> bpm · shared by every page, last change wins</p>
+    <script type="module">import { getTempo, onTempo } from './src/tempo.js'; const el = document.getElementById('tempo'); el.textContent = getTempo(112); onTempo(b => el.textContent = b);</script>
+    <p class="hint">Chrome or Edge, USB‑C, allow MIDI + SysEx when asked. The Move goes into control mode while a page is connected and back to standalone when you disconnect or close the tab. Also: <a href="./melodic.html">melodic drills</a> (notes, intervals, chords, rhythm).</p>
+  </main>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

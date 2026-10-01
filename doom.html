@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Doom on the Move</title>
+  <link rel="stylesheet" href="./games/doom/js-dos/js-dos.css" />
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="doom">
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Doom · shareware 1.9 in DOSBox, played with the Move</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+      <button id="btn-full" title="fullscreen">⛶</button>
+    </div>
+  </header>
+
+  <main class="glayout">
+    <section class="screen">
+      <div id="dos" class="dos"></div>
+      <p class="hint">js-dos boots DOOM.EXE automatically. Skip the intro with <b>Play</b> (Enter) on the Move. Sound comes from the browser; the Move is silent in control mode. Keyboard works too, of course.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Move mapping <small id="preset-name"></small></h2>
+      <div class="row gap">
+        <label>Preset <select id="preset"></select></label>
+        <button id="btn-learn">Learn: press a pad, then a key</button>
+        <button id="btn-reset" class="mini">reset preset</button>
+        <button id="btn-export" class="mini">copy JSON</button>
+      </div>
+      <p id="learn-msg" class="hint"></p>
+      <div id="padmap" class="padmap"></div>
+      <div id="legend" class="legend"></div>
+      <p class="hint">Hard hits on movement pads also hold <b>Run</b>. <b>Wheel</b> turns. <b>Knob 1</b> turns, <b>knob 7</b> screen size, <b>knob 8</b> strafes. Step buttons 1–7 pick weapons. <b>Back</b> = menu, <b>Play</b> = enter, <b>Shift</b> = run, <b>Capture</b>/<b>Loop</b> = quicksave/quickload.</p>
+      <div id="last" class="feedback"></div>
+    </section>
+
+    <details class="panel panel-wide logbox">
+      <summary>Log</summary>
+      <pre id="log" class="log" style="height:110px"></pre>
+    </details>
+  </main>
+  <script src="./games/doom/js-dos/js-dos.js"></script>
+  <script type="module" src="./src/doom/app.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

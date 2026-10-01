@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Orbits</title>
+  <link rel="icon" href="data:," />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="chaos">
+  <canvas id="cv"></canvas>
+  <header class="bar chaos-bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">orbits · a polyrhythm drum machine</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+  <div id="readout" class="readout" aria-live="polite"></div>
+  <div class="hud">
+    <button id="btn-play" class="primary big-btn">▶ play</button>
+    <div class="hud-row">
+      <button id="btn-random">randomize</button>
+      <button id="btn-clear">clear lane</button>
+      <button id="btn-tap">tap tempo</button>
+      <button id="btn-reset">reset phase</button>
+    </div>
+    <details class="drawer lane-drawer" id="lane-drawer" open>
+      <summary>lane <span id="lane-name">kick</span> · click a ring, Alt+1–4, or the Move's track buttons <em id="shift-ind" class="shift-ind"></em></summary>
+      <div id="sliders" class="sliders"></div>
+      <div id="stepsui" class="stepsui"></div>
+      <h3 class="subh">sound · Shift + knobs 1–8</h3>
+      <div class="sliders">
+        <label>voice <select id="voice-select"></select></label>
+        <label>kit (all lanes) <select id="kit-select"></select></label>
+      </div>
+      <div id="sound-sliders" class="sliders"></div>
+      <details class="drawer inner">
+        <summary>what each parameter does</summary>
+        <table id="param-glossary" class="gtable"></table>
+      </details>
+      <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
+    </details>
+    <details class="drawer" open>
+      <summary>global · master tempo &amp; humanize</summary>
+      <div id="global-sliders" class="sliders"></div>
+    </details>
+    <details class="drawer">
+      <summary>Move controls</summary>
+      <table class="gtable">
+        <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent</td><th>Steps</th><td>selected lane, all 16</td></tr>
+        <tr><th>Track 1–4</th><td>select lane</td><th>Play</th><td>start / stop</td></tr>
+        <tr><th>Shift + knobs</th><td colspan="3">sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
+        <tr><th>Knob 1</th><td>length</td><th>Knob 5</th><td>swing</td></tr>
+        <tr><th>Knob 2</th><td>euclid hits</td><th>Knob 6</th><td>probability</td></tr>
+        <tr><th>Knob 3</th><td>rotation</td><th>Knob 7</th><td>tune</td></tr>
+        <tr><th>Knob 4</th><td>speed ratio</td><th>Knob 8</th><td>master tempo</td></tr>
+        <tr><th>Mute</th><td>mute lane</td><th>Capture</th><td>randomize all</td></tr>
+        <tr><th>Undo</th><td>clear lane</td><th>Record</th><td>tap tempo</td></tr>
+        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
+        <tr><th>Wheel</th><td>humanize</td><th>Volume</th><td>volume</td></tr>
+      </table>
+    </details>
+  </div>
+  <script src="./vendor/tone/Tone.js"></script>
+  <script type="module" src="./src/poly/app.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>
