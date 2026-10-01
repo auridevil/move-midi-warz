@@ -25,6 +25,30 @@
     </div>
   </header>
   <div id="readout" class="readout" aria-live="polite"></div>
+  <div class="hud-left">
+    <details class="drawer" open>
+      <summary>global · master tempo &amp; humanize</summary>
+      <div id="global-sliders" class="sliders"></div>
+    </details>
+  </div>
+  <div class="hud-bl">
+    <details class="drawer">
+      <summary>Move controls</summary>
+      <table class="gtable">
+        <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent</td><th>Steps</th><td>selected lane, all 16</td></tr>
+        <tr><th>Track 1–4</th><td>select lane</td><th>Play</th><td>start / stop</td></tr>
+        <tr><th>Shift + knobs</th><td colspan="3">sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
+        <tr><th>Knob 1</th><td>length</td><th>Knob 5</th><td>swing</td></tr>
+        <tr><th>Knob 2</th><td>euclid hits</td><th>Knob 6</th><td>probability</td></tr>
+        <tr><th>Knob 3</th><td>rotation</td><th>Knob 7</th><td>tune</td></tr>
+        <tr><th>Knob 4</th><td>speed ratio</td><th>Knob 8</th><td>master tempo</td></tr>
+        <tr><th>Mute</th><td>mute lane</td><th>Capture</th><td>randomize all</td></tr>
+        <tr><th>Undo</th><td>clear lane</td><th>Record</th><td>tap tempo</td></tr>
+        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
+        <tr><th>Wheel</th><td>humanize</td><th>Volume</th><td>volume</td></tr>
+      </table>
+    </details>
+  </div>
   <div class="hud">
     <button id="btn-play" class="primary big-btn">▶ play</button>
     <div class="hud-row">
@@ -48,26 +72,6 @@
         <table id="param-glossary" class="gtable"></table>
       </details>
       <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
-    </details>
-    <details class="drawer" open>
-      <summary>global · master tempo &amp; humanize</summary>
-      <div id="global-sliders" class="sliders"></div>
-    </details>
-    <details class="drawer">
-      <summary>Move controls</summary>
-      <table class="gtable">
-        <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent</td><th>Steps</th><td>selected lane, all 16</td></tr>
-        <tr><th>Track 1–4</th><td>select lane</td><th>Play</th><td>start / stop</td></tr>
-        <tr><th>Shift + knobs</th><td colspan="3">sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
-        <tr><th>Knob 1</th><td>length</td><th>Knob 5</th><td>swing</td></tr>
-        <tr><th>Knob 2</th><td>euclid hits</td><th>Knob 6</th><td>probability</td></tr>
-        <tr><th>Knob 3</th><td>rotation</td><th>Knob 7</th><td>tune</td></tr>
-        <tr><th>Knob 4</th><td>speed ratio</td><th>Knob 8</th><td>master tempo</td></tr>
-        <tr><th>Mute</th><td>mute lane</td><th>Capture</th><td>randomize all</td></tr>
-        <tr><th>Undo</th><td>clear lane</td><th>Record</th><td>tap tempo</td></tr>
-        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
-        <tr><th>Wheel</th><td>humanize</td><th>Volume</th><td>volume</td></tr>
-      </table>
     </details>
   </div>
   <script src="./vendor/tone/Tone.js"></script>
