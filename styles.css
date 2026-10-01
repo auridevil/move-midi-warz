@@ -253,5 +253,5 @@ body.chaos::before { display: none; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
 
 /* launcher credit */
-.credit { margin-top: 36px; font: 400 10px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(167,139,250,.75); }
-.credit a { color: var(--signal-cyan); } .credit a:hover { color: var(--star-white); }
+.credit { margin: -14px 0 26px; font: 400 12px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(236,233,247,.8); }
+.credit a { color: var(--signal-cyan); text-shadow: 0 0 12px rgba(103,232,249,.35); } .credit a:hover { color: var(--star-white); }
