@@ -28,7 +28,7 @@
   <div class="hud-left">
     <details class="drawer" open>
       <summary>global · master tempo &amp; humanize</summary>
-      <div id="global-sliders" class="sliders"></div>
+      <div id="global-sliders" class="gauges two"></div>
     </details>
   </div>
   <div class="hud-bl">
@@ -59,19 +59,19 @@
     </div>
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary>lane <span id="lane-name">kick</span> · click a ring, Alt+1–4, or the Move's track buttons <em id="shift-ind" class="shift-ind"></em></summary>
-      <div id="sliders" class="sliders"></div>
+      <div id="sliders" class="gauges"></div>
       <div id="stepsui" class="stepsui"></div>
       <h3 class="subh">sound · Shift + knobs 1–8</h3>
       <div class="sliders">
         <label>voice <select id="voice-select"></select></label>
         <label>kit (all lanes) <select id="kit-select"></select></label>
       </div>
-      <div id="sound-sliders" class="sliders"></div>
+      <div id="sound-sliders" class="gauges"></div>
       <details class="drawer inner">
         <summary>what each parameter does</summary>
         <table id="param-glossary" class="gtable"></table>
       </details>
-      <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
+      <p class="hint">Gauges: drag up/down (Shift = fine), scroll, or arrow keys; double‑click resets. At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
     </details>
   </div>
   <script src="./vendor/tone/Tone.js"></script>

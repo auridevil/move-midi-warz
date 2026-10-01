@@ -4,6 +4,7 @@ import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND } fr
 import { VOICES, VOICE_KEYS } from './voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
+import { makeGauge } from '../gauge.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -80,7 +81,7 @@ for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => {
 // ---- tempo ----
 function applyTempo(bpm, publish = true) {
   tempo = Math.min(240, Math.max(40, Math.round(bpm))); if (publish) setTempo(tempo, 'poly'); retime();
-  const sl = $('tempo'), tv = $('tempo-val'); if (sl) sl.value = tempo; if (tv) tv.textContent = tempo; readout();
+  sliders.tempo?.set(tempo); readout();
 }
 onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false); });
 const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
@@ -114,23 +115,25 @@ const PARAMS = [
   { k: 'prob', label: 'probability', min: 0, max: 100, get: l => Math.round(l.prob * 100), set: (l, v) => { l.prob = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
   { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v },
 ];
-const sliders = {};
+const sliders = {};   // k -> gauge handle ({ set, value })
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
-  for (const p of PARAMS) { const l = document.createElement('label'); l.title = INFO[p.k]; l.innerHTML = `${p.label} <b class="pv"></b> <input type="range" min="${p.min}" max="${p.max}" step="1" />`; const inp = l.querySelector('input'); inp.oninput = () => { p.set(m.lane, +inp.value); sync(); }; sliders[p.k] = { inp, val: l.querySelector('.pv') }; el.appendChild(l); }
+  for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
   const ge = $('global-sliders'); ge.innerHTML = '';
-  const tl = document.createElement('label'); tl.title = INFO.tempo; tl.innerHTML = `master tempo · knob 8 <b id="tempo-val"></b> <input id="tempo" type="range" min="40" max="240" step="1" />`; ge.appendChild(tl); $('tempo').oninput = () => applyTempo(+$('tempo').value);
-  const hl = document.createElement('label'); hl.title = INFO.humanize; hl.innerHTML = `humanize · wheel <b id="hum-val"></b> <input id="humanize" type="range" min="0" max="100" step="1" />`; ge.appendChild(hl); $('humanize').oninput = () => { m.humanize = +$('humanize').value / 100; save(); readout(); $('hum-val').textContent = $('humanize').value + '%'; };
+  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) }); ge.appendChild(sliders.tempo.el);
+  sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => setVoice(m.selected, vs.value);
   const ks = $('kit-select'); ks.innerHTML = ''; for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => applyKit(ks.value);
   const se = $('sound-sliders'); se.innerHTML = '';
-  for (const k of SOUND_KEYS) { const sl = document.createElement('label'); sl.title = INFO[k]; sl.innerHTML = `${k} <b class="pv"></b> <input type="range" min="0" max="100" step="1" />`; const inp = sl.querySelector('input'); inp.oninput = () => { m.lane.setSound(k, +inp.value / 100); applySound(m.selected); sync(); }; sliders['snd:' + k] = { inp, val: sl.querySelector('.pv') }; se.appendChild(sl); }
+  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
 function sync() {
-  for (const p of PARAMS) { const v = p.get(m.lane); sliders[p.k].inp.value = v; sliders[p.k].val.textContent = p.fmt(v); }
-  for (const k of SOUND_KEYS) { const v = Math.round(m.lane.sound[k] * 100); sliders['snd:' + k].inp.value = v; sliders['snd:' + k].val.textContent = v; }
-  $('tempo').value = tempo; $('tempo-val').textContent = tempo; $('humanize').value = Math.round(m.humanize * 100); $('hum-val').textContent = Math.round(m.humanize * 100) + '%'; $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`; $('voice-select').value = m.lane.voice; const kk = KIT_KEYS.find(k => KITS[k].name === m.kit); if (kk) $('kit-select').value = kk; $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected];
+  for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
+  for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
+  sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
+  $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`; $('voice-select').value = m.lane.voice; const kk = KIT_KEYS.find(k => KITS[k].name === m.kit); if (kk) $('kit-select').value = kk;
+  $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); paintLeds(); save(); readout();
 }
@@ -160,7 +163,7 @@ move.addEventListener('encoder', (e) => {
   if (shift) { const k = SOUND_KEYS[index]; m.lane.setSound(k, m.lane.sound[k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
   const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) applyTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
 });
-move.addEventListener('wheel', (e) => { m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); $('humanize').value = Math.round(m.humanize * 100); $('hum-val').textContent = Math.round(m.humanize * 100) + '%'; readout(); save(); });
+move.addEventListener('wheel', (e) => { m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; return; } if (!pressed) return;
