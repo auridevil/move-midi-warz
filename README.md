@@ -40,7 +40,7 @@ poly.html  / src/poly/      Orbits: lanes model, voices, kits, page
 chaos.html / src/chaos/     Entropy Engine: stochastic field, Tone voices, page
 lights.html / src/games/    Lights Out (+ generative arp)
 doom.html  / src/doom/      Doom via js-dos; games/doom/ holds the runtime and the shareware bundle
-melodic.html / src/*.js     melodic drills, shared MIDI wrapper, audio helpers, master tempo, dev reload
+melodic.html / src/*.js     melodic drills, shared MIDI wrapper, audio helpers, master tempo, dev reload, analytics
 packages/move-keymap/       Move → keyboard/mouse mapper for browser games (presets, learn mode, tests)
 vendor/tone/                Tone.js (MIT)
 test/                       node --test suites
@@ -48,6 +48,12 @@ tools/smoke.mjs             headless console check of every page
 GAMES.md                    ideas list for pad-native games
 ```
 The Move driver is a separate package: **[movewire](https://github.com/auridevil/movewire)** (MIT, zero deps, tests, protocol reference).
+
+## Analytics
+
+Page counts via [GoatCounter](https://www.goatcounter.com/) — cookie-free, no personal data, no
+consent banner. One line, `src/analytics.js`, loaded by every page; it does nothing on localhost.
+Dashboard: https://supervuoto.goatcounter.com/
 
 ## Contributing
 Exercises, kits, voices, mappings, games, protocol findings: see [CONTRIBUTING.md](CONTRIBUTING.md). Sharing what you
