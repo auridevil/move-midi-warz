@@ -52,6 +52,7 @@
     <p class="hint tempo-line">master tempo <b id="tempo">—</b> bpm · shared by every page, last change wins</p>
     <script type="module">import { getTempo, onTempo } from './src/tempo.js'; const el = document.getElementById('tempo'); el.textContent = getTempo(112); onTempo(b => el.textContent = b);</script>
     <p class="hint">Chrome or Edge, USB‑C, allow MIDI + SysEx when asked. The Move goes into control mode while a page is connected and back to standalone when you disconnect or close the tab. Also: <a href="./melodic.html">melodic drills</a> (notes, intervals, chords, rhythm).</p>
+    <footer class="credit">made by <a href="https://aurelianobergese.dev" target="_blank" rel="noopener">aurelianobergese.dev</a> aka <a href="https://supervuoto.org" target="_blank" rel="noopener">supervuoto.org</a> · <a href="https://github.com/auridevil/move-midi-warz" target="_blank" rel="noopener">source</a></footer>
   </main>
   <script type="module" src="./src/dev-reload.js"></script>
 </body>

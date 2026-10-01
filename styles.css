@@ -251,3 +251,7 @@ body.chaos::before { display: none; }
 .gauge .g-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(103,232,249,.3)); }
 .gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 9.5px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
+
+/* launcher credit */
+.credit { margin-top: 36px; font: 400 10px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(167,139,250,.75); }
+.credit a { color: var(--signal-cyan); } .credit a:hover { color: var(--star-white); }
