@@ -5,6 +5,7 @@ import { VOICES, VOICE_KEYS } from './voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
+import { frameLoop } from '../frames.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -57,6 +58,8 @@ function cycleVoice(li, dir) { const i = VOICE_KEYS.indexOf(m.lanes[li].voice); 
 function applyKit(key) { m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((_, i) => { buildVoice(i); applySound(i); }); $('kit-select').value = key; sync(); }
 function cycleKit(dir) { const cur = KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 const events = []; // for visuals: {lane, index, t, accent}
+// stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
+let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
 async function wake() { if (awake) return; await T.start(); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
 function buildLoops() {
   for (const l of loops) l.dispose(); loops = [];
@@ -198,12 +201,13 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed ----
 const cv = $('cv'), ctx = cv.getContext('2d'); const DPR = Math.min(1.5, devicePixelRatio || 1);
-function resize() { cv.width = innerWidth * DPR; cv.height = innerHeight * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); }
-addEventListener('resize', resize); resize();
+function resize() { cv.width = innerWidth * DPR; cv.height = innerHeight * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); poke(); }
+addEventListener('resize', resize); resize(); document.fonts?.ready.then(poke);
 cv.addEventListener('click', (e) => { const cx = innerWidth * 0.5, cy = innerHeight * 0.56, R = Math.min(innerWidth, innerHeight) * 0.42; const d = Math.hypot(e.clientX - cx, e.clientY - cy) / R; const ring = Math.round((d - 0.25) / 0.2); if (ring >= 0 && ring < 4) { m.select(ring); sync(); } });
-function draw() {
+function draw(now) {
+  if (!playing && now > busyUntil) return;
   ctx.fillStyle = 'rgba(14, 10, 32, 0.28)'; ctx.fillRect(0, 0, innerWidth, innerHeight);
-  const cx = innerWidth * 0.5, cy = innerHeight * 0.56, R = Math.min(innerWidth, innerHeight) * 0.42, now = performance.now();
+  const cx = innerWidth * 0.5, cy = innerHeight * 0.56, R = Math.min(innerWidth, innerHeight) * 0.42;
   m.lanes.forEach((lane, li) => {
     const r = R * (0.25 + li * 0.2), sel = li === m.selected;
     ctx.strokeStyle = sel ? LANE_HEX[li] + 'aa' : 'rgba(236,233,247,.14)'; ctx.lineWidth = sel ? 1.5 : 1; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
@@ -218,12 +222,12 @@ function draw() {
     ctx.fillText(`${voiceLabel(lane)} ${lane.length} ×${RATIO_LABEL[lane.ratioIndex]}${lane.muted ? ' m' : ''}`, cx + Math.cos(la) * (r + 14), cy + Math.sin(la) * (r + 14) + 4);
   });
   for (const ev of events) { const age = (now - ev.t) / 500; if (age > 1 || !ev.hit) continue; const lane = m.lanes[ev.lane], r = R * (0.25 + ev.lane * 0.2), a = (ev.index / lane.length) * Math.PI * 2 - Math.PI / 2; ctx.strokeStyle = LANE_HEX[ev.lane]; ctx.globalAlpha = 1 - age; ctx.lineWidth = ev.accent ? 3 : 1.5; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 8 + age * 26, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-  requestAnimationFrame(draw);
 }
 function readout() {
+  poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
   const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}`), sline];
   $('readout').textContent = lines.join('\n');
 }
 window.__poly = { move, m, applyTempo };
-readout(); draw();
+readout(); frameLoop(draw);

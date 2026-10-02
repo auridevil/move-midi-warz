@@ -23,8 +23,7 @@ body::after { content: ''; position: fixed; inset: 0; z-index: 9999; pointer-eve
 /* drifting stars */
 body::before { content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .7;
   background-image: radial-gradient(1px 1px at 12% 18%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 68% 8%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 84% 62%, rgba(103,232,249,.9) 50%, transparent 51%), radial-gradient(1px 1px at 36% 74%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 52% 40%, rgba(167,139,250,.9) 50%, transparent 51%), radial-gradient(1px 1px at 92% 28%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 22% 90%, #fff 50%, transparent 51%), radial-gradient(1.5px 1.5px at 76% 88%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 6% 48%, rgba(240,171,252,.9) 50%, transparent 51%);
-  animation: stars-drift 120s linear infinite; }
-@keyframes stars-drift { to { background-position: 0 -600px; } }
+  }  /* static on purpose: an endless drift repaints the whole viewport and re-blurs every panel each frame */
 ::selection { background: var(--signal-cyan); color: var(--void-black); }
 ::-webkit-scrollbar { width: 7px; height: 7px; } ::-webkit-scrollbar-track { background: var(--void-black); } ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--dim-purple), rgba(103, 232, 249, 0.3)); border-radius: 4px; }
 :focus-visible { outline: 2px solid var(--signal-cyan); outline-offset: 3px; border-radius: 2px; }
@@ -233,6 +232,8 @@ body.chaos::before { display: none; }
 .lane-drawer { border-width: 1px; transition: border-color .2s; }
 .subh { font: 400 10px var(--font-display); letter-spacing: .2em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
 .shift-ind { font-style: normal; color: var(--ember-magenta); margin-left: 8px; font-size: 11px; }
+/* pages with a live full-screen canvas: blur would be recomputed every frame, so go opaque instead */
+body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(22, 14, 46, 0.86); }
 .drawer.inner { margin-top: 8px; padding: 6px 10px; background: rgba(0,0,0,.15); }
 .sliders label[title] { cursor: help; }
 .hud-left { position: fixed; left: 24px; top: 215px; z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 380px; max-height: calc(100vh - 240px); overflow: auto; }

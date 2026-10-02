@@ -2,6 +2,7 @@ import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex, padRowCol } from 'movewire';
 import { Field, N, COLS, ROWS } from './field.js';
 import { Voices } from './voices.js';
+import { frameLoop } from '../frames.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 
 const $ = (id) => document.getElementById(id);
@@ -159,7 +160,7 @@ function cellXY(i) { const { row, col } = padRowCol(i); const W = innerWidth, H 
 function draw() {
   frame++;
   const now = performance.now(); stress.frameMs = stress.frameMs * 0.9 + (now - lastFrameT) * 0.1; lastFrameT = now;
-  if (frame % stress.drawEvery !== 0) { requestAnimationFrame(draw); return; }          // shed frames when stressed
+  if (frame % stress.drawEvery !== 0) return;          // shed frames when stressed
   ctx.fillStyle = 'rgba(14, 10, 32, 0.18)'; ctx.fillRect(0, 0, innerWidth, innerHeight);
   // links between cells that fired together
   ctx.lineWidth = 1;
@@ -182,7 +183,6 @@ function draw() {
   // gate ring under the field
   for (let st = 0; st < 16; st++) { const a = (st / 16) * Math.PI * 2 - Math.PI / 2, R = Math.min(innerWidth, innerHeight) * 0.46, cx = innerWidth * 0.5, cy = innerHeight * 0.56; ctx.fillStyle = field.gate[st] ? (st === field.tick % 16 ? '#fff' : 'rgba(103,232,249,.7)') : 'rgba(236,233,247,.12)'; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * R, cy + Math.sin(a) * R, st === field.tick % 16 ? 5 : 3, 0, Math.PI * 2); ctx.fill(); }
   if (frame % 6 === 0) readout();
-  requestAnimationFrame(draw);
 }
 function readout() {
   const p = field.params; const glitch = (s) => s.replace(/[a-z0-9]/g, (c) => (Math.random() < 0.015 ? GLYPHS[Math.floor(Math.random() * GLYPHS.length)] : c));
@@ -197,4 +197,4 @@ function readout() {
   $('readout').textContent = glitch(lines.join('\n'));
   const m = $('stress'); m.style.width = `${Math.round(stress.level * 100)}%`; m.style.background = stress.level > 0.7 ? 'var(--bad)' : stress.level > 0.4 ? '#fde047' : 'var(--signal-cyan)';
 }
-draw();
+frameLoop(draw);

@@ -3,6 +3,7 @@
 if (['localhost', '127.0.0.1'].includes(location.hostname)) {
   let known = null;
   const check = async () => {
+    if (document.hidden) return;   // background tabs: no need to poll
     try { const { v } = await (await fetch('/__version', { cache: 'no-store' })).json(); if (known && v !== known) location.reload(); known = v; } catch {}
   };
   check(); setInterval(check, 2000);

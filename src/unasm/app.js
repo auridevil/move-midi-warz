@@ -6,6 +6,7 @@ import { renderDemo, DEMO } from './demo.js';
 import { encodeWav, joinChunks } from './wav.js';
 import { getTempo, onTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
+import { frameLoop } from '../frames.js';
 
 const $ = (id) => document.getElementById(id);
 const midi = new Midi();
@@ -173,13 +174,22 @@ function syncUi() {
 function overviewPeaks(buf, cols = 1600) { const d = mono(buf), step = Math.max(1, Math.floor(d.length / cols)), out = new Float32Array(cols); for (let c = 0; c < cols; c++) { let m = 0; for (let i = c * step, e = Math.min(d.length, i + step); i < e; i += 4) m = Math.max(m, Math.abs(d[i])); out[c] = m; } return out; }
 const ov = $('overview'), zo = $('zoom'), DPR = Math.min(2, devicePixelRatio || 1);
 const fit = (cv) => { const w = cv.clientWidth, h = cv.clientHeight; if (cv.width !== w * DPR || cv.height !== h * DPR) { cv.width = w * DPR; cv.height = h * DPR; } const g = cv.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0); return [g, w, h]; };
-let zoomCache = { key: '', cols: null };
+let zoomCache = { key: '', cols: null }, ovCache = { key: '', img: null }, lastFrame = '';
 function zoomWindow() { if (eng.loop) return eng.loop; const bar = 240 / st.bpm, p = eng.posAt(), k = Math.floor((p - st.offset) / bar / 4) * 4; const start = Math.max(0, st.offset + k * bar); return { start, end: Math.min(eng.duration, start + 4 * bar) }; }
+let peaksId = 0, lastPeaks = null;
 function draw() {
-  requestAnimationFrame(draw);
+  // stopped and nothing changed since the last frame: skip the redraw entirely
+  if (peaks !== lastPeaks) { lastPeaks = peaks; peaksId++; }
+  const sig = `${peaksId}|${eng.playing}|${eng.posAt()}|${eng.loop?.start}|${eng.loop?.end}|${eng.held.length}|${st.bpm}|${st.offset}|${ov.clientWidth}x${ov.clientHeight}|${zo.clientWidth}x${zo.clientHeight}|${document.fonts?.status}`;
+  if (!eng.playing && sig === lastFrame) return ledTick(); lastFrame = sig;
   { const [g, w, h] = fit(ov); g.clearRect(0, 0, w, h); if (peaks && eng.buffer) {
-    const d = eng.duration; if (eng.loop) { g.fillStyle = 'rgba(253,224,71,.12)'; g.fillRect(eng.loop.start / d * w, 0, (eng.loop.end - eng.loop.start) / d * w, h); }
-    g.fillStyle = 'rgba(167,139,250,.75)'; for (let x = 0; x < w; x++) { const v = peaks[Math.floor(x / w * peaks.length)] * h * 0.9; g.fillRect(x, (h - v) / 2, 1, Math.max(1, v)); }
+    // the overview bars only change with the track, the loop or the size: render them once, blit per frame
+    const d = eng.duration, key = `${peaksId}|${w}x${h}|${DPR}|${eng.loop?.start}|${eng.loop?.end}`;
+    if (ovCache.key !== key) { const img = new OffscreenCanvas(w * DPR, h * DPR), o = img.getContext('2d'); o.scale(DPR, DPR);
+      if (eng.loop) { o.fillStyle = 'rgba(253,224,71,.12)'; o.fillRect(eng.loop.start / d * w, 0, (eng.loop.end - eng.loop.start) / d * w, h); }
+      o.fillStyle = 'rgba(167,139,250,.75)'; for (let x = 0; x < w; x++) { const v = peaks[Math.floor(x / w * peaks.length)] * h * 0.9; o.fillRect(x, (h - v) / 2, 1, Math.max(1, v)); }
+      ovCache = { key, img }; }
+    g.drawImage(ovCache.img, 0, 0, w, h);
     g.fillStyle = '#ece9f7'; g.fillRect(eng.posAt() / d * w, 0, 2, h);
   } }
   { const [g, w, h] = fit(zo); g.clearRect(0, 0, w, h); if (!eng.buffer) { g.fillStyle = 'rgba(236,233,247,.4)'; g.font = '14px Space Grotesk, sans-serif'; g.fillText('drop a track, or press demo loop', 16, h / 2); return; }
@@ -252,6 +262,6 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
     if (track?.demo) await loadBuffer(toCtxBuffer(await renderDemo(ctx.sampleRate)), DEMO.name, { detect: false, demo: true });
     else if (track?.bytes) { bytes = track.bytes; await loadBuffer(await ctx.decodeAudioData(track.bytes.slice(0)), track.name, { detect: false }); }
   } catch { $('track-info').textContent = 'Could not restore the last track: load it again.'; }
-  draw();
+  frameLoop(draw);
 })();
 if (['localhost', '127.0.0.1'].includes(location.hostname)) window.__unasm = { eng, ctx, st: () => st }; // for local smoke tests
