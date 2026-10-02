@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MIDI Warz — Unassembler</title>
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <meta name="color-scheme" content="dark" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+  <script type="importmap">
+  { "imports": { "movewire": "./node_modules/movewire/src/index.js", "movewire/web-midi": "./node_modules/movewire/src/web-midi.js" } }
+  </script>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <header class="bar">
+    <h1><a href="./index.html" class="home">MIDI Warz</a> <span class="sub">Unassembler · stutter, slice, break it on the Move</span></h1>
+    <div class="status">
+      <span id="midi-state" class="pill pill-off">Move: not connected</span>
+      <button id="btn-connect" class="primary">Connect Move</button>
+      <button id="btn-disconnect" disabled>Disconnect</button>
+    </div>
+  </header>
+  <main class="pl ua">
+    <section class="pl-rollcard ua-wave">
+      <canvas id="overview" class="ua-overview"></canvas>
+      <canvas id="zoom" class="ua-zoom"></canvas>
+    </section>
+    <section class="ua-play">
+      <div class="ua-padcard">
+        <div id="pads" class="ua-pads"></div>
+        <p class="hint">Hold a pad, let go and the track is where it would have been. <b>Keep one on:</b> Shift + pad (Move or keyboard), or switch <b>latch</b> on so every pad toggles. Keys 1–8 · Q–I · A–K · Z–, (rows top to bottom).</p>
+      </div>
+      <aside class="ua-side">
+        <div class="ua-deck">
+          <div class="ua-source">
+            <label class="ua-drop" id="drop" title="Drop an audio file anywhere on the page, or click to choose one">
+              <input id="file" type="file" accept="audio/*,.mp3,.wav,.flac,.m4a,.aac,.ogg" hidden />
+              <span class="ua-drop-t">drop a track</span><span class="ua-drop-s">or click · mp3 · wav · flac · m4a</span>
+            </label>
+            <button id="btn-demo" title="An 8-bar loop made here, nothing copyrighted">demo</button>
+          </div>
+          <div class="ua-track"><div id="track-name" class="ua-name">no track yet</div><div id="track-info" class="pl-mood">Load a track: it stays here when you come back.</div></div>
+          <div class="ua-transport">
+            <button id="btn-play" class="pl-play" title="Play / stop (Space · Move: Play)">▶</button>
+            <button id="btn-latch" class="ua-latch" title="Latch: pads toggle on/off instead of acting while held (Move: Loop button)">latch</button>
+            <button id="btn-rec" class="ua-rec" title="Record what comes out to a WAV (Move: Record)">● rec</button>
+            <div id="vol" class="ua-vol"></div>
+          </div>
+          <div class="ua-row"><label class="pl-f">bpm <input id="bpm" type="number" min="40" max="250" step="0.1" value="120" /></label><div class="pl-f">quantize <div id="quant" class="seg"></div></div></div>
+          <div class="ua-row"><div class="pl-f">loop bars <div id="loop" class="seg"></div></div></div>
+          <details class="ua-fix">
+            <summary>beat not right? <span id="conf" class="ua-conf"></span></summary>
+            <div class="ua-row">
+              <div class="pl-f">tempo <div class="seg"><button id="bpm-half" title="Half the tempo">÷2</button><button id="bpm-double" title="Double the tempo">×2</button><button id="bpm-tap" title="Tap along on the beat">tap</button></div></div>
+              <div class="pl-f">first beat <div class="seg"><button id="off-dn" title="Grid 10 ms earlier (Shift: one beat)">◀</button><button id="off-reset" title="Put the downbeat at the playhead">here</button><button id="off-up" title="Grid 10 ms later (Shift: one beat)">▶</button></div></div>
+            </div>
+            <label class="switch pl-kick" title="Play at the master tempo shared by every page (tape speed, pitch follows)"><input id="sync" type="checkbox" /> <span>follow master tempo <b id="master">—</b></span></label>
+          </details>
+        </div>
+        <div class="ua-knobcard">
+          <div id="knobs" class="gauges four"></div>
+          <p id="fx-now" class="pl-desc">—</p>
+        </div>
+      </aside>
+    </section>
+    <details class="glossary pl-help">
+      <summary>Move controls</summary>
+      <table>
+        <tr><th>Pads, top row</th><td>stutter 1/2 · 1/4 · 1/8 · 1/16 · 1/32 · 1/64 · 1/8T · 1/16T</td><th>Pads, row 2</th><td>slices 1–8 of the loop (or the bar)</td></tr>
+        <tr><th>Pads, row 3</th><td>reverse · tape stop · spin back · half speed · freeze · scatter · build roll · octave up</td><th>Pads, bottom row</th><td>filter · bitcrush · gate · echo · wash · kill · pitch drop · glitch</td></tr>
+        <tr><th>Pressure</th><td>amount of the held effect</td><th>Step buttons</th><td>jump to that sixteenth of the bar</td></tr>
+        <tr><th>Knobs 1–8</th><td>filter · resonance · crush · echo · feedback · wash · pitch · dry/wet</td><th>Wheel</th><td>nudge the playhead by a sixteenth</td></tr>
+        <tr><th>Shift + pad</th><td>latch that effect (press again to free it)</td><th>Loop</th><td>latch mode: every pad toggles</td></tr>
+        <tr><th>Volume knob</th><td>output volume</td><th></th><td></td></tr>
+        <tr><th>Track 1–4</th><td>quantize 1/16 · 1/8 · 1/4 · off</td><th>◀ ▶</th><td>bar back / forward · Shift: loop length</td></tr>
+        <tr><th>Capture</th><td>loop the bar under the playhead · Shift: loop off</td><th>Play</th><td>start / stop</td></tr>
+        <tr><th>Record</th><td>record to WAV</td><th>Undo</th><td>release every effect, latched ones too</td></tr>
+      </table>
+    </details>
+  </main>
+  <script type="module" src="./src/unasm/app.js"></script>
+  <script type="module" src="./src/analytics.js"></script>
+  <script type="module" src="./src/dev-reload.js"></script>
+</body>
+</html>

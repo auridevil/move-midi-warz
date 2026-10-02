@@ -38,6 +38,7 @@ index.html                  launcher
 drums.html / src/drums/     finger drumming: exercises data, kit, drill engine (grader), page
 poly.html  / src/poly/      Orbits: lanes model, voices, kits, page
 punchliner.html / src/punch/ Punchliner: line generator, endings + chaos, preview sounds, .mid and Move Set (.ablbundle) writers
+unassembler.html / src/unasm/ Unassembler: beat detection, glitch engine (stutters, slices, take-overs), demo loop, WAV recorder
 chaos.html / src/chaos/     Entropy Engine: stochastic field, Tone voices, page
 lights.html / src/games/    Lights Out (+ generative arp)
 doom.html  / src/doom/      Doom via js-dos; games/doom/ holds the runtime and the shareware bundle

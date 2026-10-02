@@ -2,7 +2,7 @@
 // Needs a running dev server (npm start) and Chrome with --remote-debugging-port=9222, e.g.:
 //   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --remote-debugging-port=9222 --user-data-dir=/tmp/mw-chrome about:blank &
 const base = process.argv[2] || 'http://localhost:5173';
-const pages = ['index.html', 'drums.html', 'lights.html', 'chaos.html', 'poly.html', 'doom.html', 'melodic.html', 'punchliner.html'];
+const pages = ['index.html', 'drums.html', 'lights.html', 'chaos.html', 'poly.html', 'doom.html', 'melodic.html', 'punchliner.html', 'unassembler.html'];
 let failed = 0;
 for (const path of pages) {
   const { webSocketDebuggerUrl } = await (await fetch('http://localhost:9222/json/new?about:blank', { method: 'PUT' })).json();
