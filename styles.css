@@ -224,7 +224,9 @@ body.chaos::before { display: none; }
 .gtable { border-collapse: collapse; font-size: 12px; margin-top: 6px; } .gtable th { text-align: left; color: var(--fg); padding: 3px 8px 3px 0; white-space: nowrap; } .gtable td { color: var(--muted); padding: 3px 14px 3px 0; }
 .chaos .bar .sub { color: rgba(240,171,252,.85); }
 
-.stressbar { position: fixed; left: 24px; bottom: 18px; width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); z-index: 3; overflow: hidden; }
+.stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 400 10px var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.75); cursor: help; }
+.stress-val { min-width: 13ch; font-variant-numeric: tabular-nums; }
+.stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
 .stepsui { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; margin: 8px 0; }
 .stepsui .st { height: 18px; border-radius: 4px; background: rgba(236,233,247,.14); cursor: pointer; } .stepsui .st.on { background: var(--signal-cyan); } .stepsui .st.acc { background: #fff; } .stepsui .st.off { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; }
@@ -385,3 +387,58 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .art-punch { background: repeating-linear-gradient(90deg, transparent 0 11%, rgba(236,233,247,.08) 11% 11.5%), linear-gradient(180deg, transparent 18%, #67e8f9 18% 24%, transparent 24% 40%, #a78bfa 40% 46%, transparent 46% 58%, #a78bfa 58% 64%, transparent 64% 78%, #f0abfc 78% 86%, transparent 86%), var(--cell); }
 @media (max-width: 1100px) { .pl-work { grid-template-columns: 1fr; } .pl-parts { display: grid; grid-template-columns: repeat(3, 1fr); } .pl-song-main { grid-template-columns: 1fr auto; } .pl-chords { grid-column: 1 / -1; grid-row: 2; } }
 @media (max-width: 760px) { .pl-parts { grid-template-columns: 1fr; } .pl-song-main { grid-template-columns: 1fr; } .pl-transport { flex-wrap: wrap; } }
+
+/* Orbits: slots, record, evolve, MIDI, step locks */
+.slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0 2px; }
+.slots .slot { padding: 4px 0; font-size: 11px; border-radius: 6px; background: rgba(236,233,247,.06); color: var(--muted); border: 1px dashed rgba(236,233,247,.2); }
+.slots .slot.filled { background: rgba(167,139,250,.35); color: #fff; border-style: solid; border-color: rgba(167,139,250,.6); }
+.slots .slot.chain { border-color: var(--ember-magenta); box-shadow: inset 0 0 0 1px var(--ember-magenta); }
+.slots .slot.cur { background: var(--star-white); color: var(--void-black); font-weight: 700; }
+.slots .slot.queued { background: var(--signal-cyan); color: var(--void-black); animation: slot-wait .5s ease-in-out infinite alternate; }
+@keyframes slot-wait { to { opacity: .45; } }
+.row-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; font-size: 12px; }
+.row-ctl label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; }
+.row-ctl select { width: auto; }
+.row-ctl input[type=number] { width: 64px; }
+.gauges.one { grid-template-columns: 1fr; margin: 0; }
+.hint.tight { margin: 4px 0; }
+button.small { padding: 3px 10px; font-size: 11px; }
+.rec-btn.armed { background: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 16px rgba(239,68,68,.45); }
+#btn-evolve.armed { background: var(--ember-magenta); border-color: var(--ember-magenta); color: var(--void-black); box-shadow: 0 0 16px rgba(240,171,252,.4); }
+.evo-lanes { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; margin: 4px 0; }
+.midi-lanes input { width: 56px; }
+.stepsui .st.lk { box-shadow: inset 0 -3px 0 var(--signal-cyan); }
+.stepsui .st.sel { outline: 2px solid var(--signal-cyan); outline-offset: 1px; }
+.lockpanel { border: 1px solid rgba(103,232,249,.45); border-radius: 10px; padding: 6px 8px; margin: 4px 0 8px; background: rgba(103,232,249,.05); }
+.lock-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--signal-cyan); gap: 8px; }
+.hud-bl .stress-meter { position: static; margin: 8px 0 0; }
+/* Orbits layout: the left column is placed by JS between the readout and the bottom-left panel (layoutHud) */
+#hud-left { max-height: none; }
+/* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
+.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgba(18, 12, 40, 0.97); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
+.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgba(18, 12, 40, 0.97); padding: 8px 0; }
+.keys-pop .pop-x { display: none; float: right; font-size: 10px; color: var(--muted); letter-spacing: .1em; }
+.keys-pop[open] .pop-x { display: inline; }
+.gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
+@media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } #hud-left { top: auto !important; bottom: auto !important; } }
+body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: hidden; }   /* never runs under the lane panel */
+/* Orbits on narrow windows: stack everything in one scrolling column over the fixed canvas */
+@media (max-width: 1100px) {
+  body:has(#hud-left) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
+  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .readout { order: 1; } body:has(#hud-left) .hud { order: 2; }
+  body:has(#hud-left) #hud-left { order: 3; } body:has(#hud-left) #hud-bl { order: 4; }
+  body:has(#hud-left) .readout { position: static; margin: 0 16px 12px; max-width: none; overflow-x: auto; }
+  body:has(#hud-left) .hud { position: static; max-width: none; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
+  body:has(#hud-left) .hud-row { justify-content: flex-start; }
+  body:has(#hud-left) #hud-left { position: static; width: auto; margin: 0 16px 12px; overflow: visible; }
+  body:has(#hud-left) #hud-bl { position: static; width: auto; margin: 0 16px 16px; }
+}
+/* Orbits round 3: trig conditions, samples, dice */
+.stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto 0 -13px 0; font-size: 8px; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
+.stepsui { margin-bottom: 14px; }
+.trig-row { border-top: 1px solid rgba(103,232,249,.2); padding-top: 6px; }
+.sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
+#btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
+#btn-fill.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
+#btn-dice.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); box-shadow: 0 0 14px rgba(103,232,249,.4); }
+#dice-seed { width: 80px; }

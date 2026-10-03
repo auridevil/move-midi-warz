@@ -40,10 +40,10 @@ for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => {
 const fires = []; // recent fires for the visuals: {cell, t, note, vel}
 
 // ---- stress meter: main-thread jank, audio scheduling lateness, voice load → 0..1, with automatic throttling ----
-const stress = { frameMs: 16, lateMs: 0, voices: 0, level: 0, maxFires: 8, drawEvery: 1, dropped: 0 };
+const stress = { frameMs: 16, headMs: 100, voices: 0, level: 0, maxFires: 8, drawEvery: 1, dropped: 0 };
 function updateStress() {
   const jank = Math.min(1, Math.max(0, (stress.frameMs - 18) / 40));       // 18 ms fine, 58 ms = 1
-  const late = Math.min(1, Math.max(0, stress.lateMs / 80));               // scheduled note already 80 ms in the past = 1
+  const late = Math.min(1, Math.max(0, (30 - stress.headMs) / 50));       // < 30 ms of audio headroom starts to count, < −20 ms (notes in the past) = 1
   const load = voices ? Math.min(1, voices.activeVoices() / voices.capacity()) : 0;
   stress.voices = voices ? voices.activeVoices() : 0;
   stress.level = stress.level * 0.85 + Math.max(jank, late, load * 0.8) * 0.15;   // smoothed
@@ -53,7 +53,9 @@ function updateStress() {
 function tick(time) {
   if (frozen) return;
   if (auto && Math.random() < 0.08) field.inject(Math.floor(Math.random() * N), 0.6 + Math.random() * 0.6);
-  stress.lateMs = Math.max(0, (T.now() - time) * 1000);                       // how late the scheduler is running
+  // headroom = how far ahead of the speakers this tick is scheduled. (T.now() − time sat at 0–50 ms in normal running, Tone's update interval,
+  // so the old 'lateness' idled the meter at 25–40 %.)
+  stress.headMs = stress.headMs * 0.8 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.2;
   let out = field.step();
   if (out.length > stress.maxFires) { out.sort((a, b) => b.vel - a.vel); stress.dropped += out.length - stress.maxFires; out = out.slice(0, stress.maxFires); }
   for (const f of out) { if (voices.play(f, time)) fires.push({ ...f, t: performance.now() }); else stress.dropped++; }
@@ -189,12 +191,14 @@ function readout() {
   const bar = (v) => '▁▂▃▄▅▆▇█'[Math.min(7, Math.floor(v * 8))].repeat(1) + '·'.repeat(0);
   const lines = [
     `tempo ${String(tempo).padStart(3)} bpm   energy ${field.totalEnergy().toFixed(2).padStart(6)}   tick ${String(field.tick).padStart(6)}   ${awake ? (frozen ? 'frozen' : auto ? 'auto-seeding' : 'listening') : 'asleep'}`,
-    `stress ${'█'.repeat(Math.round(stress.level * 10)).padEnd(10, '·')} ${(stress.level * 100).toFixed(0).padStart(3)}%   frame ${stress.frameMs.toFixed(0).padStart(3)} ms   late ${stress.lateMs.toFixed(0).padStart(3)} ms   voices ${String(stress.voices).padStart(2)}   ${stress.maxFires < 8 ? `throttling → ${stress.maxFires} fires/tick${stress.drawEvery > 1 ? `, ${stress.drawEvery}× frame skip` : ''}` : 'headroom ok'}   dropped ${stress.dropped}`,
+    `stress ${'█'.repeat(Math.round(stress.level * 10)).padEnd(10, '·')} ${(stress.level * 100).toFixed(0).padStart(3)}%   frame ${stress.frameMs.toFixed(0).padStart(3)} ms   headroom ${stress.headMs.toFixed(0).padStart(3)} ms   voices ${String(stress.voices).padStart(2)}   ${stress.maxFires < 8 ? `throttling → ${stress.maxFires} fires/tick${stress.drawEvery > 1 ? `, ${stress.drawEvery}× frame skip` : ''}` : 'headroom ok'}   dropped ${stress.dropped}`,
     ...PARAM_KEYS.map(k => `${PARAM_LABEL[k].padEnd(10)} ${bar(p[k])} ${p[k].toFixed(2)}`),
     `scale ${field.scale.join(' ')}   octave ${field.octave > 0 ? '+' : ''}${field.octave}   drift ${field.drift > 0 ? '+' : ''}${field.drift}   pinned ${field.pinned.size}`,
     `last  ${field.lastFires.slice(0, 5).map(f => `${f.family[0]}${f.note}`).join(' ') || '∅'}   arp ${field.arpNotes().join(' ') || '∅'}`,
   ];
   $('readout').textContent = glitch(lines.join('\n'));
-  const m = $('stress'); m.style.width = `${Math.round(stress.level * 100)}%`; m.style.background = stress.level > 0.7 ? 'var(--bad)' : stress.level > 0.4 ? '#fde047' : 'var(--signal-cyan)';
+  const m = $('stress'), col = stress.level > 0.7 ? 'var(--bad)' : stress.level > 0.4 ? '#fde047' : 'var(--signal-cyan)'; m.style.width = `${Math.round(stress.level * 100)}%`; m.style.background = col;
+  const word = stress.level > 0.7 ? 'overload' : stress.level > 0.4 ? 'busy' : stress.maxFires < 8 ? 'throttling' : 'calm';
+  const sv = $('stress-val'); sv.textContent = `${Math.round(stress.level * 100)}% · ${word}`; sv.style.color = col;
 }
 frameLoop(draw);

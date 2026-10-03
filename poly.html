@@ -25,29 +25,110 @@
     </div>
   </header>
   <div id="readout" class="readout" aria-live="polite"></div>
-  <div class="hud-left">
+  <div class="hud-left" id="hud-left">
     <details class="drawer" open>
       <summary>global · master tempo &amp; humanize</summary>
       <div id="global-sliders" class="gauges two"></div>
     </details>
-  </div>
-  <div class="hud-bl">
+    <details class="drawer" open>
+      <summary>patterns · 16 slots &amp; chains</summary>
+      <div id="slots" class="slots"></div>
+      <p id="chain-info" class="hint tight"></p>
+      <div class="row-ctl">
+        <label title="When a recalled slot takes over">switch <select id="slot-switch"></select></label>
+        <div id="slot-gauges" class="gauges one"></div>
+        <button id="chain-stop" class="small">stop chain</button>
+      </div>
+      <p class="hint tight">Click = load · Shift+click = save · Cmd/Ctrl+click = add to a chain · Alt+click = erase. Move: hold <b>Loop</b> + step = load (several steps = chain), hold <b>Duplicate</b> + step = save.</p>
+    </details>
     <details class="drawer">
-      <summary>Move controls</summary>
-      <table class="gtable">
-        <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent</td><th>Steps</th><td>selected lane, all 16</td></tr>
-        <tr><th>Track 1–4</th><td>select lane</td><th>Play</th><td>start / stop</td></tr>
-        <tr><th>Shift + knobs</th><td colspan="3">sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
-        <tr><th>Knob 1</th><td>length</td><th>Knob 5</th><td>swing</td></tr>
-        <tr><th>Knob 2</th><td>euclid hits</td><th>Knob 6</th><td>probability</td></tr>
-        <tr><th>Knob 3</th><td>rotation</td><th>Knob 7</th><td>tune</td></tr>
-        <tr><th>Knob 4</th><td>speed ratio</td><th>Knob 8</th><td>master tempo</td></tr>
-        <tr><th>Mute</th><td>mute lane</td><th>Capture</th><td>randomize all</td></tr>
-        <tr><th>Undo</th><td>clear lane</td><th>Record</th><td>tap tempo</td></tr>
-        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
-        <tr><th>Wheel</th><td>humanize</td><th>Volume</th><td>volume</td></tr>
+      <summary>live record · play the pads, they stick</summary>
+      <div class="row-ctl">
+        <button id="btn-rec" class="rec-btn">● arm record</button>
+        <div id="rec-gauges" class="gauges one"></div>
+      </div>
+      <div class="row-ctl">
+        <label title="Where a hit is filed">quantize <select id="rec-quant"></select></label>
+        <label title="The 8 pads of a row play 8 pitches and write a tune lock"><input type="checkbox" id="rec-pitch" /> pitch pads</label>
+      </div>
+      <p class="hint tight">Armed + playing: pads (or keys 1–8 / q–i / a–k / z–,) play their row's lane and write the nearest step. Hard hits = accents. Move: <b>Record</b> arms, Shift+Record = tap tempo.</p>
+    </details>
+    <details class="drawer">
+      <summary>evolve · the pattern drifts on its own</summary>
+      <div class="row-ctl">
+        <button id="btn-evolve" class="rec-btn">◌ evolve</button>
+        <button id="evo-home-now" class="small" title="Use the current pattern as home">home = now</button>
+        <label title="What evolve may change">touches <select id="evo-scope"></select></label>
+      </div>
+      <div id="evo-gauges" class="gauges three"></div>
+      <div id="evo-lanes" class="evo-lanes"></div>
+      <p class="hint tight">Every N bars some lanes get nudged (rotation, fill, length, speed). Untick a lane to keep it steady. Move: Shift+Capture toggles.</p>
+    </details>
+    <details class="drawer">
+      <summary>dice · free or repeatable randomness</summary>
+      <div class="row-ctl">
+        <button id="btn-dice" class="rec-btn">○ dice free</button>
+        <label title="Same seed = same groove">seed <input type="number" id="dice-seed" min="1" max="99999" /></label>
+        <button id="dice-roll" class="small" title="New seed">re-roll</button>
+        <button id="dice-make" class="small" title="Randomize the pattern from this seed">pattern from seed</button>
+      </div>
+      <div id="dice-gauges" class="gauges three"></div>
+      <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
+    </details>
+    <details class="drawer">
+      <summary>share &amp; export · link, WAV, MIDI</summary>
+      <div class="row-ctl">
+        <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
+      </div>
+      <div class="row-ctl">
+        <label>length <select id="exp-len"><option value="1">1 bar</option><option value="2">2 bars</option><option value="4" selected>4 bars</option><option value="8">8 bars</option><option value="16">16 bars</option><option value="cycle">one full cycle</option></select></label>
+        <label title="MIDI only: the running chain, each slot its bars">MIDI of <select id="exp-what"><option value="pattern">this pattern</option><option value="chain">the chain</option></select></label>
+      </div>
+      <div class="row-ctl"><button id="exp-wav">⤓ WAV</button><button id="exp-mid">⤓ MIDI</button></div>
+      <p id="exp-status" class="hint tight"></p>
+    </details>
+    <details class="drawer">
+      <summary>MIDI I/O · notes, clock out, clock in</summary>
+      <button id="btn-midi-enable">enable MIDI ports</button>
+      <div id="midi-body" hidden>
+        <div class="row-ctl"><label>out <select id="midi-out"></select></label><label title="MIDI clock + start/stop to the out port"><input type="checkbox" id="midi-clock-out" /> clock out</label></div>
+        <table id="midi-lanes" class="gtable midi-lanes"></table>
+        <div class="row-ctl"><label>gate <input type="number" id="midi-gate" min="5" max="2000" /> ms</label></div>
+        <div class="row-ctl"><label>clock in <select id="midi-in"></select></label><label>follow <select id="midi-follow"></select></label></div>
+      </div>
+      <p id="midi-status" class="hint tight"></p>
+    </details>
+  </div>
+  <div class="hud-bl" id="hud-bl">
+    <details class="drawer keys-pop" id="keys-pop">
+      <summary>Move controls <span class="pop-x">esc ×</span></summary>
+      <table class="gtable keys">
+        <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent · record armed: play + record</td></tr>
+        <tr><th>Steps</th><td>selected lane, all 16 · tap = toggle</td></tr>
+        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color</td></tr>
+        <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
+        <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
+        <tr><th>Hold Layout</th><td>fill</td></tr>
+        <tr><th>Delete</th><td>clear the lane</td></tr>
+        <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
+        <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
+        <tr><th>Track 1–4</th><td>select lane</td></tr>
+        <tr><th>Play</th><td>start / stop</td></tr>
+        <tr><th>Knobs 1–4</th><td>length · euclid hits · rotation · speed ratio</td></tr>
+        <tr><th>Knobs 5–7</th><td>swing · probability · tune</td></tr>
+        <tr><th>Knob 8</th><td>master tempo</td></tr>
+        <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
+        <tr><th>Mute</th><td>mute lane · Shift = solo</td></tr>
+        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off</td></tr>
+        <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
+        <tr><th>Record</th><td>arm live record · Shift = tap tempo</td></tr>
+        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
+        <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
+        <tr><th>Wheel</th><td>humanize</td></tr>
+        <tr><th>Volume</th><td>volume</td></tr>
       </table>
     </details>
+    <div class="stress-meter" title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
   </div>
   <div class="hud">
     <button id="btn-play" class="primary big-btn">▶ play</button>
@@ -57,15 +138,40 @@
       <button id="btn-tap">tap tempo</button>
       <button id="btn-reset">reset phase</button>
     </div>
+    <div class="hud-row">
+      <button id="btn-undo" title="Undo (Cmd/Ctrl+Z · Move: Undo)">↶ undo</button>
+      <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z · Move: Shift+Undo)">↷ redo</button>
+      <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0 · Move: hold Layout)">fill (hold)</button>
+    </div>
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary>lane <span id="lane-name">kick</span> · click a ring, Alt+1–4, or the Move's track buttons <em id="shift-ind" class="shift-ind"></em></summary>
       <div id="sliders" class="gauges"></div>
       <div id="stepsui" class="stepsui"></div>
+      <div id="lockpanel" class="lockpanel" hidden>
+        <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
+        <div id="lock-gauges" class="gauges"></div>
+        <div class="row-ctl trig-row">
+          <label title="Play only on some loops, or only with/without Fill">condition <select id="trig-cond"></select></label>
+          <label title="Repeat the hit inside its step">repeats <select id="trig-ratchet"></select></label>
+          <label title="Each repeat quieter"><input type="checkbox" id="trig-fade" /> fade</label>
+        </div>
+      </div>
       <h3 class="subh">sound · Shift + knobs 1–8</h3>
       <div class="sliders">
         <label>voice <select id="voice-select"></select></label>
         <label>kit (all lanes) <select id="kit-select"></select></label>
       </div>
+      <div class="row-ctl">
+        <button id="btn-solo" class="small" title="Only soloed lanes play (Move: Shift+Mute)">solo</button>
+        <label title="When this lane hits it cuts off…">chokes <select id="choke-select"></select></label>
+      </div>
+      <div class="row-ctl sample-row" title="Load a file, record the mic, take an Unassembler slice, or drop a file on a ring">
+        <span class="subh">sample</span>
+        <button id="btn-sample-file" class="small">load file…</button><input type="file" id="sample-file" accept="audio/*" hidden />
+        <button id="btn-mic" class="small rec-btn">● mic</button>
+        <select id="slice-select"></select>
+      </div>
+      <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sound-sliders" class="gauges"></div>
       <details class="drawer inner">
         <summary>what each parameter does</summary>

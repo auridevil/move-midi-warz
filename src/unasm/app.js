@@ -7,6 +7,7 @@ import { encodeWav, joinChunks } from './wav.js';
 import { getTempo, onTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { frameLoop } from '../frames.js';
+import { putSample, SLICES_KEY, SLICES_PING } from '../samples.js';
 
 const $ = (id) => document.getElementById(id);
 const midi = new Midi();
@@ -79,6 +80,16 @@ function toggleRec() {
   syncUi(); paintLeds();
 }
 $('btn-rec').onclick = toggleRec;
+// hand the 8 slices of the current loop (or bar) to Orbits through the shared sample store
+$('btn-to-orbits').onclick = async () => {
+  const b = eng.buffer; if (!b) { $('track-info').textContent = 'load a track first'; return; }
+  // same region the slice pads use: the loop, else the bar under the playhead
+  const r = eng.loop || eng.barRegion(), sr = b.sampleRate, a = Math.floor(r.start * sr), n = Math.floor((r.end - r.start) * sr / 8);
+  const chans = Array.from({ length: Math.min(2, b.numberOfChannels) }, (_, c) => b.getChannelData(c));
+  const slices = Array.from({ length: 8 }, (_, k) => chans.map(d => d.slice(a + k * n, a + (k + 1) * n)));
+  await putSample(SLICES_KEY, { name: st.name || 'track', sampleRate: sr, slices }); try { localStorage.setItem(SLICES_PING, String(Date.now())); } catch {}
+  $('track-info').textContent = `8 slices of ${(r.end - r.start).toFixed(2)} s sent: in Orbits, pick them in a lane's sample menu`;
+};
 
 // ---------------- grid, loop, tempo ----------------
 const applyRate = () => eng.setRate((st.sync ? master / st.bpm : 1) * 2 ** (st.knobs.pitch / 12));

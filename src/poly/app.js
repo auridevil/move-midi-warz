@@ -1,11 +1,19 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET } from './lanes.js';
+import { Dice } from './dice.js';
+import { History } from './history.js';
+import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
+import { encodeWav } from '../unasm/wav.js';
+import { phaseCorrection } from './midiio.js';
+import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
+import { PolyMidi, FOLLOW_MODES } from './midiio.js';
 import { VOICES, VOICE_KEYS } from './voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
-import { frameLoop } from '../frames.js';
+import { createScene } from './scene.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -17,10 +25,22 @@ const LANE_HEX = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa'];
 let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null')); } catch { m = new Machine(); }
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
-const save = () => { try { localStorage.setItem(SAVE, JSON.stringify(m)); } catch {} };
+// every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step)
+const hist = new History(); let restoring = false;
+const save = () => { const j = JSON.stringify(m); if (!restoring) hist.commit(j); try { localStorage.setItem(SAVE, j); } catch {} };
+const dice = new Dice(); let fill = false;
+// page settings (not part of a pattern): live record, evolve, MIDI I/O
+const SETTINGS = 'midi-warz.poly.settings.v1';
+const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest' };
+const evo = { on: false, every: 4, amount: 40, scope: 'hits', home: 0 };   // home: return to the snapshot after N mutations (0 = never)
+let evoSnap = null, evoCount = 0;
+const bank = new SlotBank(localStorage);
+const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); } } catch {}
+const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice })); } catch {} };
 
 // ---- sounds ----
-let kit = null, loops = [];
+let kit = null, loop = null;
 // every lane owns a chain: voice (from the library) → drive → tone filter → pan → level → master (+ send → delay)
 function makeKit() {
   const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter);
@@ -29,16 +49,33 @@ function makeKit() {
   const chains = m.lanes.map(() => {
     const level = new T.Gain(0.8).connect(master); const send = new T.Gain(0.15).connect(delay); const pan = new T.Panner(0); pan.connect(level); pan.connect(send);
     const tone = new T.Filter({ type: 'lowpass', frequency: 8000, Q: 0.7 }).connect(pan); const drive = new T.Distortion({ distortion: 0, wet: 0 }).connect(tone);
-    return { v: null, voice: null, drive, tone, pan, level, send };
+    const choke = new T.Gain(1).connect(drive);   // another lane's hit can cut this one off (choke groups)
+    return { v: null, voice: null, choke, drive, tone, pan, level, send };
   });
   const kit = { master, delay, chains }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
 function buildVoice(li, k = kit) {
-  if (!k) return; const c = k.chains[li], key = VOICES[m.lanes[li].voice] ? m.lanes[li].voice : 'kick';
+  if (!k) return; const lane = m.lanes[li], c = k.chains[li];
+  const key = lane.voice === 'sample' && lane.sample ? 'sample' : VOICES[lane.voice] ? lane.voice : 'kick';
   if (c.voice === key && c.v) return;
   if (c.v) for (const n of Object.values(c.v)) { try { n.dispose(); } catch {} }
-  c.v = VOICES[key].make(T, c.drive); c.voice = key;
+  c.v = key === 'sample' ? {} : VOICES[key].make(T, c.choke); c.voice = key;   // samples make their nodes per hit
+  if (key === 'sample') ensureSample(lane);
+}
+// ---- samples on lanes: buffers by id (IndexedDB holds the audio; the lane only keeps { id, name }) ----
+const sampleBufs = new Map();
+async function ensureSample(lane) { const id = lane.sample?.id; if (!id || sampleBufs.has(id)) return; const r = await getSample(id); if (r) sampleBufs.set(id, toAudioBuffer(r, T.getContext().rawContext)); }
+/** One-shot playback: tune = rate (±1 oct), decay = how much of the sample plays, snap < ½ softens the attack and
+ *  > ½ skips into the sample, color = a pitch swoop into the note (up above ½, down below). */
+function playSample(c, lane, p, time) {
+  const buf = sampleBufs.get(lane.sample?.id); if (!buf) return;
+  const len = buf.duration, offset = p.snap > 0.5 ? (p.snap - 0.5) * 0.6 * len : 0, attack = p.snap < 0.5 ? 0.001 + (0.5 - p.snap) * 0.06 : 0.001;
+  const play = Math.min(len - offset, 0.03 + Math.pow(p.decayRaw, 1.5) * (len - offset)), rate = Math.pow(2, p.tune);
+  const src = new T.ToneBufferSource(buf), env = new T.Gain(0).connect(c.choke); src.connect(env);
+  env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + attack); env.gain.setValueAtTime(p.vel, time + Math.max(attack, play * 0.75)); env.gain.linearRampToValueAtTime(0, time + play);
+  src.playbackRate.setValueAtTime(rate * Math.pow(2, (p.color - 0.5) * 2), time); src.playbackRate.exponentialRampToValueAtTime(rate, time + 0.06);
+  src.onended = () => { try { src.dispose(); env.dispose(); } catch {} }; src.start(time, offset); src.stop(time + play + 0.02);
 }
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
 function applySound(li, k = kit) {
@@ -47,35 +84,52 @@ function applySound(li, k = kit) {
   c.tone.frequency.value = 200 * Math.pow(60, s.tone);              // 200 Hz .. 12 kHz
   c.pan.pan.value = s.pan * 2 - 1; c.level.gain.value = s.level * s.level * 1.2; c.send.gain.value = s.send * 0.8;
 }
-function hitSound(lane, time, accent) {
-  const li = m.lanes.indexOf(lane), c = kit.chains[li]; if (!c?.v) return; const s = lane.sound;
-  const p = { vel: accent ? 1 : 0.7, tune: lane.tune, dec: 0.04 + s.decay * s.decay * 1.2, snap: s.snap, color: s.color };
-  try { VOICES[c.voice].hit(T, c.v, p, time); } catch {}
+function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
+  const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
+  const p = { vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color };
+  // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
+  try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
+  // a tone lock opens / closes the lane filter for this hit only; the next unlocked hit puts it back
+  if (L.tone != null || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone), time); } catch {} c.toneLocked = L.tone != null; }
+  try { if (c.voice === 'sample') playSample(c, lane, p, time); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
-const voiceLabel = (lane) => VOICES[lane.voice]?.label || lane.voice;
+const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
 function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awake && !playing) hitSound(m.lanes[li], T.now(), false); sync(); }
-function cycleVoice(li, dir) { const i = VOICE_KEYS.indexOf(m.lanes[li].voice); setVoice(li, VOICE_KEYS[((i + dir) % VOICE_KEYS.length + VOICE_KEYS.length) % VOICE_KEYS.length]); }
+function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
 function applyKit(key) { m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((_, i) => { buildVoice(i); applySound(i); }); $('kit-select').value = key; sync(); }
 function cycleKit(dir) { const cur = KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
-const events = []; // for visuals: {lane, index, t, accent}
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
 async function wake() { if (awake) return; await T.start(); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
-function buildLoops() {
-  for (const l of loops) l.dispose(); loops = [];
-  m.lanes.forEach((lane, li) => {
-    const loop = new T.Loop((time) => {
-      const ev = lane.advance();
-      if (ev.hit) { const jitter = (Math.random() - 0.5) * m.humanize * 0.03; const off = ev.swung * m.stepSeconds(lane, tempo); hitSound(lane, time + off + Math.max(0, jitter), ev.accent); }
-      T.getDraw().schedule(() => { events.push({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent, t: performance.now() }); if (events.length > 64) events.splice(0, events.length - 64); lane.shown = ev.index; paintLeds(); }, time);
-    }, m.stepSeconds(lane, tempo));
-    loop.start(0); loops.push(loop);
+
+// ---- the master clock: one loop at 24 ticks per beat drives every lane, MIDI clock, slots and evolve ----
+// Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
+const stress = { level: 0, headMs: 100 };
+let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:step' already played live
+const tickSec = () => 60 / tempo / PPQ;
+const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
+function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onTick(time), `${T.getTransport().PPQ / PPQ}i`); loop.start(0); }
+function onTick(time) {
+  if (resetPending) { tick = 0; resetPending = false; }
+  const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
+  stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
+  pmidi.clock(at);
+  const si = bank.due(t, m.cycleTicks()); if (si >= 0) loadSlot(si);
+  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS);
+  const now = T.getContext().rawContext.currentTime;
+  m.tick(t, Math.random, { fill, dice: dice.locked ? dice : null }).forEach((ev, li) => {
+    if (!ev) return; const lane = m.lanes[li];
+    if (skip.delete(`${li}:${ev.step}`)) ev.hit = false;   // played live a moment ago: don't double it
+    for (const h of expandHits(ev, lane, li, { humanize: m.humanize, dice: dice.locked ? dice : null, tickSec: tickSec() })) {   // swing, ±humanize, ratchets
+      const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000);
+    }
+    T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; paintLeds(); }, time);
   });
 }
-function retime() { if (!awake) return; T.getTransport().bpm.rampTo(tempo, 0.1); m.lanes.forEach((lane, i) => { if (loops[i]) loops[i].interval = m.stepSeconds(lane, tempo); }); kit.delay.delayTime.value = T.Time('8n.').toSeconds(); }
+function retime() { if (!awake) return; T.getTransport().bpm.rampTo(tempo, 0.1); kit.delay.delayTime.value = T.Time('8n.').toSeconds(); }
 async function togglePlay() {
   await wake(); playing = !playing;
-  if (playing) { m.resetAll(); for (const l of loops) l.start(0); T.getTransport().start('+0.05'); } else { T.getTransport().stop(); for (const l of loops) l.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -108,6 +162,28 @@ const INFO = {
   level: 'Lane volume.',
   tempo: 'Master tempo in bpm, shared by every page. Knob 8 (no Shift), tap tempo on the Record button. Global, not per lane.',
   humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine. Wheel.',
+  'step locks': 'Hold a step button on the Move and turn knobs 1–7 (or Alt/right-click a step here) to override tune, probability, velocity, decay, tone, snap or color on that step only. Hold step + Delete clears them. Locked hits glow cyan and get a small moon.',
+  'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
+  'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
+  'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
+  'chain bars': 'In a chain (song), how many bars each slot plays before the next one comes in. Chains always change on a bar line.',
+  'accent above': 'Live record: pad velocity at or above this becomes an accent (keyboard: Shift = accent).',
+  quantize: 'Live record: "nearest step" rounds, so a slightly early hit lands on the coming step; "step just played" always files it under the last step.',
+  'pitch pads': 'Live record: the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
+  'evolve every': 'Evolve mode: how many bars between two mutations.',
+  'evolve amount': 'Evolve mode: chance per lane of being nudged at each mutation.',
+  'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
+  'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
+  'clock out': 'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
+  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (Move: hold Layout · keyboard: hold 0), never while it is, or only/never on the first loop after Play. Move: hold step + knob 8.',
+  repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter. Move: hold step + Shift + knob 8.',
+  solo: 'Solo: only soloed lanes play (several can be). Move: Shift + Mute.',
+  chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
+  sample: 'Load a file, record up to 4 s from the mic, take one of the 8 slices Unassembler sent, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit.',
+  dice: 'Free dice = every probability roll is new. Locked dice = rolls come from the seed, so a probabilistic groove (and humanize, evolve, randomize) repeats exactly. Same seed, same groove.',
+  'dice repeat': 'Locked dice: the rolls repeat every N loops of each lane (1 = every loop identical).',
+  share: 'Copy link puts the whole pattern (not samples) in the URL: open it anywhere to get the groove. WAV renders the current pattern; MIDI writes the pattern or the running chain, one track per lane with the MIDI I/O notes.',
+  'clock in': 'Follow another device: "tempo" takes its bpm, "tempo + start/stop" also starts and stops with it, "phase lock" also keeps the beat aligned to its clock ticks (and Song Position Pointer).',
 };
 const PARAMS = [
   { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => { l.setLength(v); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); }, fmt: v => v },
@@ -135,53 +211,370 @@ function sync() {
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
-  $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`; $('voice-select').value = m.lane.voice; const kk = KIT_KEYS.find(k => KITS[k].name === m.kit); if (kk) $('kit-select').value = kk;
+  $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`; renderVoiceOptions(); renderLaneMix(); const kk = KIT_KEYS.find(k => KITS[k].name === m.kit); if (kk) $('kit-select').value = kk;
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
-  renderSteps(); paintLeds(); save(); readout();
+  renderSteps(); renderLocks(); paintLeds(); save(); readout();
+}
+function renderVoiceOptions() {
+  const vs = $('voice-select'), want = m.lane.sample ? `sample:${m.lane.sample.id}` : 'none';
+  if (vs.dataset.sample !== want) { vs.querySelector('option[value=sample]')?.remove(); if (m.lane.sample) vs.add(new Option(voiceLabel({ voice: 'sample', sample: m.lane.sample }), 'sample'), 0); vs.dataset.sample = want; }
+  vs.value = m.lane.voice;
+}
+function renderLaneMix() {
+  const lane = m.lane; $('btn-solo').classList.toggle('armed', lane.solo);
+  const cs = $('choke-select'); cs.innerHTML = ''; cs.add(new Option('nothing', -1)); m.lanes.forEach((l, i) => { if (i !== m.selected) cs.add(new Option(`lane ${i + 1} · ${voiceLabel(l)}`, i)); }); cs.value = lane.choke;
+  $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
 }
 function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, p.get(m.lane) + delta); sync(); }
 function renderSteps() {
   const el = $('stepsui'); el.innerHTML = ''; const lane = m.lane;
-  for (let i = 0; i < MAX_STEPS; i++) { const d = document.createElement('div'); d.className = `st ${i >= lane.length ? 'off' : lane.hitAt(i) ? (lane.accentAt(i) ? 'acc' : 'on') : ''}`; d.onclick = (e) => { if (e.shiftKey) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); sync(); }; el.appendChild(d); }
+  for (let i = 0; i < MAX_STEPS; i++) {
+    const d = document.createElement('div'); d.className = `st ${i >= lane.length ? 'off' : lane.hitAt(i) ? (lane.accentAt(i) ? 'acc' : 'on') : ''}${i < lane.length && lane.lockAt(i) ? ' lk' : ''}${i < lane.length && lane.trigAt(i) ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
+    const tg = i < lane.length && lane.trigAt(i); if (tg) d.dataset.tg = `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim();
+    d.title = 'click = hit · Shift+click = accent · Alt+click or right-click = step locks, condition, repeats';
+    d.onclick = (e) => { if (i >= lane.length) return; if (e.altKey) return editLocks(i); if (e.shiftKey) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); sync(); };
+    d.oncontextmenu = (e) => { e.preventDefault(); if (i < lane.length) editLocks(i); };
+    el.appendChild(d);
+  }
 }
-buildSliders(); sync();
+
+// ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
+let lockStep = -1;   // visible step the lock panel edits (-1 = closed)
+const LOCK_UI = {
+  tune: { label: 'tune', min: -100, max: 100, fmt: v => (v > 0 ? '+' : '') + v, base: l => l.tune },
+  prob: { label: 'probability', fmt: v => v + '%', base: l => l.prob },
+  vel: { label: 'velocity', fmt: v => v + '%', base: () => 0.7 },
+  decay: { label: 'decay', base: l => l.sound.decay }, tone: { label: 'tone', base: l => l.sound.tone },
+  snap: { label: 'snap', base: l => l.sound.snap }, color: { label: 'color', base: l => l.sound.color },
+};
+const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
+function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); }
+function buildLockGauges() {
+  const el = $('lock-gauges'); el.innerHTML = '';
+  for (const k of LOCK_KEYS) {
+    const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
+      onChange: (v) => { if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); renderSteps(); renderLocks(); save(); } });
+    sliders['lock:' + k] = g; el.appendChild(g.el);
+  }
+  $('lock-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; renderSteps(); renderLocks(); save(); };
+  const cs = $('trig-cond'), rs = $('trig-ratchet'), fd = $('trig-fade');
+  for (const c of CONDS) cs.add(new Option(c, c)); for (let r = 1; r <= MAX_RATCHET; r++) rs.add(new Option(r === 1 ? 'single' : `×${r}`, r));
+  const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); renderSteps(); renderLocks(); save(); };
+  cs.onchange = () => setTrig({ cond: cs.value }); rs.onchange = () => setTrig({ ratchet: +rs.value }); fd.onchange = () => setTrig({ fade: fd.checked });
+  $('lock-close').onclick = () => editLocks(lockStep);
+}
+function renderLocks() {
+  const lane = m.lane, panel = $('lockpanel'); if (lockStep >= lane.length) lockStep = -1;
+  panel.hidden = lockStep < 0; if (lockStep < 0) return;
+  const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
+  const tg = lane.trigAt(lockStep); $('trig-cond').value = tg?.cond || 'always'; $('trig-ratchet').value = tg?.ratchet || 1; $('trig-fade').checked = !!tg?.fade;
+  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.join(', ') : 'no locks yet (dim = lane value)'}`;
+  for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); g.setColor(lk[k] != null ? 'var(--signal-cyan)' : 'rgba(236,233,247,.3)'); }
+}
+function auditionLock() {
+  if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
+  for (let k = 0; k < n; k++) hitSound(lane, T.now() + k * 0.09 / n * 2, lane.accentAt(lockStep) && !k, lane.lockAt(lockStep), tg?.fade ? v * Math.pow(0.72, k) : v);
+}
+
+// ---- pattern slots & chains ----
+function loadSlot(i) {
+  const sel = m.selected; m.assign(bank.get(i)); m.selected = sel;
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); });
+  evoSnap = bank.get(i); evoCount = 0; lockStep = -1; sync(); renderSlots(); renderLanesEvolve();
+}
+function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
+/** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
+function recallSlot(i) { if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
+function chainSlots(list) { bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
+function renderSlots() {
+  const el = $('slots'); el.innerHTML = '';
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const b = document.createElement('button'); b.textContent = i + 1;
+    b.className = `slot${bank.filled(i) ? ' filled' : ''}${bank.current === i ? ' cur' : ''}${bank.pending === i ? ' queued' : ''}${bank.chain.length > 1 && bank.chain.includes(i) ? ' chain' : ''}`;
+    b.title = 'click = load · Shift+click = save here · Cmd/Ctrl+click = add to chain · Alt+click = erase';
+    b.onclick = (e) => { if (e.shiftKey) saveSlot(i); else if (e.altKey) { bank.erase(i); renderSlots(); } else if (e.metaKey || e.ctrlKey) chainSlots([...(bank.chain.length ? bank.chain : bank.current >= 0 ? [bank.current] : []), i]); else recallSlot(i); };
+    el.appendChild(b);
+  }
+  $('chain-info').textContent = bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join(' → ')} · ${bank.chainBars} bar${bank.chainBars > 1 ? 's' : ''} each` : bank.pending >= 0 ? `slot ${bank.pending + 1} waits for the next ${bank.switchAt === 'now' ? 'tick' : bank.switchAt}` : bank.current >= 0 ? `playing slot ${bank.current + 1}` : 'nothing saved yet: Shift+click a slot';
+}
+function buildSlotsUI() {
+  const sw = $('slot-switch'); for (const k of SWITCH_MODES) sw.add(new Option({ now: 'at once', bar: 'next bar', cycle: 'when all lanes line up' }[k], k)); sw.value = bank.switchAt; sw.onchange = () => { bank.switchAt = sw.value; bank.persist(); };
+  sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
+  $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
+  renderSlots();
+}
+
+// ---- live record: armed + playing, pads (or keys) play and write the nearest step ----
+function liveHit(li, col, velocity = 100) {
+  const lane = m.lanes[li]; if (!awake) { wake(); return; }
+  const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = Math.max(0.25, Math.min(1, velocity / 127)), accent = velocity >= rec.accentVel;
+  hitSound(lane, T.immediate(), accent, tune != null ? { tune } : null, accent ? 1 : v); pmidi.note(li, accent ? 1 : v, performance.now());
+  if (!rec.armed || !playing) { m.select(li); sync(); return; }
+  // where on the master clock was this hit, as heard? (the scheduler runs ahead; the speakers lag a little)
+  const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0);
+  const q = lane.quantize(clockRef.tick + (heard - clockRef.time) / tickSec(), rec.quant), idx = lane.stepIndex(q.index);
+  lane.hits[idx] = true; if (accent) lane.accents[idx] = true; if (tune != null) lane.setLock(idx, 'tune', tune);
+  if (q.step * lane.stepTicks() > clockRef.tick) skip.add(`${li}:${q.step}`);   // that step hasn't been scheduled yet: don't play it twice
+  scene.flash(li, q.index, accent); m.select(li); sync();
+}
+function setRec(on) { rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
+function buildRecUI() {
+  $('btn-rec').onclick = () => setRec(!rec.armed);
+  sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
+  const q = $('rec-quant'); q.add(new Option('nearest step', 'nearest')); q.add(new Option('step just played', 'previous')); q.value = rec.quant; q.onchange = () => { rec.quant = q.value; saveSettings(); };
+  const pp = $('rec-pitch'); pp.checked = rec.pitchPads; pp.onchange = () => { rec.pitchPads = pp.checked; saveSettings(); };
+}
+
+// ---- evolve: every N bars, nudge some lanes; optionally come back home ----
+let lastEvolve = '';
+/** Randomize: with locked dice a fresh seed is rolled and shown, so a groove you like can be re-made from its number. */
+function randomizeAll() { if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
+// ---- undo / redo ----
+function applyState(json) {
+  if (!json) return; restoring = true; const sel = m.selected; m.assign(JSON.parse(json)); m.selected = Math.min(sel, m.lanes.length - 1);
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
+}
+const undo = () => applyState(hist.undo()), redo = () => applyState(hist.redo());
+function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
+function evolveNow(bar = 0) {
+  if (!evoSnap) evoSnap = m.toJSON();
+  if (evo.home && evoCount >= evo.home) { const sel = m.selected; m.assign(evoSnap); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); evoCount = 0; lastEvolve = 'back home'; }
+  else { const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100 }, dice.stream(1000 + bar)); evoCount++; lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still'; }
+  sync();
+}
+function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
+function renderLanesEvolve() {
+  const el = $('evo-lanes'); el.innerHTML = '';
+  m.lanes.forEach((l, i) => { const lab = document.createElement('label'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = l.evolve; cb.onchange = () => { l.evolve = cb.checked; save(); }; lab.append(cb, ` ${voiceLabel(l)}`); lab.style.color = LANE_HEX[i]; el.appendChild(lab); });
+}
+function buildEvolveUI() {
+  $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = 'home set'; readout(); };
+  const g = $('evo-gauges');
+  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 1, max: 32, value: evo.every, title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { evo.every = v; saveSettings(); readout(); } });
+  sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
+  sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
+  g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
+  const sc = $('evo-scope'); for (const [k, t] of [['rotate', 'rotation only'], ['hits', 'rotation + hits'], ['all', 'everything (+ length, speed)']]) sc.add(new Option(t, k)); sc.value = evo.scope; sc.onchange = () => { evo.scope = sc.value; saveSettings(); };
+  renderLanesEvolve();
+}
+
+// ---- MIDI I/O ----
+async function enableMidi() {
+  try { if (!midi.access) await midi.init(); } catch (e) { $('midi-status').textContent = e.message; return; }
+  midi.addEventListener('ports', () => { pmidi.refresh(); renderMidi(); }); pmidi.refresh(); renderMidi();
+}
+function renderMidi() {
+  const has = !!midi.access; $('btn-midi-enable').hidden = has; $('midi-body').hidden = !has; if (!has) return;
+  const fill = (sel, ports, cur) => { sel.innerHTML = ''; sel.add(new Option('— none —', '')); for (const p of ports) sel.add(new Option(p.name, p.name)); sel.value = ports.some(p => p.name === cur) ? cur : ''; };
+  fill($('midi-out'), pmidi.outputs(), pmidi.outName); fill($('midi-in'), pmidi.inputs(), pmidi.inName);
+  const bad = pmidi.outName && !pmidi.out;
+  $('midi-status').textContent = bad ? `"${pmidi.outName}" can't take notes right now (the Move in control mode would light pads instead)` : pmidi.follow !== 'off' && pmidi.inName ? `following ${pmidi.inName}${pmidi.extBpm ? ` · ${pmidi.extBpm} bpm` : ' · waiting for clock'}` : '';
+}
+function buildMidiUI() {
+  $('btn-midi-enable').onclick = enableMidi;
+  $('midi-out').onchange = (e) => { pmidi.setOutput(e.target.value); saveSettings(); renderMidi(); };
+  $('midi-in').onchange = (e) => { pmidi.setInput(e.target.value); saveSettings(); renderMidi(); };
+  const co = $('midi-clock-out'); co.checked = pmidi.clockOut; co.onchange = () => { pmidi.clockOut = co.checked; saveSettings(); };
+  const fo = $('midi-follow'); for (const [k, t] of [['off', 'ignore'], ['tempo', 'tempo'], ['transport', 'tempo + start/stop'], ['lock', 'tempo + start/stop + phase lock']]) fo.add(new Option(t, k)); fo.value = pmidi.follow; fo.onchange = () => { pmidi.follow = fo.value; saveSettings(); renderMidi(); };
+  const gate = $('midi-gate'); gate.value = pmidi.gateMs; gate.onchange = () => { pmidi.gateMs = Math.max(5, Math.min(2000, +gate.value || 60)); saveSettings(); };
+  const t = $('midi-lanes'); t.innerHTML = '<tr><th></th><th>note</th><th>channel</th></tr>';
+  m.lanes.forEach((l, i) => {
+    const tr = document.createElement('tr'); tr.innerHTML = `<th style="color:${LANE_HEX[i]}">lane ${i + 1}</th><td><input type="number" min="0" max="127" value="${pmidi.lanes[i].note}"></td><td><input type="number" min="1" max="16" value="${pmidi.lanes[i].ch}"></td>`;
+    const [n, c] = tr.querySelectorAll('input'); n.onchange = () => { pmidi.lanes[i].note = Math.max(0, Math.min(127, +n.value | 0)); saveSettings(); }; c.onchange = () => { pmidi.lanes[i].ch = Math.max(1, Math.min(16, +c.value | 0)); saveSettings(); };
+    t.appendChild(tr);
+  });
+  pmidi.handlers = { tempo: (bpm) => { applyTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
+    // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
+    tick: (ext, t) => {
+      if (!playing) return; const raw = T.getContext().rawContext, audioT = raw.currentTime + (t - performance.now()) / 1000;
+      const { jump, trim } = phaseCorrection(clockRef.tick + (audioT - clockRef.time) / tickSec() - ext);
+      if (jump) tick = Math.max(0, tick + jump); T.getTransport().bpm.value = (pmidi.extBpm || tempo) * trim; stress.drift = jump ? 'snap' : `${((trim - 1) * 100).toFixed(1)}%`;
+    } };
+  renderMidi();
+}
+// ---- solo & choke ----
+function toggleSolo(li = m.selected) { m.lanes[li].solo = !m.lanes[li].solo; sync(); }
+function buildMixUI() {
+  $('btn-solo').onclick = () => toggleSolo();
+  $('choke-select').onchange = (e) => { m.lane.choke = +e.target.value; sync(); };
+}
+
+// ---- samples: load a file, record the mic, or take a slice from Unassembler; drop a file on a ring ----
+async function assignSample(li, rec) {
+  if (!rec?.channels?.length) return; await wake(); const id = `orbits-${Date.now().toString(36)}-${li}`;
+  await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, T.getContext().rawContext));
+  const lane = m.lanes[li]; lane.sample = { id, name: rec.name || 'sample' }; lane.setVoice('sample'); buildVoice(li); m.select(li); sync();
+  if (!playing) hitSound(lane, T.now(), false);
+}
+async function sampleFromFile(li, file) {
+  try { await wake(); const buf = await T.getContext().rawContext.decodeAudioData(await file.arrayBuffer()); await assignSample(li, trimRecord(fromAudioBuffer(buf, file.name), { thr: 0.001, maxSec: 8 })); }
+  catch (e) { $('sample-name').textContent = `could not read ${file.name}: ${e.message || e}`; }
+}
+let micRec = null;
+async function toggleMic() {
+  if (micRec) { micRec.stop(); return; }
+  try {
+    await wake(); const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
+    const chunks = [], li = m.selected, mr = new MediaRecorder(stream); micRec = mr; $('btn-mic').classList.add('armed'); $('btn-mic').textContent = '■ stop mic';
+    const auto = setTimeout(() => mr.state === 'recording' && mr.stop(), 4000);   // 4 s max
+    mr.ondataavailable = (e) => chunks.push(e.data);
+    mr.onstop = async () => {
+      clearTimeout(auto); stream.getTracks().forEach(t => t.stop()); micRec = null; $('btn-mic').classList.remove('armed'); $('btn-mic').textContent = '● mic';
+      try { const buf = await T.getContext().rawContext.decodeAudioData(await new Blob(chunks).arrayBuffer()); await assignSample(li, trimRecord(fromAudioBuffer(buf, `mic ${new Date().toTimeString().slice(0, 5)}`))); } catch (e) { $('sample-name').textContent = `mic: ${e.message || e}`; }
+    };
+    mr.start();
+  } catch (e) { $('sample-name').textContent = `mic: ${e.message || e}`; }
+}
+async function renderSlices() {
+  const sl = await getSample(SLICES_KEY), sel = $('slice-select'); sel.innerHTML = '';
+  sel.add(new Option(sl ? `Unassembler: ${sl.name.slice(0, 22)}…` : 'Unassembler slices: none sent yet', ''));
+  if (sl) sl.slices.forEach((_, k) => sel.add(new Option(`slice ${k + 1}`, k)));
+}
+function buildSampleUI() {
+  $('btn-sample-file').onclick = () => $('sample-file').click();
+  $('sample-file').onchange = () => { const f = $('sample-file').files[0]; if (f) sampleFromFile(m.selected, f); $('sample-file').value = ''; };
+  $('btn-mic').onclick = toggleMic;
+  $('slice-select').onchange = async (e) => { if (e.target.value === '') return; const sl = await getSample(SLICES_KEY), k = +e.target.value; if (sl) await assignSample(m.selected, { name: `${sl.name.replace(/\.[^.]+$/, '').split(' · ')[0].slice(0, 16)} #${k + 1}`, sampleRate: sl.sampleRate, channels: sl.slices[k] }); e.target.value = ''; };
+  addEventListener('storage', (e) => { if (e.key === SLICES_PING) renderSlices(); });
+  for (const ev of ['dragenter', 'dragover']) $('cv').addEventListener(ev, (e) => e.preventDefault());
+  $('cv').addEventListener('drop', (e) => { e.preventDefault(); const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(wav|mp3|aif+|flac|ogg|m4a)$/i.test(f.name)); if (!f) return; const r = scene.pick(e.clientX, e.clientY); sampleFromFile(r >= 0 ? r : m.selected, f); });
+  renderSlices();
+}
+
+// ---- dice: free or locked (seeded) randomness ----
+function renderDice() {
+  $('btn-dice').classList.toggle('armed', dice.locked); $('btn-dice').textContent = dice.locked ? '● dice locked' : '○ dice free';
+  $('dice-seed').value = dice.seed; sliders.diceRepeat?.set(dice.repeat);
+}
+function buildDiceUI() {
+  $('btn-dice').onclick = () => { dice.locked = !dice.locked; saveSettings(); renderDice(); readout(); };
+  $('dice-seed').onchange = (e) => { dice.seed = Math.max(1, +e.target.value | 0); saveSettings(); readout(); };
+  $('dice-roll').onclick = () => { dice.reroll(); saveSettings(); renderDice(); readout(); };
+  $('dice-make').onclick = () => { const was = dice.locked; dice.locked = true; m.randomize(dice.stream(0)); dice.locked = was; sync(); };
+  sliders.diceRepeat = makeGauge({ label: 'repeat · loops', min: 1, max: 16, value: dice.repeat, title: INFO['dice repeat'], color: 'var(--signal-cyan)', onChange: (v) => { dice.repeat = v; saveSettings(); } }); $('dice-gauges').appendChild(sliders.diceRepeat.el);
+  renderDice();
+}
+
+// ---- share & export ----
+const download = (bytes, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
+const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+/** Length of a render in master ticks: N bars, or one full polyrhythm cycle (capped at 64 bars). */
+function renderTicks() { const v = $('exp-len').value; return v === 'cycle' ? Math.min(64 * BAR_TICKS, m.cycleTicks()) : +v * BAR_TICKS; }
+async function shareLink() {
+  const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
+  history.replaceState(null, '', `#p=${code}`);
+  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; } catch { $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; }
+}
+async function exportWav() {
+  await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering ${sec.toFixed(1)} s…`;
+  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  for (const l of m.lanes) await ensureSample(l);
+  const out = await T.Offline(({ transport }) => {
+    transport.bpm.value = tempo; const k = makeKit();   // a fresh kit in the offline context, same voices and sounds
+    for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
+  }, sec + tail, 2, 44100);
+  const b = out.get(); download(encodeWav([b.getChannelData(0), b.getChannelData(1)], b.sampleRate), `orbits-${stamp()}.wav`, 'audio/wav');
+  $('exp-status').textContent = `WAV: ${hits.length} hits, ${(sec + tail).toFixed(1)} s`;
+}
+function exportMidi() {
+  const chain = $('exp-what').value === 'chain' && bank.chain.length > 1;
+  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: dice.locked ? dice : null }) : collectHits(m, { from: 0, to: renderTicks(), tempo, dice: dice.locked ? dice : null });
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000 });
+  download(bytes, `orbits-${chain ? 'chain' : 'pattern'}-${stamp()}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes${chain ? ` · chain of ${bank.chain.length}` : ''}`;
+}
+async function loadShared() {
+  const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return;
+  try { const o = await decodeShare(mm[1]); m.assign(o.m); if (o.tempo) applyTempo(o.tempo); m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); sync(); renderLanesEvolve(); $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; }
+  catch (e) { $('exp-status').textContent = `link: ${e.message}`; }
+}
+function buildExportUI() {
+  $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi;
+  addEventListener('hashchange', loadShared);
+}
+
+// ---- undo / redo / fill buttons ----
+function buildEditUI() {
+  $('btn-undo').onclick = undo; $('btn-redo').onclick = redo;
+  const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
+}
+buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEditUI(); sync(); hist.commit(JSON.stringify(m)); loadShared();
 
 // ---- Move ----
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34];
+const REC_LED = nearestPaletteIndex('#ef4444'), CYAN_LED = nearestPaletteIndex('#67e8f9'), MAGENTA_LED = nearestPaletteIndex('#f0abfc');
+const held = new Map();   // step buttons held down: index → { used } (used = a knob turned, so release won't toggle)
+let loopHeld = false, dupHeld = false, chainPick = [];
 function paintLeds() {
   if (!move.inControl) return;
+  const anySolo = m.lanes.some(l => l.solo);
   m.lanes.forEach((lane, r) => {
-    for (let c = 0; c < 8; c++) { const i = c; const pad = r * 8 + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[r]) : LANE_DIM[r]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted ? (col ? LANE_DIM[r] : 0) : col); }
+    for (let c = 0; c < 8; c++) { const i = c; const pad = r * 8 + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[r]) : LANE_DIM[r]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted || (anySolo && !lane.solo) ? (col ? LANE_DIM[r] : 0) : col); }
   });
   const lane = m.lane;
-  for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? LANE_LED[m.selected] : LANE_DIM[m.selected]);
+  if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
+    for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
+  } else for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.lockAt(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]);
   for (let t = 1; t <= 4; t++) { const li = 4 - t; move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
-  move.setButtonColor('play', playing ? COLOR.WHITE : nearestPaletteIndex('#67e8f9')); move.setButtonColor('mute', lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', LANE_LED[0]); move.setButtonColor('undo', LANE_LED[3]); move.setButtonColor('record', nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
+  move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
+  move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
+  move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16);
 }
-move.addEventListener('pad', (e) => { if (!e.detail.on) return; const { row, col } = e.detail; const lane = m.lanes[row]; if (col >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(row); sync(); });
-move.addEventListener('step', (e) => { if (!e.detail.on) return; const lane = m.lane; if (e.detail.index >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(e.detail.index)); else lane.toggle(lane.stepIndex(e.detail.index)); sync(); });
+move.addEventListener('pad', (e) => {
+  if (!e.detail.on) return; const { row, col, velocity } = e.detail;
+  if (rec.armed) return liveHit(row, col, velocity);
+  const lane = m.lanes[row]; if (col >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(row); sync();
+});
+move.addEventListener('step', (e) => {
+  const { index, on } = e.detail;
+  if (loopHeld || dupHeld) { if (!on) return; if (dupHeld) saveSlot(index); else if (bank.filled(index) && !chainPick.includes(index)) chainPick.push(index); paintLeds(); return; }
+  const lane = m.lane; if (index >= lane.length) return;
+  if (on) { if (shift) { lane.toggleAccent(lane.stepIndex(index)); sync(); } else held.set(index, { used: false }); return; }
+  const h = held.get(index); held.delete(index); if (h && !h.used) { lane.toggle(lane.stepIndex(index)); sync(); }   // a tap toggles; a hold + knob locked something instead
+});
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
+  if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
+    const lane = m.lane;
+    for (const [i, h] of held) { h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
+    auditionLock(); renderSteps(); renderLocks(); save(); paintLeds(); return;
+  }
+  if (held.size && index < LOCK_KEYS.length) {   // hold step(s) + knob 1–7 = lock tune · prob · vel · decay · tone · snap · color on those steps
+    const k = LOCK_KEYS[index], lane = m.lane, span = k === 'tune' ? 0.02 : 0.02;
+    for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); lockStep = i; }
+    auditionLock(); renderSteps(); renderLocks(); save(); paintLeds(); return;
+  }
   if (shift) { const k = SOUND_KEYS[index]; m.lane.setSound(k, m.lane.sound[k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
   const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) applyTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
 });
 move.addEventListener('wheel', (e) => { m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
-  const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; return; } if (!pressed) return;
-  const tr = /^track(\d)$/.exec(name); if (tr) { m.select(4 - +tr[1]); sync(); return; }   // track 1 is the top button = top pad row = lane 3
-  if (name === 'play') togglePlay(); if (name === 'mute') { m.lane.muted = !m.lane.muted; sync(); } if (name === 'capture') { m.randomize(); sync(); } if (name === 'undo') { m.lane.clear(); sync(); } if (name === 'record') tapTempo();
+  const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; return; }
+  if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
+  if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
+  if (name === 'layout') { setFill(pressed); return; }   // hold = fill
+  if (!pressed) return;
+  const tr = /^track(\d)$/.exec(name); if (tr) { m.select(4 - +tr[1]); lockStep = -1; sync(); return; }   // track 1 is the top button = top pad row = lane 3
+  if (name === 'delete' && held.size) { for (const [i, h] of held) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(i)); m.lane.trigs[m.lane.stepIndex(i)] = null; } renderSteps(); renderLocks(); save(); paintLeds(); return; }
+  if (name === 'delete') { m.lane.clear(); sync(); return; }   // Delete alone = clear the lane (undoable)
+  if (name === 'play') togglePlay(); if (name === 'mute') { if (shift) toggleSolo(); else { m.lane.muted = !m.lane.muted; sync(); } } if (name === 'undo') { if (shift) redo(); else undo(); }
+  if (name === 'capture') { if (shift) setEvolve(!evo.on); else randomizeAll(); }
+  if (name === 'record') { if (shift) tapTempo(); else setRec(!rec.armed); }
   if (name === 'left' || name === 'right') { const dir = name === 'right' ? 1 : -1; if (shift) cycleKit(dir); else cycleVoice(m.selected, dir); }
 });
-$('btn-random').onclick = () => { m.randomize(); sync(); }; $('btn-clear').onclick = () => { m.lane.clear(); sync(); }; $('btn-reset').onclick = () => { m.resetAll(); };
+$('btn-random').onclick = randomizeAll; $('btn-clear').onclick = () => { m.lane.clear(); sync(); }; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
+window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 window.addEventListener('keydown', (e) => {
   if (e.repeat || ['INPUT', 'SELECT'].includes(e.target.tagName)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
-  if (/^[1-4]$/.test(e.key) && e.altKey) { m.select(+e.key - 1); sync(); return; }
-  const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0) return;
-  const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); const lane = m.lanes[row]; if (col >= lane.length) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (e.key === '0') { setFill(true); return; }
+  if (/^[1-4]$/.test(e.key) && e.altKey) { m.select(+e.key - 1); lockStep = -1; sync(); return; }
+  const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
+  const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, e.shiftKey ? 127 : 100);
+  const lane = m.lanes[row]; if (col >= lane.length) return;
   if (e.shiftKey) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); m.select(row); sync();
 });
 
@@ -189,45 +582,48 @@ window.addEventListener('keydown', (e) => {
 function setPill(t, cls) { const el = $('midi-state'); el.textContent = t; el.className = `pill ${cls}`; }
 $('btn-connect').onclick = async () => {
   try {
-    await wake(); const { inputs } = await midi.init(); const port = midi.pickDefault(inputs); midi.select(port);
+    await wake(); const inputs = midi.access ? midi.inputs() : (await midi.init()).inputs; midi.addEventListener('ports', () => { pmidi.refresh(); renderMidi(); }); const port = midi.pickDefault(inputs); midi.select(port);
     if (!port) { setPill('Move: no MIDI input found', 'pill-off'); return; }
     if (!midi.sysexAllowed) { setPill('Move: SysEx denied — allow it in the Chrome prompt', 'pill-warn'); return; }
     setPill(`Handshaking with ${port.name}…`, 'pill-warn'); const { identity } = await move.connect(); paintLeds();
-    setPill(`Move: ready${identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''}`, 'pill-on'); $('btn-disconnect').disabled = false;
+    setPill(`Move: ready${identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''}`, 'pill-on'); $('btn-disconnect').disabled = false; pmidi.refresh(); renderMidi();
   } catch (e) { setPill(`Move: ${e.message}`, 'pill-off'); }
 };
 $('btn-disconnect').onclick = () => { move.disconnect(); setPill('Move: disconnected (back to standalone)', 'pill-off'); $('btn-disconnect').disabled = true; };
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
-// ---- visuals: concentric orbits, one ring per lane, each turning at its own speed ----
-const cv = $('cv'), ctx = cv.getContext('2d'); const DPR = Math.min(1.5, devicePixelRatio || 1);
-function resize() { cv.width = innerWidth * DPR; cv.height = innerHeight * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0); poke(); }
-addEventListener('resize', resize); resize(); document.fonts?.ready.then(poke);
-cv.addEventListener('click', (e) => { const cx = innerWidth * 0.5, cy = innerHeight * 0.56, R = Math.min(innerWidth, innerHeight) * 0.42; const d = Math.hypot(e.clientX - cx, e.clientY - cy) / R; const ring = Math.round((d - 0.25) / 0.2); if (ring >= 0 && ring < 4) { m.select(ring); sync(); } });
-function draw(now) {
-  if (!playing && now > busyUntil) return;
-  ctx.fillStyle = 'rgba(14, 10, 32, 0.28)'; ctx.fillRect(0, 0, innerWidth, innerHeight);
-  const cx = innerWidth * 0.5, cy = innerHeight * 0.56, R = Math.min(innerWidth, innerHeight) * 0.42;
-  m.lanes.forEach((lane, li) => {
-    const r = R * (0.25 + li * 0.2), sel = li === m.selected;
-    ctx.strokeStyle = sel ? LANE_HEX[li] + 'aa' : 'rgba(236,233,247,.14)'; ctx.lineWidth = sel ? 1.5 : 1; ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
-    for (let i = 0; i < lane.length; i++) {
-      const a = (i / lane.length) * Math.PI * 2 - Math.PI / 2, x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-      const hit = lane.hitAt(i), acc = lane.accentAt(i), cur = playing && lane.shown === i;
-      ctx.fillStyle = hit ? (lane.muted ? 'rgba(236,233,247,.25)' : LANE_HEX[li]) : 'rgba(236,233,247,.18)'; ctx.beginPath(); ctx.arc(x, y, hit ? (acc ? 9 : 6.5) : 3, 0, Math.PI * 2); ctx.fill();
-      if (cur) { ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.stroke(); }
-    }
-    // label on the ring's lower-right diagonal so the four never overlap
-    const la = Math.PI / 4 + li * 0.12; ctx.fillStyle = sel ? LANE_HEX[li] : 'rgba(236,233,247,.45)'; ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'left';
-    ctx.fillText(`${voiceLabel(lane)} ${lane.length} ×${RATIO_LABEL[lane.ratioIndex]}${lane.muted ? ' m' : ''}`, cx + Math.cos(la) * (r + 14), cy + Math.sin(la) * (r + 14) + 4);
-  });
-  for (const ev of events) { const age = (now - ev.t) / 500; if (age > 1 || !ev.hit) continue; const lane = m.lanes[ev.lane], r = R * (0.25 + ev.lane * 0.2), a = (ev.index / lane.length) * Math.PI * 2 - Math.PI / 2; ctx.strokeStyle = LANE_HEX[ev.lane]; ctx.globalAlpha = 1 - age; ctx.lineWidth = ev.accent ? 3 : 1.5; ctx.beginPath(); ctx.arc(cx + Math.cos(a) * r, cy + Math.sin(a) * r, 8 + age * 26, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1; }
-}
+// ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
+const scene = createScene($('cv'), { machine: () => m, isRecording: () => rec.armed, laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+addEventListener('resize', poke); document.fonts?.ready.then(poke);
+$('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
+// ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
+setInterval(() => {
+  if (document.hidden) return; const { frameMs, quality } = scene.stats();
+  const jank = playing ? Math.min(1, Math.max(0, (frameMs - 18) / 40)) : 0, late = playing ? Math.min(1, Math.max(0, (30 - stress.headMs) / 50)) : 0;   // < 30 ms of headroom starts to count, < −20 ms = notes in the past
+  const lvl = (stress.level = stress.level * 0.6 + Math.max(jank, late) * 0.4); if (!playing && lvl < 0.005 && $('stress').style.width === '0%') return;
+  const col = lvl > 0.7 ? 'var(--bad)' : lvl > 0.4 ? '#fde047' : 'var(--signal-cyan)', word = lvl > 0.7 ? 'overload' : lvl > 0.4 ? 'busy' : quality < 1 ? 'shedding visuals' : 'calm';
+  const bar = $('stress'); bar.style.width = `${Math.round(lvl * 100)}%`; bar.style.background = col;
+  const sv = $('stress-val'); sv.textContent = `${Math.round(lvl * 100)}% · ${word}`; sv.style.color = col;
+  $('stress-val').parentElement.title = `stress ${Math.round(lvl * 100)}% · frame ${frameMs.toFixed(0)} ms · audio headroom ${stress.headMs.toFixed(0)} ms · visuals ${Math.round(quality * 100)}%`;
+}, 300);
 function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
-  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}`), sline];
+  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
+    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }
-window.__poly = { move, m, applyTempo };
-readout(); frameLoop(draw);
+// ---- layout: the left column lives between the readout (whose height changes) and the bottom-left panel ----
+function layoutHud() {
+  const hl = $('hud-left'); if (innerWidth <= 1100) { hl.style.top = hl.style.bottom = ''; return; }
+  const top = $('readout').getBoundingClientRect().bottom + 12, keysOpen = $('keys-pop').open;
+  // while the Move-controls popup is open it floats over the column; size the column against the closed panel
+  const blTop = keysOpen ? innerHeight - 18 - $('hud-bl').querySelector('.stress-meter').offsetHeight - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
+  hl.style.top = `${Math.round(top)}px`; hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
+}
+new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHud).observe($('hud-bl')); addEventListener('resize', layoutHud);
+$('keys-pop').addEventListener('toggle', layoutHud);
+addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
+addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
+window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress };
+readout(); scene.start();

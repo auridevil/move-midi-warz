@@ -26,7 +26,7 @@
   </header>
 
   <div id="readout" class="readout" aria-live="polite"></div>
-  <div class="stressbar" title="stress: main-thread jank, audio scheduling lateness, voice load"><i id="stress"></i></div>
+  <div class="stress-meter" title="stress: main-thread jank, audio headroom (how far ahead of the speakers notes are scheduled), voice load — the engine throttles itself above 30%"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
 
   <div class="hud">
     <button id="btn-audio" class="primary big-btn">⏻ wake the engine</button>
