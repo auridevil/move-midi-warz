@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MIDI Warz — Orbits</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0e0a20" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
   <meta name="color-scheme" content="dark" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -29,6 +32,15 @@
     <details class="drawer" open>
       <summary>global · master tempo &amp; humanize</summary>
       <div id="global-sliders" class="gauges two"></div>
+    </details>
+    <details class="drawer" id="lib-drawer">
+      <summary>library · saved setups</summary>
+      <form id="lib-form" class="lib-form" autocomplete="off">
+        <input id="lib-name" type="text" maxlength="40" placeholder="name this setup" aria-label="setup name" />
+        <button class="primary small" type="submit">save</button>
+      </form>
+      <div id="lib-list" class="lib-list"></div>
+      <p class="hint tight">A setup is everything: patterns, voices, kit, sounds, locks, conditions, samples, humanize, tempo, volume and dice. Same name = overwrite. Click a name to load (undoable).</p>
     </details>
     <details class="drawer" open>
       <summary>patterns · 16 slots &amp; chains</summary>
@@ -147,8 +159,8 @@
     </div>
     <div class="hud-row">
       <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
-      <button id="btn-save" title="Save the pattern and tempo in this browser">save</button>
-      <button id="btn-load" title="Load what you saved (undoable)">load</button>
+      <button id="btn-save" title="Save this setup under a name (library)">save</button>
+      <button id="btn-load" title="Open the library of saved setups">load</button>
       <button id="btn-random">randomize</button>
       <button id="btn-clear">clear lane</button>
       <button id="btn-tap">tap tempo</button>
@@ -204,6 +216,7 @@
   <script src="./vendor/tone/Tone.js"></script>
   <script type="module" src="./src/poly/app.js"></script>
   <script type="module" src="./src/analytics.js"></script>
+  <script type="module" src="./src/pwa.js"></script>
   <script type="module" src="./src/dev-reload.js"></script>
 </body>
 </html>

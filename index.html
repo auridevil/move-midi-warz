@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>MIDI Warz</title>
   <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="theme-color" content="#0e0a20" />
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
   <meta name="color-scheme" content="dark" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -17,6 +20,7 @@
 <body class="launcher">
   <main class="launch">
     <h1>MIDI Warz <span class="sub">your Ableton Move, plugged into the browser</span></h1>
+    <button id="btn-install" class="primary install-btn" hidden title="Install MIDI Warz as an app: its own window, a dock/launcher icon, works offline">⤓ install as an app</button>
     <p class="credit">made by <a href="https://aurelianobergese.dev" target="_blank" rel="noopener">aurelianobergese.dev</a> aka <a href="https://supervuoto.org" target="_blank" rel="noopener">supervuoto.org</a></p>
     <div class="cards">
       <a class="card" href="./poly.html">
@@ -67,6 +71,7 @@
     <p class="hint">Chrome or Edge, USB‑C, allow MIDI + SysEx when asked. The Move goes into control mode while a page is connected and back to standalone when you disconnect or close the tab. Also: <a href="./melodic.html">melodic drills</a> (notes, intervals, chords, rhythm).</p>
   </main>
   <script type="module" src="./src/analytics.js"></script>
+  <script type="module" src="./src/pwa.js"></script>
   <script type="module" src="./src/dev-reload.js"></script>
 </body>
 </html>

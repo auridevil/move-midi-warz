@@ -2,7 +2,7 @@
 """Static dev server with no-cache headers (Chrome otherwise keeps stale ES modules around)."""
 import sys, mimetypes
 from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
-mimetypes.add_type('application/wasm', '.wasm'); mimetypes.add_type('application/octet-stream', '.jsdos'); mimetypes.add_type('text/javascript', '.mjs')
+mimetypes.add_type('application/wasm', '.wasm'); mimetypes.add_type('application/octet-stream', '.jsdos'); mimetypes.add_type('text/javascript', '.mjs'); mimetypes.add_type('application/manifest+json', '.webmanifest')
 import os, json, time
 def version():
     latest = 0

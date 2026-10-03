@@ -170,3 +170,15 @@ test('jam / stems: equal-length WAVs per lane + mix in one zip, no clipping', as
   const names = []; for (let i = 0; i < zip.length - 4; i++) if (zip[i] === 0x50 && zip[i + 1] === 0x4B && zip[i + 2] === 3 && zip[i + 3] === 4) { const n = zip[i + 26] | (zip[i + 27] << 8); names.push(new TextDecoder().decode(zip.slice(i + 30, i + 30 + n))); }
   assert.deepEqual(names, ['take/1-kick.wav', 'take/2-snare.wav', 'take/3-hat-x.wav', 'take/4-demo.wav', 'take/mix.wav']);
 });
+test('library: named setups, overwrite by name, rename, delete, migrate the old single save, storage full', async () => {
+  const { Library, LIB_KEY } = await import('../src/poly/library.js'); const mem = new Map(); const store = { getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
+  mem.set('midi-warz.poly.saved.v1', JSON.stringify({ m: { lanes: [] }, tempo: 99, t: 1 }));
+  const lib = new Library(store); assert.equal(lib.list()[0].name, 'saved', 'old save migrated'); assert.equal(lib.list()[0].tempo, 99);
+  const a = lib.save('Dub 1', { m: { x: 1 }, tempo: 120 }, 10); const b = lib.save('', { m: { x: 2 }, tempo: 90 }, 20); assert.equal(b.name, 'pattern 3');
+  assert.deepEqual(lib.list().map(e => e.name), ['pattern 3', 'Dub 1', 'saved'], 'newest first');
+  const a2 = lib.save('dub 1 ', { m: { x: 3 }, tempo: 121 }, 30); assert.equal(a2.id, a.id, 'same name (any case) overwrites'); assert.equal(lib.items.length, 3); assert.equal(lib.get(a.id).m.x, 3);
+  assert.equal(lib.rename(b.id, 'dub 1'), false, 'taken'); assert.equal(lib.rename(b.id, 'Night'), true); assert.equal(lib.get(b.id).name, 'Night');
+  lib.overwrite(b.id, { m: { x: 9 } }, 40); assert.equal(lib.get(b.id).m.x, 9); assert.equal(lib.remove(a.id), true);
+  const again = new Library(store); assert.deepEqual(again.list().map(e => e.name), ['Night', 'saved'], 'persisted'); assert.ok(mem.get(LIB_KEY));
+  const full = new Library({ getItem: () => null, setItem: () => { throw new Error('QuotaExceeded'); } }); assert.equal(full.save('x', { m: {} }), null); assert.equal(full.items.length, 0, 'rolled back');
+});

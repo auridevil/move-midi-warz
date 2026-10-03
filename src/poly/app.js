@@ -7,6 +7,7 @@ import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare,
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16 } from './jam.js';
+import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
@@ -31,6 +32,7 @@ let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 
 const hist = new History(); let restoring = false;
 const save = () => { const j = JSON.stringify(m); if (!restoring) hist.commit(j); try { localStorage.setItem(SAVE, j); } catch {} };
 const dice = new Dice(); let fill = false;
+const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one last loaded / saved
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
 const SETTINGS = 'midi-warz.poly.settings.v1';
 const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest' };
@@ -607,17 +609,47 @@ buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI()
 // every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
 if (!/#p=/.test(location.hash)) initPattern(); loadShared();
 $('btn-init').onclick = initPattern;
-// save / load: one saved pattern (+ tempo) in this browser, separate from the 16 slots; load is undoable
-const SAVED = 'midi-warz.poly.saved.v1';
+// ---- library: named setups in localStorage (patterns + voices + kit + sounds + tempo + volume + dice) ----
+const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON() });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
-function renderSaved() { let o = null; try { o = JSON.parse(localStorage.getItem(SAVED) || 'null'); } catch {} $('btn-load').disabled = !o; $('btn-load').title = o ? `Load what you saved ${new Date(o.t).toLocaleString()} (undoable)` : 'Nothing saved yet'; }
-$('btn-save').onclick = () => { try { localStorage.setItem(SAVED, JSON.stringify({ m: m.toJSON(), tempo, t: Date.now() })); flash('btn-save', 'saved ✓'); } catch (e) { flash('btn-save', 'full!'); } renderSaved(); };
-$('btn-load').onclick = () => {
-  let o = null; try { o = JSON.parse(localStorage.getItem(SAVED) || 'null'); } catch {} if (!o?.m) return;
-  if (evo.on) setEvolve(false); const sel = m.selected; m.assign(o.m); m.selected = sel; if (o.tempo) applyTempo(o.tempo);
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); flash('btn-load', 'loaded ✓');
-};
-renderSaved();
+function loadSetup(id) {
+  const e = lib.get(id); if (!e?.m) return; if (evo.on) setEvolve(false);
+  const sel = m.selected; m.assign(e.m); m.selected = Math.min(sel, m.lanes.length - 1); if (e.tempo) applyTempo(e.tempo);
+  if (e.vol != null) { vol = e.vol; kit?.master.gain.rampTo(vol, 0.05); } if (e.dice) { dice.fromJSON(e.dice); saveSettings(); renderDice(); }
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; libCurrent = id; sync(); renderLanesEvolve(); renderLib(); flash('btn-load', `“${e.name}” ✓`);
+}
+function saveSetup(name) {
+  const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }
+  libCurrent = e.id; $('lib-name').value = e.name; renderLib(); flash('btn-save', 'saved ✓'); readout();
+}
+function openLib(focus) { $('lib-drawer').open = true; $('lib-drawer').scrollIntoView({ block: 'nearest' }); if (focus) { const n = $('lib-name'); n.value = lib.get(libCurrent)?.name || lib.nextName(); n.focus(); n.select(); } }
+const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(t).toLocaleDateString(); };
+function renderLib() {
+  const el = $('lib-list'); el.innerHTML = ''; const items = lib.list();
+  if (!items.length) { el.innerHTML = '<p class="hint tight">Nothing saved yet: type a name and press save.</p>'; return; }
+  for (const e of items) {
+    const row = document.createElement('div'); row.className = `lib-row${e.id === libCurrent ? ' cur' : ''}`;
+    const name = document.createElement('button'); name.type = 'button'; name.className = 'lib-name'; name.textContent = e.name; name.title = 'load this setup (undoable)'; name.onclick = () => loadSetup(e.id);
+    const voices = (e.m?.lanes || []).map(l => l.voice === 'sample' ? '♪' : (VOICES[l.voice]?.label || l.voice)).join(' · ');
+    const meta = document.createElement('span'); meta.className = 'lib-meta'; meta.textContent = `${e.tempo || '?'} bpm · ${voices} · ${ago(e.t)}`;
+    const acts = document.createElement('span'); acts.className = 'lib-acts';
+    const btn = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = txt; b.title = title; b.onclick = fn; acts.appendChild(b); return b; };
+    btn('↻', 'overwrite with what is playing now', () => { lib.overwrite(e.id, setupData()); libCurrent = e.id; renderLib(); flash('btn-save', 'saved ✓'); });
+    btn('✎', 'rename', () => {
+      const inp = document.createElement('input'); inp.type = 'text'; inp.value = e.name; inp.maxLength = 40; inp.className = 'lib-rename'; name.replaceWith(inp); inp.focus(); inp.select();
+      const done = (ok) => { if (ok && !lib.rename(e.id, inp.value)) { inp.setCustomValidity('that name is taken'); inp.reportValidity(); return; } renderLib(); };
+      inp.onkeydown = (k) => { if (k.key === 'Enter') done(true); if (k.key === 'Escape') done(false); k.stopPropagation(); }; inp.onblur = () => done(true);
+    });
+    const del = btn('×', 'delete', () => { if (del.dataset.sure) { lib.remove(e.id); if (libCurrent === e.id) libCurrent = null; renderLib(); } else { del.dataset.sure = 1; del.textContent = 'sure?'; del.classList.add('danger'); setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = '×'; del.classList.remove('danger'); } }, 2500); } });
+    row.append(name, acts, meta); el.appendChild(row);
+  }
+}
+$('lib-form').onsubmit = (e) => { e.preventDefault(); $('lib-name').setCustomValidity(''); saveSetup($('lib-name').value); };
+$('lib-name').oninput = () => $('lib-name').setCustomValidity('');
+$('lib-name').onkeydown = (e) => e.stopPropagation();   // typing a name must not play pads
+$('btn-save').onclick = () => openLib(true);
+$('btn-load').onclick = () => openLib(false);
+renderLib();
 
 // ---- Move ----
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34];
@@ -730,7 +762,7 @@ function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
   const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
-    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
+    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }
 // ---- layout: the left column lives between the readout (whose height changes) and the bottom-left panel ----
@@ -745,5 +777,5 @@ new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHu
 $('keys-pop').addEventListener('toggle', layoutHud);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, initPattern, clearLane, randomizeAll, setEvolve };
+window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, clearLane, randomizeAll, setEvolve };
 readout(); scene.start();

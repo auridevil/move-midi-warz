@@ -1,0 +1,25 @@
+{
+  "name": "MIDI Warz",
+  "short_name": "MIDI Warz",
+  "description": "Your Ableton Move, plugged into the browser: Orbits, finger drumming, Entropy Engine, Unassembler, Punchliner, Lights Out, Doom.",
+  "id": "./",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "background_color": "#0e0a20",
+  "theme_color": "#0e0a20",
+  "categories": ["music", "entertainment"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Orbits", "short_name": "Orbits", "description": "Polyrhythm drum machine", "url": "./poly.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Finger drumming", "short_name": "Drums", "url": "./drums.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Entropy Engine", "short_name": "Entropy", "url": "./chaos.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Unassembler", "short_name": "Unassembler", "url": "./unassembler.html", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}
