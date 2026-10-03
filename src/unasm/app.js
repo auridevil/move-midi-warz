@@ -88,7 +88,7 @@ $('btn-to-orbits').onclick = async () => {
   const chans = Array.from({ length: Math.min(2, b.numberOfChannels) }, (_, c) => b.getChannelData(c));
   const slices = Array.from({ length: 8 }, (_, k) => chans.map(d => d.slice(a + k * n, a + (k + 1) * n)));
   await putSample(SLICES_KEY, { name: st.name || 'track', sampleRate: sr, slices }); try { localStorage.setItem(SLICES_PING, String(Date.now())); } catch {}
-  $('track-info').textContent = `8 slices of ${(r.end - r.start).toFixed(2)} s sent: in Orbits, pick them in a lane's sample menu`;
+  $('track-info').textContent = `8 slices of ${(r.end - r.start).toFixed(2)} s sent: in Orbits they appear as tiles in a lane's sample row`;
 };
 
 // ---------------- grid, loop, tempo ----------------

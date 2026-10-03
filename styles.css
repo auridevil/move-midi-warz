@@ -442,3 +442,30 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 #btn-fill.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
 #btn-dice.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); box-shadow: 0 0 14px rgba(103,232,249,.4); }
 #dice-seed { width: 80px; }
+/* ---- src/ui.js controls: segmented bars, chips, toggle chips (no dropdowns) ---- */
+.ctl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl-col { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
+.ctl-lbl { font: 400 9.5px var(--font-display); letter-spacing: .16em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
+.seg-ui button { padding: 5px 10px; font-size: 11.5px; }
+.seg-ui button.on { background: var(--signal-cyan); color: var(--void-black); }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.chips button, .tchip { --chip: var(--signal-cyan); padding: 4px 11px; font-size: 11.5px; border-radius: 999px; background: transparent; color: var(--star-white); border: 1px solid color-mix(in srgb, var(--chip) 55%, transparent); box-shadow: none; }
+.chips button:hover, .tchip:hover { background: color-mix(in srgb, var(--chip) 16%, transparent); }
+.chips button.on, .tchip.on { background: var(--chip); border-color: var(--chip); color: var(--void-black); font-weight: 700; box-shadow: 0 0 12px color-mix(in srgb, var(--chip) 35%, transparent); }
+.chips button:disabled { opacity: .25; cursor: default; }
+.tchip::before { content: '○ '; } .tchip.on::before { content: '● '; }
+/* condition picker: "1 in N" + loop dots */
+.cond-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
+.loop-dots { display: flex; gap: 6px; }
+.ldot { --chip: var(--signal-cyan); width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 11px; background: transparent; color: var(--muted); border: 1.5px dashed color-mix(in srgb, var(--chip) 60%, transparent); box-shadow: none; }
+.ldot.on { background: var(--chip); color: var(--void-black); border-style: solid; font-weight: 700; box-shadow: 0 0 10px color-mix(in srgb, var(--chip) 45%, transparent); }
+.trig-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+/* Unassembler slices as waveform tiles */
+.slice-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 4px 0 6px; }
+.slice-grid .slice-head, .slice-grid > p { grid-column: 1 / -1; margin: 0 0 2px; }
+.slice { position: relative; padding: 2px; border-radius: 6px; background: rgba(103,232,249,.06); border: 1px solid rgba(103,232,249,.25); box-shadow: none; }
+.slice:hover { background: rgba(103,232,249,.18); border-color: var(--signal-cyan); }
+.slice canvas { display: block; width: 100%; height: 22px; }
+.slice span { position: absolute; top: 1px; left: 4px; font-size: 8.5px; color: var(--muted); }
+.evo-lanes { gap: 6px; }
+.midi-gauges { grid-template-columns: repeat(4, 1fr); }

@@ -13,6 +13,7 @@ import { VOICES, VOICE_KEYS } from './voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
+import { segmented, toggleChip, mount } from '../ui.js';
 import { createScene } from './scene.js';
 
 const $ = (id) => document.getElementById(id);
@@ -93,6 +94,7 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   if (L.tone != null || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone), time); } catch {} c.toneLocked = L.tone != null; }
   try { if (c.voice === 'sample') playSample(c, lane, p, time); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
+const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
 function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awake && !playing) hitSound(m.lanes[li], T.now(), false); sync(); }
 function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
@@ -223,7 +225,8 @@ function renderVoiceOptions() {
 }
 function renderLaneMix() {
   const lane = m.lane; $('btn-solo').classList.toggle('armed', lane.solo);
-  const cs = $('choke-select'); cs.innerHTML = ''; cs.add(new Option('nothing', -1)); m.lanes.forEach((l, i) => { if (i !== m.selected) cs.add(new Option(`lane ${i + 1} · ${voiceLabel(l)}`, i)); }); cs.value = lane.choke;
+  ui.choke.setOptions([[-1, 'nothing'], ...m.lanes.map((l, i) => [i, `${i + 1} · ${voiceLabel(l)}`, `cut lane ${i + 1} when this lane hits`])]); ui.choke.disable(m.selected); ui.choke.set(lane.choke);
+  [...ui.choke.el.children].forEach((b, k) => { if (k) b.style.setProperty('--chip', LANE_HEX[k - 1]); });
   $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
 }
 function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, p.get(m.lane) + delta); sync(); }
@@ -258,19 +261,30 @@ function buildLockGauges() {
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
   $('lock-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; renderSteps(); renderLocks(); save(); };
-  const cs = $('trig-cond'), rs = $('trig-ratchet'), fd = $('trig-fade');
-  for (const c of CONDS) cs.add(new Option(c, c)); for (let r = 1; r <= MAX_RATCHET; r++) rs.add(new Option(r === 1 ? 'single' : `×${r}`, r));
   const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); renderSteps(); renderLocks(); save(); };
-  cs.onchange = () => setTrig({ cond: cs.value }); rs.onchange = () => setTrig({ ratchet: +rs.value }); fd.onchange = () => setTrig({ fade: fd.checked });
+  // condition = "every N loops" + which loop (dots), or one of the fill / first specials
+  ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
+  ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st']], value: null, chips: true,
+    onChange: (c) => setTrig({ cond: m.lane.trigAt(lockStep)?.cond === c ? 'always' : c }) }));
+  ui.ratchet = mount('trig-ratchet', segmented({ options: [1, 2, 3, 4].map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
+  ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
   $('lock-close').onclick = () => editLocks(lockStep);
 }
 function renderLocks() {
   const lane = m.lane, panel = $('lockpanel'); if (lockStep >= lane.length) lockStep = -1;
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
-  const tg = lane.trigAt(lockStep); $('trig-cond').value = tg?.cond || 'always'; $('trig-ratchet').value = tg?.ratchet || 1; $('trig-fade').checked = !!tg?.fade;
+  renderTrig(lane.trigAt(lockStep));
   $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.join(', ') : 'no locks yet (dim = lane value)'}`;
   for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); g.setColor(lk[k] != null ? 'var(--signal-cyan)' : 'rgba(236,233,247,.3)'); }
+}
+/** Condition picker state from a step's trig: 'a:b' → "1 in b" + dot a lit; specials light their chip. */
+function renderTrig(tg) {
+  const cond = tg?.cond || 'always', ab = /^(\d):(\d)$/.exec(cond), b = ab ? +ab[2] : cond === 'always' ? 1 : null, a = ab ? +ab[1] : 1;
+  ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade);
+  const dots = $('cond-dots'); dots.innerHTML = ''; $('cond-dots-wrap').hidden = !(b > 1);
+  for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); renderSteps(); renderLocks(); save(); }; dots.appendChild(d); }
+  $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays' }[cond];
 }
 function auditionLock() {
   if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
@@ -299,7 +313,7 @@ function renderSlots() {
   $('chain-info').textContent = bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join(' → ')} · ${bank.chainBars} bar${bank.chainBars > 1 ? 's' : ''} each` : bank.pending >= 0 ? `slot ${bank.pending + 1} waits for the next ${bank.switchAt === 'now' ? 'tick' : bank.switchAt}` : bank.current >= 0 ? `playing slot ${bank.current + 1}` : 'nothing saved yet: Shift+click a slot';
 }
 function buildSlotsUI() {
-  const sw = $('slot-switch'); for (const k of SWITCH_MODES) sw.add(new Option({ now: 'at once', bar: 'next bar', cycle: 'when all lanes line up' }[k], k)); sw.value = bank.switchAt; sw.onchange = () => { bank.switchAt = sw.value; bank.persist(); };
+  ui.slotSwitch = mount('slot-switch', segmented({ options: [['now', 'at once'], ['bar', 'next bar'], ['cycle', 'full cycle', 'when every lane lines up again']], value: bank.switchAt, onChange: (v) => { bank.switchAt = v; bank.persist(); renderSlots(); } }));
   sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
   $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
   renderSlots();
@@ -322,8 +336,8 @@ function setRec(on) { rec.armed = on; $('btn-rec').classList.toggle('armed', on)
 function buildRecUI() {
   $('btn-rec').onclick = () => setRec(!rec.armed);
   sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
-  const q = $('rec-quant'); q.add(new Option('nearest step', 'nearest')); q.add(new Option('step just played', 'previous')); q.value = rec.quant; q.onchange = () => { rec.quant = q.value; saveSettings(); };
-  const pp = $('rec-pitch'); pp.checked = rec.pitchPads; pp.onchange = () => { rec.pitchPads = pp.checked; saveSettings(); };
+  ui.quant = mount('rec-quant', segmented({ options: [['nearest', 'nearest step', 'early hits land on the coming step'], ['previous', 'step just played']], value: rec.quant, onChange: (v) => { rec.quant = v; saveSettings(); } }));
+  ui.pitchPads = mount('rec-pitch', toggleChip({ label: 'pitch pads', on: rec.pitchPads, title: INFO['pitch pads'], onChange: (v) => { rec.pitchPads = v; saveSettings(); } }));
 }
 
 // ---- evolve: every N bars, nudge some lanes; optionally come back home ----
@@ -346,7 +360,7 @@ function evolveNow(bar = 0) {
 function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
-  m.lanes.forEach((l, i) => { const lab = document.createElement('label'); const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = l.evolve; cb.onchange = () => { l.evolve = cb.checked; save(); }; lab.append(cb, ` ${voiceLabel(l)}`); lab.style.color = LANE_HEX[i]; el.appendChild(lab); });
+  m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
 }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = 'home set'; readout(); };
@@ -355,7 +369,7 @@ function buildEvolveUI() {
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
   sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
   g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
-  const sc = $('evo-scope'); for (const [k, t] of [['rotate', 'rotation only'], ['hits', 'rotation + hits'], ['all', 'everything (+ length, speed)']]) sc.add(new Option(t, k)); sc.value = evo.scope; sc.onchange = () => { evo.scope = sc.value; saveSettings(); };
+  ui.evoScope = mount('evo-scope', segmented({ options: [['rotate', 'rotation'], ['hits', '+ hits'], ['all', 'everything', 'rotation, fill, length and speed']], value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
   renderLanesEvolve();
 }
 
@@ -366,24 +380,24 @@ async function enableMidi() {
 }
 function renderMidi() {
   const has = !!midi.access; $('btn-midi-enable').hidden = has; $('midi-body').hidden = !has; if (!has) return;
-  const fill = (sel, ports, cur) => { sel.innerHTML = ''; sel.add(new Option('— none —', '')); for (const p of ports) sel.add(new Option(p.name, p.name)); sel.value = ports.some(p => p.name === cur) ? cur : ''; };
-  fill($('midi-out'), pmidi.outputs(), pmidi.outName); fill($('midi-in'), pmidi.inputs(), pmidi.inName);
+  const opts = (ports) => [['', 'none'], ...ports.map(p => [p.name, p.name])];
+  ui.midiOut.setOptions(opts(pmidi.outputs())); ui.midiOut.set(pmidi.outName); ui.midiIn.setOptions(opts(pmidi.inputs())); ui.midiIn.set(pmidi.inName);
   const bad = pmidi.outName && !pmidi.out;
   $('midi-status').textContent = bad ? `"${pmidi.outName}" can't take notes right now (the Move in control mode would light pads instead)` : pmidi.follow !== 'off' && pmidi.inName ? `following ${pmidi.inName}${pmidi.extBpm ? ` · ${pmidi.extBpm} bpm` : ' · waiting for clock'}` : '';
 }
 function buildMidiUI() {
   $('btn-midi-enable').onclick = enableMidi;
-  $('midi-out').onchange = (e) => { pmidi.setOutput(e.target.value); saveSettings(); renderMidi(); };
-  $('midi-in').onchange = (e) => { pmidi.setInput(e.target.value); saveSettings(); renderMidi(); };
-  const co = $('midi-clock-out'); co.checked = pmidi.clockOut; co.onchange = () => { pmidi.clockOut = co.checked; saveSettings(); };
-  const fo = $('midi-follow'); for (const [k, t] of [['off', 'ignore'], ['tempo', 'tempo'], ['transport', 'tempo + start/stop'], ['lock', 'tempo + start/stop + phase lock']]) fo.add(new Option(t, k)); fo.value = pmidi.follow; fo.onchange = () => { pmidi.follow = fo.value; saveSettings(); renderMidi(); };
-  const gate = $('midi-gate'); gate.value = pmidi.gateMs; gate.onchange = () => { pmidi.gateMs = Math.max(5, Math.min(2000, +gate.value || 60)); saveSettings(); };
-  const t = $('midi-lanes'); t.innerHTML = '<tr><th></th><th>note</th><th>channel</th></tr>';
-  m.lanes.forEach((l, i) => {
-    const tr = document.createElement('tr'); tr.innerHTML = `<th style="color:${LANE_HEX[i]}">lane ${i + 1}</th><td><input type="number" min="0" max="127" value="${pmidi.lanes[i].note}"></td><td><input type="number" min="1" max="16" value="${pmidi.lanes[i].ch}"></td>`;
-    const [n, c] = tr.querySelectorAll('input'); n.onchange = () => { pmidi.lanes[i].note = Math.max(0, Math.min(127, +n.value | 0)); saveSettings(); }; c.onchange = () => { pmidi.lanes[i].ch = Math.max(1, Math.min(16, +c.value | 0)); saveSettings(); };
-    t.appendChild(tr);
+  ui.midiOut = mount('midi-out', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setOutput(v); saveSettings(); renderMidi(); } }));
+  ui.midiIn = mount('midi-in', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setInput(v); saveSettings(); renderMidi(); } }));
+  ui.clockOut = mount('midi-clock-out', toggleChip({ label: 'send clock + start/stop', on: pmidi.clockOut, title: INFO['clock out'], onChange: (v) => { pmidi.clockOut = v; saveSettings(); } }));
+  ui.follow = mount('midi-follow', segmented({ options: [['off', 'off'], ['tempo', 'tempo'], ['transport', '+ start/stop'], ['lock', '+ phase lock', 'tempo, start/stop and beat position']], value: pmidi.follow, onChange: (v) => { pmidi.follow = v; saveSettings(); renderMidi(); } }));
+  // note + channel per lane as gauges (note names in Live's convention, C3 = 60), then the gate
+  const NOTE = (p) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][p % 12] + (Math.floor(p / 12) - 2), g = $('midi-lanes');
+  m.lanes.forEach((_, i) => {
+    g.appendChild(makeGauge({ label: `lane ${i + 1} note`, min: 0, max: 127, value: pmidi.lanes[i].note, fmt: (v) => `${NOTE(v)} · ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].note = v; saveSettings(); } }).el);
+    g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); } }).el);
   });
+  g.appendChild(makeGauge({ label: 'gate', min: 5, max: 500, value: pmidi.gateMs, fmt: (v) => `${v} ms`, color: 'var(--star-white)', title: 'how long each MIDI note is held', onChange: (v) => { pmidi.gateMs = v; saveSettings(); } }).el);
   pmidi.handlers = { tempo: (bpm) => { applyTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
     // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
     tick: (ext, t) => {
@@ -397,7 +411,7 @@ function buildMidiUI() {
 function toggleSolo(li = m.selected) { m.lanes[li].solo = !m.lanes[li].solo; sync(); }
 function buildMixUI() {
   $('btn-solo').onclick = () => toggleSolo();
-  $('choke-select').onchange = (e) => { m.lane.choke = +e.target.value; sync(); };
+  ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
 
 // ---- samples: load a file, record the mic, or take a slice from Unassembler; drop a file on a ring ----
@@ -427,15 +441,22 @@ async function toggleMic() {
   } catch (e) { $('sample-name').textContent = `mic: ${e.message || e}`; }
 }
 async function renderSlices() {
-  const sl = await getSample(SLICES_KEY), sel = $('slice-select'); sel.innerHTML = '';
-  sel.add(new Option(sl ? `Unassembler: ${sl.name.slice(0, 22)}…` : 'Unassembler slices: none sent yet', ''));
-  if (sl) sl.slices.forEach((_, k) => sel.add(new Option(`slice ${k + 1}`, k)));
+  const sl = await getSample(SLICES_KEY), el = $('slice-select'); el.innerHTML = '';
+  if (!sl) { el.innerHTML = '<p class="hint tight">No slices yet: in Unassembler press <b>→ orbits</b>, they show up here.</p>'; return; }
+  const head = document.createElement('p'); head.className = 'hint tight slice-head'; head.textContent = `slices of ${sl.name.split(' · ')[0]} · tap one to put it on this lane`; el.appendChild(head);
+  sl.slices.forEach((ch, k) => {   // a tile per slice with its waveform, so you pick by shape, not by number
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'slice'; b.title = `slice ${k + 1}`;
+    const c = document.createElement('canvas'); c.width = 64; c.height = 26; const g = c.getContext('2d'), d = ch[0], step = Math.max(1, Math.floor(d.length / 64));
+    g.fillStyle = '#67e8f9'; for (let x = 0; x < 64; x++) { let pk = 0; for (let j = x * step; j < (x + 1) * step && j < d.length; j += 4) pk = Math.max(pk, Math.abs(d[j])); const h = Math.max(1, pk * 24); g.fillRect(x, 13 - h / 2, 1, h); }
+    const n = document.createElement('span'); n.textContent = k + 1; b.append(c, n);
+    b.onclick = () => assignSample(m.selected, { name: `${sl.name.replace(/\.[^.]+$/, '').split(' · ')[0].slice(0, 16)} #${k + 1}`, sampleRate: sl.sampleRate, channels: ch });
+    el.appendChild(b);
+  });
 }
 function buildSampleUI() {
   $('btn-sample-file').onclick = () => $('sample-file').click();
   $('sample-file').onchange = () => { const f = $('sample-file').files[0]; if (f) sampleFromFile(m.selected, f); $('sample-file').value = ''; };
   $('btn-mic').onclick = toggleMic;
-  $('slice-select').onchange = async (e) => { if (e.target.value === '') return; const sl = await getSample(SLICES_KEY), k = +e.target.value; if (sl) await assignSample(m.selected, { name: `${sl.name.replace(/\.[^.]+$/, '').split(' · ')[0].slice(0, 16)} #${k + 1}`, sampleRate: sl.sampleRate, channels: sl.slices[k] }); e.target.value = ''; };
   addEventListener('storage', (e) => { if (e.key === SLICES_PING) renderSlices(); });
   for (const ev of ['dragenter', 'dragover']) $('cv').addEventListener(ev, (e) => e.preventDefault());
   $('cv').addEventListener('drop', (e) => { e.preventDefault(); const f = [...(e.dataTransfer?.files || [])].find(f => f.type.startsWith('audio') || /\.(wav|mp3|aif+|flac|ogg|m4a)$/i.test(f.name)); if (!f) return; const r = scene.pick(e.clientX, e.clientY); sampleFromFile(r >= 0 ? r : m.selected, f); });
@@ -460,7 +481,7 @@ function buildDiceUI() {
 const download = (bytes, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
 const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
 /** Length of a render in master ticks: N bars, or one full polyrhythm cycle (capped at 64 bars). */
-function renderTicks() { const v = $('exp-len').value; return v === 'cycle' ? Math.min(64 * BAR_TICKS, m.cycleTicks()) : +v * BAR_TICKS; }
+function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? Math.min(64 * BAR_TICKS, m.cycleTicks()) : +v * BAR_TICKS; }
 async function shareLink() {
   const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
   history.replaceState(null, '', `#p=${code}`);
@@ -478,7 +499,7 @@ async function exportWav() {
   $('exp-status').textContent = `WAV: ${hits.length} hits, ${(sec + tail).toFixed(1)} s`;
 }
 function exportMidi() {
-  const chain = $('exp-what').value === 'chain' && bank.chain.length > 1;
+  const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1;
   const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: dice.locked ? dice : null }) : collectHits(m, { from: 0, to: renderTicks(), tempo, dice: dice.locked ? dice : null });
   const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000 });
   download(bytes, `orbits-${chain ? 'chain' : 'pattern'}-${stamp()}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes${chain ? ` · chain of ${bank.chain.length}` : ''}`;
@@ -489,6 +510,8 @@ async function loadShared() {
   catch (e) { $('exp-status').textContent = `link: ${e.message}`; }
 }
 function buildExportUI() {
+  ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'one full polyrhythm cycle (max 64 bars)']], value: 4 }));
+  ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi;
   addEventListener('hashchange', loadShared);
 }

@@ -35,7 +35,7 @@
       <div id="slots" class="slots"></div>
       <p id="chain-info" class="hint tight"></p>
       <div class="row-ctl">
-        <label title="When a recalled slot takes over">switch <select id="slot-switch"></select></label>
+        <div class="ctl" title="When a recalled slot takes over"><span class="ctl-lbl">switch</span><div id="slot-switch"></div></div>
         <div id="slot-gauges" class="gauges one"></div>
         <button id="chain-stop" class="small">stop chain</button>
       </div>
@@ -48,8 +48,8 @@
         <div id="rec-gauges" class="gauges one"></div>
       </div>
       <div class="row-ctl">
-        <label title="Where a hit is filed">quantize <select id="rec-quant"></select></label>
-        <label title="The 8 pads of a row play 8 pitches and write a tune lock"><input type="checkbox" id="rec-pitch" /> pitch pads</label>
+        <div class="ctl" title="Where a hit is filed"><span class="ctl-lbl">quantize</span><div id="rec-quant"></div></div>
+        <div id="rec-pitch"></div>
       </div>
       <p class="hint tight">Armed + playing: pads (or keys 1–8 / q–i / a–k / z–,) play their row's lane and write the nearest step. Hard hits = accents. Move: <b>Record</b> arms, Shift+Record = tap tempo.</p>
     </details>
@@ -58,7 +58,8 @@
       <div class="row-ctl">
         <button id="btn-evolve" class="rec-btn">◌ evolve</button>
         <button id="evo-home-now" class="small" title="Use the current pattern as home">home = now</button>
-        <label title="What evolve may change">touches <select id="evo-scope"></select></label>
+        </div>
+      <div class="row-ctl"><div class="ctl" title="What evolve may change"><span class="ctl-lbl">touches</span><div id="evo-scope"></div></div>
       </div>
       <div id="evo-gauges" class="gauges three"></div>
       <div id="evo-lanes" class="evo-lanes"></div>
@@ -81,8 +82,10 @@
         <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
       </div>
       <div class="row-ctl">
-        <label>length <select id="exp-len"><option value="1">1 bar</option><option value="2">2 bars</option><option value="4" selected>4 bars</option><option value="8">8 bars</option><option value="16">16 bars</option><option value="cycle">one full cycle</option></select></label>
-        <label title="MIDI only: the running chain, each slot its bars">MIDI of <select id="exp-what"><option value="pattern">this pattern</option><option value="chain">the chain</option></select></label>
+        <div class="ctl"><span class="ctl-lbl">length</span><div id="exp-len"></div></div>
+      </div>
+      <div class="row-ctl">
+        <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
       </div>
       <div class="row-ctl"><button id="exp-wav">⤓ WAV</button><button id="exp-mid">⤓ MIDI</button></div>
       <p id="exp-status" class="hint tight"></p>
@@ -91,10 +94,12 @@
       <summary>MIDI I/O · notes, clock out, clock in</summary>
       <button id="btn-midi-enable">enable MIDI ports</button>
       <div id="midi-body" hidden>
-        <div class="row-ctl"><label>out <select id="midi-out"></select></label><label title="MIDI clock + start/stop to the out port"><input type="checkbox" id="midi-clock-out" /> clock out</label></div>
-        <table id="midi-lanes" class="gtable midi-lanes"></table>
-        <div class="row-ctl"><label>gate <input type="number" id="midi-gate" min="5" max="2000" /> ms</label></div>
-        <div class="row-ctl"><label>clock in <select id="midi-in"></select></label><label>follow <select id="midi-follow"></select></label></div>
+        <div class="ctl-col"><span class="ctl-lbl">send notes &amp; clock to</span><div id="midi-out"></div></div>
+        <div class="row-ctl"><div id="midi-clock-out"></div></div>
+        <span class="ctl-lbl">note · channel per lane, gate</span>
+        <div id="midi-lanes" class="gauges midi-gauges"></div>
+        <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
+        <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
       </div>
       <p id="midi-status" class="hint tight"></p>
     </details>
@@ -151,9 +156,14 @@
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>
         <div class="row-ctl trig-row">
-          <label title="Play only on some loops, or only with/without Fill">condition <select id="trig-cond"></select></label>
-          <label title="Repeat the hit inside its step">repeats <select id="trig-ratchet"></select></label>
-          <label title="Each repeat quieter"><input type="checkbox" id="trig-fade" /> fade</label>
+          <div class="cond-pick" title="Play only on some loops, or only with/without Fill">
+            <div class="ctl"><span class="ctl-lbl">plays</span><div id="cond-every"></div></div>
+            <div class="ctl" id="cond-dots-wrap"><span class="ctl-lbl">on loop</span><div id="cond-dots" class="loop-dots"></div></div>
+            <div class="ctl"><span class="ctl-lbl">only</span><div id="cond-special"></div></div>
+            <p id="cond-text" class="hint tight"></p>
+          </div>
+          <div class="ctl" title="Repeat the hit inside its step"><span class="ctl-lbl">repeats</span><div id="trig-ratchet"></div></div>
+          <div id="trig-fade"></div>
         </div>
       </div>
       <h3 class="subh">sound · Shift + knobs 1–8</h3>
@@ -163,14 +173,14 @@
       </div>
       <div class="row-ctl">
         <button id="btn-solo" class="small" title="Only soloed lanes play (Move: Shift+Mute)">solo</button>
-        <label title="When this lane hits it cuts off…">chokes <select id="choke-select"></select></label>
+        <div class="ctl" title="When this lane hits it cuts off…"><span class="ctl-lbl">chokes</span><div id="choke-select"></div></div>
       </div>
       <div class="row-ctl sample-row" title="Load a file, record the mic, take an Unassembler slice, or drop a file on a ring">
         <span class="subh">sample</span>
         <button id="btn-sample-file" class="small">load file…</button><input type="file" id="sample-file" accept="audio/*" hidden />
         <button id="btn-mic" class="small rec-btn">● mic</button>
-        <select id="slice-select"></select>
       </div>
+      <div id="slice-select" class="slice-grid" title="Slices sent from Unassembler (→ orbits): tap one to put it on this lane"></div>
       <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sound-sliders" class="gauges"></div>
       <details class="drawer inner">
