@@ -87,7 +87,7 @@
       <div class="row-ctl">
         <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
       </div>
-      <div class="row-ctl"><button id="exp-wav">⤓ WAV</button><button id="exp-mid">⤓ MIDI</button></div>
+      <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + the mix, all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button></div>
       <p id="exp-status" class="hint tight"></p>
     </details>
     <details class="drawer">
@@ -114,6 +114,7 @@
         <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
         <tr><th>Hold Layout</th><td>fill</td></tr>
+        <tr><th>Sampling</th><td>jam: record 4 lane tracks (up to 256 beats) · again = stop</td></tr>
         <tr><th>Delete</th><td>clear the lane</td></tr>
         <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
         <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
@@ -136,8 +137,18 @@
     <div class="stress-meter" title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
   </div>
   <div class="hud">
-    <button id="btn-play" class="primary big-btn">▶ play</button>
+    <div class="hud-row top-row">
+      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as 4 lane tracks, up to 256 beats (Move: Sampling)">● jam</button>
+      <button id="btn-play" class="primary big-btn">▶ play</button>
+    </div>
+    <div id="jam-panel" class="jam-panel" hidden>
+      <div class="jam-bar"><i id="jam-fill"></i></div>
+      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ 4 tracks + mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
+    </div>
     <div class="hud-row">
+      <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
+      <button id="btn-save" title="Save the pattern and tempo in this browser">save</button>
+      <button id="btn-load" title="Load what you saved (undoable)">load</button>
       <button id="btn-random">randomize</button>
       <button id="btn-clear">clear lane</button>
       <button id="btn-tap">tap tempo</button>

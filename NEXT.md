@@ -6,9 +6,9 @@ MIDI export, undo/redo, seeded dice, solo & choke groups, samples on lanes (file
 symmetric humanize, headroom-based stress meters. What's left is smaller:
 
 ## Export
+- Jam takes are kept in memory only: a reload loses an undownloaded take (could go to IndexedDB).
 - WAV of a whole chain (today WAV renders the current pattern; MIDI already does chains). Needs the offline kit
   rebuilt per slot, since slots can use different voices.
-- Stems: one WAV per lane.
 
 ## Samples
 - Share links drop samples (they live in this browser's IndexedDB). An "export kit" zip (pattern + WAVs) would

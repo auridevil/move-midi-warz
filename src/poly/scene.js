@@ -89,7 +89,7 @@ export function createScene(cv, o) {
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
-    if (!o.isBusy() && !o.isRecording?.() && !waves.length && !sparks.length && !beams.length && !blooms.length && energy.every(e => e < 0.01)) { prev = now; return; }
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && energy.every(e => e < 0.01)) { prev = now; return; }
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
@@ -190,6 +190,16 @@ export function createScene(cv, o) {
       const pulse = 0.5 + 0.5 * Math.sin(now * 0.006), r = g.ring(3) + 26;
       ctx.strokeStyle = `rgba(239,68,68,${0.25 + pulse * 0.35})`; ctx.lineWidth = 1.5 + pulse * 2; ctx.setLineDash([6, 10]); ctx.lineDashOffset = -now * 0.02;
       ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+    }
+    // jam: a red arc around everything fills up over the 256 beats, with a ticking head
+    const jp = o.jamProgress?.();
+    if (jp != null) {
+      const r = g.ring(3) + 40, a0 = -Math.PI / 2, a1 = a0 + TAU * Math.max(0.002, jp), pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+      ctx.strokeStyle = 'rgba(239,68,68,.18)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = `rgba(239,68,68,${0.7 + pulse * 0.3})`; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, a1); ctx.stroke(); ctx.lineCap = 'butt';
+      ctx.drawImage(sprite('#ef4444'), g.cx + Math.cos(a1) * r - 16, g.cy + Math.sin(a1) * r - 16, 32, 32);
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fca5a5'; ctx.font = '12px "Major Mono Display", monospace'; ctx.textAlign = 'center';
+      ctx.fillText(`jam ${Math.floor(jp * 256)}/256`, g.cx, g.cy - r - 12); ctx.textAlign = 'left'; ctx.globalCompositeOperation = 'lighter';
     }
     // beams between simultaneous hits
     for (let i = beams.length - 1; i >= 0; i--) {

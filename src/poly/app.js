@@ -6,6 +6,7 @@ import { History } from './history.js';
 import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
+import { JAM_BEATS, stemsZip, floatStemsToInt16 } from './jam.js';
 import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
@@ -42,18 +43,23 @@ const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify
 
 // ---- sounds ----
 let kit = null, loop = null;
-// every lane owns a chain: voice (from the library) → drive → tone filter → pan → level → master (+ send → delay)
-function makeKit() {
-  const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter);
-  const master = new T.Gain(vol).connect(comp);
-  const delay = new T.FeedbackDelay({ delayTime: '8n.', feedback: 0.3, wet: 1 }).connect(master);
+// every lane owns a chain: voice → choke → drive → tone filter → pan → level ┐
+//                                                          └→ send → its own delay ┴→ lane bus → master
+// One delay per lane (instead of a shared one) sounds the same — a delay is linear — but keeps each lane's echoes on
+// its own bus, so stems and jam recordings carry them. raw = no master compressor/limiter (stems for a DAW).
+function makeKit({ raw = false } = {}) {
+  let master;
+  if (raw) master = new T.Gain(1).toDestination();
+  else { const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter); master = new T.Gain(vol).connect(comp); }
   const chains = m.lanes.map(() => {
-    const level = new T.Gain(0.8).connect(master); const send = new T.Gain(0.15).connect(delay); const pan = new T.Panner(0); pan.connect(level); pan.connect(send);
+    const bus = new T.Gain(1).connect(master);
+    const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, feedback: 0.3, wet: 1 }).connect(bus);   // dotted eighth
+    const level = new T.Gain(0.8).connect(bus); const send = new T.Gain(0.15).connect(delay); const pan = new T.Panner(0); pan.connect(level); pan.connect(send);
     const tone = new T.Filter({ type: 'lowpass', frequency: 8000, Q: 0.7 }).connect(pan); const drive = new T.Distortion({ distortion: 0, wet: 0 }).connect(tone);
     const choke = new T.Gain(1).connect(drive);   // another lane's hit can cut this one off (choke groups)
-    return { v: null, voice: null, choke, drive, tone, pan, level, send };
+    return { v: null, voice: null, choke, drive, tone, pan, level, send, delay, bus };
   });
-  const kit = { master, delay, chains }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
+  const kit = { master, chains }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
 function buildVoice(li, k = kit) {
@@ -115,7 +121,7 @@ function onTick(time) {
   if (resetPending) { tick = 0; resetPending = false; }
   const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
-  pmidi.clock(at);
+  pmidi.clock(at); jamTick(t, time);
   const si = bank.due(t, m.cycleTicks()); if (si >= 0) loadSlot(si);
   if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS);
   const now = T.getContext().rawContext.currentTime;
@@ -128,10 +134,10 @@ function onTick(time) {
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; paintLeds(); }, time);
   });
 }
-function retime() { if (!awake) return; T.getTransport().bpm.rampTo(tempo, 0.1); kit.delay.delayTime.value = T.Time('8n.').toSeconds(); }
+function retime() { if (!awake) return; T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.value = d; }   // dotted eighth
 async function togglePlay() {
   await wake(); playing = !playing;
-  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -342,8 +348,16 @@ function buildRecUI() {
 
 // ---- evolve: every N bars, nudge some lanes; optionally come back home ----
 let lastEvolve = '';
+/** Clearing or randomizing is a fresh start: evolve stops (it would mutate the new pattern away from you). */
+function clearLane() { if (evo.on) setEvolve(false); m.lane.clear(); sync(); }
+/** Init: every lane empty, length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
+function initPattern() {
+  if (evo.on) setEvolve(false); const n = new Machine();
+  n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(RATIOS.indexOf(1)); }); n.lanes[0].hits[0] = true;
+  const sel = 0; m.assign(n.toJSON()); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
+}
 /** Randomize: with locked dice a fresh seed is rolled and shown, so a groove you like can be re-made from its number. */
-function randomizeAll() { if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
+function randomizeAll() { if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
 // ---- undo / redo ----
 function applyState(json) {
   if (!json) return; restoring = true; const sel = m.selected; m.assign(JSON.parse(json)); m.selected = Math.min(sel, m.lanes.length - 1);
@@ -512,7 +526,7 @@ async function loadShared() {
 function buildExportUI() {
   ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'one full polyrhythm cycle (max 64 bars)']], value: 4 }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
-  $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi;
+  $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   addEventListener('hashchange', loadShared);
 }
 
@@ -521,7 +535,89 @@ function buildEditUI() {
   $('btn-undo').onclick = undo; $('btn-redo').onclick = redo;
   const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
 }
-buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEditUI(); sync(); hist.commit(JSON.stringify(m)); loadShared();
+
+// ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as 4 lane tracks, up to 256 beats ----
+// The recorder taps each lane bus (pre-master), starts on a beat and ends exactly on the master clock, so the four
+// files are sample-aligned and the same length.
+const jam = { state: 'idle', node: null, startTick: 0, beats: 0, chunks: null, sr: 44100 };   // idle → armed → rec → finishing → done
+async function ensureJamNode() {
+  // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
+  if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
+  await tc.addAudioWorkletModule(new URL('./jam-worklet.js', import.meta.url).href);
+  jam.node = tc.createAudioWorkletNode('orbits-jam', { numberOfInputs: 4, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
+  jam.node.connect(ctx.destination);   // silent output, keeps the recorder pulled by the graph
+  kit.chains.forEach((c, i) => c.bus.connect(jam.node, 0, i));
+  jam.node.port.onmessage = ({ data }) => {
+    if (data.lanes) data.lanes.forEach(([L, R], i) => { jam.chunks[i][0].push(L); jam.chunks[i][1].push(R); });
+    if (data.done) { const any = jam.chunks[0][0].length; jam.state = any ? 'done' : 'idle'; renderJam(); paintLeds(); }
+  };
+}
+async function toggleJam() {
+  if (jam.state === 'rec' || jam.state === 'armed') return stopJam();
+  try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
+  jam.chunks = Array.from({ length: 4 }, () => [[], []]); jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
+  if (!playing) togglePlay();
+}
+function stopJam() {
+  if (jam.state === 'armed') { jam.state = 'idle'; jam.node?.port.postMessage({ cancel: true }); }
+  else if (jam.state === 'rec') { jam.state = 'finishing'; jam.node.port.postMessage({ end: T.getContext().rawContext.currentTime + 0.02 }); }
+  renderJam(); paintLeds();
+}
+/** Master-clock side: start on the next beat, stop at 256 beats sharp. */
+function jamTick(t, time) {
+  if (jam.state === 'armed' && t % PPQ === 0) { jam.startTick = t; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
+  if (jam.state !== 'rec') return;
+  const el = t - jam.startTick; jam.beats = el / PPQ;
+  if (el >= JAM_BEATS * PPQ) { jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
+  else if (el % PPQ === 0) T.getDraw().schedule(renderJam, time);
+}
+function renderJam() {
+  const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam'), panel = $('jam-panel');
+  btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next beat…' : '● jam';
+  panel.hidden = st === 'idle'; $('jam-fill').style.width = `${Math.min(100, (jam.beats / JAM_BEATS) * 100)}%`;
+  const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
+  $('jam-text').textContent = st === 'armed' ? 'starts on the next beat' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(b / 4) + 1}` : st === 'finishing' ? 'closing the take…' : st === 'done' ? `take ready · ${Math.round(jam.beats)} beats · ${secs.toFixed(1)} s · 4 lanes + mix` : '';
+  $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
+}
+function downloadJam() {
+  if (jam.state !== 'done') return; const names = m.lanes.map(voiceLabel);
+  download(stemsZip(jam.chunks, names, jam.sr, `orbits-jam-${stamp()}`), `orbits-jam-${stamp()}.zip`, 'application/zip');
+}
+function buildJamUI() {
+  $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = downloadJam; $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = null; renderJam(); paintLeds(); };
+  renderJam();
+}
+
+// ---- stems: the current pattern rendered once, each lane to its own pair of channels → equal-length WAVs ----
+async function exportStems() {
+  await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering 4 stems, ${(sec + tail).toFixed(1)} s…`;
+  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  for (const l of m.lanes) await ensureSample(l);
+  const out = await T.Offline(() => {
+    T.getTransport().bpm.value = tempo; const k = makeKit({ raw: true }), ctx = T.getContext().rawContext, merger = ctx.createChannelMerger(8);
+    merger.connect(ctx.destination); k.master.disconnect();
+    k.chains.forEach((c, i) => { const sp = ctx.createChannelSplitter(2); c.bus.disconnect(); c.bus.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
+    for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
+  }, sec + tail, 8, 44100);
+  const b = out.get(), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]));
+  download(stemsZip(lanes, m.lanes.map(voiceLabel), b.sampleRate, `orbits-stems-${stamp()}`), `orbits-stems-${stamp()}.zip`, 'application/zip');
+  $('exp-status').textContent = `stems: 4 lanes + mix, ${(sec + tail).toFixed(1)} s each${gain < 1 ? ` (all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping)` : ''}`;
+}
+buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
+// every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
+if (!/#p=/.test(location.hash)) initPattern(); loadShared();
+$('btn-init').onclick = initPattern;
+// save / load: one saved pattern (+ tempo) in this browser, separate from the 16 slots; load is undoable
+const SAVED = 'midi-warz.poly.saved.v1';
+const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
+function renderSaved() { let o = null; try { o = JSON.parse(localStorage.getItem(SAVED) || 'null'); } catch {} $('btn-load').disabled = !o; $('btn-load').title = o ? `Load what you saved ${new Date(o.t).toLocaleString()} (undoable)` : 'Nothing saved yet'; }
+$('btn-save').onclick = () => { try { localStorage.setItem(SAVED, JSON.stringify({ m: m.toJSON(), tempo, t: Date.now() })); flash('btn-save', 'saved ✓'); } catch (e) { flash('btn-save', 'full!'); } renderSaved(); };
+$('btn-load').onclick = () => {
+  let o = null; try { o = JSON.parse(localStorage.getItem(SAVED) || 'null'); } catch {} if (!o?.m) return;
+  if (evo.on) setEvolve(false); const sel = m.selected; m.assign(o.m); m.selected = sel; if (o.tempo) applyTempo(o.tempo);
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); flash('btn-load', 'loaded ✓');
+};
+renderSaved();
 
 // ---- Move ----
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34];
@@ -541,7 +637,7 @@ function paintLeds() {
   for (let t = 1; t <= 4; t++) { const li = 4 - t; move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
-  move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16);
+  move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
 move.addEventListener('pad', (e) => {
   if (!e.detail.on) return; const { row, col, velocity } = e.detail;
@@ -577,16 +673,17 @@ move.addEventListener('button', (e) => {
   if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
   if (name === 'layout') { setFill(pressed); return; }   // hold = fill
+  if (name === 'sampling' && pressed) { toggleJam(); return; }
   if (!pressed) return;
   const tr = /^track(\d)$/.exec(name); if (tr) { m.select(4 - +tr[1]); lockStep = -1; sync(); return; }   // track 1 is the top button = top pad row = lane 3
   if (name === 'delete' && held.size) { for (const [i, h] of held) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(i)); m.lane.trigs[m.lane.stepIndex(i)] = null; } renderSteps(); renderLocks(); save(); paintLeds(); return; }
-  if (name === 'delete') { m.lane.clear(); sync(); return; }   // Delete alone = clear the lane (undoable)
+  if (name === 'delete') { clearLane(); return; }   // Delete alone = clear the lane (undoable)
   if (name === 'play') togglePlay(); if (name === 'mute') { if (shift) toggleSolo(); else { m.lane.muted = !m.lane.muted; sync(); } } if (name === 'undo') { if (shift) redo(); else undo(); }
   if (name === 'capture') { if (shift) setEvolve(!evo.on); else randomizeAll(); }
   if (name === 'record') { if (shift) tapTempo(); else setRec(!rec.armed); }
   if (name === 'left' || name === 'right') { const dir = name === 'right' ? 1 : -1; if (shift) cycleKit(dir); else cycleVoice(m.selected, dir); }
 });
-$('btn-random').onclick = randomizeAll; $('btn-clear').onclick = () => { m.lane.clear(); sync(); }; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
+$('btn-random').onclick = randomizeAll; $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
 window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 window.addEventListener('keydown', (e) => {
@@ -616,7 +713,7 @@ $('btn-disconnect').onclick = () => { move.disconnect(); setPill('Move: disconne
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, isRecording: () => rec.armed, laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
@@ -633,7 +730,7 @@ function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
   const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
-    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
+    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }
 // ---- layout: the left column lives between the readout (whose height changes) and the bottom-left panel ----
@@ -648,5 +745,5 @@ new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHu
 $('keys-pop').addEventListener('toggle', layoutHud);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress };
+window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, initPattern, clearLane, randomizeAll, setEvolve };
 readout(); scene.start();

@@ -158,3 +158,15 @@ test('clock phase lock: trims small drift, snaps big jumps; SPP and start reset 
   const p = new PolyMidi({ getAccess: () => null }); p.follow = 'lock'; const ticks = []; p.handlers.tick = (n) => ticks.push(n); p.handlers.start = () => {};
   p.receive([0xFA], 0); p.receive([0xF8], 1); p.receive([0xF8], 2); p.receive([0xF2, 4, 0], 3); p.receive([0xF8], 4); assert.deepEqual(ticks, [0, 1, 24], 'SPP 4 sixteenths = tick 24');
 });
+test('jam / stems: equal-length WAVs per lane + mix in one zip, no clipping', async () => {
+  const { wavFromInt16, mixInt16, floatStemsToInt16, stemsZip } = await import('../src/poly/jam.js');
+  const w = wavFromInt16([Int16Array.of(1, 2), Int16Array.of(3)], [Int16Array.of(-1, -2), Int16Array.of(-3)], 48000);
+  const v = new DataView(w.buffer); assert.equal(String.fromCharCode(...w.slice(0, 4)), 'RIFF'); assert.equal(v.getUint32(40, true), 12, '3 frames × 4 bytes'); assert.equal(v.getInt16(44 + 8, true), 3); assert.equal(v.getInt16(44 + 10, true), -3);
+  const lane = (x) => [[Int16Array.of(x, x)], [Int16Array.of(-x, -x)]];
+  const mix = mixInt16([lane(20000), lane(20000), lane(1), lane(0)]); assert.equal(mix[0][0][0], 32767, 'clipped, not wrapped'); assert.equal(mix[1][0][1], -32768);
+  const { lanes, gain } = floatStemsToInt16([[Float32Array.of(2, 0), Float32Array.of(0, 0)], [Float32Array.of(0.5, 0), Float32Array.of(0, 0)]]);
+  assert.ok(Math.abs(gain - 0.49) < 1e-9, 'loudest lane scaled to 0.98'); assert.equal(lanes[1][0][0][0], Math.round(0.5 * 0.49 * 32767), 'same gain on every stem');
+  const zip = stemsZip([lane(5), lane(6), lane(7), lane(8)], ['kick', 'snare', 'hat/x', '♪ demo'], 44100, 'take');
+  const names = []; for (let i = 0; i < zip.length - 4; i++) if (zip[i] === 0x50 && zip[i + 1] === 0x4B && zip[i + 2] === 3 && zip[i + 3] === 4) { const n = zip[i + 26] | (zip[i + 27] << 8); names.push(new TextDecoder().decode(zip.slice(i + 30, i + 30 + n))); }
+  assert.deepEqual(names, ['take/1-kick.wav', 'take/2-snare.wav', 'take/3-hat-x.wav', 'take/4-demo.wav', 'take/mix.wav']);
+});
