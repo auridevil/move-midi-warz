@@ -247,7 +247,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 
 /* arc gauges: small arc, value and label stacked underneath */
 .gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px; margin: 4px 0; }
-.gauge { display: flex; flex-direction: column; align-items: center; gap: 0; cursor: ns-resize; user-select: none; padding: 2px 0 3px; border-radius: 8px; outline: none; }
+.gauge { display: flex; flex-direction: column; align-items: center; gap: 0; cursor: ns-resize; user-select: none; touch-action: none; padding: 2px 0 3px; border-radius: 8px; outline: none; }
 .gauge:hover, .gauge:focus { background: rgba(167,139,250,.08); }
 .gauge svg { width: 34px; height: 34px; display: block; }
 .gauge .g-track { fill: none; stroke: rgba(236,233,247,.16); stroke-width: 4.5; stroke-linecap: round; }
@@ -432,6 +432,25 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .hud-row { justify-content: flex-start; }
   body:has(#hud-left) #hud-left { position: static; width: auto; margin: 0 16px 12px; overflow: visible; }
   body:has(#hud-left) #hud-bl { position: static; width: auto; margin: 0 16px 16px; }
+  /* the orbits get their own square stage right under the header, so the rings are visible and tappable instead of
+     sitting behind the panels; the scene measures the canvas box, not the viewport */
+  body:has(#hud-left) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
+  body:has(#hud-left) .readout { order: 2; }
+  body:has(#hud-left) .lane-tabs { justify-content: flex-start; }
+}
+/* lane buttons: the touch way to pick a ring */
+.lane-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.lane-tab { --lane: var(--signal-cyan); color: var(--lane); border-color: color-mix(in srgb, var(--lane) 45%, transparent); padding: 6px 10px; font-size: 12px; min-height: 36px; }
+.lane-tab.sel { background: color-mix(in srgb, var(--lane) 22%, transparent); border-color: var(--lane); box-shadow: 0 0 12px color-mix(in srgb, var(--lane) 35%, transparent); }
+/* phone */
+@media (max-width: 760px) {
+  body:has(#hud-left) .readout { display: none; }
+  body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
+  body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
+  body:has(#hud-left) .stepsui { gap: 3px; } body:has(#hud-left) .stepsui .st { height: 28px; }
+  body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
+  body:has(#hud-left) .big-btn { flex: 1; }
+  body:has(#hud-left) .gtable.keys { font-size: 11px; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
 .stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto 0 -13px 0; font-size: 8px; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }

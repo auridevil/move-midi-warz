@@ -34,11 +34,12 @@ export function createScene(cv, o) {
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 
-  const geo = () => { const R = Math.min(W, H) * 0.42; return { cx: W * 0.5, cy: H * 0.56, R, ring: (li) => R * (0.25 + li * 0.2) }; };
+  // on phones the canvas is a square stage under the header (CSS), not the viewport: centre the system and use more of it
+  const geo = () => { const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return { cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R, ring: (li) => R * (0.25 + li * 0.2) }; };
   const nodeXY = (g, li, i, len) => { const a = (i / len) * TAU - Math.PI / 2, r = g.ring(li); return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r, a]; };
 
   function resize() {
-    DPR = Math.min(1.75, devicePixelRatio || 1); W = innerWidth; H = innerHeight;
+    DPR = Math.min(1.75, devicePixelRatio || 1); W = cv.clientWidth || innerWidth; H = cv.clientHeight || innerHeight;   // the canvas box, which CSS sizes
     cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
     // static backdrop: void gradient + two nebulae, rendered once per size
     bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height; const b = bg.getContext('2d'); b.scale(DPR, DPR);
@@ -51,7 +52,7 @@ export function createScene(cv, o) {
     const n = Math.round(Math.min(320, W * H / 5200));
     stars = Array.from({ length: n }, () => ({ a: Math.random() * TAU, d: Math.sqrt(Math.random()) * Math.hypot(W, H) * 0.62, s: 0.3 + Math.random() ** 3 * 1.6, tw: Math.random() * TAU, sp: 0.4 + Math.random() * 1.6 }));
   }
-  addEventListener('resize', resize); resize();
+  addEventListener('resize', resize); new ResizeObserver(() => { if (cv.clientWidth !== W || cv.clientHeight !== H) resize(); }).observe(cv); resize();
 
   /** Called by the app for every lane step, at the moment it sounds. */
   function onStep(ev) {
@@ -85,7 +86,8 @@ export function createScene(cv, o) {
   }
 
   /** Which ring is under (x, y)? -1 if none. */
-  function pick(x, y) { const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / 0.2); return r >= 0 && r < 4 ? r : -1; }
+  /** x, y are client coordinates. */
+  function pick(x, y) { const b = cv.getBoundingClientRect(); x -= b.left; y -= b.top; const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / 0.2); return r >= 0 && r < 4 ? r : -1; }
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
@@ -178,8 +180,9 @@ export function createScene(cv, o) {
       }
       // label on the ring's lower-right diagonal so the four never overlap
       ctx.globalCompositeOperation = 'source-over';
-      const la = Math.PI / 4 + li * 0.12, lx = g.cx + Math.cos(la) * (r + 16), ly = g.cy + Math.sin(la) * (r + 16) + 4, txt = `${o.label(lane)} ${len} ×${o.ratioLabel[lane.ratioIndex]}${lane.muted ? ' m' : ''}`;
+      const la = Math.PI / 4 + li * 0.12; let lx = g.cx + Math.cos(la) * (r + 16); const ly = g.cy + Math.sin(la) * (r + 16) + 4, txt = `${o.label(lane)} ${len} ×${o.ratioLabel[lane.ratioIndex]}${lane.muted ? ' m' : ''}`;
       ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'left';
+      lx = Math.min(lx, W - 8 - ctx.measureText(txt).width);   // a narrow stage: keep the label on screen
       if (isSel) { ctx.fillStyle = 'rgba(103,232,249,.6)'; ctx.fillText(txt, lx - 1, ly); ctx.fillStyle = 'rgba(240,171,252,.6)'; ctx.fillText(txt, lx + 1, ly); }
       ctx.fillStyle = isSel ? hex : 'rgba(236,233,247,.5)'; ctx.fillText(txt, lx, ly);
       ctx.globalCompositeOperation = 'lighter';
