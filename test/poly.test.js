@@ -182,3 +182,33 @@ test('library: named setups, overwrite by name, rename, delete, migrate the old 
   const again = new Library(store); assert.deepEqual(again.list().map(e => e.name), ['Night', 'saved'], 'persisted'); assert.ok(mem.get(LIB_KEY));
   const full = new Library({ getItem: () => null, setItem: () => { throw new Error('QuotaExceeded'); } }); assert.equal(full.save('x', { m: {} }), null); assert.equal(full.items.length, 0, 'rolled back');
 });
+
+test('dsp engine: every voice renders finite audio that decays, without allocating per sample', async () => {
+  const { makeEngine } = await import('../src/poly/dsp-core.js');
+  const { DSP_VOICES, DSP_KEYS } = await import('../src/poly/dsp-voices.js');
+  assert.deepEqual(DSP_KEYS.sort(), [...VOICE_KEYS].sort(), 'the dsp engine covers the whole voice library');
+  const sr = 44100, p = { vel: 1, tune: 0, dec: 0.04 + 0.5 * 0.5 * 1.2, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  for (const k of DSP_KEYS) {
+    for (const q of [p, { ...p, tune: 1, snap: 1, color: 1, dec: 1.24 }, { ...p, tune: -1, snap: 0, color: 0, dec: 0.04 }]) {
+      const eng = makeEngine(sr); const layers = DSP_VOICES[k](q);
+      for (const L of layers) for (const [key, v] of Object.entries(L)) assert.ok(Number.isFinite(v), `${k}.${key} is ${v}`);
+      eng.hit(layers, 5); const out = new Float32Array(sr * 6); let peak = 0, head = 0;
+      for (let i = 0; i < out.length; i += 128) eng.render(out, i, i + 128);
+      for (let i = 0; i < out.length; i++) { const a = Math.abs(out[i]); assert.ok(Number.isFinite(out[i]), `${k}: NaN at ${i}`); if (a > peak) peak = a; if (i < sr * 0.05 && a > head) head = a; }
+      assert.ok(peak > 0.02 && peak < 2, `${k} peak ${peak.toFixed(3)}`); assert.ok(head > 0.01, `${k} silent in its first 50 ms`);
+      assert.equal(eng.active(), 0, `${k} still sounding after 6 s`);
+      let tail = 0; for (let i = Math.round(sr * 5.9); i < out.length; i++) tail = Math.max(tail, Math.abs(out[i])); assert.ok(tail < 1e-3, `${k} tail ${tail}`);
+    }
+  }
+  // scheduling: a hit at sample 100 of a block is silent before it; a second hit while the first rings adds a slot
+  const eng = makeEngine(sr); eng.hit(DSP_VOICES.kick(p), 100); const out = new Float32Array(128); eng.render(out, 0, 128);
+  assert.ok(out.slice(0, 100).every(v => v === 0) && out.slice(100).some(v => v !== 0));
+  eng.hit(DSP_VOICES.clap(p), 0); assert.ok(eng.active() >= 3);
+});
+
+test('dsp worklet is generated from dsp-core.js (tools/build-worklet.mjs) and self-contained', async () => {
+  const { readFileSync } = await import('node:fs');
+  const core = readFileSync(new URL('../src/poly/dsp-core.js', import.meta.url), 'utf8').replace(/^export /gm, '');
+  const w = readFileSync(new URL('../src/poly/dsp-worklet.js', import.meta.url), 'utf8');
+  assert.ok(w.includes(core), 'run: node tools/build-worklet.mjs'); assert.ok(!/^import /m.test(w), 'no imports: Tone loads worklets from a blob URL');
+});

@@ -12,6 +12,7 @@ import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
 import { VOICES, VOICE_KEYS } from './voices.js';
+import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
@@ -61,16 +62,47 @@ function makeKit({ raw = false } = {}) {
     const choke = new T.Gain(1).connect(drive);   // another lane's hit can cut this one off (choke groups)
     return { v: null, voice: null, choke, drive, tone, pan, level, send, delay, bus };
   });
-  const kit = { master, chains }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
+  const kit = { master, chains, tc: T.getContext() }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
 function buildVoice(li, k = kit) {
   if (!k) return; const lane = m.lanes[li], c = k.chains[li];
   const key = lane.voice === 'sample' && lane.sample ? 'sample' : VOICES[lane.voice] ? lane.voice : 'kick';
-  if (c.voice === key && c.v) return;
+  const eng = engine === 'dsp' && key !== 'sample' && DSP_VOICES[key] && dspReady(k.tc) ? 'dsp' : 'synth';
+  if (c.voice === key && c.engine === eng && c.v) return;
   if (c.v) for (const n of Object.values(c.v)) { try { n.dispose(); } catch {} }
-  c.v = key === 'sample' ? {} : VOICES[key].make(T, c.choke); c.voice = key;   // samples make their nodes per hit
+  if (eng === 'dsp') {   // one worklet node per lane, made once and kept: it is silent between hits
+    if (!c.dsp) { c.dsp = k.tc.createAudioWorkletNode('orbits-dsp', { numberOfInputs: 0, numberOfOutputs: 1, outputChannelCount: [1] }); T.connect(c.dsp, c.choke); }
+    c.v = {};
+  } else c.v = key === 'sample' ? {} : VOICES[key].make(T, c.choke);   // samples make their nodes per hit
+  c.voice = key; c.engine = eng;
   if (key === 'sample') ensureSample(lane);
+  // the dsp engine is wanted but its module is not in this context yet: load it, then move every lane over
+  if (engine === 'dsp' && eng === 'synth' && key !== 'sample' && !dspReady(k.tc)) ensureDsp(k.tc).then(() => { m.lanes.forEach((_, i) => buildVoice(i, k)); }).catch(() => {});
+}
+// ---- engines: 'synth' = the Tone.js voices in voices.js, 'dsp' = the AudioWorklet drum models in dsp-voices.js ----
+const ENGINE_KEY = 'midi-warz.poly.engine';
+let engine = localStorage.getItem(ENGINE_KEY) === 'dsp' ? 'dsp' : 'synth';
+const dspCtx = new WeakSet(), dspLoading = new WeakMap();   // per Tone context (offline renders have their own)
+const dspReady = (tc) => dspCtx.has(tc);
+let pingId = 0;
+const dspFlush = (k) => Promise.all(k.chains.map(c => c.dsp && new Promise((res) => { const id = ++pingId; const on = (e) => { if (e.data?.pong === id) { c.dsp.port.removeEventListener('message', on); res(); } }; c.dsp.port.addEventListener('message', on); c.dsp.port.start(); c.dsp.port.postMessage({ ping: id }); })));
+function ensureDsp(tc = T.getContext()) {
+  if (dspCtx.has(tc)) return Promise.resolve();
+  if (!dspLoading.has(tc)) dspLoading.set(tc, tc.addAudioWorkletModule(new URL('./dsp-worklet.js', import.meta.url).href).then(() => { dspCtx.add(tc); }));
+  return dspLoading.get(tc);
+}
+function setEngine(e) {
+  engine = e === 'dsp' ? 'dsp' : 'synth'; try { localStorage.setItem(ENGINE_KEY, engine); } catch {}
+  ui.engine?.set(engine);
+  const swap = () => { if (!kit) return; m.lanes.forEach((_, i) => buildVoice(i)); if (awake && !playing) hitSound(m.lane, T.now(), false); };
+  if (engine === 'dsp' && kit && !dspReady(kit.tc)) ensureDsp(kit.tc).then(swap).catch((err) => { $('engine-note').textContent = `dsp engine unavailable: ${err.message}`; }); else swap();
+  $('engine-note').textContent = engine === 'dsp' ? 'dsp: purpose-built drum models in an AudioWorklet — exponential pitch sweeps, soft-clipped bodies, 808-style metal hats, real clap bursts. Same knobs.' : 'synth: the original Tone.js voices.';
+  sync();
+}
+function buildEngineUI() {
+  ui.engine = mount('engine-select', segmented({ options: [['synth', 'synth', 'the original Tone.js voices'], ['dsp', 'dsp', 'purpose-built drum DSP (AudioWorklet)']], value: engine, onChange: setEngine }));
+  $('engine-note').textContent = engine === 'dsp' ? 'dsp: purpose-built drum models in an AudioWorklet. Same knobs.' : 'synth: the original Tone.js voices.';
 }
 // ---- samples on lanes: buffers by id (IndexedDB holds the audio; the lane only keeps { id, name }) ----
 const sampleBufs = new Map();
@@ -100,7 +132,7 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
   // a tone lock opens / closes the lane filter for this hit only; the next unlocked hit puts it back
   if (L.tone != null || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone), time); } catch {} c.toneLocked = L.tone != null; }
-  try { if (c.voice === 'sample') playSample(c, lane, p, time); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
+  try { if (c.voice === 'sample') playSample(c, lane, p, time); else if (c.engine === 'dsp') c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
 const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
@@ -110,7 +142,7 @@ function applyKit(key) { m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((
 function cycleKit(dir) { const cur = KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
-async function wake() { if (awake) return; await T.start(); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
+async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
 
 // ---- the master clock: one loop at 24 ticks per beat drives every lane, MIDI clock, slots and evolve ----
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
@@ -510,9 +542,10 @@ async function exportWav() {
   await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering ${sec.toFixed(1)} s…`;
   const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
   for (const l of m.lanes) await ensureSample(l);
-  const out = await T.Offline(({ transport }) => {
-    transport.bpm.value = tempo; const k = makeKit();   // a fresh kit in the offline context, same voices and sounds
+  const out = await T.Offline(async ({ transport }) => {
+    if (engine === 'dsp') await ensureDsp(T.getContext()); transport.bpm.value = tempo; const k = makeKit();   // a fresh kit in the offline context, same voices and sounds
     for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
+    await dspFlush(k);   // the worklets must hold every hit before the offline render starts
   }, sec + tail, 2, 44100);
   const b = out.get(); download(encodeWav([b.getChannelData(0), b.getChannelData(1)], b.sampleRate), `orbits-${stamp()}.wav`, 'audio/wav');
   $('exp-status').textContent = `WAV: ${hits.length} hits, ${(sec + tail).toFixed(1)} s`;
@@ -598,17 +631,18 @@ async function exportStems() {
   await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering 4 stems, ${(sec + tail).toFixed(1)} s…`;
   const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
   for (const l of m.lanes) await ensureSample(l);
-  const out = await T.Offline(() => {
-    T.getTransport().bpm.value = tempo; const k = makeKit({ raw: true }), ctx = T.getContext().rawContext, merger = ctx.createChannelMerger(8);
+  const out = await T.Offline(async () => {
+    if (engine === 'dsp') await ensureDsp(T.getContext()); T.getTransport().bpm.value = tempo; const k = makeKit({ raw: true }), ctx = T.getContext().rawContext, merger = ctx.createChannelMerger(8);
     merger.connect(ctx.destination); k.master.disconnect();
     k.chains.forEach((c, i) => { const sp = ctx.createChannelSplitter(2); c.bus.disconnect(); c.bus.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
     for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
+    await dspFlush(k);
   }, sec + tail, 8, 44100);
   const b = out.get(), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]));
   download(stemsZip(lanes, m.lanes.map(voiceLabel), b.sampleRate, `orbits-stems-${stamp()}`), `orbits-stems-${stamp()}.zip`, 'application/zip');
   $('exp-status').textContent = `stems: 4 lanes + mix, ${(sec + tail).toFixed(1)} s each${gain < 1 ? ` (all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping)` : ''}`;
 }
-buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
+buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
 // every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
 if (!/#p=/.test(location.hash)) initPattern(); loadShared();
 $('btn-init').onclick = initPattern;
@@ -764,7 +798,7 @@ setInterval(() => {
 function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
-  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
+  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   engine ${engine}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
     `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }
@@ -780,5 +814,5 @@ new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHu
 $('keys-pop').addEventListener('toggle', layoutHud);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, clearLane, randomizeAll, setEvolve };
+window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, clearLane, randomizeAll, setEvolve };
 readout(); scene.start();
