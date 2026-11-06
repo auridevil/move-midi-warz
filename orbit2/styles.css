@@ -217,6 +217,15 @@ body.chaos::before { display: none; }
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
+/* first visit: the play button breathes until it is pressed once (a steady glow when motion is reduced) */
+#btn-play.pulse { animation: play-pulse 1.4s ease-in-out infinite; box-shadow: 0 0 0 3px rgba(253,224,71,.5), 0 0 24px rgba(253,224,71,.45); }
+@keyframes play-pulse { 50% { box-shadow: 0 0 0 7px rgba(253,224,71,.12), 0 0 34px rgba(253,224,71,.25); } }
+@media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
+.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(22, 14, 46, 0.9); font-size: 12.5px; }
+.welcome[hidden] { display: none; }
+.welcome .wb-x { padding: 2px 8px; background: transparent; }
+.grooves-row { align-items: center; }
+.grooves-row .chips { justify-content: flex-end; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }
 .drawer summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 8px 0; }

@@ -18,6 +18,7 @@ import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount } from '../ui.js';
 import { createScene } from './scene.js';
+import { GROOVES, DEMO_GROOVE, grooveByKey } from './grooves.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -26,6 +27,8 @@ const move = new MoveDevice({ send: (b) => midi.send(b) });
 midi.addEventListener('raw', (e) => move.receive(e.detail.bytes, e.detail.t));
 const SAVE = 'midi-warz.orbit2.v2'; // v2: step = quarter note at ratio 1
 const LANE_HEX = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa'];
+// first ever visit = nothing saved yet (read before the first sync() writes it): it gets the demo groove, not init
+let firstVisit = true; try { firstVisit = localStorage.getItem(SAVE) == null; } catch {}
 let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null')); } catch { m = new Machine(); }
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
@@ -186,7 +189,7 @@ function onTick(time) {
 }
 function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.value = d; }   // dotted eighth
 async function togglePlay() {
-  await wake(); playing = !playing;
+  await wake(); playing = !playing; $('btn-play').classList.remove('pulse');
   if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintLeds(); readout();
 }
@@ -421,6 +424,12 @@ function initPattern() {
   if (evo.on) setEvolve(false); const n = new Machine();
   n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(RATIOS.indexOf(1)); }); n.lanes[0].hits[0] = true;
   const sel = 0; m.assign(n.toJSON()); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
+}
+/** Load a starter groove (grooves.js): pattern + kit + swing in one undoable step, and its tempo (tempo is global). */
+function loadGroove(key) {
+  const g = grooveByKey(key); if (!g) return; if (evo.on) setEvolve(false);
+  m.assign(g.m); m.selected = 0; applyTempo(g.tempo, true);
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
 }
 /** Randomize: with locked dice a fresh seed is rolled and shown, so a groove you like can be re-made from its number. */
 function randomizeAll() { if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
@@ -729,9 +738,19 @@ async function exportStems() {
   $('exp-status').textContent = `stems: 4 lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(histJson());
-// every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
-if (!/#p=/.test(location.hash)) initPattern(); loadShared();
+// a shared link wins; a first visit gets the demo groove and a pulsing play button; a returning visit keeps the
+// pattern it left and offers "start fresh" (init, undoable)
+if (/#p=/.test(location.hash)) loadShared();
+else if (firstVisit) { loadGroove(DEMO_GROOVE); $('btn-play').classList.add('pulse'); }
+else $('welcome').hidden = false;
 $('btn-init').onclick = initPattern;
+$('wb-keep').onclick = $('wb-close').onclick = () => { $('welcome').hidden = true; };
+$('wb-fresh').onclick = () => { $('welcome').hidden = true; initPattern(); };
+// starter grooves (grooves.js): one chip each, the description as tooltip; loading one is undoable like a setup
+for (const g of GROOVES) {
+  const b = document.createElement('button'); b.type = 'button'; b.id = `groove-${g.key}`; b.textContent = g.name; b.title = `${g.desc} (${g.tempo} bpm, undoable)`;
+  b.onclick = () => { loadGroove(g.key); flash(b.id, `${g.name} ✓`); }; $('grooves').appendChild(b);
+}
 // ---- library: named setups in localStorage (patterns + voices + kit + sounds + tempo + volume + dice) ----
 const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON() });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
@@ -927,5 +946,5 @@ new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHu
 $('keys-pop').addEventListener('toggle', layoutHud);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, clearLane, randomizeAll, setEvolve };
+window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve };
 readout(); scene.start();
