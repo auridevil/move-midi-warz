@@ -103,7 +103,7 @@ test('MIDI I/O: notes with gate, clock out only when enabled, clock in follows t
   p.setOutput('DAW'); p.lanes[1] = { note: 40, ch: 2 }; p.note(1, 0.5, 1000); assert.deepEqual(sent, [[0x91, 40, 64, 1000], [0x81, 40, 0, 1060]]);
   sent.length = 0; p.clock(5); assert.equal(sent.length, 0); p.clockOut = true; p.clock(5); p.start(6); assert.deepEqual(sent, [[0xF8, 5], [0xFA, 6]]);
   const got = []; p.handlers = { tempo: b => got.push(b), start: () => got.push('start'), stop: () => got.push('stop') };
-  p.follow = 'tempo'; for (let i = 0; i < 25; i++) p.receive([0xF8], i * 20.8333); p.receive([0xFA], 0); assert.deepEqual(got, [120], '24 ticks in 500 ms = 120 bpm; start ignored in tempo mode');
+  p.follow = 'tempo'; for (let i = 0; i < 49; i++) p.receive([0xF8], i * 20.8333); p.receive([0xFA], 0); assert.deepEqual(got, [120], '24 ticks per 500 ms = 120 bpm (first reading after 2 beats); start ignored in tempo mode');
   p.follow = 'transport'; p.receive([0xFA], 0); p.receive([0xFC], 0); assert.deepEqual(got.slice(1), ['start', 'stop']);
   const q = new PolyMidi({ getAccess: () => null }); q.fromJSON(JSON.parse(JSON.stringify(p))); assert.equal(q.lanes[1].note, 40); assert.equal(q.follow, 'transport'); assert.equal(q.clockOut, true);
 });

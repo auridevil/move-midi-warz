@@ -512,3 +512,5 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .lib-acts { display: flex; gap: 3px; } .lib-acts button { padding: 2px 8px; min-width: 26px; }
 .lib-acts button.danger { background: #ef4444; border-color: #ef4444; color: #fff; }
 .install-btn { margin: 4px 0 10px; }
+/* screen-reader only: the polite live region that announces one changed value (the readout itself is silent) */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }

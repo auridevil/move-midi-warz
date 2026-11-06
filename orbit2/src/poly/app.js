@@ -31,7 +31,11 @@ if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
 // every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step)
 const hist = new History(); let restoring = false;
-const save = () => { const j = JSON.stringify(m); if (!restoring) hist.commit(j); try { localStorage.setItem(SAVE, j); } catch {} };
+let spoken = null, announceTimer = 0;   // screen-reader announcements (announceChanges, next to readout)
+// mute and solo are performance moves, not edits: they are left out of the undo snapshots (and kept as they are when
+// undo / redo restores one), so Undo after a mute undoes your last edit
+const histJson = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo' ? undefined : v));
+const save = () => { if (!restoring) hist.commit(histJson()); try { localStorage.setItem(SAVE, JSON.stringify(m)); } catch {} };
 const dice = new Dice(); let fill = false;
 const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one last loaded / saved
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
@@ -167,9 +171,9 @@ function onTick(time) {
   const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clock(at); jamTick(t, time);
-  const cyc = m.cycleTicks(cycleOpts()), si = bank.due(t, cyc); if (si >= 0) loadSlot(si);
+  const cyc = m.cycleTicks(cycleOpts()), si = bank.due(t, cyc); if (si >= 0) loadSlot(si, true);
   if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS);
+  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS, true);
   const now = T.getContext().rawContext.currentTime;
   m.tick(t, Math.random, { fill, dice: dice.locked ? dice : null }).forEach((ev, li) => {
     if (!ev) return; const lane = m.lanes[li];
@@ -180,7 +184,7 @@ function onTick(time) {
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; paintLeds(); }, time);
   });
 }
-function retime() { if (!awake) return; T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.value = d; }   // dotted eighth
+function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.value = d; }   // dotted eighth
 async function togglePlay() {
   await wake(); playing = !playing;
   if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
@@ -190,9 +194,17 @@ $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
 
 // ---- tempo ----
-function applyTempo(bpm, publish = true) {
-  tempo = Math.min(240, Math.max(40, Math.round(bpm))); if (publish) setTempo(tempo, 'poly'); retime();
+/** exact: keep 0.01 bpm (an external clock at 127.5 is 127.5); knobs, taps and other pages use whole bpm. */
+function applyTempo(bpm, publish = true, { exact = false } = {}) {
+  const was = tempo, c = Math.min(240, Math.max(40, bpm)); tempo = exact ? Math.round(c * 100) / 100 : Math.round(c);
+  if (publish) setTempo(tempo, 'poly'); if (tempo !== was) retime();
   sliders.tempo?.set(tempo); readout();
+}
+/** MIDI clock in (already smoothed, called only on a real change). In phase lock while playing the clock-tick trim
+ *  drives the transport, so only our tempo (grid maths, delays, display) follows: a retime would fight the lock. */
+function followClockTempo(bpm) {
+  if (pmidi.follow === 'lock' && playing) { const was = tempo; tempo = Math.round(Math.min(240, Math.max(40, bpm)) * 100) / 100; if (tempo !== was) retime({ transport: false }); sliders.tempo?.set(tempo); readout(); }
+  else applyTempo(bpm, true, { exact: true });
 }
 onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false); });
 const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
@@ -347,10 +359,14 @@ function auditionLock() {
 }
 
 // ---- pattern slots & chains ----
-function loadSlot(i) {
+// Called from the master clock (fromClock): the model and the voices change now, so this tick already plays the new
+// state, but the DOM rebuild, JSON, localStorage and undo commit wait until the clock callback has returned.
+// A microtask, not Draw.schedule: Draw drops callbacks that come late (hidden tab), and these must not be lost.
+const offClock = (fromClock, fn) => fromClock ? queueMicrotask(fn) : fn();
+function loadSlot(i, fromClock = false) {
   const sel = m.selected; m.assign(bank.get(i)); m.selected = sel;
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); });
-  evoSnap = bank.get(i); evoCount = 0; lockStep = -1; sync(); renderSlots(); renderLanesEvolve();
+  evoSnap = bank.get(i); evoCount = 0; lockStep = -1; offClock(fromClock, () => { sync(); renderSlots(); renderLanesEvolve(); });
 }
 function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
@@ -410,16 +426,17 @@ function initPattern() {
 function randomizeAll() { if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
 // ---- undo / redo ----
 function applyState(json) {
-  if (!json) return; restoring = true; const sel = m.selected; m.assign(JSON.parse(json)); m.selected = Math.min(sel, m.lanes.length - 1);
+  if (!json) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
+  m.assign(JSON.parse(json)); m.selected = Math.min(sel, m.lanes.length - 1); m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
 }
 const undo = () => applyState(hist.undo()), redo = () => applyState(hist.redo());
 function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
-function evolveNow(bar = 0) {
+function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
   if (evo.home && evoCount >= evo.home) { const sel = m.selected; m.assign(evoSnap); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); evoCount = 0; lastEvolve = 'back home'; }
   else { const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100 }, dice.stream(1000 + bar)); evoCount++; lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still'; }
-  sync();
+  offClock(fromClock, sync);
 }
 function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
@@ -462,7 +479,7 @@ function buildMidiUI() {
     g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); } }).el);
   });
   g.appendChild(makeGauge({ label: 'gate', min: 5, max: 500, value: pmidi.gateMs, fmt: (v) => `${v} ms`, color: 'var(--star-white)', title: 'how long each MIDI note is held', onChange: (v) => { pmidi.gateMs = v; saveSettings(); } }).el);
-  pmidi.handlers = { tempo: (bpm) => { applyTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
+  pmidi.handlers = { tempo: (bpm) => { followClockTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
     // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
     tick: (ext, t) => {
       if (!playing) return; const raw = T.getContext().rawContext, audioT = raw.currentTime + (t - performance.now()) / 1000;
@@ -711,7 +728,7 @@ async function exportStems() {
   download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, { bpm: tempo, beats: r.bars * 4 }), `${base}.zip`, 'application/zip');
   $('exp-status').textContent = `stems: 4 lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
-buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
+buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(histJson());
 // every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
 if (!/#p=/.test(location.hash)) initPattern(); loadShared();
 $('btn-init').onclick = initPattern;
@@ -824,10 +841,23 @@ move.addEventListener('button', (e) => {
 $('btn-random').onclick = randomizeAll; $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
 window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
+// A focused control owns its keys: Space / Enter activate a focused button or <summary>, text fields get every key,
+// knobs get theirs. Letter hotkeys still work after a mouse click / tap on a button (focused by the pointer, not by Tab;
+// :focus-visible can't tell, Chrome turns it on at the first key press).
+const TEXT_SEL = 'input, select, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], [role=slider], .gauge';
+let pointerFocus = null;
+addEventListener('pointerdown', (e) => { pointerFocus = e.target instanceof Element ? e.target.closest(CONTROL_SEL) : null; }, true);
+addEventListener('keydown', (e) => { if (e.key === 'Tab') pointerFocus = null; }, true);
+function controlOwnsKey(e) {
+  const el = e.target instanceof Element ? e.target : null; if (!el || el === document.body || el.id === 'cv') return false;
+  if (el.closest(TEXT_SEL)) return true; const c = el.closest(CONTROL_SEL); if (!c) return false;
+  return e.key === ' ' || e.key === 'Enter' || c.matches('[role=slider], .gauge') || c !== pointerFocus;
+}
 window.addEventListener('keydown', (e) => {
-  if (e.repeat || ['INPUT', 'SELECT'].includes(e.target.tagName)) return;
+  if (e.repeat) return;
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return; e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  if (controlOwnsKey(e)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
-  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (e.key === '0') { setFill(true); return; }
   if (/^[1-4]$/.test(e.key) && e.altKey) { m.select(+e.key - 1); lockStep = -1; sync(); return; }
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
@@ -869,7 +899,21 @@ function readout() {
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
   const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${KITS[m.kitKey()]?.name || 'custom'}   engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
     `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
-  $('readout').textContent = lines.join('\n');
+  $('readout').textContent = lines.join('\n'); announceChanges();
+}
+// The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
+// changed, after the knob settles: "length 5", "tempo 124 bpm", or the lane you switched to.
+function speakable() {
+  const l = m.lane, o = { lane: `lane ${m.selected + 1} ${voiceLabel(l)}`, tempo: `tempo ${tempo} bpm`, transport: playing ? 'playing' : 'stopped', kit: `kit ${KITS[m.kitKey()]?.name || 'custom'}`, humanize: `humanize ${Math.round(m.humanize * 100)}%`,
+    mute: l.muted ? 'muted' : 'unmuted', solo: l.solo ? 'solo on' : 'solo off', record: rec.armed ? 'record armed' : 'record off', fill: fill ? 'fill on' : 'fill off', evolve: evo.on ? 'evolve on' : 'evolve off' };
+  for (const p of PARAMS) o[p.k] = `${p.label} ${p.fmt(p.get(l))}`; for (const k of SOUND_KEYS) o['snd:' + k] = `${k} ${Math.round(l.sound[k] * 100)}`;
+  return o;
+}
+function announceChanges() {
+  const now = speakable(), prev = spoken; spoken = now; if (!prev) return;
+  const changed = now.lane !== prev.lane ? [now.lane] : Object.keys(now).filter(k => now[k] !== prev[k]).map(k => now[k]);
+  if (!changed.length || changed.length > 3) return;   // a whole new pattern (undo, slot) is not one value: stay quiet
+  clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = changed.join(', '); }, 300);
 }
 // ---- layout: the left column lives between the readout (whose height changes) and the bottom-left panel ----
 function layoutHud() {
