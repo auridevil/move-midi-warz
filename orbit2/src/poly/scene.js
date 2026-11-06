@@ -58,7 +58,6 @@ export function createScene(cv, o) {
   function onStep(ev) {
     const now = performance.now(); last[ev.lane] = { index: ev.index, t: now };
     recent.push({ lane: ev.lane, index: ev.index, t: now }); while (recent.length > 16) recent.shift();
-    alignCheck(now);
     if (ev.hit) burst(ev.lane, ev.index, ev.accent, now);
   }
   /** Light up a planet without moving the playhead (live-recorded hits). */
@@ -78,12 +77,8 @@ export function createScene(cv, o) {
     for (const w of waves) if (w !== waves[waves.length - 1] && now - w.t < 28 && w.hex !== hex) beams.push({ x1: w.x, y1: w.y, x2: x, y2: y, h1: w.hex, h2: hex, t: now });
     if (ev.lane === 0 && ev.accent && !reduced) shake = Math.min(6, shake + 3.5);
   }
-  /** Every lane just wrapped to step 0 within a few ms: the whole polyrhythm lines up again. */
-  function alignCheck(now) {
-    const m = o.machine(); if (now - lastAlign < 400) return;
-    const ok = m.lanes.every((_, li) => last[li] && last[li].index === 0 && now - last[li].t < 30);
-    if (ok) { lastAlign = now; blooms.push({ t: now }); }
-  }
+  /** The app calls this when the master clock reaches a full cycle (Machine.cycleTicks, conditions and dice included). */
+  function bloom() { const now = performance.now(); if (now - lastAlign < 400) return; lastAlign = now; blooms.push({ t: now }); }
 
   /** Which ring is under (x, y)? -1 if none. */
   /** x, y are client coordinates. */
@@ -230,5 +225,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, flash: flashHit, pick, start: () => frameLoop(frame), reset: () => { last.length = 0; }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, start: () => frameLoop(frame), reset: () => { last.length = 0; }, stats: () => ({ frameMs: avgDt, quality }) };
 }

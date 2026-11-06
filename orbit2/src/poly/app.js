@@ -152,6 +152,8 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:step' already played live
 const tickSec = () => 60 / tempo / PPQ;
+/** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
+const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onTick(time), `${T.getTransport().PPQ / PPQ}i`); loop.start(0); }
 function onTick(time) {
@@ -159,7 +161,8 @@ function onTick(time) {
   const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clock(at); jamTick(t, time);
-  const si = bank.due(t, m.cycleTicks()); if (si >= 0) loadSlot(si);
+  const cyc = m.cycleTicks(cycleOpts()), si = bank.due(t, cyc); if (si >= 0) loadSlot(si);
+  if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
   if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS);
   const now = T.getContext().rawContext.currentTime;
   m.tick(t, Math.random, { fill, dice: dice.locked ? dice : null }).forEach((ev, li) => {
@@ -194,7 +197,7 @@ const INFO = {
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
-  swing: 'Delays every odd step by this fraction of a step. 0 = straight, ~25% = groove, 50%+ = triplet-ish.',
+  swing: 'Delays every second step (counted from the downbeat, so odd lengths never swing a downbeat) by this fraction of a step. 0 = straight, ~20% = loose groove, 33% = triplet swing, 50% = dotted-16th feel.',
   prob: 'Chance that a programmed hit actually plays. 100% = always; 60% = the pattern breathes differently every loop.',
   tune: 'Pitch of the voice, about ±1 octave (less for some voices).',
   decay: 'Length of the sound, from a tick (40 ms) to a long tail (1.2 s). Kits scale it per voice.',
@@ -537,7 +540,7 @@ const pad2 = (n) => String(n).padStart(2, '0');
 /** Local time to the second, so two exports in the same minute don't overwrite each other. */
 const stamp = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
 /** Length of a render in master ticks: N bars, or whole bars holding whole polyrhythm cycles (capped at 64 bars). */
-function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? wholeBarCycle(m.cycleTicks(), BAR_TICKS, 64) : { ticks: +v * BAR_TICKS, capped: false }; }
+function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? wholeBarCycle(m.cycleTicks(cycleOpts()), BAR_TICKS, 64) : { ticks: +v * BAR_TICKS, capped: false }; }
 // Every audio export is whole bars at the current tempo, so a DAW lines it up. Renders start LEAD_IN early (humanize
 // can push a hit before tick 0) and ring out for a tail long enough for the delay to die away; then either
 //   loop     (default): foldLoop wraps the tail onto the start → exactly N bars that loop seamlessly (Session clips)
@@ -849,7 +852,7 @@ setInterval(() => {
 function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
-  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   engine ${engine}   cycle ${m.cycleSteps().toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
+  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
     `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }

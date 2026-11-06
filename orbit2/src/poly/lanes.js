@@ -72,7 +72,9 @@ export class Lane {
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
     const hit = this.hitAt(i) && !this.muted && !ctx.silenced && condPasses(trig?.cond, loop, ctx.fill) && r < (lock?.prob ?? this.prob);
     this.pos = (i + 1) % this.length;
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: i % 2 === 1 ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
+    // swing follows the absolute step (counted from the master tick), not the loop index: on a 5-step lane the
+    // index restarts on an odd step every other loop, which would swing the downbeat
+    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: step % 2 === 1 ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
   /**
    * Live record: the step a hit at fractional master tick `tickF` belongs to. 'nearest' rounds (early hits
@@ -94,6 +96,16 @@ export class Lane {
     return { index: i, hit, accent, swung, lane: this.name };
   }
   reset() { this.pos = 0; }
+  /**
+   * Loops of this lane before it repeats exactly: the lcm of every a:b condition's b on its active steps, × the locked
+   * dice repeat when a roll can change something (probability below 100 % or humanize). 'first'/'fill' are not periodic.
+   */
+  loopsPerCycle({ repeat = 1, humanize = 0 } = {}) {
+    let n = 1;
+    for (let i = 0; i < this.length; i++) { const ab = this.hits[i] && /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
+    const rolls = humanize > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1);
+    return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
+  }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
   static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: o.hits, accents: o.accents, rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample || null; return l; }
 }
@@ -104,11 +116,14 @@ export class Machine {
   select(i) { this.selected = ((i % this.lanes.length) + this.lanes.length) % this.lanes.length; return this.lane; }
   /** Seconds per step: at ratio ×1 a step is a quarter note (4 steps = one bar); ×2 = eighths, ×4 = sixteenths, ½ = half notes. */
   stepSeconds(lane, bpm) { return (60 / bpm) / lane.ratio; }
-  /** Beats (quarter notes) until all lanes line up again: the polyrhythm's true cycle. */
-  cycleSteps() { const lcm = (a, b) => a * b / gcd(a, b); return this.lanes.reduce((acc, l) => lcm(acc, Math.round(l.length / l.ratio * 12)), 1) / 12; }
+  /**
+   * Beats (quarter notes) until the whole machine repeats exactly: lengths × speeds, × trig conditions (1:3 = three
+   * loops), × the locked dice repeat. opts.repeat = dice.repeat when the dice are locked (else 1).
+   */
+  cycleSteps({ repeat = 1 } = {}) { return this.lanes.reduce((acc, l) => lcm(acc, Math.round(l.length / l.ratio * 12) * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1) / 12; }
   resetAll() { for (const l of this.lanes) l.reset(); }
   /** Master ticks until every lane lines up again. */
-  cycleTicks() { return Math.max(1, Math.round(this.cycleSteps() * PPQ)); }
+  cycleTicks(opts) { return Math.max(1, Math.round(this.cycleSteps(opts) * PPQ)); }
   /** Every lane's event at master tick `tick` (null where a lane doesn't step). */
   /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
   tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo); return this.lanes.map((l, li) => l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo })); }
@@ -141,4 +156,5 @@ export class Machine {
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit }; }
   static from(o) { const m = new Machine(); if (o?.lanes) m.lanes = o.lanes.map(Lane.from); m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0; m.kit = o?.kit; return m; }
 }
-const gcd = (a, b) => (b ? gcd(b, a % b) : a);
+function gcd(a, b) { return b ? gcd(b, a % b) : a; }
+function lcm(a, b) { return a * b / gcd(a, b); }
