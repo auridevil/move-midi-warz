@@ -316,3 +316,18 @@ test('B9 clock-in follower: pure, smooth, no flapping at 127.5 bpm with jitter, 
   const p = new PolyMidi({ getAccess: () => null }), got = []; p.handlers.tempo = b => got.push(b); p.follow = 'tempo';
   for (let i = 0; i < 24 * 16; i++) p.receive([0xF8], i * 60000 / 127.5 / 24); assert.deepEqual(got, [127.5]); assert.equal(p.extBpm, 127.5);
 });
+
+test('F1 starter grooves: complete Machine JSON, real voices, round-trip, tempo in range, demo aligns within 2 bars', async () => {
+  const { GROOVES, DEMO_GROOVE, grooveByKey } = await import('../src/poly/grooves.js'); const { VOICES } = await import('../src/poly/voices.js'); const { PPQ } = await import('../src/poly/lanes.js');
+  const want = { boombap: [80, 95], trap: [130, 150], house: [118, 130], techno: [125, 140], dnb: [165, 180], afro: [110, 125], poly345: [60, 200] };
+  assert.deepEqual(GROOVES.map(g => g.key).sort(), Object.keys(want).sort());
+  for (const g of GROOVES) {
+    const m = Machine.from(g.m); assert.deepEqual(m.toJSON(), g.m, g.key); assert.ok(g.desc && g.name && KITS[g.kit], g.key);
+    assert.ok(g.tempo >= want[g.key][0] && g.tempo <= want[g.key][1], g.key);
+    m.lanes.forEach(l => { assert.ok(VOICES[l.voice], `${g.key} ${l.voice}`); assert.ok(l.hits.some(Boolean), g.key); });
+    assert.ok(m.lanes[0].hits[0], `${g.key} kick on 1`); assert.ok(m.cycleTicks() <= 16 * 4 * PPQ, g.key);
+  }
+  const demo = Machine.from(grooveByKey(DEMO_GROOVE).m); assert.ok(demo.cycleTicks() <= 8 * PPQ);
+  assert.deepEqual(demo.lanes.map(l => l.length).sort(), [2, 3, 4, 5]);
+  assert.ok(grooveByKey('trap').m.lanes[2].trigs.some(t => t?.ratchet > 1), 'trap hat rolls');
+});
