@@ -258,3 +258,61 @@ test('dsp worklet is generated from dsp-core.js (tools/build-worklet.mjs) and se
   const w = readFileSync(new URL('../src/poly/dsp-worklet.js', import.meta.url), 'utf8');
   assert.ok(w.includes(core), 'run: node tools/build-worklet.mjs'); assert.ok(!/^import /m.test(w), 'no imports: Tone loads worklets from a blob URL');
 });
+
+// ---- ORBIT2-01 bug batch ----
+test('B1 swing follows the absolute step: a length-5 lane never swings a downbeat, live and in exports', async () => {
+  const { collectHits } = await import('../src/poly/export.js');
+  const l = new Lane('hat', { length: 5 }); l.setEuclid(5); l.swing = 0.3;
+  const evs = []; for (let t = 0; t < 24 * 5 * 10; t += 24) evs.push(l.at(t, () => 0));   // 10 loops at ×1
+  assert.equal(evs.length, 50); assert.ok(evs.every(e => e.swung === (e.step % 2 ? 0.3 : 0)), 'odd absolute steps only');
+  assert.ok(evs.some(e => e.index === 0 && e.step % 2), 'index 0 lands on odd steps too (and is swung there, it is an off-step)');
+  const m = new Machine(); m.lanes.forEach(x => x.clear()); Object.assign(m.lanes[0], Lane.from({ ...l.toJSON(), name: 'kick' }));
+  const hits = collectHits(m, { from: 0, to: 24 * 50, tempo: 120 }), beat = 0.5;
+  for (const h of hits) { const step = Math.round(h.time / beat - (Math.abs(h.time / beat - Math.round(h.time / beat)) > 1e-6 ? 0.3 : 0)); assert.ok(Math.abs(h.time - (step + (step % 2 ? 0.3 : 0)) * beat) < 1e-9, `hit at ${h.time}`); }
+  assert.equal(hits.filter(h => Math.abs(h.time / beat % 2) < 1e-9).length, 25, 'every even step (downbeat) on the grid');
+});
+test('B2 / B3 default voices exist, unknown voices migrate to the Common kit, kitKey tells kit from custom', async () => {
+  const { VOICES } = await import('../src/poly/voices.js'); const { KITS } = await import('../src/poly/kits.js');
+  const m = new Machine(); assert.ok(m.lanes.every(l => VOICES[l.voice]), m.lanes.map(l => l.voice).join()); assert.equal(m.lanes[3].voice, KITS.common.lanes[3].voice);
+  assert.equal(m.kitKey(), 'common'); assert.equal(m.kit, 'Common');
+  const old = m.toJSON(); old.lanes[3].voice = 'perc'; old.lanes[1].voice = 'sample'; old.lanes[1].sample = null; old.lanes[2].voice = 'hat';
+  const back = Machine.from(JSON.parse(JSON.stringify(old)));
+  assert.equal(back.lanes[3].voice, 'wood', 'perc → the Common kit voice of lane 4'); assert.equal(back.lanes[1].voice, 'snare', 'a sample lane without its sample'); assert.equal(back.lanes[2].voice, 'hat', 'real voices kept');
+  m.lanes[0].setSound('decay', 0.9); assert.equal(m.kitKey(), null, 'a tweaked sound = custom');
+  m.applyKit(KITS.common, DEFAULT_SOUND); assert.equal(m.kitKey(), 'common', 're-applying the kit puts it back');
+  m.applyKit(KITS.trap, DEFAULT_SOUND); assert.equal(m.kitKey(), 'trap');
+});
+test('B4 the cycle includes trig conditions and the locked dice repeat', () => {
+  const m = new Machine(); m.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); l.setEuclid(2); }); m.humanize = 0;
+  assert.equal(m.cycleSteps(), 4); assert.equal(m.cycleTicks(), 96);
+  m.lanes[1].setTrig(0, { cond: '1:3' }); assert.equal(m.cycleSteps(), 12, 'a 1:3 step triples the cycle'); assert.equal(m.cycleTicks(), 288);
+  m.lanes[1].setTrig(1, { cond: '1:3' }); assert.equal(m.cycleSteps(), 12, 'only active steps count'); m.lanes[2].setTrig(0, { cond: '2:4' }); assert.equal(m.cycleSteps(), 48, 'lcm(3, 4) loops');
+  m.lanes[2].setTrig(0, { cond: 'first' }); assert.equal(m.cycleSteps(), 12, 'first / fill are not periodic');
+  assert.equal(m.cycleSteps({ repeat: 4 }), 12, 'dice repeat only matters when a roll can change something');
+  m.lanes[0].prob = 0.5; assert.equal(m.cycleSteps({ repeat: 4 }), 48, 'lane 1 rolls: 4 loops = 16 beats, with lane 2 at 12 → 48'); assert.equal(m.cycleSteps({ repeat: 5 }), 60);
+  m.lanes[0].prob = 1; m.lanes[0].setLock(0, 'prob', 0.5); assert.equal(m.cycleSteps({ repeat: 4 }), 48, 'a prob lock on an active step rolls too');
+  m.lanes[0].clearLocks(0); m.humanize = 0.2; assert.equal(m.cycleTicks({ repeat: 2 }), 24 * 24, 'humanize: every lane rolls; lane 2 = lcm(3, 2) = 6 loops = 24 beats');
+  m.lanes[1].setTrig(0, { cond: 'always' }); assert.equal(m.cycleSteps({ repeat: 2 }), 8, 'repeat 2 on 4-step lanes');
+});
+test('B5 one roll, one hit list: WAV hits and MIDI notes of the same take are identical; a new roll differs', async () => {
+  const { collectHits, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js'); const { Dice } = await import('../src/poly/dice.js');
+  const m = new Machine(); m.lanes.forEach(l => { l.setLength(8); l.setRatio(7); l.setEuclid(6); l.prob = 0.5; }); m.humanize = 0.6;
+  const take = (seed) => collectHits(m, { from: 0, to: 96 * 4, tempo: 120, dice: Dice.take(seed) });
+  const wav = take(48213), again = take(48213), midiHits = take(48213);
+  assert.deepEqual(again, wav, 'the same roll gives the same hits'); assert.ok(wav.length > 20 && wav.length < 96, `probability thinned the pattern (${wav.length})`);
+  const lanes = [36, 38, 42, 39].map(note => ({ note, ch: 10 })), mid = readMidi(hitsToMidi(midiHits, { tempo: 120, lanes, names: ['a', 'b', 'c', 'd'], bars: 4 }));
+  const notes = mid.tracks.flatMap(t => t.notes); assert.equal(notes.length, wav.length, 'same count');
+  const ons = notes.map(n => n.on).sort((a, b) => a - b), want = wav.map(h => Math.round(Math.max(0, h.time) / (60 / 120 / 4) * 24)).sort((a, b) => a - b);
+  assert.deepEqual(ons, want, 'same times (MIDI ticks)');
+  assert.notDeepEqual(take(7), wav, 'another roll is another take');
+  const free = [0, 1].map(() => collectHits(m, { from: 0, to: 96 * 4, tempo: 120 })); assert.notDeepEqual(free[0], free[1], 'without a roll every render differs (the old bug)');
+});
+test('B9 clock-in follower: pure, smooth, no flapping at 127.5 bpm with jitter, follows a real change', async () => {
+  const { makeBpmFollower, PolyMidi } = await import('../src/poly/midiio.js'); const { mulberry32 } = await import('../src/poly/dice.js');
+  const feed = (bpmAt, ticks, jitterMs, seed = 1) => { const f = makeBpmFollower(), rng = mulberry32(seed), out = []; let t = 1000; for (let i = 0; i < ticks; i++) { t += 60000 / bpmAt(i) / 24; const r = f.tick(t + (rng() * 2 - 1) * jitterMs); if (r != null) out.push(r); } return out; };
+  for (let s = 1; s <= 5; s++) { const out = feed(() => 127.5, 24 * 64, 1, s); assert.ok(out.length >= 1 && out.length <= 2, `seed ${s}: ${out.length} tempo changes in 64 beats (was 767)`); assert.ok(Math.abs(out.at(-1) - 127.5) < 0.15, `seed ${s}: ${out.at(-1)}`); assert.notEqual(out.at(-1) % 1, 0, 'kept as a float'); }
+  assert.deepEqual(feed(() => 127.5, 500, 1, 9), feed(() => 127.5, 500, 1, 9), 'pure: same input, same output');
+  const step = feed(i => (i < 24 * 8 ? 120 : 126), 24 * 24, 1, 3); assert.ok(Math.abs(step.at(-1) - 126) < 0.1, `settles on the new tempo (${step.at(-1)})`); assert.ok(step.length < 30, 'one update per ≥0.3 bpm of a real move');
+  const p = new PolyMidi({ getAccess: () => null }), got = []; p.handlers.tempo = b => got.push(b); p.follow = 'tempo';
+  for (let i = 0; i < 24 * 16; i++) p.receive([0xF8], i * 60000 / 127.5 / 24); assert.deepEqual(got, [127.5]); assert.equal(p.extBpm, 127.5);
+});
