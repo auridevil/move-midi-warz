@@ -95,11 +95,12 @@
       </div>
       <div class="row-ctl">
         <div class="ctl"><span class="ctl-lbl">length</span><div id="exp-len"></div></div>
+        <div id="exp-loop"></div>
       </div>
       <div class="row-ctl">
         <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
       </div>
-      <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + the mix, all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button></div>
+      <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + their raw sum (no master compressor), all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button></div>
       <p id="exp-status" class="hint tight"></p>
     </details>
     <details class="drawer">
@@ -155,7 +156,7 @@
     </div>
     <div id="jam-panel" class="jam-panel" hidden>
       <div class="jam-bar"><i id="jam-fill"></i></div>
-      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ 4 tracks + mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
+      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ 4 tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
     </div>
     <div class="hud-row">
       <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>

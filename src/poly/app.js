@@ -6,7 +6,7 @@ import { History } from './history.js';
 import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
-import { JAM_BEATS, stemsZip, floatStemsToInt16 } from './jam.js';
+import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
@@ -50,13 +50,13 @@ let kit = null, loop = null;
 //                                                          └→ send → its own delay ┴→ lane bus → master
 // One delay per lane (instead of a shared one) sounds the same — a delay is linear — but keeps each lane's echoes on
 // its own bus, so stems and jam recordings carry them. raw = no master compressor/limiter (stems for a DAW).
+/** The master glue: compressor → limiter → out. Both look ahead, so the chain delays everything (masterLatency). */
+function makeMaster(gain) { const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter); return new T.Gain(gain).connect(comp); }
 function makeKit({ raw = false } = {}) {
-  let master;
-  if (raw) master = new T.Gain(1).toDestination();
-  else { const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter); master = new T.Gain(vol).connect(comp); }
+  const master = raw ? new T.Gain(1).toDestination() : makeMaster(vol);
   const chains = m.lanes.map(() => {
     const bus = new T.Gain(1).connect(master);
-    const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, feedback: 0.3, wet: 1 }).connect(bus);   // dotted eighth
+    const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, maxDelay: 2, feedback: 0.3, wet: 1 }).connect(bus);   // dotted eighth
     const level = new T.Gain(0.8).connect(bus); const send = new T.Gain(0.15).connect(delay); const pan = new T.Panner(0); pan.connect(level); pan.connect(send);
     const tone = new T.Filter({ type: 'lowpass', frequency: 8000, Q: 0.7 }).connect(pan); const drive = new T.Distortion({ distortion: 0, wet: 0 }).connect(tone);
     const choke = new T.Gain(1).connect(drive);   // another lane's hit can cut this one off (choke groups)
@@ -83,13 +83,16 @@ function buildVoice(li, k = kit) {
 // ---- engines: 'synth' = the Tone.js voices in voices.js, 'dsp' = the AudioWorklet drum models in dsp-voices.js ----
 const ENGINE_KEY = 'midi-warz.poly.engine';
 let engine = localStorage.getItem(ENGINE_KEY) === 'dsp' ? 'dsp' : 'synth';
+// Tone's addAudioWorkletModule remembers only the first module per context, so the dsp voices and the jam recorder
+// would lock each other out: load through the context's own audioWorklet (Tone's wrapper, which its nodes accept).
+const addWorklet = (tc, path) => tc.rawContext.audioWorklet.addModule(new URL(path, import.meta.url).href);
 const dspCtx = new WeakSet(), dspLoading = new WeakMap();   // per Tone context (offline renders have their own)
 const dspReady = (tc) => dspCtx.has(tc);
 let pingId = 0;
 const dspFlush = (k) => Promise.all(k.chains.map(c => c.dsp && new Promise((res) => { const id = ++pingId; const on = (e) => { if (e.data?.pong === id) { c.dsp.port.removeEventListener('message', on); res(); } }; c.dsp.port.addEventListener('message', on); c.dsp.port.start(); c.dsp.port.postMessage({ ping: id }); })));
 function ensureDsp(tc = T.getContext()) {
   if (dspCtx.has(tc)) return Promise.resolve();
-  if (!dspLoading.has(tc)) dspLoading.set(tc, tc.addAudioWorkletModule(new URL('./dsp-worklet.js', import.meta.url).href).then(() => { dspCtx.add(tc); }));
+  if (!dspLoading.has(tc)) dspLoading.set(tc, addWorklet(tc, './dsp-worklet.js').then(() => { dspCtx.add(tc); }));
   return dspLoading.get(tc);
 }
 function setEngine(e) {
@@ -530,31 +533,71 @@ function buildDiceUI() {
 
 // ---- share & export ----
 const download = (bytes, name, type) => { const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([bytes], { type })); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); };
-const stamp = () => new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
-/** Length of a render in master ticks: N bars, or one full polyrhythm cycle (capped at 64 bars). */
-function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? Math.min(64 * BAR_TICKS, m.cycleTicks()) : +v * BAR_TICKS; }
+const pad2 = (n) => String(n).padStart(2, '0');
+/** Local time to the second, so two exports in the same minute don't overwrite each other. */
+const stamp = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+/** Length of a render in master ticks: N bars, or whole bars holding whole polyrhythm cycles (capped at 64 bars). */
+function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? wholeBarCycle(m.cycleTicks(), BAR_TICKS, 64) : { ticks: +v * BAR_TICKS, capped: false }; }
+// Every audio export is whole bars at the current tempo, so a DAW lines it up. Renders start LEAD_IN early (humanize
+// can push a hit before tick 0) and ring out for a tail long enough for the delay to die away; then either
+//   loop     (default): foldLoop wraps the tail onto the start → exactly N bars that loop seamlessly (Session clips)
+//   one-shot:           starts on the downbeat, keeps the ring-out, rounded up to whole bars (place once in a song)
+// The stereo WAV goes through the master compressor + limiter, which look ahead and so delay the sound: the measured
+// latency is taken off, so the first downbeat is on sample 0 like the (raw) stems.
+const LEAD_IN = 0.05;
+const tailSec = () => Math.max(2.5, 60 / tempo * 0.75 * 9 + 1.5);   // 9 dotted-eighth echoes at 0.3 feedback ≈ -94 dB, plus decay
+let latencyCache = null;
+async function masterLatency() {
+  if (latencyCache != null) return latencyCache;
+  const at = 0.01, out = await T.Offline(() => {
+    const ctx = T.getContext().rawContext, g = makeMaster(1), buf = ctx.createBuffer(1, 1, ctx.sampleRate), src = ctx.createBufferSource();
+    buf.getChannelData(0)[0] = 0.5; src.buffer = buf; T.connect(src, g); src.start(at);
+  }, 0.2, 1, 44100);
+  const d = out.get().getChannelData(0), i = d.findIndex(x => Math.abs(x) > 1e-4);
+  return (latencyCache = i < 0 ? 0 : Math.max(0, i / 44100 - at));
+}
+/** The current pattern rendered offline: { chans, sr, bars, hits, capped, loop }. stems: raw kit, a pair per lane. */
+async function renderPattern({ stems = false } = {}) {
+  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = BAR_TICKS * tickSec(), loop = ui.expLoop.value;
+  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  for (const l of m.lanes) await ensureSample(l);
+  const lat = stems ? 0 : await masterLatency();
+  const out = await T.Offline(async ({ transport }) => {
+    if (engine === 'dsp') await ensureDsp(T.getContext()); transport.bpm.value = tempo;
+    const k = makeKit({ raw: stems });   // a fresh kit in the offline context, same voices and sounds
+    if (stems) {
+      const ctx = T.getContext().rawContext, merger = ctx.createChannelMerger(8); merger.connect(ctx.destination); k.master.disconnect();
+      k.chains.forEach((c, i) => { const sp = ctx.createChannelSplitter(2); c.bus.disconnect(); c.bus.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
+    }
+    // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
+    for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + LEAD_IN, h.accent, h.lock, h.vel, k);
+    await dspFlush(k);   // the worklets must hold every hit before the offline render starts
+  }, LEAD_IN + sec + tailSec(), stems ? 8 : 2, 44100);
+  const b = out.get(), sr = b.sampleRate, pre = LEAD_IN + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
+  const chans = loop ? raw.map(d => foldLoop(d, sr, sec, pre)) : oneShot(raw, sr, sec, pre, barSec);
+  return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / BAR_TICKS, hits, capped, loop };
+}
+const nBars = (n) => `${n} bar${n === 1 ? '' : 's'}`;
+/** File names carry tempo and length; a one-shot names the pattern and its ring-out ("4bars+2tail-oneshot"). */
+const fileBase = (kind, r, bpm = tempo) => `orbits-${kind ? `${kind}-` : ''}${bpm}bpm-${r.loop ? nBars(r.bars).replace(' ', '') : `${nBars(r.patternBars).replace(' ', '')}+${r.bars - r.patternBars}tail-oneshot`}-${stamp()}`;
+const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}`;
 async function shareLink() {
   const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
   history.replaceState(null, '', `#p=${code}`);
   try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; } catch { $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; }
 }
 async function exportWav() {
-  await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering ${sec.toFixed(1)} s…`;
-  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
-  for (const l of m.lanes) await ensureSample(l);
-  const out = await T.Offline(async ({ transport }) => {
-    if (engine === 'dsp') await ensureDsp(T.getContext()); transport.bpm.value = tempo; const k = makeKit();   // a fresh kit in the offline context, same voices and sounds
-    for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
-    await dspFlush(k);   // the worklets must hold every hit before the offline render starts
-  }, sec + tail, 2, 44100);
-  const b = out.get(); download(encodeWav([b.getChannelData(0), b.getChannelData(1)], b.sampleRate), `orbits-${stamp()}.wav`, 'audio/wav');
-  $('exp-status').textContent = `WAV: ${hits.length} hits, ${(sec + tail).toFixed(1)} s`;
+  await wake(); $('exp-status').textContent = 'rendering…';
+  const r = await renderPattern(), acid = { bpm: tempo, beats: r.bars * 4 };
+  download(withAcid(encodeWav(r.chans, r.sr), acid), `${fileBase('', r)}.wav`, 'audio/wav');
+  $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${renderNote(r)}`;
 }
 function exportMidi() {
-  const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1;
-  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: dice.locked ? dice : null }) : collectHits(m, { from: 0, to: renderTicks(), tempo, dice: dice.locked ? dice : null });
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000 });
-  download(bytes, `orbits-${chain ? 'chain' : 'pattern'}-${stamp()}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes${chain ? ` · chain of ${bank.chain.length}` : ''}`;
+  const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
+  const bars = chain ? bank.chainBars * bank.chain.length : ticks / BAR_TICKS;
+  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: dice.locked ? dice : null }) : collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars });
+  download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 async function loadShared() {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return;
@@ -562,7 +605,8 @@ async function loadShared() {
   catch (e) { $('exp-status').textContent = `link: ${e.message}`; }
 }
 function buildExportUI() {
-  ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'one full polyrhythm cycle (max 64 bars)']], value: 4 }));
+  ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'whole bars that hold whole polyrhythm cycles (max 64 bars)']], value: 4 }));
+  ui.expLoop = mount('exp-loop', toggleChip({ label: 'render as loop', on: true, title: 'on: the ring-out wraps onto the start, so the file is exactly N bars and loops seamlessly (Session clips). off: one-shot that starts on the downbeat and keeps its ring-out, rounded up to whole bars (place it once in a song).' }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   addEventListener('hashchange', loadShared);
@@ -575,51 +619,67 @@ function buildEditUI() {
 }
 
 // ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as 4 lane tracks, up to 256 beats ----
-// The recorder taps each lane bus (pre-master), starts on a beat and ends exactly on the master clock, so the four
-// files are sample-aligned and the same length.
-const jam = { state: 'idle', node: null, startTick: 0, beats: 0, chunks: null, sr: 44100 };   // idle → armed → rec → finishing → done
+// The recorder taps each lane bus (pre-master), starts on a bar line and ends on one (stop rounds up to the next
+// bar), so the four files are sample-aligned, the same length and whole bars long: a DAW lines them up at this tempo.
+const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, sr: 44100 };   // idle → armed → rec → finishing → done
 async function ensureJamNode() {
   // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
   if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
-  await tc.addAudioWorkletModule(new URL('./jam-worklet.js', import.meta.url).href);
+  await addWorklet(tc, './jam-worklet.js');
   jam.node = tc.createAudioWorkletNode('orbits-jam', { numberOfInputs: 4, numberOfOutputs: 1, outputChannelCount: [1], channelCount: 2, channelCountMode: 'explicit', channelInterpretation: 'speakers' });
   jam.node.connect(ctx.destination);   // silent output, keeps the recorder pulled by the graph
   kit.chains.forEach((c, i) => c.bus.connect(jam.node, 0, i));
   jam.node.port.onmessage = ({ data }) => {
     if (data.lanes) data.lanes.forEach(([L, R], i) => { jam.chunks[i][0].push(L); jam.chunks[i][1].push(R); });
-    if (data.done) { const any = jam.chunks[0][0].length; jam.state = any ? 'done' : 'idle'; renderJam(); paintLeds(); }
+    if (data.done) {   // cut to the exact take (a stop in the grace window ends on a bar line already recorded past)
+      if (data.frames != null) jam.chunks = trimChunks(jam.chunks, data.frames);
+      const any = jam.chunks[0][0].length; jam.state = any ? 'done' : 'idle'; renderJam(); paintLeds();
+    }
   };
 }
 async function toggleJam() {
   if (jam.state === 'rec' || jam.state === 'armed') return stopJam();
+  if (jam.state === 'finishing') return;   // the take is closing on its bar line: a press now would mix two takes
   try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
   jam.chunks = Array.from({ length: 4 }, () => [[], []]); jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
   if (!playing) togglePlay();
 }
 function stopJam() {
   if (jam.state === 'armed') { jam.state = 'idle'; jam.node?.port.postMessage({ cancel: true }); }
-  else if (jam.state === 'rec') { jam.state = 'finishing'; jam.node.port.postMessage({ end: T.getContext().rawContext.currentTime + 0.02 }); }
+  else if (jam.state === 'rec') {
+    // The take ends on a bar line, like Live's record quantize: the next one, or the one just passed if the stop came
+    // within a 16th of it (late by a hair shouldn't cost a whole bar). "Now" is the audible tick, not the last
+    // scheduled one (the clock runs ahead). The end is posted now (the transport may be stopping) and re-posted from
+    // the clock when it gets there, which stays exact even if the tempo moves meanwhile.
+    const now = jam.lastTick - Math.max(0, jam.lastTime - T.getContext().rawContext.currentTime) / tickSec(), el = Math.max(0, now - jam.startTick);
+    const bars = Math.max(1, el % BAR_TICKS < BAR_TICKS / 16 ? Math.floor(el / BAR_TICKS) : Math.ceil(el / BAR_TICKS));
+    jam.stopTick = jam.startTick + bars * BAR_TICKS; jam.beats = bars * 4; jam.state = 'finishing';
+    jam.node.port.postMessage({ end: jam.lastTime + (jam.stopTick - jam.lastTick) * tickSec() });
+  }
   renderJam(); paintLeds();
 }
-/** Master-clock side: start on the next beat, stop at 256 beats sharp. */
+/** Master-clock side: start on the next bar, stop at 256 beats sharp (or on the bar line after a stop). */
 function jamTick(t, time) {
-  if (jam.state === 'armed' && t % PPQ === 0) { jam.startTick = t; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
+  if (jam.state === 'finishing' && t === jam.stopTick) jam.node.port.postMessage({ end: time });
+  if (jam.state === 'finishing' && t % PPQ === 0) T.getDraw().schedule(renderJam, time);
+  if (jam.state === 'finishing' && t < jam.stopTick && tempo !== jam.tempo) jam.tempoMoved = true;   // still inside the take
+  if (jam.state === 'armed' && t % BAR_TICKS === 0) { jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
   if (jam.state !== 'rec') return;
-  const el = t - jam.startTick; jam.beats = el / PPQ;
-  if (el >= JAM_BEATS * PPQ) { jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
+  jam.lastTick = t; jam.lastTime = time; if (tempo !== jam.tempo) jam.tempoMoved = true; const el = t - jam.startTick; jam.beats = el / PPQ;
+  if (el >= JAM_BEATS * PPQ) { jam.stopTick = t; jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
   else if (el % PPQ === 0) T.getDraw().schedule(renderJam, time);
 }
 function renderJam() {
   const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam'), panel = $('jam-panel');
-  btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next beat…' : '● jam';
+  btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next bar…' : st === 'finishing' ? '◌ jam: closing…' : '● jam';
   panel.hidden = st === 'idle'; $('jam-fill').style.width = `${Math.min(100, (jam.beats / JAM_BEATS) * 100)}%`;
   const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
-  $('jam-text').textContent = st === 'armed' ? 'starts on the next beat' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(b / 4) + 1}` : st === 'finishing' ? 'closing the take…' : st === 'done' ? `take ready · ${Math.round(jam.beats)} beats · ${secs.toFixed(1)} s · 4 lanes + mix` : '';
+  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(b / 4) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats / 4))} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · 4 lanes + raw mix${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
 function downloadJam() {
-  if (jam.state !== 'done') return; const names = m.lanes.map(voiceLabel);
-  download(stemsZip(jam.chunks, names, jam.sr, `orbits-jam-${stamp()}`), `orbits-jam-${stamp()}.zip`, 'application/zip');
+  if (jam.state !== 'done') return; const bars = Math.round(jam.beats / 4), base = fileBase('jam', { loop: true, bars }, jam.tempo);
+  download(stemsZip(jam.chunks, m.lanes.map(voiceLabel), jam.sr, base, { bpm: jam.tempo, beats: bars * 4, loop: true }), `${base}.zip`, 'application/zip');
 }
 function buildJamUI() {
   $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = downloadJam; $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = null; renderJam(); paintLeds(); };
@@ -628,19 +688,10 @@ function buildJamUI() {
 
 // ---- stems: the current pattern rendered once, each lane to its own pair of channels → equal-length WAVs ----
 async function exportStems() {
-  await wake(); const ticks = renderTicks(), sec = ticks * tickSec(), tail = 2.5; $('exp-status').textContent = `rendering 4 stems, ${(sec + tail).toFixed(1)} s…`;
-  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
-  for (const l of m.lanes) await ensureSample(l);
-  const out = await T.Offline(async () => {
-    if (engine === 'dsp') await ensureDsp(T.getContext()); T.getTransport().bpm.value = tempo; const k = makeKit({ raw: true }), ctx = T.getContext().rawContext, merger = ctx.createChannelMerger(8);
-    merger.connect(ctx.destination); k.master.disconnect();
-    k.chains.forEach((c, i) => { const sp = ctx.createChannelSplitter(2); c.bus.disconnect(); c.bus.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
-    for (const h of hits) hitSound(m.lanes[h.li], Math.max(0, h.time) + 0.01, h.accent, h.lock, h.vel, k);
-    await dspFlush(k);
-  }, sec + tail, 8, 44100);
-  const b = out.get(), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]));
-  download(stemsZip(lanes, m.lanes.map(voiceLabel), b.sampleRate, `orbits-stems-${stamp()}`), `orbits-stems-${stamp()}.zip`, 'application/zip');
-  $('exp-status').textContent = `stems: 4 lanes + mix, ${(sec + tail).toFixed(1)} s each${gain < 1 ? ` (all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping)` : ''}`;
+  await wake(); $('exp-status').textContent = 'rendering 4 stems…';
+  const r = await renderPattern({ stems: true }), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [r.chans[2 * i], r.chans[2 * i + 1]])), base = fileBase('stems', r);
+  download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, { bpm: tempo, beats: r.bars * 4 }), `${base}.zip`, 'application/zip');
+  $('exp-status').textContent = `stems: 4 lanes + raw mix · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
 // every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)

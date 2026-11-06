@@ -168,7 +168,53 @@ test('jam / stems: equal-length WAVs per lane + mix in one zip, no clipping', as
   assert.ok(Math.abs(gain - 0.49) < 1e-9, 'loudest lane scaled to 0.98'); assert.equal(lanes[1][0][0][0], Math.round(0.5 * 0.49 * 32767), 'same gain on every stem');
   const zip = stemsZip([lane(5), lane(6), lane(7), lane(8)], ['kick', 'snare', 'hat/x', '♪ demo'], 44100, 'take');
   const names = []; for (let i = 0; i < zip.length - 4; i++) if (zip[i] === 0x50 && zip[i + 1] === 0x4B && zip[i + 2] === 3 && zip[i + 3] === 4) { const n = zip[i + 26] | (zip[i + 27] << 8); names.push(new TextDecoder().decode(zip.slice(i + 30, i + 30 + n))); }
-  assert.deepEqual(names, ['take/1-kick.wav', 'take/2-snare.wav', 'take/3-hat-x.wav', 'take/4-demo.wav', 'take/mix.wav']);
+  assert.deepEqual(names, ['take/take-1-kick.wav', 'take/take-2-snare.wav', 'take/take-3-hat-x.wav', 'take/take-4-demo.wav', 'take/take-mix-raw.wav']);
+});
+test('oneShot: starts on the downbeat, keeps the ring-out, rounds up to whole bars', async () => {
+  const { oneShot } = await import('../src/poly/jam.js');
+  // sr 10, bar 1 s, 1-bar pattern, lead-in 0.2 s; sound rings to sample 2 + 14 → 1.5 bars of content → 2 bars
+  const d = new Float32Array(30); d[2] = 1; d[16] = 0.01; const [o] = oneShot([d], 10, 1, 0.2, 1);
+  assert.equal(o.length, 20); assert.equal(o[0], 1, 'downbeat on sample 0'); assert.equal(o[14], Math.fround(0.01), 'ring-out kept');
+  const [q] = oneShot([new Float32Array(30).fill(0, 0)], 10, 2, 0.2, 1); assert.equal(q.length, 20, 'never shorter than the pattern');
+});
+test('wholeBarCycle: whole bars that hold whole cycles, capped', async () => {
+  const { wholeBarCycle } = await import('../src/poly/jam.js');
+  assert.deepEqual(wholeBarCycle(72, 96), { ticks: 288, capped: false }, '¾ bar cycle → 3 bars');
+  assert.deepEqual(wholeBarCycle(96 * 5, 96), { ticks: 480, capped: false });
+  assert.deepEqual(wholeBarCycle(96 * 35 / 2, 96, 64), { ticks: 96 * 35, capped: false }, '17.5 bars → 35');
+  assert.deepEqual(wholeBarCycle(97, 96, 64), { ticks: 64 * 96, capped: true });
+});
+test('trimChunks cuts every lane to the same frame count', async () => {
+  const { trimChunks } = await import('../src/poly/jam.js');
+  const lane = () => [[Int16Array.of(1, 2, 3), Int16Array.of(4, 5)], [Int16Array.of(1, 2, 3), Int16Array.of(4, 5)]];
+  const t = trimChunks([lane(), lane()], 4); assert.deepEqual(t[1][0].map(c => [...c]), [[1, 2, 3], [4]]); assert.deepEqual(t[0][1].map(c => c.length), [3, 1]);
+  assert.deepEqual(trimChunks([lane()], 9)[0][0].map(c => c.length), [3, 2], 'longer than the take: unchanged');
+});
+test('withAcid: tempo chunk before data, valid RIFF', async () => {
+  const { withAcid, wavFromInt16 } = await import('../src/poly/jam.js');
+  const w = withAcid(wavFromInt16([Int16Array.of(7, 8)], [Int16Array.of(-7, -8)], 44100), { bpm: 128, beats: 16, loop: true }), v = new DataView(w.buffer);
+  const id = (o) => String.fromCharCode(...w.slice(o, o + 4));
+  assert.equal(v.getUint32(4, true), w.length - 8); assert.equal(id(12), 'fmt '); assert.equal(id(36), 'acid'); assert.equal(v.getUint32(40, true), 24);
+  assert.equal(v.getUint32(44, true), 4, 'loop + stretch'); assert.equal(v.getUint32(56, true), 16); assert.equal(v.getUint16(62, true), 4); assert.equal(v.getFloat32(64, true), 128);
+  assert.equal(id(68), 'data'); assert.equal(v.getUint32(72, true), 8); assert.equal(v.getInt16(76, true), 7);
+});
+test('MIDI export lasts the full pattern even when the last hit is early', async () => {
+  const { hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
+  const bytes = hitsToMidi([{ li: 0, time: 0, vel: 1 }], { tempo: 120, lanes: [{ note: 36, ch: 10 }], names: ['kick'], bars: 4 });
+  // last event (end of track) of each track at 4 bars = 16 quarters × 96 ppq
+  let i = 14, ends = []; for (let k = 0; k < 2; k++) { const len = (bytes[i + 4] << 24 | bytes[i + 5] << 16 | bytes[i + 6] << 8 | bytes[i + 7]) >>> 0; let t = 0, j = i + 8; const end = j + len; const rv = () => { let n = 0, c; do { c = bytes[j++]; n = (n << 7) | (c & 0x7F); } while (c & 0x80); return n; };
+    while (j < end) { t += rv(); const st = bytes[j]; if (st === 0xFF) { j += 2; const l = rv(); j += l; } else j += 3; } ends.push(t); i = end; }
+  assert.deepEqual(ends, [16 * 96, 16 * 96]); assert.equal(readMidi(bytes).tracks[1].notes.length, 1);
+});
+test('foldLoop: exactly the loop length, tail wraps onto the start, lead-in onto the end', async () => {
+  const { foldLoop } = await import('../src/poly/jam.js');
+  // sr 10, loop 1 s, lead-in 0.2 s: [early, early | 10 loop samples | tail, tail]
+  const d = Float32Array.of(0.5, 0.25, 1, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0.1, 0.2);
+  const out = foldLoop(d, 10, 1, 0.2);
+  assert.equal(out.length, 10, 'no silent tail: the file is the loop');
+  assert.ok(Math.abs(out[0] - 1.1) < 1e-6 && Math.abs(out[1] - 0.2) < 1e-6, 'tail rings into the start');
+  assert.equal(out[8], 0.5); assert.equal(out[9], 2.25, 'early hits land at the end');
+  assert.equal(foldLoop(new Float32Array(500), 44100, 120 / 120 * 2, 0.05).length, 88200, '1 bar at 120 bpm = 2 s');
 });
 test('library: named setups, overwrite by name, rename, delete, migrate the old single save, storage full', async () => {
   const { Library, LIB_KEY } = await import('../src/poly/library.js'); const mem = new Map(); const store = { getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };

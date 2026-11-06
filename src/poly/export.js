@@ -31,11 +31,11 @@ export function collectChain(slotStates, { bars, tempo, dice = null }) {
   return out;
 }
 
-/** Hits → Standard MIDI File (one track per lane, notes/channels from the MIDI I/O settings). */
-export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits' }) {
+/** Hits → Standard MIDI File (one track per lane, notes/channels from the MIDI I/O settings), `bars` long. */
+export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0 }) {
   const toSteps = (sec) => sec / (60 / tempo / 4);   // writeMidi counts sixteenths
   const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: l.note, s: toSteps(Math.max(0, h.time)), d: Math.max(0.05, toSteps(gateSec)), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
-  return writeMidi({ bpm: tempo, name, parts });
+  return writeMidi({ bpm: tempo, name, parts, endStep: bars * 16 });   // the clip is the full N bars, not up to the last note
 }
 
 // ---- share links: the machine (+ tempo) as deflated JSON in the URL hash ----

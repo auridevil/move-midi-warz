@@ -11,22 +11,24 @@ const meta = (type, data) => [0xFF, type, ...vlq(data.length), ...data];
 /** Ticks for a step, with swing pushing every odd sixteenth late by swing% of a step (50 = straight). */
 export const stepTicks = (s, swing = 50) => Math.round(s * TPS + (s % 2 === 1 ? Math.max(0, swing - 50) / 50 * TPS : 0));
 
-function track(events, name) {
+function track(events, name, end = 0) {
   // events: [tick, bytes]; note-offs sort before note-ons on the same tick
   events.sort((a, b) => a[0] - b[0] || a[2] - b[2]);
   const data = [0x00, ...meta(0x03, str(name))]; let last = 0;
   for (const [t, bytes] of events) { data.push(...vlq(t - last), ...bytes); last = t; }
-  data.push(0x00, ...meta(0x2F, []));
+  data.push(...vlq(Math.max(0, end - last)), ...meta(0x2F, []));   // end of track no earlier than `end`
   return chunk('MTrk', data);
 }
 
 /** parts: [{ name, ch (1–16), notes: [{p, s, d, v}] }] → Uint8Array of a .mid file. markers: [{ s (step), text }] become
- *  marker meta events on the tempo track (Live shows them as locators). */
-export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, markers = [] }) {
+ *  marker meta events on the tempo track (Live shows them as locators). endStep: every track lasts at least this many
+ *  steps, so a DAW makes the clip the full pattern length even when the last note comes early. */
+export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, markers = [], endStep = 0 }) {
+  const end = stepTicks(endStep, 50);
   const usq = Math.round(60000000 / bpm);
   const head = [0x00, ...meta(0x03, str(name)), 0x00, ...meta(0x51, [(usq >> 16) & 255, (usq >> 8) & 255, usq & 255]), 0x00, ...meta(0x58, [4, 2, 24, 8])];
   let last = 0; for (const m of [...markers].sort((a, b) => a.s - b.s)) { const t = stepTicks(m.s, 50); head.push(...vlq(t - last), ...meta(0x06, str(m.text))); last = t; }
-  const tempo = [...head, 0x00, ...meta(0x2F, [])];
+  const tempo = [...head, ...vlq(Math.max(0, end - last)), ...meta(0x2F, [])];
   const tracks = [chunk('MTrk', tempo)];
   for (const part of parts) {
     const ch = (part.ch - 1) & 15, ev = [];
@@ -37,7 +39,7 @@ export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, m
       if (again) off = Math.min(off, stepTicks(again.s, swing));
       ev.push([on, [0x90 | ch, n.p, n.v], 1], [off, [0x80 | ch, n.p, 0], 0]);
     }
-    tracks.push(track(ev, part.name));
+    tracks.push(track(ev, part.name, end));
   }
   const header = chunk('MThd', [0, 1, 0, tracks.length, (PPQ >> 8) & 255, PPQ & 255]);
   return Uint8Array.from([...header, ...tracks.flat()]);
