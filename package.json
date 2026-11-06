@@ -6,8 +6,8 @@
   "private": true,
   "scripts": {
     "start": "python3 serve.py 5173",
-    "check": "for f in src/*.js src/drums/*.js src/doom/*.js src/games/*.js src/chaos/*.js src/poly/*.js src/punch/*.js src/unasm/*.js; do node --check $f || exit 1; done && npm run check --prefix packages/move-keymap",
-    "test": "node --test \"test/*.test.js\" && npm test --prefix packages/move-keymap"
+    "check": "for f in src/*.js src/drums/*.js src/doom/*.js src/games/*.js src/chaos/*.js src/poly/*.js src/punch/*.js src/unasm/*.js orbit2/src/*.js orbit2/src/poly/*.js orbit2/src/punch/*.js orbit2/src/unasm/*.js; do node --check $f || exit 1; done && npm run check --prefix packages/move-keymap",
+    "test": "node --test \"test/*.test.js\" \"orbit2/test/*.test.js\" && npm test --prefix packages/move-keymap"
   },
   "dependencies": {
     "movewire": "github:auridevil/movewire#main"
