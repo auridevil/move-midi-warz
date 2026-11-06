@@ -1,5 +1,7 @@
 // Polyrhythm drum machine model: 4 lanes, each with its own length, speed ratio, euclidean fill, rotation,
 // swing, probability and accents. Pure logic (no audio), unit-tested.
+import { KITS } from './kits.js';
+import { VOICES } from './voices.js';
 export const MAX_STEPS = 16;
 export const RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 3 / 2, 2, 3, 4];
 export const RATIO_LABEL = ['¼', '⅓', '½', '⅔', '¾', '1', '3/2', '2', '3', '4'];
@@ -111,7 +113,8 @@ export class Lane {
 }
 
 export class Machine {
-  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: [5, 5, 7, 7][i] })); this.selected = 0; this.humanize = 0; }
+  // a new machine plays the Common kit: lane names are ids, not voices ('perc' is not a voice)
+  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: [5, 5, 7, 7][i] })); this.selected = 0; this.humanize = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
   get lane() { return this.lanes[this.selected]; }
   select(i) { this.selected = ((i % this.lanes.length) + this.lanes.length) % this.lanes.length; return this.lane; }
   /** Seconds per step: at ratio ×1 a step is a quarter note (4 steps = one bar); ×2 = eighths, ×4 = sixteenths, ½ = half notes. */
@@ -153,8 +156,19 @@ export class Machine {
   randomize(rng = Math.random) { for (const l of this.lanes) { l.setLength(2 + Math.floor(rng() * 11)); l.setEuclid(1 + Math.floor(rng() * Math.max(1, l.length - 1))); l.rotation = Math.floor(rng() * l.length); } }
   /** Apply a kit: voices + sound tweaks per lane; patterns untouched. */
   applyKit(kit, defaults) { kit.lanes.forEach((k, i) => { const l = this.lanes[i]; if (!l) return; l.setVoice(k.voice); l.sound = { ...defaults, ...(k.sound || {}) }; }); this.kit = kit.name; }
+  /** The kit key whose voices and sounds every lane still has exactly, or null (= custom). */
+  kitKey() {
+    const same = (a, b) => Math.abs(a - b) < 1e-9;
+    return Object.keys(KITS).find(key => KITS[key].lanes.every((k, i) => { const l = this.lanes[i]; if (!l || l.voice !== k.voice) return false; const s = { ...DEFAULT_SOUND, ...(k.sound || {}) }; return SOUND_KEYS.every(sk => same(l.sound[sk], s[sk])); })) ?? null;
+  }
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit }; }
-  static from(o) { const m = new Machine(); if (o?.lanes) m.lanes = o.lanes.map(Lane.from); m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0; m.kit = o?.kit; return m; }
+  static from(o) {
+    const m = new Machine(); if (o?.lanes) m.lanes = o.lanes.map(Lane.from); m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0; m.kit = o?.kit;
+    // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample that is
+    // gone: give that lane the Common kit's voice instead of a silent fallback to the kick
+    m.lanes.forEach((l, i) => { if (l.voice === 'sample' ? !l.sample : !VOICES[l.voice]) l.voice = KITS.common.lanes[i % 4].voice; });
+    return m;
+  }
 }
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
 function lcm(a, b) { return a * b / gcd(a, b); }

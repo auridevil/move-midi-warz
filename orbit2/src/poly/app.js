@@ -115,9 +115,12 @@ async function ensureSample(lane) { const id = lane.sample?.id; if (!id || sampl
 function playSample(c, lane, p, time) {
   const buf = sampleBufs.get(lane.sample?.id); if (!buf) return;
   const len = buf.duration, offset = p.snap > 0.5 ? (p.snap - 0.5) * 0.6 * len : 0, attack = p.snap < 0.5 ? 0.001 + (0.5 - p.snap) * 0.06 : 0.001;
-  const play = Math.min(len - offset, 0.03 + Math.pow(p.decayRaw, 1.5) * (len - offset)), rate = Math.pow(2, p.tune);
+  const rate = Math.pow(2, p.tune), avail = (len - offset) / rate;   // seconds left at this speed (tuned down = longer)
+  const play = Math.min(avail, 0.03 + Math.pow(p.decayRaw, 1.5) * avail);
+  // decay at the top plays the whole sample (only a 10 ms click guard at the end); lower, the last quarter fades
+  const hold = p.decayRaw >= 0.99 ? Math.max(attack, play - 0.01) : Math.max(attack, play * 0.75);
   const src = new T.ToneBufferSource(buf), env = new T.Gain(0).connect(c.choke); src.connect(env);
-  env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + attack); env.gain.setValueAtTime(p.vel, time + Math.max(attack, play * 0.75)); env.gain.linearRampToValueAtTime(0, time + play);
+  env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + attack); env.gain.setValueAtTime(p.vel, time + hold); env.gain.linearRampToValueAtTime(0, time + play);
   src.playbackRate.setValueAtTime(rate * Math.pow(2, (p.color - 0.5) * 2), time); src.playbackRate.exponentialRampToValueAtTime(rate, time + 0.06);
   src.onended = () => { try { src.dispose(); env.dispose(); } catch {} }; src.start(time, offset); src.stop(time + play + 0.02);
 }
@@ -141,8 +144,11 @@ const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
 function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awake && !playing) hitSound(m.lanes[li], T.now(), false); sync(); }
 function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
-function applyKit(key) { m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((_, i) => { buildVoice(i); applySound(i); }); $('kit-select').value = key; sync(); }
-function cycleKit(dir) { const cur = KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
+function applyKit(key) { if (!KITS[key]) return; m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((_, i) => { buildVoice(i); applySound(i); }); sync(); }
+/** The kit select shows the truth: the kit every lane still matches, else "custom" (so picking any kit, even the one
+ *  you started from, is a change and re-applies it). */
+function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelector('option[value=custom]').hidden = !!k; ks.value = k || 'custom'; }
+function cycleKit(dir) { const cur = m.kitKey() ?? KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
 async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
@@ -253,7 +259,7 @@ function buildSliders() {
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
   for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => setVoice(m.selected, vs.value);
-  const ks = $('kit-select'); ks.innerHTML = ''; for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => applyKit(ks.value);
+  const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => applyKit(ks.value);
   const se = $('sound-sliders'); se.innerHTML = '';
   for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
@@ -262,7 +268,7 @@ function sync() {
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
   $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
-  laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); }); renderVoiceOptions(); renderLaneMix(); const kk = KIT_KEYS.find(k => KITS[k].name === m.kit); if (kk) $('kit-select').value = kk;
+  laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); renderLocks(); paintLeds(); save(); readout();
@@ -475,7 +481,8 @@ function buildMixUI() {
 async function assignSample(li, rec) {
   if (!rec?.channels?.length) return; await wake(); const id = `orbits-${Date.now().toString(36)}-${li}`;
   await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, T.getContext().rawContext));
-  const lane = m.lanes[li]; lane.sample = { id, name: rec.name || 'sample' }; lane.setVoice('sample'); buildVoice(li); m.select(li); sync();
+  // decay at the top = the whole sample: a fresh slice must play to its end, not inherit the drum's short decay
+  const lane = m.lanes[li]; lane.sample = { id, name: rec.name || 'sample' }; lane.setVoice('sample'); lane.setSound('decay', 1); buildVoice(li); m.select(li); sync();
   if (!playing) hitSound(lane, T.now(), false);
 }
 async function sampleFromFile(li, file) {
@@ -852,7 +859,7 @@ setInterval(() => {
 function readout() {
   poke();
   const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
-  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${m.kit || 'custom'}   engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
+  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${KITS[m.kitKey()]?.name || 'custom'}   engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
     `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
   $('readout').textContent = lines.join('\n');
 }
