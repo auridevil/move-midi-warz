@@ -11,5 +11,7 @@ export class Dice {
   stream(n = 0) { return this.locked ? mulberry32(this.seed * 7919 + n) : Math.random; }
   reroll() { this.seed = 1 + Math.floor(Math.random() * 9999); return this.seed; }
   toJSON() { const { locked, seed, repeat } = this; return { locked, seed, repeat }; }
+  /** A seeded roll that never repeats (free dice, made reproducible): every export of one take uses the same one. */
+  static take(seed) { const d = new Dice(); d.locked = true; d.seed = seed; d.repeat = Infinity; return d; }
   fromJSON(o) { if (o) { this.locked = !!o.locked; this.seed = o.seed | 0 || this.seed; this.repeat = Math.max(1, o.repeat | 0 || 1); } return this; }
 }

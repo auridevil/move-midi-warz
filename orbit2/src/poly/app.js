@@ -383,7 +383,8 @@ function liveHit(li, col, velocity = 100) {
   // where on the master clock was this hit, as heard? (the scheduler runs ahead; the speakers lag a little)
   const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0);
   const q = lane.quantize(clockRef.tick + (heard - clockRef.time) / tickSec(), rec.quant), idx = lane.stepIndex(q.index);
-  lane.hits[idx] = true; if (accent) lane.accents[idx] = true; if (tune != null) lane.setLock(idx, 'tune', tune);
+  // the pad's velocity is kept as a vel lock (an accent is its own flag and plays at full), so ghost notes stay ghosts
+  lane.hits[idx] = true; if (!accent) lane.setLock(idx, 'vel', v); else { lane.accents[idx] = true; if (lane.locks[idx]) { delete lane.locks[idx].vel; if (!Object.keys(lane.locks[idx]).length) lane.locks[idx] = null; } } if (tune != null) lane.setLock(idx, 'tune', tune);
   if (q.step * lane.stepTicks() > clockRef.tick) skip.add(`${li}:${q.step}`);   // that step hasn't been scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
@@ -569,7 +570,7 @@ async function masterLatency() {
 /** The current pattern rendered offline: { chans, sr, bars, hits, capped, loop }. stems: raw kit, a pair per lane. */
 async function renderPattern({ stems = false } = {}) {
   const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = BAR_TICKS * tickSec(), loop = ui.expLoop.value;
-  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   for (const l of m.lanes) await ensureSample(l);
   const lat = stems ? 0 : await masterLatency();
   const out = await T.Offline(async ({ transport }) => {
@@ -591,6 +592,12 @@ const nBars = (n) => `${n} bar${n === 1 ? '' : 's'}`;
 /** File names carry tempo and length; a one-shot names the pattern and its ring-out ("4bars+2tail-oneshot"). */
 const fileBase = (kind, r, bpm = tempo) => `orbits-${kind ? `${kind}-` : ''}${bpm}bpm-${r.loop ? nBars(r.bars).replace(' ', '') : `${nBars(r.patternBars).replace(' ', '')}+${r.bars - r.patternBars}tail-oneshot`}-${stamp()}`;
 const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}`;
+// One take, one hit list: free dice still roll, but from a per-take seed, so WAV, stems and MIDI made while this roll
+// is current hold the same hits (count and times). "new roll" draws another take; locked dice use their own seed.
+const newRoll = () => 1 + Math.floor(Math.random() * 99999);
+let expRoll = newRoll();
+const exportDice = () => dice.locked ? dice : Dice.take(expRoll);
+const rollNote = () => dice.locked ? `dice ${dice.seed}` : `roll ${expRoll}`;
 async function shareLink() {
   const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
   history.replaceState(null, '', `#p=${code}`);
@@ -600,14 +607,14 @@ async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
   const r = await renderPattern(), acid = { bpm: tempo, beats: r.bars * 4 };
   download(withAcid(encodeWav(r.chans, r.sr), acid), `${fileBase('', r)}.wav`, 'audio/wav');
-  $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${renderNote(r)}`;
+  $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}`;
 }
 function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const bars = chain ? bank.chainBars * bank.chain.length : ticks / BAR_TICKS;
-  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: dice.locked ? dice : null }) : collectHits(m, { from: 0, to: ticks, tempo, dice: dice.locked ? dice : null });
+  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars });
-  download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
+  download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 async function loadShared() {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return;
@@ -619,6 +626,7 @@ function buildExportUI() {
   ui.expLoop = mount('exp-loop', toggleChip({ label: 'render as loop', on: true, title: 'on: the ring-out wraps onto the start, so the file is exactly N bars and loops seamlessly (Session clips). off: one-shot that starts on the downbeat and keeps its ring-out, rounded up to whole bars (place it once in a song).' }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
+  $('exp-roll').onclick = () => { expRoll = newRoll(); $('exp-status').textContent = dice.locked ? `dice are locked: exports use dice ${dice.seed} (re-roll in the dice drawer)` : `roll ${expRoll}: the next WAV, stems and MIDI share these hits`; };
   addEventListener('hashchange', loadShared);
 }
 
@@ -701,7 +709,7 @@ async function exportStems() {
   await wake(); $('exp-status').textContent = 'rendering 4 stems…';
   const r = await renderPattern({ stems: true }), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [r.chans[2 * i], r.chans[2 * i + 1]])), base = fileBase('stems', r);
   download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, { bpm: tempo, beats: r.bars * 4 }), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `stems: 4 lanes + raw mix · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
+  $('exp-status').textContent = `stems: 4 lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(JSON.stringify(m));
 // every visit starts from init; the pattern you left is one undo away (and a shared link wins over both)
