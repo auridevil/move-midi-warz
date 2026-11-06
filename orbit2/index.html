@@ -29,6 +29,7 @@
   </header>
   <div id="readout" class="readout"></div>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
   <div class="hud-left" id="hud-left">
     <details class="drawer" open>
       <summary>global · master tempo &amp; humanize</summary>
@@ -164,7 +165,8 @@
       <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
       <button id="btn-save" title="Save this setup under a name (library)">save</button>
       <button id="btn-load" title="Open the library of saved setups">load</button>
-      <button id="btn-random">randomize</button>
+      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click or long-press: wild (undoable)">randomize</button>
+      <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
       <button id="btn-clear">clear lane</button>
       <button id="btn-tap">tap tempo</button>
       <button id="btn-reset">reset phase</button>

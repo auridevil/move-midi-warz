@@ -153,7 +153,26 @@ export class Machine {
     });
     return changes;
   }
+  /** Wild randomize: any length, fill and rotation per lane (speeds kept). Often noise; musical randomize is the default. */
   randomize(rng = Math.random) { for (const l of this.lanes) { l.setLength(2 + Math.floor(rng() * 11)); l.setEuclid(1 + Math.floor(rng() * Math.max(1, l.length - 1))); l.rotation = Math.floor(rng() * l.length); } }
+  /**
+   * Musical randomize: roll a groove from a family (MUSICAL_FAMILIES, or the key given): kick on step 1, snare where the
+   * family puts it, lane lengths and speeds from the family, the whole cycle at most 16 bars. Voices and sounds stay.
+   * Pure: rng is a dice stream, so locked dice re-make the same groove. Returns the family { key, name }.
+   */
+  randomizeMusical(rng = Math.random, family) {
+    const f = MUSICAL_FAMILIES.find(x => x.key === family) || MUSICAL_FAMILIES[Math.floor(rng() * MUSICAL_FAMILIES.length)];
+    const specs = f.build(rng);
+    this.lanes.forEach((l, i) => {
+      const s = specs[i]; if (!s) return; l.clear(); l.setLength(s.len); l.setRatio(RATIOS.indexOf(s.ratio)); l.prob = 1; l.swing = s.swing || 0;
+      if (s.k != null) l.setEuclid(s.k); else for (const h of s.hits) l.hits[h % s.len] = true;
+      for (const a of s.acc || []) if (l.hits[a]) l.accents[a] = true;
+      l.rotation = s.rot ? s.rot % s.len : 0;
+    });
+    // swing on an odd lane doubles its loop: drop swing until the cycle fits (the families are built to fit anyway)
+    if (this.cycleTicks() > MAX_CYCLE_BARS * BAR_TICKS) for (const l of this.lanes) l.swing = 0;
+    return { key: f.key, name: f.name };
+  }
   /** Apply a kit: voices + sound tweaks per lane; patterns untouched. */
   applyKit(kit, defaults) { kit.lanes.forEach((k, i) => { const l = this.lanes[i]; if (!l) return; l.setVoice(k.voice); l.sound = { ...defaults, ...(k.sound || {}) }; }); this.kit = kit.name; }
   /** The kit key whose voices and sounds every lane still has exactly, or null (= custom). */
@@ -170,5 +189,63 @@ export class Machine {
     return m;
   }
 }
+/** Musical randomize never makes a cycle longer than this. */
+export const MAX_CYCLE_BARS = 16;
+const one = (rng, a) => a[Math.floor(rng() * a.length)], some = (rng, a, p) => a.filter(() => rng() < p);
+/**
+ * Groove families for musical randomize. build(rng) → one spec per lane (kick, snare, hat, perc):
+ * { len, ratio, hits: [stored steps] or k: euclid fill, acc, rot, swing }. lengths = the lane lengths a family may use
+ * (tests check every roll against them). The kick never rotates and always has step 1.
+ */
+export const MUSICAL_FAMILIES = [
+  { key: 'tresillo', name: 'tresillo over four', lengths: [[8, 16], [16], [4, 8, 16], [8, 16]],
+    build: (rng) => {
+      const long = rng() < 0.5;
+      return [
+        { len: long ? 16 : 8, ratio: 4, hits: long ? [0, 3, 6, 8, 11, ...some(rng, [14], 0.5)] : [0, 3, 6], acc: [0] },   // 3+3+2
+        { len: 16, ratio: 4, hits: rng() < 0.7 ? [4, 12] : [8], acc: [4, 8, 12] },
+        one(rng, [{ len: 8, ratio: 2, k: 8, acc: [0, 2, 4, 6], swing: one(rng, [0, 0.1, 0.2]) }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]), swing: one(rng, [0, 0.1]) }, { len: 4, ratio: 2, hits: [1, 3] }]),
+        { len: one(rng, [8, 16]), ratio: 4, k: 3, rot: one(rng, [2, 4, 5]) },    // the tresillo answered on the other lane
+      ];
+    } },
+  { key: 'clave32', name: '3-2 clave', lengths: [[4], [4], [2, 8, 16], [16]],
+    build: (rng) => [
+      { len: 4, ratio: 1, hits: rng() < 0.6 ? [0, 1, 2, 3] : [0, 2], acc: [0] },
+      { len: 4, ratio: 1, hits: rng() < 0.5 ? [1, 3] : [2], acc: [1, 2, 3] },
+      one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [6, 8, 10]), rot: one(rng, [0, 1, 2]), swing: one(rng, [0, 0.12]) }, { len: 8, ratio: 2, k: 8, acc: [1, 3, 5, 7] }]),
+      { len: 16, ratio: one(rng, [2, 4]), hits: [0, 3, 6, 10, 12], acc: [0] },   // son clave 3-2: 2 bars of 8ths, or 1 bar of 16ths
+    ] },
+  { key: '4vs3', name: 'four against three', lengths: [[4], [4], [3, 6], [3, 12]],
+    build: (rng) => [
+      { len: 4, ratio: 1, hits: rng() < 0.5 ? [0, 1, 2, 3] : [0, 2], acc: [0] },
+      { len: 4, ratio: 1, hits: rng() < 0.6 ? [1, 3] : [2], acc: [1, 2, 3] },
+      one(rng, [{ len: 3, ratio: 3 / 4, hits: [0, 1, 2], acc: [0] }, { len: 6, ratio: 3 / 2, k: one(rng, [3, 4, 6]), acc: [0] }]),   // 3 (or 6) across the bar
+      one(rng, [{ len: 3, ratio: 1, k: one(rng, [1, 2]) }, { len: 12, ratio: 3, k: one(rng, [3, 5, 7]), rot: one(rng, [0, 2, 4]) }]),
+    ] },
+  { key: '5over4', name: 'five over four', lengths: [[4], [4], [8, 16], [5]],
+    build: (rng) => [
+      { len: 4, ratio: 1, hits: rng() < 0.5 ? [0, 1, 2, 3] : [0, 2], acc: [0] },
+      { len: 4, ratio: 1, hits: [1, 3], acc: [1, 3] },
+      one(rng, [{ len: 8, ratio: 2, k: one(rng, [4, 6, 8]), rot: one(rng, [0, 1]) }, { len: 16, ratio: 4, k: one(rng, [8, 12]) }]),
+      { len: 5, ratio: one(rng, [1, 2, 4]), k: one(rng, [1, 2, 3]), acc: [0] },   // meets the bar again after 5 bars at most
+    ] },
+  { key: 'fourfloor', name: 'four on the floor', lengths: [[4], [4], [2, 16], [8, 12, 16]],
+    build: (rng) => [
+      { len: 4, ratio: 1, hits: [0, 1, 2, 3], acc: [0] },
+      { len: 4, ratio: 1, hits: [1, 3], acc: [1, 3] },
+      one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]), acc: [2, 6, 10, 14], swing: one(rng, [0, 0.1, 0.15]) }]),
+      (len => ({ len, ratio: 4, k: one(rng, [3, 4, 5, 7]), rot: Math.floor(rng() * len) }))(one(rng, [8, 12, 16])),
+    ] },
+  { key: 'boombap', name: 'boom bap', lengths: [[16], [16], [8], [8, 16]],
+    build: (rng) => {
+      const swing = one(rng, [0.15, 0.2, 0.25]);
+      return [
+        { len: 16, ratio: 4, hits: [0, ...some(rng, [7, 8, 10, 11, 14], 0.35)], acc: [0], swing },
+        { len: 16, ratio: 4, hits: [4, 12, ...some(rng, [7, 15], 0.25)], acc: [4, 12], swing },   // backbeat + the odd ghost
+        { len: 8, ratio: 2, k: one(rng, [6, 8]), acc: [0, 2, 4, 6], swing: swing + 0.1 },
+        one(rng, [{ len: 8, ratio: 1, k: one(rng, [2, 3]), rot: one(rng, [1, 3]) }, { len: 16, ratio: 2, k: one(rng, [3, 5]), rot: one(rng, [2, 6]) }]),
+      ];
+    } },
+];
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
 function lcm(a, b) { return a * b / gcd(a, b); }

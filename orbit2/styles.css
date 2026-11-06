@@ -224,6 +224,9 @@ body.chaos::before { display: none; }
 .welcome { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(22, 14, 46, 0.9); font-size: 12.5px; }
 .welcome[hidden] { display: none; }
 .welcome .wb-x { padding: 2px 8px; background: transparent; }
+/* randomize names the groove it rolled */
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; padding: 8px 16px; border-radius: 999px; background: rgba(22, 14, 46, 0.95); border: 1px solid var(--hairline); color: var(--star-white); font-size: 13px; pointer-events: none; }
+.toast[hidden] { display: none; }
 .grooves-row { align-items: center; }
 .grooves-row .chips { justify-content: flex-end; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }

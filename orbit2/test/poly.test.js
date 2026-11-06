@@ -331,3 +331,26 @@ test('F1 starter grooves: complete Machine JSON, real voices, round-trip, tempo 
   assert.deepEqual(demo.lanes.map(l => l.length).sort(), [2, 3, 4, 5]);
   assert.ok(grooveByKey('trap').m.lanes[2].trigs.some(t => t?.ratchet > 1), 'trap hat rolls');
 });
+
+test('F4 musical randomize: 200 seeds → kick on step 1, cycle ≤ 16 bars, lengths from the family; seeded = repeatable', async () => {
+  const { MUSICAL_FAMILIES, MAX_CYCLE_BARS, BAR_TICKS } = await import('../src/poly/lanes.js'); const { mulberry32 } = await import('../src/poly/dice.js');
+  const seen = new Set();
+  for (let s = 1; s <= 200; s++) {
+    const m = new Machine(), voices = m.lanes.map(l => l.voice), f = m.randomizeMusical(mulberry32(s)), fam = MUSICAL_FAMILIES.find(x => x.key === f.key); seen.add(f.key);
+    assert.ok(fam && f.name === fam.name, `seed ${s}`); assert.ok(m.lanes[0].hitAt(0), `seed ${s} ${f.key}: kick on 1`);
+    assert.ok(m.cycleTicks() <= MAX_CYCLE_BARS * BAR_TICKS, `seed ${s} ${f.key}: ${m.cycleTicks() / BAR_TICKS} bars`);
+    m.lanes.forEach((l, i) => { assert.ok(fam.lengths[i].includes(l.length), `seed ${s} ${f.key} lane ${i}: ${l.length}`); assert.ok(l.hits.some(Boolean)); });
+    assert.deepEqual(m.lanes.map(l => l.voice), voices, 'voices stay'); assert.deepEqual(Machine.from(JSON.parse(JSON.stringify(m))).toJSON(), m.toJSON());
+  }
+  assert.equal(seen.size, MUSICAL_FAMILIES.length, 'every family comes up');
+  for (const fam of MUSICAL_FAMILIES) { const m = new Machine(); assert.equal(m.randomizeMusical(mulberry32(3), fam.key).key, fam.key); }
+  const a = new Machine(), b = new Machine(); a.randomizeMusical(mulberry32(42)); b.randomizeMusical(mulberry32(42)); assert.deepEqual(a.toJSON(), b.toJSON());
+});
+
+test('F5 alignment countdown text: bars, then beats in the last bar, hidden for a one-bar cycle', async () => {
+  const { alignText } = await import('../src/poly/scene.js');
+  assert.equal(alignText(0, 96), ''); assert.equal(alignText(50, 48), '');
+  assert.equal(alignText(0, 4 * 96), 'aligns in 4 bars'); assert.equal(alignText(1, 4 * 96), 'aligns in 4 bars'); assert.equal(alignText(96 * 2 + 5, 4 * 96), 'aligns in 2 bars');
+  assert.equal(alignText(96 * 3, 4 * 96), 'aligns in 4 beats'); assert.equal(alignText(4 * 96 - 1, 4 * 96), 'aligns in 1 beat');
+  assert.equal(alignText(0, 120), 'aligns in 2 bars'); assert.equal(alignText(30, 120), 'aligns in 4 beats');   // 5 beats: the 3 vs 4 vs 5 demo
+});

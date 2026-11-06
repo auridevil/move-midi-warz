@@ -9,6 +9,16 @@ const MUTED = '#8b84a8';
 const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (hex, a) => { const [r, g, b] = rgb(hex); return `rgba(${r},${g},${b},${a})`; };
 
+/**
+ * "aligns in N bars" (the last bar counts in beats) for master tick `tick` of a `cycle`-tick machine; '' when the whole
+ * cycle fits in one bar (it aligns every bar: nothing to wait for). bar / beat in ticks.
+ */
+export function alignText(tick, cycle, bar = 96, beat = 24) {
+  if (!(cycle > bar)) return ''; const left = cycle - (((tick % cycle) + cycle) % cycle);
+  const [n, unit] = left > bar ? [Math.ceil(left / bar), 'bar'] : [Math.ceil(left / beat), 'beat'];
+  return `aligns in ${n} ${unit}${n > 1 ? 's' : ''}`;
+}
+
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const h = size / 2;
@@ -112,7 +122,6 @@ export function createScene(cv, o) {
     ctx.globalAlpha = 0.35 + Math.min(0.65, tot * 0.25); ctx.drawImage(sprite(o.laneHex[0]), g.cx - coreR * 2, g.cy - coreR * 2, coreR * 4, coreR * 4);
     ctx.globalAlpha = 0.25 + energy[3] * 0.3; ctx.drawImage(sprite(o.laneHex[3]), g.cx - coreR * 3, g.cy - coreR * 3, coreR * 6, coreR * 6);
     ctx.globalAlpha = 1;
-
     // cycle bloom: when every lane lines up, a chromatic shockwave leaves the core
     for (let i = blooms.length - 1; i >= 0; i--) {
       const age = (now - blooms[i].t) / 1600; if (age > 1) { blooms.splice(i, 1); continue; }
@@ -189,6 +198,18 @@ export function createScene(cv, o) {
       ctx.strokeStyle = `rgba(239,68,68,${0.25 + pulse * 0.35})`; ctx.lineWidth = 1.5 + pulse * 2; ctx.setLineDash([6, 10]); ctx.lineDashOffset = -now * 0.02;
       ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     }
+    // alignment countdown above the core, so the bloom is a payoff you see coming; it brightens in the last beat
+    // (a steady label when motion is reduced)
+    const al = playing && o.align?.(), at = al ? alignText(al.tick, al.cycle, al.bar, al.beat) : '';
+    if (at) {
+      const lastBeat = al.cycle - (al.tick % al.cycle) <= al.beat, a = lastBeat && !reduced ? 0.75 + 0.25 * Math.sin(now * 0.02) : lastBeat ? 1 : 0.85;
+      // above the core (the lane labels sit below it), on a dark pill so the ring strokes don't cut through the words
+      ctx.globalCompositeOperation = 'source-over'; ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const w = ctx.measureText(at).width + 14, y = g.cy - g.R * 0.205;
+      ctx.fillStyle = 'rgba(12,8,28,.78)'; ctx.beginPath(); ctx.roundRect(g.cx - w / 2, y - 8, w, 16, 8); ctx.fill();
+      ctx.fillStyle = `rgba(236,233,247,${a})`; ctx.fillText(at, g.cx, y); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.globalCompositeOperation = 'lighter';
+    }
+
     // jam: a red arc around everything fills up over the 256 beats, with a ticking head
     const jp = o.jamProgress?.();
     if (jp != null) {

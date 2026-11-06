@@ -432,7 +432,14 @@ function loadGroove(key) {
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
 }
 /** Randomize: with locked dice a fresh seed is rolled and shown, so a groove you like can be re-made from its number. */
-function randomizeAll() { if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); } m.randomize(dice.stream(0)); sync(); }
+/** Musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click, long-press, 'wild'). */
+function randomizeAll(wild = false) {
+  if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); }
+  const rng = dice.stream(0), name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name; sync();
+  toast(`${name}${dice.locked ? ` · dice ${dice.seed}` : ''}`);
+}
+let toastTimer = 0;
+function toast(txt) { const t = $('toast'); t.textContent = txt; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2200); }
 // ---- undo / redo ----
 function applyState(json) {
   if (!json) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
@@ -857,7 +864,14 @@ move.addEventListener('button', (e) => {
   if (name === 'record') { if (shift) tapTempo(); else setRec(!rec.armed); }
   if (name === 'left' || name === 'right') { const dir = name === 'right' ? 1 : -1; if (shift) cycleKit(dir); else cycleVoice(m.selected, dir); }
 });
-$('btn-random').onclick = randomizeAll; $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
+// randomize: click = musical, Shift+click or a long press (touch) = wild; the 'wild' button says it out loud
+{ const b = $('btn-random'); let held = 0, longDone = false;
+  b.onpointerdown = () => { longDone = false; clearTimeout(held); held = setTimeout(() => { longDone = true; randomizeAll(true); }, 550); };
+  b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(held);
+  b.oncontextmenu = (e) => e.preventDefault();   // a long press on touch must not open the menu
+  b.onclick = (e) => { if (longDone) { longDone = false; return; } randomizeAll(e.shiftKey); }; }
+$('btn-wild').onclick = () => randomizeAll(true);
+$('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
 window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 // A focused control owns its keys: Space / Enter activate a focused button or <summary>, text fields get every key,
@@ -900,7 +914,7 @@ $('btn-disconnect').onclick = () => { move.disconnect(); setPill('Move: disconne
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: clockRef.tick, cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
