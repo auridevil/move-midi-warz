@@ -221,14 +221,19 @@ body.chaos::before { display: none; }
 #btn-play.pulse { animation: play-pulse 1.4s ease-in-out infinite; box-shadow: 0 0 0 3px rgba(253,224,71,.5), 0 0 24px rgba(253,224,71,.45); }
 @keyframes play-pulse { 50% { box-shadow: 0 0 0 7px rgba(253,224,71,.12), 0 0 34px rgba(253,224,71,.25); } }
 @media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
-.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(22, 14, 46, 0.9); font-size: 12.5px; }
+/* one line on wide screens (the words wrap, the buttons don't); stacked with finger-sized buttons on a phone */
+.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(22, 14, 46, 0.9); font-size: 12.5px; }
+.welcome > span { flex: 1 1 auto; min-width: 0; }
+.welcome > button { flex: none; }
 .welcome[hidden] { display: none; }
 .welcome .wb-x { padding: 2px 8px; background: transparent; }
-/* randomize names the groove it rolled */
-.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; padding: 8px 16px; border-radius: 999px; background: rgba(22, 14, 46, 0.95); border: 1px solid var(--hairline); color: var(--star-white); font-size: 13px; pointer-events: none; }
-.toast[hidden] { display: none; }
+/* randomize and the grooves name what they loaded; stays in the page (a live region), shown by fading in */
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; width: max-content; max-width: min(92vw, 560px); padding: 8px 16px; border-radius: 14px; background: rgba(22, 14, 46, 0.95); border: 1px solid var(--hairline); color: var(--star-white); font-size: 13px; line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.toast.show { opacity: 1; }
 .grooves-row { align-items: center; }
 .grooves-row .chips { justify-content: flex-end; }
+/* a long press is wild randomize: no text selection or callout menu on touch */
+#btn-random { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }
 .drawer summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 8px 0; }
@@ -448,7 +453,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
      sitting behind the panels; the scene measures the canvas box, not the viewport */
   body:has(#hud-left) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
   body:has(#hud-left) .readout { order: 2; }
-  body:has(#hud-left) .lane-tabs { justify-content: flex-start; }
+  body:has(#hud-left) .lane-tabs, body:has(#hud-left) .grooves-row .chips { justify-content: flex-start; }
 }
 /* lane buttons: the touch way to pick a ring */
 .lane-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -463,6 +468,10 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
   body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
+  body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
+  body:has(#hud-left) .welcome > span { flex-basis: 100%; }
+  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button { min-height: 36px; }
+  body:has(#hud-left) .welcome .wb-x { min-width: 40px; margin-left: auto; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
 .stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto 0 -13px 0; font-size: 8px; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }

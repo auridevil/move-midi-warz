@@ -1,9 +1,10 @@
 // Compact arc gauge (knob-like). Drag vertically (Shift = fine), mouse wheel, or arrow keys. Emits onChange(value).
+// exact: set() from code keeps the value as given (a tempo of 127.5); what the user turns still moves in steps.
 const NS = 'http://www.w3.org/2000/svg';
 const arc = (cx, cy, r, a0, a1) => { const p = (a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); const large = a1 - a0 > Math.PI ? 1 : 0; return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`; };
 const START = Math.PI * 0.75, SWEEP = Math.PI * 1.5;
 
-export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, fmt = (v) => v, color = 'var(--signal-cyan)', title = '', onChange }) {
+export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, exact = false, fmt = (v) => v, color = 'var(--signal-cyan)', title = '', onChange }) {
   const el = document.createElement('div'); el.className = 'gauge'; el.title = title; el.tabIndex = 0;
   const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 48 48');
   const track = document.createElementNS(NS, 'path'); track.setAttribute('class', 'g-track'); track.setAttribute('d', arc(24, 24, 18, START, START + SWEEP));
@@ -15,7 +16,7 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, fm
   let v = value;
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
   const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? arc(24, 24, 18, START, a) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); };
-  const set = (x, emit = false) => { const n = clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
+  const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
   // drag: 150 px of travel = full range; Shift = 5× finer
   let drag = null;
   el.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, v }; el.setPointerCapture(e.pointerId); e.preventDefault(); });

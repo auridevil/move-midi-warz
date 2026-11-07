@@ -16,26 +16,88 @@ export function phaseCorrection(drift) {
 
 /**
  * Clock-in tempo follower: feed it every 0xF8 timestamp (ms); it returns the new bpm (a float, 0.01 resolution) only
- * when the tempo really moved, else null. The bpm is fitted over the last `window` ticks (24 = a beat), and a
- * change smaller than `hysteresis` bpm is jitter, not a tempo change: 127.5 bpm with ±1 ms jitter stays 127.5.
+ * when the tempo really moved, else null. Clocks are messier than they look, and each mess has its own answer:
+ *  - jitter: the bpm is a least-squares fit over up to `window` ticks (16 beats); a change has to beat `k` standard
+ *    errors of that fit, so a young window speaks up for big moves only. Its error bars come from the measured
+ *    jitter (a robust spread of the residuals, kept between restarts) and grow when the residuals hang together
+ *    (a wandering clock, a timestamp grid): independent jitter averages out, a drift does not.
+ *  - a late burst, a bad first tick: least squares on the inliers only (Theil–Sen first, while the window is young).
+ *  - a tick far off the line is held aside. If the clock comes back to the line it was a hiccup and is dropped. If
+ *    `run` held ticks form a clean line of another slope, the tempo changed: start from them. A clean line of the
+ *    same slope (a latency step, a lost tick, a timestamp grid wrapping) is the same tempo, shifted: start from them
+ *    and widen the jitter to that shift, so a grid that keeps wrapping is taken as jitter from then on.
+ *  - a pause (more than 3 ticks of silence) starts afresh; the bpm is kept, so the same tempo after it changes nothing.
+ *  - a significant bend in the fit is a ramp: read at the newest tick, in steps that follow the ramp's speed.
+ *  - a small leftover offset (under `big`) is corrected only when it holds on one side for `hold` ticks (4 beats);
+ *    `settle` (0.05 bpm) is never a change: a fit that keeps sharpening would otherwise re-announce 127.51 → 127.5
+ *    minutes later, a retime nobody can hear.
  */
-export function makeBpmFollower({ window = 96, minTicks = 48, hysteresis = 0.3, settle = 0.05 } = {}) {
-  let times = [], bpm = 0, side = 0;
+export function makeBpmFollower({ window = 384, first = 12, run = 6, k = 4, settle = 0.05, big = 0.3, hold = 96, zc = 4, floor = 0.25 } = {}) {
+  let pts = [], idx = 0, bpm = 0, jit = 2, calibrated = false, held = [], side = 0, slope = 0, cached = null, jumped = false;
+  const median = (v) => { const s = Float64Array.from(v).sort(), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+  const spread = (r) => Math.max(floor, 1.4826 * median(r.map(Math.abs)));   // robust σ of residuals (MAD)
+  // least squares t = a + b·x (+ c·x²) over points {x: tick index, t: ms}, x centred: b = ms per tick in the middle,
+  // b + 2c·xe at the newest tick
+  const fit = (P, quad) => {
+    const n = P.length, t0 = P[0].t; let mx = 0; for (const p of P) mx += p.x; mx /= n;
+    let s2 = 0, s3 = 0, s4 = 0, sy = 0, sxy = 0, sx2y = 0;
+    for (const p of P) { const x = p.x - mx, y = p.t - t0, x2 = x * x; s2 += x2; s3 += x2 * x; s4 += x2 * x2; sy += y; sxy += x * y; sx2y += x2 * y; }
+    const S = s4 - s2 * s2 / n - s3 * s3 / s2, c = quad ? (sx2y - s2 * sy / n - s3 * sxy / s2) / S : 0, b = (sxy - s3 * c) / s2, a = (sy - s2 * c) / n;
+    return { n, b, c, s2, S, xe: P[n - 1].x - mx, at: (x) => t0 + a + b * (x - mx) + c * (x - mx) ** 2 };
+  };
+  /** The window's fit without its outliers, the jitter it shows, and how much to widen the error bars for correlation. */
+  const robust = (P = pts) => {
+    const n = P.length, quad = n >= 24; let at;
+    if (n < 48) { const sl = []; for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) sl.push((P[j].t - P[i].t) / (P[j].x - P[i].x)); const b = median(sl), a = median(P.map(p => p.t - b * p.x)); at = (x) => a + b * x; }
+    else at = fit(P, quad).at;
+    const r0 = P.map(p => p.t - at(p.x)), s0 = spread(r0); let use = P.filter((_, i) => Math.abs(r0[i]) <= 4 * s0); if (use.length < Math.max(4, n * 0.75)) use = P;
+    const f = fit(use, quad), r = use.map(p => p.t - f.at(p.x));
+    let num = 0, den = 0; for (let i = 0; i < r.length; i++) { den += r[i] * r[i]; if (i) num += r[i] * r[i - 1]; }
+    const rho = den > 0 ? Math.min(0.95, Math.max(0, num / den)) : 0;
+    return { f, s: spread(r), infl: Math.min(20, (1 + rho) / (1 - rho)) };
+  };
+  const restart = () => { pts = []; held = []; side = 0; cached = null; jumped = false; };
+  const start = (P) => { pts = P.map(({ x, t }) => ({ x, t })); held = []; side = 0; };
   return {
     get bpm() { return bpm; },
-    /** Start / Continue: measure afresh, but keep the bpm so the same tempo isn't re-announced. full = forget it too. */
-    reset(full = false) { times = []; side = 0; if (full) bpm = 0; },
+    /** Start / Stop / Continue or a follow-mode change: measure afresh, keeping the bpm (the same tempo isn't announced
+     *  again) and the jitter (same source). full (a new port) = forget both. */
+    reset(full = false) { restart(); if (full) { bpm = 0; jit = 2; calibrated = false; } },
     tick(t) {
-      times.push(t); if (times.length > window + 1) times.shift();
-      const n = times.length - 1; if (n < minTicks) return null;
-      // least-squares slope (ms per tick) over the whole window: jitter on single ticks averages out, unlike first→last
-      let sx = 0, sy = 0, sxx = 0, sxy = 0; for (let i = 0; i <= n; i++) { const y = times[i] - times[0]; sx += i; sy += y; sxx += i * i; sxy += i * y; }
-      const k = n + 1, msPerTick = (k * sxy - sx * sy) / (k * sxx - sx * sx), now = 60000 / 24 / msPerTick;
+      const prevT = held.length ? held[held.length - 1].t : pts.length ? pts[pts.length - 1].t : null;
+      if (prevT != null && t - prevT > Math.max(100, 3 * (bpm ? 2500 / bpm : slope || 80))) restart();
+      const x = idx++;
+      if (pts.length >= (calibrated ? 12 : 48)) {   // the jitter is known once a first window has filled
+        const { f } = cached || robust(), n = f.n, r = t - f.at(x), spr = jit * Math.sqrt(1 + 1 / n + (f.xe + 1) ** 2 / f.s2);
+        if (Math.abs(r) > 3.5 * spr) {
+          if (held.length && Math.sign(r) !== held[0].sg) held = [];
+          held.push({ x, t, sg: Math.sign(r) });
+          if (held.length >= run) {   // judge the newest `run` held ticks
+            const tail = held.slice(-run), pf = fit(tail, false), se = jit * Math.sqrt(12 / (run ** 3 - run));
+            const clean = Math.sqrt(tail.reduce((a, q) => a + (q.t - pf.at(q.x)) ** 2, 0) / (run - 2)) <= 2.5 * Math.max(jit, floor);
+            if (clean && Math.abs(pf.b - f.b) > 4 * se) { start(tail); jumped = true; }   // a new tempo: from the ticks since
+            else if (clean && held.length >= 2 * run) { jit = Math.max(jit, Math.abs(held.reduce((a, q) => a + q.t - f.at(q.x), 0) / held.length) / 3); start(held); }   // same tempo, shifted
+            else if (!clean && held.length >= 3 * run) start(tail);   // still messy after 3 runs: start over from the newest
+          }
+          if (held.length) return null;   // a verdict is pending: no reading meanwhile
+        } else { held = []; pts.push({ x, t }); }   // back on the line: whatever was held was a hiccup
+      } else pts.push({ x, t });
+      cached = null; while (pts.length > window) pts.shift();
+      const n = pts.length; if (n < (jumped && bpm ? run : first)) return null; if (n >= first) jumped = false;
+      const { f, s, infl } = (cached = robust());
+      if (n >= 48) calibrated = true; if (n >= 96) jit += (s - jit) * 0.05; if (s > jit) jit = s;   // the jitter: up at once, down slowly
+      if (!bpm && s > 1.5 && n < 48) return null;   // the first reading waits for a clean window (or enough ticks)
+      if (jumped && n < first && s > 2 * Math.max(jit, floor)) return null;   // an early reading after a jump only from a clean line
+      const vb = jit ** 2 / f.s2 * infl, vc = n >= 24 ? jit ** 2 / f.S * infl : Infinity, ramp = n >= 24 && Math.abs(f.c) > zc * Math.sqrt(vc);
+      const p = ramp ? f.b + 2 * f.c * f.xe : f.b, now = 2500 / p, err = now * Math.sqrt(vb + (ramp ? 4 * f.xe * f.xe * vc : 0)) / p; slope = f.b;
       if (!(now > 20 && now < 300)) return null;
-      // a small offset that stays on one side for a whole window is real (the end of a ramp), jitter flips sides
-      const d = now - bpm; side = Math.abs(d) >= settle ? (Math.sign(d) === Math.sign(side) ? side + Math.sign(d) : Math.sign(d)) : 0;
-      if (bpm && Math.abs(d) < hysteresis && Math.abs(side) < window) return null;
-      side = 0; return (bpm = Math.round(now * 100) / 100);
+      const d = now - bpm, v = Math.round(now * 100) / 100;
+      if (bpm && ramp) { const rate = Math.abs(2500 / (p * p) * 2 * f.c * 24); if (Math.abs(d) < Math.max(Math.min(0.75, Math.max(0.15, rate / 2)), k * err)) return null; }   // about two steps per beat
+      else if (bpm) {
+        if (Math.abs(d) <= Math.max(settle, k * err)) { side = 0; return null; }
+        if (Math.abs(d) < big) { side = Math.sign(d) === Math.sign(side) ? side + Math.sign(d) : Math.sign(d); if (Math.abs(side) < hold) return null; }
+      }
+      side = 0; return v === bpm ? null : (bpm = v);
     },
   };
 }
@@ -73,15 +135,20 @@ export class PolyMidi {
   clock(at) { if (this.out && this.clockOut) this.send([0xF8], at); }
   start(at) { if (this.out && this.clockOut) this.send([0xFA], at); }
   stop() { if (this.out && this.clockOut) this.send([0xFC]); }
+  /** Follow mode change: the ticks heard before (or while 'off') say nothing about now. */
+  setFollow(mode) { this.follow = FOLLOW_MODES.includes(mode) ? mode : 'off'; this.follower.reset(); }
   /** Clock in: a smoothed float bpm (tempo handler only on a real change), plus start / stop when following the transport. */
   receive(data, t) {
     const s = data[0]; if (this.follow === 'off') return;
     if (s === 0xF8) {
       if (this.follow === 'lock') this.handlers.tick(this.extTick, t); this.extTick++;
       const bpm = this.follower.tick(t); if (bpm != null) this.handlers.tempo(bpm);
-    } else if (this.follow !== 'tempo' && (s === 0xFA || s === 0xFB)) { if (s === 0xFA) this.extTick = 0; this.follower.reset(); this.handlers.start(); }
-    else if (this.follow !== 'tempo' && s === 0xFC) this.handlers.stop();
-    else if (s === 0xF2) this.extTick = ((data[2] << 7) | data[1]) * 6;   // Song Position Pointer: sixteenths → 24 PPQ ticks
+    } else if (s === 0xFA || s === 0xFB || s === 0xFC) {
+      // the master stopped or (re)started: its clock may have paused, so measure afresh (in every mode); only the
+      // transport modes start and stop with it
+      this.follower.reset(); if (this.follow === 'tempo') return;
+      if (s === 0xFC) this.handlers.stop(); else { if (s === 0xFA) this.extTick = 0; this.handlers.start(); }
+    } else if (s === 0xF2) this.extTick = ((data[2] << 7) | data[1]) * 6;   // Song Position Pointer: sixteenths → 24 PPQ ticks
   }
   toJSON() { const { outName, clockOut, lanes, gateMs, inName, follow } = this; return { outName, clockOut, lanes, gateMs, inName, follow }; }
   fromJSON(o) {

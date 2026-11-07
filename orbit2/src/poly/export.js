@@ -1,6 +1,7 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
 import { Machine, BAR_TICKS } from './lanes.js';
+import { KITS } from './kits.js';
 import { writeMidi } from '../punch/smf.js';
 
 /** Velocity of a hit: a 'vel' lock wins, an accent adds on top. */
@@ -42,9 +43,14 @@ export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = '
 const b64u = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCharCode(b); return btoa(s).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 const unb64u = (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 async function pipe(bytes, stream) { const out = new Response(new Blob([bytes]).stream().pipeThrough(stream)); return new Uint8Array(await out.arrayBuffer()); }
-/** Samples live in this browser only, so a shared lane that used one falls back to its kit voice. */
+/** Samples live in this browser only, so a shared lane that used one falls back to the drum it replaced (its voice and
+ *  decay / snap / color, kept by Lane.loadSample), or to the Common kit's voice for that lane. */
 export async function encodeShare(machineJSON, tempo) {
-  const o = JSON.parse(JSON.stringify(machineJSON)); for (const l of o.lanes || []) if (l.voice === 'sample') { l.voice = l.name; l.sample = null; }
+  const o = JSON.parse(JSON.stringify(machineJSON));
+  (o.lanes || []).forEach((l, i) => {
+    if (l.voice === 'sample') { const d = l.sample?.drum; l.voice = d?.voice || KITS.common.lanes[i % 4].voice; if (d) for (const k of ['decay', 'snap', 'color']) if (d[k] != null) l.sound[k] = d[k]; }
+    l.sample = null;
+  });
   return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o })), new CompressionStream('deflate-raw')));
 }
 export async function decodeShare(str) {

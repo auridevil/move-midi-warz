@@ -1,7 +1,8 @@
 // Master tempo shared by every page (and every open tab): last tempo set anywhere wins.
 const KEY = 'midi-warz.orbit2.tempo';
 const listeners = new Set();
-export const clampTempo = (bpm) => Math.min(240, Math.max(40, Math.round(bpm)));
+// 0.01 bpm: a tempo followed from a MIDI clock (127.5) is shared as it is; knobs and taps round to whole bpm themselves
+export const clampTempo = (bpm) => Math.min(240, Math.max(40, Math.round(bpm * 100) / 100));
 export function getTempo(fallback = 120) { try { const v = +localStorage.getItem(KEY); return v ? clampTempo(v) : fallback; } catch { return fallback; } }
 export function setTempo(bpm, source = 'local') {
   const v = clampTempo(bpm); try { localStorage.setItem(KEY, String(v)); } catch {}

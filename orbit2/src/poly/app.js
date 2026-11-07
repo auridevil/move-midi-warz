@@ -18,7 +18,7 @@ import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount } from '../ui.js';
 import { createScene } from './scene.js';
-import { GROOVES, DEMO_GROOVE, grooveByKey } from './grooves.js';
+import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -32,13 +32,15 @@ let firstVisit = true; try { firstVisit = localStorage.getItem(SAVE) == null; } 
 let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null')); } catch { m = new Machine(); }
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
-// every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step)
-const hist = new History(); let restoring = false;
-let spoken = null, announceTimer = 0;   // screen-reader announcements (announceChanges, next to readout)
-// mute and solo are performance moves, not edits: they are left out of the undo snapshots (and kept as they are when
-// undo / redo restores one), so Undo after a mute undoes your last edit
-const histJson = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo' ? undefined : v));
-const save = () => { if (!restoring) hist.commit(histJson()); try { localStorage.setItem(SAVE, JSON.stringify(m)); } catch {} };
+// every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step).
+// Mute, solo and the selected lane are performance moves, not edits: they are left out of the step key (perfKey), so
+// they never make an undo step and Undo keeps them as they are; undoing a load (setup, slot, link, init, groove, a
+// randomize roll: loadNext) brings back the pattern you had exactly, its own mutes included, and the tempo you had
+// when the load set one (loadNext = { tempo, was }).
+const hist = new History(); let restoring = false, loadNext = false;
+let spoken = null, announceTimer = 0, hush = false;   // screen-reader announcements (announceChanges, next to readout)
+const perfKey = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo' || k === 'selected' ? undefined : v));
+const save = () => { const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; try { localStorage.setItem(SAVE, full); } catch {} };
 const dice = new Dice(); let fill = false;
 const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one last loaded / saved
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
@@ -129,7 +131,10 @@ function playSample(c, lane, p, time) {
   const src = new T.ToneBufferSource(buf), env = new T.Gain(0).connect(c.choke); src.connect(env);
   env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + attack); env.gain.setValueAtTime(p.vel, time + hold); env.gain.linearRampToValueAtTime(0, time + play);
   src.playbackRate.setValueAtTime(rate * Math.pow(2, (p.color - 0.5) * 2), time); src.playbackRate.exponentialRampToValueAtTime(rate, time + 0.06);
-  src.onended = () => { try { src.dispose(); env.dispose(); } catch {} }; src.start(time, offset); src.stop(time + play + 0.02);
+  // an offline render (WAV, stems) runs its clock, onended included, before it renders: disposing there silenced the
+  // sample in every export. The offline context is thrown away whole afterwards anyway.
+  if (!T.getContext().isOffline) src.onended = () => { try { src.dispose(); env.dispose(); } catch {} };
+  src.start(time, offset); src.stop(time + play + 0.02);
 }
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
 function applySound(li, k = kit) {
@@ -168,6 +173,8 @@ const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
+/** The master tick being heard right now (fractional): the scheduler runs ahead of the speakers, which lag a little. */
+const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onTick(time), `${T.getTransport().PPQ / PPQ}i`); loop.start(0); }
 function onTick(time) {
   if (resetPending) { tick = 0; resetPending = false; }
@@ -187,29 +194,29 @@ function onTick(time) {
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; paintLeds(); }, time);
   });
 }
-function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.value = d; }   // dotted eighth
+// the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
+function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
-  await wake(); playing = !playing; $('btn-play').classList.remove('pulse');
-  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
+  // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
+  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
 
 // ---- tempo ----
-/** exact: keep 0.01 bpm (an external clock at 127.5 is 127.5); knobs, taps and other pages use whole bpm. */
-function applyTempo(bpm, publish = true, { exact = false } = {}) {
+/** exact: keep 0.01 bpm (an external clock at 127.5 is 127.5); knobs and taps use whole bpm. transport: false when
+ *  the phase lock is steering the transport itself: only our grid maths, delays and display follow. */
+function applyTempo(bpm, publish = true, { exact = false, transport = true } = {}) {
   const was = tempo, c = Math.min(240, Math.max(40, bpm)); tempo = exact ? Math.round(c * 100) / 100 : Math.round(c);
-  if (publish) setTempo(tempo, 'poly'); if (tempo !== was) retime();
+  if (publish) setTempo(tempo, 'poly'); if (tempo !== was) retime({ transport });
   sliders.tempo?.set(tempo); readout();
 }
-/** MIDI clock in (already smoothed, called only on a real change). In phase lock while playing the clock-tick trim
- *  drives the transport, so only our tempo (grid maths, delays, display) follows: a retime would fight the lock. */
-function followClockTempo(bpm) {
-  if (pmidi.follow === 'lock' && playing) { const was = tempo; tempo = Math.round(Math.min(240, Math.max(40, bpm)) * 100) / 100; if (tempo !== was) retime({ transport: false }); sliders.tempo?.set(tempo); readout(); }
-  else applyTempo(bpm, true, { exact: true });
-}
-onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false); });
+/** MIDI clock in (already smoothed, called only on a real change). In phase lock while playing, the clock-tick trim
+ *  drives the transport: a retime would fight it. */
+const followClockTempo = (bpm) => applyTempo(bpm, true, { exact: true, transport: !(pmidi.follow === 'lock' && playing) });
+onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false, { exact: true }); });
 const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
 
 // ---- lane params (UI + Move) ----
@@ -218,7 +225,7 @@ const INFO = {
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
-  swing: 'Delays every second step (counted from the downbeat, so odd lengths never swing a downbeat) by this fraction of a step. 0 = straight, ~20% = loose groove, 33% = triplet swing, 50% = dotted-16th feel.',
+  swing: 'Delays every second step by this fraction of a step. The steps are counted on the master clock, not the loop, so on an odd length the swung steps move through the loop and come back every 2 loops; at ×3, ×3/2 and ×¾ the count restarts on every step that falls on the beat, so beats stay put. 0 = straight, ~20% = loose groove, 33% = triplet swing (2:1), 50% = dotted swing (3:1).',
   prob: 'Chance that a programmed hit actually plays. 100% = always; 60% = the pattern breathes differently every loop.',
   tune: 'Pitch of the voice, about ±1 octave (less for some voices).',
   decay: 'Length of the sound, from a tick (40 ms) to a long tail (1.2 s). Kits scale it per voice.',
@@ -269,12 +276,14 @@ function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
   for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
   const ge = $('global-sliders'); ge.innerHTML = '';
-  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) }); ge.appendChild(sliders.tempo.el);
+  // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
+  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) }); ge.appendChild(sliders.tempo.el);
   sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
   for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
-  const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => setVoice(m.selected, vs.value);
-  const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => applyKit(ks.value);
+  // picked with the mouse, a select lets go of the focus, so Space plays again instead of reopening it (see controlOwnsKey)
+  const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
+  const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => { applyKit(ks.value); letGoAfterPointer(ks); };
   const se = $('sound-sliders'); se.innerHTML = '';
   for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
@@ -323,15 +332,18 @@ const LOCK_UI = {
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); }
+/** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
+ *  prob lock can change the cycle). */
+function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); readout(); }
 function buildLockGauges() {
   const el = $('lock-gauges'); el.innerHTML = '';
   for (const k of LOCK_KEYS) {
     const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
-      onChange: (v) => { if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); renderSteps(); renderLocks(); save(); } });
+      onChange: (v) => { if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); } });
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
-  $('lock-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; renderSteps(); renderLocks(); save(); };
-  const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); renderSteps(); renderLocks(); save(); };
+  $('lock-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; stepEdited(); };
+  const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); stepEdited(); };
   // condition = "every N loops" + which loop (dots), or one of the fill / first specials
   ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
   ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st']], value: null, chips: true,
@@ -353,7 +365,7 @@ function renderTrig(tg) {
   const cond = tg?.cond || 'always', ab = /^(\d):(\d)$/.exec(cond), b = ab ? +ab[2] : cond === 'always' ? 1 : null, a = ab ? +ab[1] : 1;
   ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade);
   const dots = $('cond-dots'); dots.innerHTML = ''; $('cond-dots-wrap').hidden = !(b > 1);
-  for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); renderSteps(); renderLocks(); save(); }; dots.appendChild(d); }
+  for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); stepEdited(); }; dots.appendChild(d); }
   $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays' }[cond];
 }
 function auditionLock() {
@@ -365,11 +377,12 @@ function auditionLock() {
 // Called from the master clock (fromClock): the model and the voices change now, so this tick already plays the new
 // state, but the DOM rebuild, JSON, localStorage and undo commit wait until the clock callback has returned.
 // A microtask, not Draw.schedule: Draw drops callbacks that come late (hidden tab), and these must not be lost.
-const offClock = (fromClock, fn) => fromClock ? queueMicrotask(fn) : fn();
+// What the machine changes on its own is not announced to screen readers (hush): only what you touch is.
+const offClock = (fromClock, fn) => fromClock ? queueMicrotask(() => { hush = true; try { fn(); } finally { hush = false; } }) : fn();
 function loadSlot(i, fromClock = false) {
   const sel = m.selected; m.assign(bank.get(i)); m.selected = sel;
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); });
-  evoSnap = bank.get(i); evoCount = 0; lockStep = -1; offClock(fromClock, () => { sync(); renderSlots(); renderLanesEvolve(); });
+  evoSnap = bank.get(i); evoCount = 0; lockStep = -1; offClock(fromClock, () => { loadNext = true; sync(); renderSlots(); renderLanesEvolve(); });
 }
 function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
@@ -394,16 +407,14 @@ function buildSlotsUI() {
 }
 
 // ---- live record: armed + playing, pads (or keys) play and write the nearest step ----
-function liveHit(li, col, velocity = 100) {
+/** velocity null = a computer key (no velocity: the lane's default level); accent: pads by the "accent above" knob, keys by Shift. */
+function liveHit(li, col, velocity = 100, accent = velocity != null && velocity >= rec.accentVel) {
   const lane = m.lanes[li]; if (!awake) { wake(); return; }
-  const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = Math.max(0.25, Math.min(1, velocity / 127)), accent = velocity >= rec.accentVel;
-  hitSound(lane, T.immediate(), accent, tune != null ? { tune } : null, accent ? 1 : v); pmidi.note(li, accent ? 1 : v, performance.now());
+  const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = velocity == null ? null : Math.max(0.25, Math.min(1, velocity / 127));
+  hitSound(lane, T.immediate(), accent, tune != null ? { tune } : null, accent ? 1 : v); pmidi.note(li, accent ? 1 : v ?? hitVel(false, null), performance.now());
   if (!rec.armed || !playing) { m.select(li); sync(); return; }
-  // where on the master clock was this hit, as heard? (the scheduler runs ahead; the speakers lag a little)
-  const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0);
-  const q = lane.quantize(clockRef.tick + (heard - clockRef.time) / tickSec(), rec.quant), idx = lane.stepIndex(q.index);
-  // the pad's velocity is kept as a vel lock (an accent is its own flag and plays at full), so ghost notes stay ghosts
-  lane.hits[idx] = true; if (!accent) lane.setLock(idx, 'vel', v); else { lane.accents[idx] = true; if (lane.locks[idx]) { delete lane.locks[idx].vel; if (!Object.keys(lane.locks[idx]).length) lane.locks[idx] = null; } } if (tune != null) lane.setLock(idx, 'tune', tune);
+  const q = lane.quantize(heardTick(), rec.quant), idx = lane.stepIndex(q.index);
+  lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
   if (q.step * lane.stepTicks() > clockRef.tick) skip.add(`${li}:${q.step}`);   // that step hasn't been scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
@@ -419,34 +430,54 @@ function buildRecUI() {
 let lastEvolve = '';
 /** Clearing or randomizing is a fresh start: evolve stops (it would mutate the new pattern away from you). */
 function clearLane() { if (evo.on) setEvolve(false); m.lane.clear(); sync(); }
+/**
+ * Every load (init, a groove, a link, a setup) goes through here: the pattern with its voices and sounds, one undo
+ * step of its own, and its tempo when it brings one (undo puts the tempo you had back too). Once the beat is
+ * replaced, the welcome-back bar has nothing left to offer.
+ */
+function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
+  if (evo.on) setEvolve(false); const was = tempo;
+  m.assign(json); m.selected = Math.min(selected, m.lanes.length - 1); if (bpm) applyTempo(bpm, true, { exact });
+  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; hideWelcome();
+  loadNext = bpm ? { tempo, was } : true; sync(); renderLanesEvolve();
+}
 /** Init: every lane empty, length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
-  if (evo.on) setEvolve(false); const n = new Machine();
-  n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(RATIOS.indexOf(1)); }); n.lanes[0].hits[0] = true;
-  const sel = 0; m.assign(n.toJSON()); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
+  const n = new Machine(); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(RATIOS.indexOf(1)); }); n.lanes[0].hits[0] = true;
+  loadMachine(n.toJSON());
 }
-/** Load a starter groove (grooves.js): pattern + kit + swing in one undoable step, and its tempo (tempo is global). */
+/** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
+ *  one-liner (the chips' tooltips never show on touch). */
 function loadGroove(key) {
-  const g = grooveByKey(key); if (!g) return; if (evo.on) setEvolve(false);
-  m.assign(g.m); m.selected = 0; applyTempo(g.tempo, true);
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
+  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
 }
-/** Randomize: with locked dice a fresh seed is rolled and shown, so a groove you like can be re-made from its number. */
-/** Musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click, long-press, 'wild'). */
+/**
+ * Randomize: musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click,
+ * long-press, 'wild'). Every roll is its own undo step. With locked dice a fresh seed is rolled and shown, so a groove
+ * you like can be re-made from its number ("pattern from seed").
+ */
 function randomizeAll(wild = false) {
-  if (evo.on) setEvolve(false); if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); }
-  const rng = dice.stream(0), name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name; sync();
-  toast(`${name}${dice.locked ? ` · dice ${dice.seed}` : ''}`);
+  if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); }
+  rollPattern(wild);
 }
-let toastTimer = 0;
-function toast(txt) { const t = $('toast'); t.textContent = txt; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { t.hidden = true; }, 2200); }
+/** A roll, its own undo step, named in a toast. seeded: from the dice seed's first stream (also with free dice, for
+ *  "pattern from seed"), so a seed always makes the same groove. */
+function rollPattern(wild, seeded = dice.locked) {
+  if (evo.on) setEvolve(false);
+  const rng = seeded ? Dice.take(dice.seed).stream(0) : Math.random, name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name;
+  loadNext = true; hideWelcome(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`);
+}
 // ---- undo / redo ----
-function applyState(json) {
-  if (!json) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
-  m.assign(JSON.parse(json)); m.selected = Math.min(sel, m.lanes.length - 1); m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
+/** Put back an undo / redo step. Live mutes and solos stay as they are (keepPerf), unless the step crosses a load;
+ *  a load that set the tempo takes its tempo with it. */
+function applyState(step) {
+  if (!step) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
+  m.assign(JSON.parse(step.json)); m.selected = Math.min(sel, m.lanes.length - 1);
+  if (step.keepPerf) m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
+  if (step.tempo != null) applyTempo(step.tempo, true, { exact: true });
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
 }
-const undo = () => applyState(hist.undo()), redo = () => applyState(hist.redo());
+const undo = () => applyState(hist.undo({ tempo })), redo = () => applyState(hist.redo());
 function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
@@ -487,7 +518,7 @@ function buildMidiUI() {
   ui.midiOut = mount('midi-out', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setOutput(v); saveSettings(); renderMidi(); } }));
   ui.midiIn = mount('midi-in', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setInput(v); saveSettings(); renderMidi(); } }));
   ui.clockOut = mount('midi-clock-out', toggleChip({ label: 'send clock + start/stop', on: pmidi.clockOut, title: INFO['clock out'], onChange: (v) => { pmidi.clockOut = v; saveSettings(); } }));
-  ui.follow = mount('midi-follow', segmented({ options: [['off', 'off'], ['tempo', 'tempo'], ['transport', '+ start/stop'], ['lock', '+ phase lock', 'tempo, start/stop and beat position']], value: pmidi.follow, onChange: (v) => { pmidi.follow = v; saveSettings(); renderMidi(); } }));
+  ui.follow = mount('midi-follow', segmented({ options: [['off', 'off'], ['tempo', 'tempo'], ['transport', '+ start/stop'], ['lock', '+ phase lock', 'tempo, start/stop and beat position']], value: pmidi.follow, onChange: (v) => { pmidi.setFollow(v); saveSettings(); renderMidi(); } }));
   // note + channel per lane as gauges (note names in Live's convention, C3 = 60), then the gate
   const NOTE = (p) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][p % 12] + (Math.floor(p / 12) - 2), g = $('midi-lanes');
   m.lanes.forEach((_, i) => {
@@ -500,7 +531,10 @@ function buildMidiUI() {
     tick: (ext, t) => {
       if (!playing) return; const raw = T.getContext().rawContext, audioT = raw.currentTime + (t - performance.now()) / 1000;
       const { jump, trim } = phaseCorrection(clockRef.tick + (audioT - clockRef.time) / tickSec() - ext);
-      if (jump) tick = Math.max(0, tick + jump); T.getTransport().bpm.value = (pmidi.extBpm || tempo) * trim; stress.drift = jump ? 'snap' : `${((trim - 1) * 100).toFixed(1)}%`;
+      // a snap renumbers the ticks still to come; the reference moves with them, or every clock tick that arrives
+      // before the next scheduler batch would apply the same snap again (and the clock would swing further and further)
+      if (jump) { const to = Math.max(0, tick + jump); clockRef = { ...clockRef, tick: clockRef.tick + to - tick }; tick = to; }
+      T.getTransport().bpm.value = (pmidi.extBpm || tempo) * trim; stress.drift = jump ? 'snap' : `${((trim - 1) * 100).toFixed(1)}%`;
     } };
   renderMidi();
 }
@@ -515,8 +549,8 @@ function buildMixUI() {
 async function assignSample(li, rec) {
   if (!rec?.channels?.length) return; await wake(); const id = `orbits-${Date.now().toString(36)}-${li}`;
   await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, T.getContext().rawContext));
-  // decay at the top = the whole sample: a fresh slice must play to its end, not inherit the drum's short decay
-  const lane = m.lanes[li]; lane.sample = { id, name: rec.name || 'sample' }; lane.setVoice('sample'); lane.setSound('decay', 1); buildVoice(li); m.select(li); sync();
+  // a fresh slice plays whole from its first sample (loadSample), not with the drum's short decay or skip-in
+  const lane = m.lanes[li]; lane.loadSample({ id, name: rec.name || 'sample' }); buildVoice(li); m.select(li); sync();
   if (!playing) hitSound(lane, T.now(), false);
 }
 async function sampleFromFile(li, file) {
@@ -570,8 +604,9 @@ function buildDiceUI() {
   $('btn-dice').onclick = () => { dice.locked = !dice.locked; saveSettings(); renderDice(); readout(); };
   $('dice-seed').onchange = (e) => { dice.seed = Math.max(1, +e.target.value | 0); saveSettings(); readout(); };
   $('dice-roll').onclick = () => { dice.reroll(); saveSettings(); renderDice(); readout(); };
-  $('dice-make').onclick = () => { const was = dice.locked; dice.locked = true; m.randomize(dice.stream(0)); dice.locked = was; sync(); };
-  sliders.diceRepeat = makeGauge({ label: 'repeat · loops', min: 1, max: 16, value: dice.repeat, title: INFO['dice repeat'], color: 'var(--signal-cyan)', onChange: (v) => { dice.repeat = v; saveSettings(); } }); $('dice-gauges').appendChild(sliders.diceRepeat.el);
+  // the groove randomize rolls from this seed (the toast's "dice N" makes it again); Shift+click: the wild roll
+  $('dice-make').onclick = (e) => rollPattern(e.shiftKey, true);
+  sliders.diceRepeat = makeGauge({ label: 'repeat · loops', min: 1, max: 16, value: dice.repeat, title: INFO['dice repeat'], color: 'var(--signal-cyan)', onChange: (v) => { dice.repeat = v; saveSettings(); readout(); } }); $('dice-gauges').appendChild(sliders.diceRepeat.el);
   renderDice();
 }
 
@@ -631,10 +666,12 @@ const newRoll = () => 1 + Math.floor(Math.random() * 99999);
 let expRoll = newRoll();
 const exportDice = () => dice.locked ? dice : Dice.take(expRoll);
 const rollNote = () => dice.locked ? `dice ${dice.seed}` : `roll ${expRoll}`;
+// The address bar keeps no #p= link: on a reload the link would win over the beat you made since. Only when the
+// clipboard is blocked does the link go there, as the one way left to copy it.
 async function shareLink() {
   const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
-  history.replaceState(null, '', `#p=${code}`);
-  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; } catch { $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; }
+  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; toast('link copied'); }
+  catch { history.replaceState(null, '', `#p=${code}`); $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; }
 }
 async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
@@ -649,10 +686,15 @@ function exportMidi() {
   const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars });
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
-async function loadShared() {
-  const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return;
-  try { const o = await decodeShare(mm[1]); m.assign(o.m); if (o.tempo) applyTempo(o.tempo); m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); sync(); renderLanesEvolve(); $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; }
-  catch (e) { $('exp-status').textContent = `link: ${e.message}`; }
+/** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
+ *  history starts at the link and play pulses, like the demo. */
+async function loadShared({ first = false } = {}) {
+  const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return; history.replaceState(null, '', location.pathname + location.search);
+  try {
+    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true });
+    if (first) { hist.restart(); $('btn-play').classList.add('pulse'); }
+    $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; toast(first ? 'a beat from a link · press play' : 'loaded from a link · undo brings your beat back', 4000);
+  } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`); }
 }
 function buildExportUI() {
   ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'whole bars that hold whole polyrhythm cycles (max 64 bars)']], value: 4 }));
@@ -660,7 +702,7 @@ function buildExportUI() {
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   $('exp-roll').onclick = () => { expRoll = newRoll(); $('exp-status').textContent = dice.locked ? `dice are locked: exports use dice ${dice.seed} (re-roll in the dice drawer)` : `roll ${expRoll}: the next WAV, stems and MIDI share these hits`; };
-  addEventListener('hashchange', loadShared);
+  addEventListener('hashchange', () => loadShared());
 }
 
 // ---- undo / redo / fill buttons ----
@@ -744,28 +786,46 @@ async function exportStems() {
   download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, { bpm: tempo, beats: r.bars * 4 }), `${base}.zip`, 'application/zip');
   $('exp-status').textContent = `stems: 4 lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
-buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); hist.commit(histJson());
-// a shared link wins; a first visit gets the demo groove and a pulsing play button; a returning visit keeps the
-// pattern it left and offers "start fresh" (init, undoable)
-if (/#p=/.test(location.hash)) loadShared();
-else if (firstVisit) { loadGroove(DEMO_GROOVE); $('btn-play').classList.add('pulse'); }
+// ---- welcome back, toasts ----
+// When the welcome bar goes, everything under it moves up: clicks are swallowed for a moment, so the second click of
+// a double-click (or a double tap) can't land on whatever moved under the pointer (clear lane, jam, play).
+let clickGuard = 0, toastTimer = 0;
+for (const ev of ['pointerdown', 'mousedown', 'click', 'dblclick']) addEventListener(ev, (e) => { if (performance.now() < clickGuard) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
+/** Close the welcome bar (once the beat plays, loads or is dismissed); focus that was in it goes to play. */
+function hideWelcome() {
+  const w = $('welcome'); if (w.hidden) return; const had = w.contains(document.activeElement);
+  w.hidden = true; clickGuard = performance.now() + 450; if (had) $('btn-play').focus({ preventScroll: true });
+}
+/** One short line at the bottom. A polite live region that stays in the page (only its text changes, so screen
+ *  readers announce it); cleared once it has faded. */
+function toast(txt, ms = 2400) {
+  const t = $('toast'); t.textContent = txt; t.classList.add('show'); clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = setTimeout(() => { t.textContent = ''; }, 300); }, ms);
+}
+buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
+// a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
+// hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
+const boot = bootMode({ saved: !firstVisit, hash: location.hash });
+if (boot === 'link') loadShared({ first: firstVisit });
+else if (boot === 'first') { loadGroove(DEMO_GROOVE); hist.restart(); $('btn-play').classList.add('pulse'); }
 else $('welcome').hidden = false;
+spoken = null; clearTimeout(announceTimer);   // the page just opened: nothing to announce yet (readout() at the end starts it)
 $('btn-init').onclick = initPattern;
-$('wb-keep').onclick = $('wb-close').onclick = () => { $('welcome').hidden = true; };
-$('wb-fresh').onclick = () => { $('welcome').hidden = true; initPattern(); };
-// starter grooves (grooves.js): one chip each, the description as tooltip; loading one is undoable like a setup
+$('wb-keep').onclick = () => { hideWelcome(); if (!playing) togglePlay(); };
+$('wb-close').onclick = hideWelcome;
+$('wb-fresh').onclick = () => { initPattern(); toast('fresh start · undo brings your beat back'); };
+// starter grooves (grooves.js): one chip each, the description as tooltip and in the toast; loading one is undoable
 for (const g of GROOVES) {
   const b = document.createElement('button'); b.type = 'button'; b.id = `groove-${g.key}`; b.textContent = g.name; b.title = `${g.desc} (${g.tempo} bpm, undoable)`;
-  b.onclick = () => { loadGroove(g.key); flash(b.id, `${g.name} ✓`); }; $('grooves').appendChild(b);
+  b.onclick = () => loadGroove(g.key); $('grooves').appendChild(b);
 }
 // ---- library: named setups in localStorage (patterns + voices + kit + sounds + tempo + volume + dice) ----
 const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON() });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
 function loadSetup(id) {
-  const e = lib.get(id); if (!e?.m) return; if (evo.on) setEvolve(false);
-  const sel = m.selected; m.assign(e.m); m.selected = Math.min(sel, m.lanes.length - 1); if (e.tempo) applyTempo(e.tempo);
+  const e = lib.get(id); if (!e?.m) return;
   if (e.vol != null) { vol = e.vol; kit?.master.gain.rampTo(vol, 0.05); } if (e.dice) { dice.fromJSON(e.dice); saveSettings(); renderDice(); }
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; libCurrent = id; sync(); renderLanesEvolve(); renderLib(); flash('btn-load', `“${e.name}” ✓`);
+  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); renderLib(); flash('btn-load', `“${e.name}” ✓`);
 }
 function saveSetup(name) {
   const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }
@@ -779,7 +839,7 @@ function renderLib() {
   for (const e of items) {
     const row = document.createElement('div'); row.className = `lib-row${e.id === libCurrent ? ' cur' : ''}`;
     const name = document.createElement('button'); name.type = 'button'; name.className = 'lib-name'; name.textContent = e.name; name.title = 'load this setup (undoable)'; name.onclick = () => loadSetup(e.id);
-    const voices = (e.m?.lanes || []).map(l => l.voice === 'sample' ? '♪' : (VOICES[l.voice]?.label || l.voice)).join(' · ');
+    const voices = e.m?.lanes ? Machine.from(e.m).lanes.map(l => l.voice === 'sample' ? '♪' : voiceLabel(l)).join(' · ') : '';   // as it loads (old voices migrated)
     const meta = document.createElement('span'); meta.className = 'lib-meta'; meta.textContent = `${e.tempo || '?'} bpm · ${voices} · ${ago(e.t)}`;
     const acts = document.createElement('span'); acts.className = 'lib-acts';
     const btn = (txt, title, fn) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'small'; b.textContent = txt; b.title = title; b.onclick = fn; acts.appendChild(b); return b; };
@@ -837,12 +897,12 @@ move.addEventListener('encoder', (e) => {
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
     for (const [i, h] of held) { h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
-    auditionLock(); renderSteps(); renderLocks(); save(); paintLeds(); return;
+    auditionLock(); stepEdited(); return;
   }
   if (held.size && index < LOCK_KEYS.length) {   // hold step(s) + knob 1–7 = lock tune · prob · vel · decay · tone · snap · color on those steps
     const k = LOCK_KEYS[index], lane = m.lane, span = k === 'tune' ? 0.02 : 0.02;
     for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); lockStep = i; }
-    auditionLock(); renderSteps(); renderLocks(); save(); paintLeds(); return;
+    auditionLock(); stepEdited(); return;
   }
   if (shift) { const k = SOUND_KEYS[index]; m.lane.setSound(k, m.lane.sound[k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
   const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) applyTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
@@ -857,7 +917,7 @@ move.addEventListener('button', (e) => {
   if (name === 'sampling' && pressed) { toggleJam(); return; }
   if (!pressed) return;
   const tr = /^track(\d)$/.exec(name); if (tr) { m.select(4 - +tr[1]); lockStep = -1; sync(); return; }   // track 1 is the top button = top pad row = lane 3
-  if (name === 'delete' && held.size) { for (const [i, h] of held) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(i)); m.lane.trigs[m.lane.stepIndex(i)] = null; } renderSteps(); renderLocks(); save(); paintLeds(); return; }
+  if (name === 'delete' && held.size) { for (const [i, h] of held) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(i)); m.lane.trigs[m.lane.stepIndex(i)] = null; } stepEdited(); return; }
   if (name === 'delete') { clearLane(); return; }   // Delete alone = clear the lane (undoable)
   if (name === 'play') togglePlay(); if (name === 'mute') { if (shift) toggleSolo(); else { m.lane.muted = !m.lane.muted; sync(); } } if (name === 'undo') { if (shift) redo(); else undo(); }
   if (name === 'capture') { if (shift) setEvolve(!evo.on); else randomizeAll(); }
@@ -874,27 +934,34 @@ $('btn-wild').onclick = () => randomizeAll(true);
 $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
 window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
-// A focused control owns its keys: Space / Enter activate a focused button or <summary>, text fields get every key,
-// knobs get theirs. Letter hotkeys still work after a mouse click / tap on a button (focused by the pointer, not by Tab;
-// :focus-visible can't tell, Chrome turns it on at the first key press).
+// Who owns a key press? A control owns it only when the keyboard put the focus there (Tab, arrows): then Space / Enter
+// press that control and letters don't reach the pads. Focus left behind by a click or a tap (or kept by a knob drag,
+// which doesn't take focus) counts for nothing: Space plays, letters toggle steps, as from the page. Text fields own
+// every key; a knob only its arrows; modifier shortcuts (Alt+1–4, Cmd/Ctrl+Z) work everywhere but in text fields.
+// (:focus-visible can't tell the two apart: Chrome turns it on at the first key press.)
 const TEXT_SEL = 'input, select, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], [role=slider], .gauge';
-let pointerFocus = null;
-addEventListener('pointerdown', (e) => { pointerFocus = e.target instanceof Element ? e.target.closest(CONTROL_SEL) : null; }, true);
-addEventListener('keydown', (e) => { if (e.key === 'Tab') pointerFocus = null; }, true);
+const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']), keyFocused = new WeakSet();
+let lastInput = 'pointer';
+addEventListener('pointerdown', () => { lastInput = 'pointer'; }, true);
+addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) lastInput = 'key'; }, true);   // the keys that move focus
+addEventListener('focusin', (e) => { if (lastInput === 'key') keyFocused.add(e.target); else keyFocused.delete(e.target); }, true);
 function controlOwnsKey(e) {
   const el = e.target instanceof Element ? e.target : null; if (!el || el === document.body || el.id === 'cv') return false;
-  if (el.closest(TEXT_SEL)) return true; const c = el.closest(CONTROL_SEL); if (!c) return false;
-  return e.key === ' ' || e.key === 'Enter' || c.matches('[role=slider], .gauge') || c !== pointerFocus;
+  if (el.closest(TEXT_SEL)) return true; if (e.altKey || e.metaKey || e.ctrlKey) return false;
+  const c = el.closest(CONTROL_SEL); if (!c || !keyFocused.has(el)) return false;
+  return c.matches('[role=slider], .gauge') ? KNOB_KEYS.has(e.key) : true;
 }
+/** A select picked with the mouse gives the focus back to the page (else Space would reopen it, not play). */
+function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return; e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (controlOwnsKey(e)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
   if (e.key === '0') { setFill(true); return; }
-  if (/^[1-4]$/.test(e.key) && e.altKey) { m.select(+e.key - 1); lockStep = -1; sync(); return; }
+  if (e.altKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); m.select(+e.code.slice(5) - 1); lockStep = -1; sync(); return; }   // code, not key: Option+1 types ¡ on a Mac
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
-  const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, e.shiftKey ? 127 : 100);
+  const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, null, e.shiftKey);   // keys have no velocity: Shift = accent
   const lane = m.lanes[row]; if (col >= lane.length) return;
   if (e.shiftKey) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); m.select(row); sync();
 });
@@ -914,7 +981,7 @@ $('btn-disconnect').onclick = () => { move.disconnect(); setPill('Move: disconne
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: clockRef.tick, cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
@@ -935,16 +1002,19 @@ function readout() {
   $('readout').textContent = lines.join('\n'); announceChanges();
 }
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
-// changed, after the knob settles: "length 5", "tempo 124 bpm", or the lane you switched to.
+// you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
+// What the machine does on its own (evolve, slots switching on the clock) is not announced (hush).
 function speakable() {
-  const l = m.lane, o = { lane: `lane ${m.selected + 1} ${voiceLabel(l)}`, tempo: `tempo ${tempo} bpm`, transport: playing ? 'playing' : 'stopped', kit: `kit ${KITS[m.kitKey()]?.name || 'custom'}`, humanize: `humanize ${Math.round(m.humanize * 100)}%`,
+  const l = m.lane, o = { sel: m.selected, lane: `lane ${m.selected + 1} ${voiceLabel(l)}`, tempo: `tempo ${tempo} bpm`, transport: playing ? 'playing' : 'stopped', humanize: `humanize ${Math.round(m.humanize * 100)}%`,
     mute: l.muted ? 'muted' : 'unmuted', solo: l.solo ? 'solo on' : 'solo off', record: rec.armed ? 'record armed' : 'record off', fill: fill ? 'fill on' : 'fill off', evolve: evo.on ? 'evolve on' : 'evolve off' };
   for (const p of PARAMS) o[p.k] = `${p.label} ${p.fmt(p.get(l))}`; for (const k of SOUND_KEYS) o['snd:' + k] = `${k} ${Math.round(l.sound[k] * 100)}`;
+  o.kit = `kit ${KITS[m.kitKey()]?.name || 'custom'}`;   // last: "decay 55, kit custom" says what you touched first
   return o;
 }
 function announceChanges() {
-  const now = speakable(), prev = spoken; spoken = now; if (!prev) return;
-  const changed = now.lane !== prev.lane ? [now.lane] : Object.keys(now).filter(k => now[k] !== prev[k]).map(k => now[k]);
+  const now = speakable(), prev = spoken; spoken = now; if (!prev || hush) return;
+  const picked = now.kit !== prev.kit && m.kitKey();   // a kit picked: its name, not every voice and sound it changed
+  const changed = now.sel !== prev.sel ? [now.lane] : picked ? [now.kit] : Object.keys(now).filter(k => k !== 'sel' && now[k] !== prev[k]).map(k => now[k]);
   if (!changed.length || changed.length > 3) return;   // a whole new pattern (undo, slot) is not one value: stay quiet
   clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = changed.join(', '); }, 300);
 }

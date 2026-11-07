@@ -17,6 +17,9 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 /** Trig conditions per step. 'a:b' = play on loop a of every b; fill = only while Fill is held; first = first loop after Play. */
 export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4', '3:4', '4:4', 'fill', 'not fill', 'first', 'not first'];
 export const MAX_RATCHET = 4;
+/** A sample plays whole, from its first sample: decay at the top, no skip-in (snap) and no pitch swoop (color). */
+const SAMPLE_KEYS = ['decay', 'snap', 'color'], SAMPLE_SOUND = { decay: 1, snap: 0.5, color: 0.5 };
+const pick = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
 /** Does a condition pass on loop `loop` (0 = first loop since Play)? */
 export function condPasses(cond, loop, fill = false) {
   if (!cond || cond === 'always') return true;
@@ -42,7 +45,19 @@ export class Lane {
     this.solo = false; this.choke = -1;             // choke: index of the lane this one cuts off when it hits   // locks: per stored step, {key: value} or null
     this.sound = { ...DEFAULT_SOUND }; this.voice = name;   // voice = engine key from voices.js; defaults to the lane's classic sound
   }
-  setVoice(key) { this.voice = key; return key; }
+  /** Switching between a drum voice and the lane's sample swaps decay / snap / color: each side keeps its own. */
+  setVoice(key) {
+    const was = this.voice, s = this.sample; this.voice = key;
+    if (s && key === 'sample' && was !== 'sample') { s.drum = { voice: was, ...pick(this.sound, SAMPLE_KEYS) }; Object.assign(this.sound, s.own || SAMPLE_SOUND); }
+    else if (s && key !== 'sample' && was === 'sample') { s.own = pick(this.sound, SAMPLE_KEYS); if (s.drum) Object.assign(this.sound, pick(s.drum, SAMPLE_KEYS)); }
+    return key;
+  }
+  /** Put a sample { id, name } on the lane, playing whole. The drum it replaces (voice + decay/snap/color) is kept in
+   *  the sample record: picking a drum voice again brings its settings back, and a share link falls back to it. */
+  loadSample({ id, name }) {
+    const drum = this.voice === 'sample' ? this.sample?.drum : { voice: this.voice, ...pick(this.sound, SAMPLE_KEYS) };
+    this.sample = { id, name, ...(drum ? { drum } : {}) }; this.voice = 'sample'; Object.assign(this.sound, SAMPLE_SOUND);
+  }
   setSound(k, v) { if (!(k in this.sound)) return; this.sound[k] = Math.max(0, Math.min(1, v)); return this.sound[k]; }
   get ratio() { return RATIOS[this.ratioIndex]; }
   setLength(n) { this.length = Math.max(1, Math.min(MAX_STEPS, Math.round(n))); if (this.pos >= this.length) this.pos = 0; return this.length; }
@@ -61,9 +76,29 @@ export class Lane {
   /** Lock a parameter on one stored step (use stepIndex() for a visible position). */
   setLock(i, k, v) { if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const x = clamp(v, k === 'tune' ? -1 : 0, 1); (this.locks[i] ||= {})[k] = x; return x; }
   clearLocks(i) { this.locks[i] = null; }
+  unlock(i, k) { const lk = this.locks[i]; if (!lk) return; delete lk[k]; if (!Object.keys(lk).length) this.locks[i] = null; }
+  /**
+   * Live record onto stored step `i`, keeping the feel: an accent is its own flag (and plays full); any other hit keeps
+   * its velocity as a vel lock (vel null = no velocity, e.g. a computer key: the lane default) and drops an old accent,
+   * so a soft overdub plays soft. tune = the pitch pads' lock.
+   */
+  recordHit(i, { accent = false, vel = null, tune = null } = {}) {
+    this.hits[i] = true; this.accents[i] = accent;
+    if (accent || vel == null) this.unlock(i, 'vel'); else this.setLock(i, 'vel', vel);
+    if (tune != null) this.setLock(i, 'tune', tune);
+  }
   lockAt(i) { return this.locks[this.stepIndex(i)]; }
   /** Master-clock ticks per step: ×1 = 24 (a beat), ×4 = 6, ⅔ = 36. */
   stepTicks() { return Math.round(PPQ / this.ratio); }
+  /** Steps from one step on a beat to the next: 1 (every step is on a beat), 2, 4, or 3 at ×3, ×3/2 and ×¾. */
+  beatGroup() { const st = this.stepTicks(); return lcm(st, PPQ) / st; }
+  /**
+   * Is absolute step `step` (counted from the master tick, not the loop) a swung one? Every second step; when 3 steps
+   * span a beat (or a bar at ×¾) the count restarts on each step that falls on the beat, so the beat is never swung.
+   */
+  swungAt(step) { const g = this.beatGroup(); return (g > 1 && g % 2 ? step % g : step) % 2 === 1; }
+  /** Steps after which the swing pattern repeats: 2, or 3 for the triplet speeds. */
+  swingPeriod() { const g = this.beatGroup(); return g > 1 && g % 2 ? g : 2; }
   /**
    * What this lane does at master tick `tick`, or null when it doesn't step there. The position is derived
    * from the tick, never accumulated, so lanes stay phase-locked through ratio, length and tempo changes.
@@ -74,9 +109,9 @@ export class Lane {
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
     const hit = this.hitAt(i) && !this.muted && !ctx.silenced && condPasses(trig?.cond, loop, ctx.fill) && r < (lock?.prob ?? this.prob);
     this.pos = (i + 1) % this.length;
-    // swing follows the absolute step (counted from the master tick), not the loop index: on a 5-step lane the
-    // index restarts on an odd step every other loop, which would swing the downbeat
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: step % 2 === 1 ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
+    // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
+    // step every other loop, which would swing the downbeat
+    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swungAt(step) ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
   /**
    * Live record: the step a hit at fractional master tick `tickF` belongs to. 'nearest' rounds (early hits
@@ -90,26 +125,24 @@ export class Lane {
   stepIndex(i) { return ((i - this.rotation) % this.length + this.length) % this.length; }
   hitAt(i) { return this.hits[this.stepIndex(i)]; }
   accentAt(i) { return this.accents[this.stepIndex(i)]; }
-  /** Advance one step: returns what happened at the current position, then moves on. */
-  advance(rng = Math.random) {
-    const i = this.pos; const hit = this.hitAt(i) && !this.muted && rng() < this.prob; const accent = hit && this.accentAt(i);
-    const swung = i % 2 === 1 ? this.swing : 0;   // fraction of a step to delay odd steps
-    this.pos = (this.pos + 1) % this.length;
-    return { index: i, hit, accent, swung, lane: this.name };
-  }
   reset() { this.pos = 0; }
   /**
-   * Loops of this lane before it repeats exactly: the lcm of every a:b condition's b on its active steps, × the locked
-   * dice repeat when a roll can change something (probability below 100 % or humanize). 'first'/'fill' are not periodic.
+   * Loops of this lane before it sounds exactly the same again (an empty lane: 1): the lcm of every a:b condition's b
+   * on its active steps; × 2 (or 3) when swing is on and the length is odd (the swung steps move through the loop);
+   * × the locked dice repeat when a roll can change something (probability below 100 % or humanize).
+   * 'first' / 'fill' are not periodic.
    */
   loopsPerCycle({ repeat = 1, humanize = 0 } = {}) {
-    let n = 1;
-    for (let i = 0; i < this.length; i++) { const ab = this.hits[i] && /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
+    let n = 1, any = false;
+    for (let i = 0; i < this.length; i++) { if (!this.hits[i]) continue; any = true; const ab = /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
+    if (!any) return 1;
+    if (this.swing > 0) n = lcm(n, lcm(this.length, this.swingPeriod()) / this.length);
     const rolls = humanize > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1);
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: o.hits, accents: o.accents, rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample || null; return l; }
+  // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; return l; }
 }
 
 export class Machine {
@@ -182,7 +215,7 @@ export class Machine {
   }
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit }; }
   static from(o) {
-    const m = new Machine(); if (o?.lanes) m.lanes = o.lanes.map(Lane.from); m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0; m.kit = o?.kit;
+    const m = new Machine(); if (o?.lanes) { m.lanes = o.lanes.map(Lane.from); m.kit = o.kit; } m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0;
     // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample that is
     // gone: give that lane the Common kit's voice instead of a silent fallback to the kick
     m.lanes.forEach((l, i) => { if (l.voice === 'sample' ? !l.sample : !VOICES[l.voice]) l.voice = KITS.common.lanes[i % 4].voice; });
@@ -196,7 +229,15 @@ const one = (rng, a) => a[Math.floor(rng() * a.length)], some = (rng, a, p) => a
  * Groove families for musical randomize. build(rng) → one spec per lane (kick, snare, hat, perc):
  * { len, ratio, hits: [stored steps] or k: euclid fill, acc, rot, swing }. lengths = the lane lengths a family may use
  * (tests check every roll against them). The kick never rotates and always has step 1.
+ * Swing moves every second step of a lane's own grid, so a family swings on one grid only: the sixteenths, every ×4
+ * lane by the same amount (×2 lanes then play straight eighths, which that grid doesn't move). Tresillo and clave are
+ * straight. A half-time snare (on 3) never lands on a kick. Tests check every roll for flams.
  */
+/** Kick on the beats (or 1 and 3), backbeat on 2 and 4 or half time on 3, never both on 3. */
+const beatKickSnare = (rng, pFull, pBack) => {
+  const kick = rng() < pFull ? [0, 1, 2, 3] : [0, 2], back = rng() < pBack;
+  return [{ len: 4, ratio: 1, hits: back ? kick : kick.filter(i => i !== 2), acc: [0] }, { len: 4, ratio: 1, hits: back ? [1, 3] : [2], acc: [1, 2, 3] }];
+};
 export const MUSICAL_FAMILIES = [
   { key: 'tresillo', name: 'tresillo over four', lengths: [[8, 16], [16], [4, 8, 16], [8, 16]],
     build: (rng) => {
@@ -204,21 +245,19 @@ export const MUSICAL_FAMILIES = [
       return [
         { len: long ? 16 : 8, ratio: 4, hits: long ? [0, 3, 6, 8, 11, ...some(rng, [14], 0.5)] : [0, 3, 6], acc: [0] },   // 3+3+2
         { len: 16, ratio: 4, hits: rng() < 0.7 ? [4, 12] : [8], acc: [4, 8, 12] },
-        one(rng, [{ len: 8, ratio: 2, k: 8, acc: [0, 2, 4, 6], swing: one(rng, [0, 0.1, 0.2]) }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]), swing: one(rng, [0, 0.1]) }, { len: 4, ratio: 2, hits: [1, 3] }]),
+        one(rng, [{ len: 8, ratio: 2, k: 8, acc: [0, 2, 4, 6] }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]) }, { len: 4, ratio: 2, hits: [1, 3] }]),
         { len: one(rng, [8, 16]), ratio: 4, k: 3, rot: one(rng, [2, 4, 5]) },    // the tresillo answered on the other lane
       ];
     } },
   { key: 'clave32', name: '3-2 clave', lengths: [[4], [4], [2, 8, 16], [16]],
     build: (rng) => [
-      { len: 4, ratio: 1, hits: rng() < 0.6 ? [0, 1, 2, 3] : [0, 2], acc: [0] },
-      { len: 4, ratio: 1, hits: rng() < 0.5 ? [1, 3] : [2], acc: [1, 2, 3] },
-      one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [6, 8, 10]), rot: one(rng, [0, 1, 2]), swing: one(rng, [0, 0.12]) }, { len: 8, ratio: 2, k: 8, acc: [1, 3, 5, 7] }]),
+      ...beatKickSnare(rng, 0.6, 0.5),
+      one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [6, 8, 10]), rot: one(rng, [0, 1, 2]) }, { len: 8, ratio: 2, k: 8, acc: [1, 3, 5, 7] }]),
       { len: 16, ratio: one(rng, [2, 4]), hits: [0, 3, 6, 10, 12], acc: [0] },   // son clave 3-2: 2 bars of 8ths, or 1 bar of 16ths
     ] },
   { key: '4vs3', name: 'four against three', lengths: [[4], [4], [3, 6], [3, 12]],
     build: (rng) => [
-      { len: 4, ratio: 1, hits: rng() < 0.5 ? [0, 1, 2, 3] : [0, 2], acc: [0] },
-      { len: 4, ratio: 1, hits: rng() < 0.6 ? [1, 3] : [2], acc: [1, 2, 3] },
+      ...beatKickSnare(rng, 0.5, 0.6),
       one(rng, [{ len: 3, ratio: 3 / 4, hits: [0, 1, 2], acc: [0] }, { len: 6, ratio: 3 / 2, k: one(rng, [3, 4, 6]), acc: [0] }]),   // 3 (or 6) across the bar
       one(rng, [{ len: 3, ratio: 1, k: one(rng, [1, 2]) }, { len: 12, ratio: 3, k: one(rng, [3, 5, 7]), rot: one(rng, [0, 2, 4]) }]),
     ] },
@@ -230,19 +269,22 @@ export const MUSICAL_FAMILIES = [
       { len: 5, ratio: one(rng, [1, 2, 4]), k: one(rng, [1, 2, 3]), acc: [0] },   // meets the bar again after 5 bars at most
     ] },
   { key: 'fourfloor', name: 'four on the floor', lengths: [[4], [4], [2, 16], [8, 12, 16]],
-    build: (rng) => [
-      { len: 4, ratio: 1, hits: [0, 1, 2, 3], acc: [0] },
-      { len: 4, ratio: 1, hits: [1, 3], acc: [1, 3] },
-      one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]), acc: [2, 6, 10, 14], swing: one(rng, [0, 0.1, 0.15]) }]),
-      (len => ({ len, ratio: 4, k: one(rng, [3, 4, 5, 7]), rot: Math.floor(rng() * len) }))(one(rng, [8, 12, 16])),
-    ] },
-  { key: 'boombap', name: 'boom bap', lengths: [[16], [16], [8], [8, 16]],
     build: (rng) => {
-      const swing = one(rng, [0.15, 0.2, 0.25]);
+      const swing = one(rng, [0, 0.1, 0.15]);   // the sixteenths' shuffle, the same on both ×4 lanes
       return [
-        { len: 16, ratio: 4, hits: [0, ...some(rng, [7, 8, 10, 11, 14], 0.35)], acc: [0], swing },
+        { len: 4, ratio: 1, hits: [0, 1, 2, 3], acc: [0] },
+        { len: 4, ratio: 1, hits: [1, 3], acc: [1, 3] },
+        one(rng, [{ len: 2, ratio: 2, hits: [1] }, { len: 16, ratio: 4, k: one(rng, [8, 12, 16]), acc: [2, 6, 10, 14], swing }]),
+        (len => ({ len, ratio: 4, k: one(rng, [3, 4, 5, 7]), rot: Math.floor(rng() * len), swing }))(one(rng, [8, 12, 16])),
+      ];
+    } },
+  { key: 'boombap', name: 'boom bap', lengths: [[16], [16], [16], [8, 16]],
+    build: (rng) => {
+      const swing = one(rng, [0.15, 0.2, 0.25]), more = some(rng, [7, 8, 10, 11, 14], 0.35);   // swung sixteenths: 57.5–62.5 %
+      return [
+        { len: 16, ratio: 4, hits: [0, ...(more.length ? more : [one(rng, [7, 10])])], acc: [0], swing },   // never a lone kick
         { len: 16, ratio: 4, hits: [4, 12, ...some(rng, [7, 15], 0.25)], acc: [4, 12], swing },   // backbeat + the odd ghost
-        { len: 8, ratio: 2, k: one(rng, [6, 8]), acc: [0, 2, 4, 6], swing: swing + 0.1 },
+        { len: 16, ratio: 4, hits: [0, 2, 4, 6, 8, 10, 12, 14, ...some(rng, [3, 7, 11, 15], 0.3)], acc: [0, 4, 8, 12], swing },   // 8ths + swung 16th pickups
         one(rng, [{ len: 8, ratio: 1, k: one(rng, [2, 3]), rot: one(rng, [1, 3]) }, { len: 16, ratio: 2, k: one(rng, [3, 5]), rot: one(rng, [2, 6]) }]),
       ];
     } },

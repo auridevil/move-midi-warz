@@ -29,7 +29,7 @@
   </header>
   <div id="readout" class="readout"></div>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
-  <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <div class="hud-left" id="hud-left">
     <details class="drawer" open>
       <summary>global · master tempo &amp; humanize</summary>
@@ -85,7 +85,7 @@
         <button id="btn-dice" class="rec-btn">○ dice free</button>
         <label title="Same seed = same groove">seed <input type="number" id="dice-seed" min="1" max="99999" /></label>
         <button id="dice-roll" class="small" title="New seed">re-roll</button>
-        <button id="dice-make" class="small" title="Randomize the pattern from this seed">pattern from seed</button>
+        <button id="dice-make" class="small" title="Make the groove randomize rolls from this seed (Shift+click: the wild roll)">pattern from seed</button>
       </div>
       <div id="dice-gauges" class="gauges three"></div>
       <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
@@ -152,7 +152,7 @@
     <div class="stress-meter" title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
   </div>
   <div class="hud">
-    <div id="welcome" class="welcome" role="status" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undoable)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
+    <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
     <div class="hud-row top-row">
       <button id="btn-jam" class="jam-btn" title="Jam: record what you play as 4 lane tracks, up to 256 beats (Move: Sampling)">● jam</button>
       <button id="btn-play" class="primary big-btn">▶ play</button>

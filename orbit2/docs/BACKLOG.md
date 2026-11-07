@@ -174,3 +174,33 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## Later
 
 (Reviewers' non-blocking SHOULD items that were not done land here, with the phase that raised them.)
+
+- **dsp engine voice levels** (ORBIT2-02, sound): at the same settings the dsp engine plays several voices far louder
+  than synth (open hat +16 dB, ride +13, shaker +14, crackle +21, clap +8, wood +7.5), so the starter grooves,
+  balanced on the default synth engine, have bright lanes up to 5 LU over the kick on dsp. Calibrate a per-voice trim
+  in `dsp-voices.js` against the synth engine (render each voice at the default sound, BS.1770), so A/B compares
+  sound, not level.
+- **Loudness target** (ORBIT2-02, maya): balanced grooves play at −24…−26 LUFS with peaks of −5 to −9 dBFS; a master
+  make-up / loudness target could use that headroom (all patterns, not only grooves).
+- **Musical randomize with locked dice + humanize** (ORBIT2-02, verifier): the 16-bar cap checks `cycleTicks()` without
+  the dice repeat, so repeat 4 can make five over four 20 bars long.
+- **Groove data** (ORBIT2-02, architect, verifier): `GROOVES[i].swing` (the spec's swing template) duplicates the lanes'
+  own swing and nothing reads it; `kit` is read by tests only. `MUSICAL_FAMILIES` is music data inside the model file
+  (could live next to the grooves). Wild randomize is not on the Move.
+- **Which groove is loaded** (ORBIT2-02, maya, greta): no chip shows it, and the kit select says "custom" for every
+  groove (they patch their kits).
+- **Who gets the demo** (ORBIT2-02, maya): someone who opened the page once without pressing play comes back to
+  "welcome back"; visitors from before this phase never hear the demo.
+- **Countdown** (ORBIT2-02, rio, greta): on a phone the two-line pill is as wide as the kick ring; the countdown lives
+  only on the canvas (not in the readout or the accessibility tree).
+- **First-visit screen** (ORBIT2-02, sound, greta): "Connect Move" has the same bright fill as the pulsing play right
+  above it; play is the 36th tab stop; the toast is bottom-centre, far from randomize on desktop; "3 vs 4 vs 5" sits
+  alone on the second chip line on desktop.
+- **Groove taste** (ORBIT2-02, tomi, rio): an afro variant with a 12/8 clave against the bell (the binary clave's "and"
+  of 2 falls between bell strokes); more dynamics (open / slap / ghost congas, `fade` on rolls); the demo's 4 and 5
+  rings play one hit each.
+- **Synth kicks with a click layer** (ORBIT2-02, sound; outside phase 02): `kick` / `kick909` renders end in a hard
+  waveform cut at the end of the click layer (+9–24 ms after the hit), one tick per loop in a DAW; pink-noise voices
+  (clap, shaker) carry sub energy a 150 Hz high-pass would remove.
+- **B9 follower after a ramp** (found during ORBIT2-02's pre-check, for ORBIT2-01's pass): when a tempo ramp ends the
+  follower overshoots by 1.3–2.2 bpm for about a beat (the quadratic fit extrapolated).

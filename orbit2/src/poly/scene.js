@@ -10,12 +10,13 @@ const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) &
 const rgba = (hex, a) => { const [r, g, b] = rgb(hex); return `rgba(${r},${g},${b},${a})`; };
 
 /**
- * "aligns in N bars" (the last bar counts in beats) for master tick `tick` of a `cycle`-tick machine; '' when the whole
- * cycle fits in one bar (it aligns every bar: nothing to wait for). bar / beat in ticks.
+ * "aligns in N bars" for master tick `tick` (fractional: the tick being heard) of a `cycle`-tick machine; the last two
+ * bars count in beats, so "2 bars" never stands for 5 beats. '' when the whole cycle fits in one bar (it aligns every
+ * bar: nothing to wait for). bar / beat in ticks.
  */
 export function alignText(tick, cycle, bar = 96, beat = 24) {
   if (!(cycle > bar)) return ''; const left = cycle - (((tick % cycle) + cycle) % cycle);
-  const [n, unit] = left > bar ? [Math.ceil(left / bar), 'bar'] : [Math.ceil(left / beat), 'beat'];
+  const [n, unit] = left > 2 * bar ? [Math.ceil(left / bar), 'bar'] : [Math.ceil(left / beat), 'beat'];
   return `aligns in ${n} ${unit}${n > 1 ? 's' : ''}`;
 }
 
@@ -198,16 +199,20 @@ export function createScene(cv, o) {
       ctx.strokeStyle = `rgba(239,68,68,${0.25 + pulse * 0.35})`; ctx.lineWidth = 1.5 + pulse * 2; ctx.setLineDash([6, 10]); ctx.lineDashOffset = -now * 0.02;
       ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     }
-    // alignment countdown above the core, so the bloom is a payoff you see coming; it brightens in the last beat
-    // (a steady label when motion is reduced)
+    // alignment countdown, so the bloom is a payoff you see coming. In the middle of the core, inside the kick ring:
+    // no planet, comet or burst ever lands there (every ring's step 1 is at 12 o'clock). A dark pill, two lines when
+    // one doesn't fit the ring; the words stay bright, the last beat lights the pill's rim (steady when motion is
+    // reduced).
     const al = playing && o.align?.(), at = al ? alignText(al.tick, al.cycle, al.bar, al.beat) : '';
     if (at) {
-      const lastBeat = al.cycle - (al.tick % al.cycle) <= al.beat, a = lastBeat && !reduced ? 0.75 + 0.25 * Math.sin(now * 0.02) : lastBeat ? 1 : 0.85;
-      // above the core (the lane labels sit below it), on a dark pill so the ring strokes don't cut through the words
+      const lastBeat = al.cycle - (al.tick % al.cycle) <= al.beat;
       ctx.globalCompositeOperation = 'source-over'; ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const w = ctx.measureText(at).width + 14, y = g.cy - g.R * 0.205;
-      ctx.fillStyle = 'rgba(12,8,28,.78)'; ctx.beginPath(); ctx.roundRect(g.cx - w / 2, y - 8, w, 16, 8); ctx.fill();
-      ctx.fillStyle = `rgba(236,233,247,${a})`; ctx.fillText(at, g.cx, y); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.globalCompositeOperation = 'lighter';
+      const room = g.ring(0) * 2 - 10, lines = ctx.measureText(at).width + 14 <= room ? [at] : [at.replace(/ \d.*/, ''), at.replace(/^.* in /, '')];
+      const w = Math.max(...lines.map(s => ctx.measureText(s).width)) + 14, h = lines.length * 14 + 4;
+      ctx.fillStyle = 'rgba(12,8,28,.85)'; ctx.beginPath(); ctx.roundRect(g.cx - w / 2, g.cy - h / 2, w, h, 8); ctx.fill();
+      if (lastBeat) { ctx.strokeStyle = `rgba(103,232,249,${reduced ? 0.85 : 0.4 + 0.5 * Math.sin(now * 0.012) ** 2})`; ctx.lineWidth = 1.5; ctx.stroke(); }
+      ctx.fillStyle = 'rgba(236,233,247,.95)'; lines.forEach((s, k) => ctx.fillText(s, g.cx, g.cy + (k - (lines.length - 1) / 2) * 14));
+      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.globalCompositeOperation = 'lighter';
     }
 
     // jam: a red arc around everything fills up over the 256 beats, with a ticking head
