@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-01
 title: ORBIT2-01 bug batch (B1–B12), review panel
 date: 2026-11-06
-round: 3
-result: IN PROGRESS
+round: 4
+result: HAPPY
 reviewers:
   verifier: HAPPY
   architect: HAPPY
   sound: HAPPY
-  kai: NOT HAPPY
+  kai: HAPPY
   ines: HAPPY
 tags: [orbit2, review]
 related:
@@ -125,5 +125,27 @@ phase lock snaps on every incoming tick and swings away (6); tempo knob shows 12
 ## Panel from here on
 
 The playbooks were restructured on 2026-11-09 (see [[REVIEW-PANEL]]): this phase's panel is now verifier, architect,
-sound, kai, ines. Pending: kai's confirmation of the wheel fix (the close task's confirmation round).
+sound, kai, ines. kai's confirmation of the wheel fix came in round 4 (the close task's confirmation round).
+
+## Round 4 (2026-11-09, confirmation, close task): 1 of 1 HAPPY, phase HAPPY
+
+Only kai was still NOT HAPPY. Brief: phase goal, B1–B12 verbatim, the must-fix rule, `git diff --stat f1b4387..HEAD`
+(18 files, all in `orbit2/`; phase 02 commits named as out of scope), kai's MUST-FIX items of rounds 1–3 and "Changes
+after round 3". Fresh sub-agent on sonnet, ports 5404/9404.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| kai | HAPPY | none (Tab → `btn-connect`, three wheel notches on a knob, Space → "■ stop": Space plays, Connect not pressed; `app.js:949`; `npm run check` clean; 0 page errors) |
+
+kai's SHOULDs: (1) the wheel takes the keys back only over a knob, so a wheel turn elsewhere leaves a Tab-focused
+button holding Space: by design (knobs are the only wheel controls; scrolling the page keeps the keys, see the comment
+above `controlOwnsKey`), no change; (2) from a cold page the first Tab lands on the "MIDI Warz" home link → Later in
+[[BACKLOG]]; (3) B9 not re-tested live this round (note only). GOOD: the key-ownership model (keyboard focus owns
+Space/Enter, a pointer or a knob wheel hands the keys back), Escape leaves a control, mutes/solos out of undo.
+
+Implementer's cross-check (kai's control run without the wheel landed on a link and showed nothing): headless Chrome on
+5400/9400, desktop 1440×900 and phone 390×844 touch, trusted CDP input. Tab to `btn-clear` + Space → the button is
+pressed (1 click), transport stays stopped, so the keyboard-focused control owns Space; then three trusted wheel events
+on a knob (tempo 100 → 104 bpm / length 4 → 5) + Space → "■ stop", no second click. 0 page errors. `npm run check` OK,
+`npm test` 103 + 9 green (kai's 9 were the `packages/move-keymap` tail of the same run).
 

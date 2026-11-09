@@ -15,35 +15,35 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **B1 swing on odd lengths.** `Lane.at()` swings by the visible step index `i % 2` (`lanes.js` ~75), so lanes of
   length 3/5/7 swing downbeats on alternate loops. Swing must follow the absolute step parity (`step % 2`), in live
   play, WAV and MIDI (all go through `expandHits`). Also the swing tooltip (`INFO.swing` in `app.js`) says "50%+ =
-  triplet-ish": exact triplet swing is 33 %, 50 % is a dotted-16th feel. (Ines, Tomi)
+  triplet-ish": exact triplet swing is 33 %, 50 % is a dotted-16th feel. (Ines, Tomi) ✅ ORBIT2-01
 - **B2 lane 4 voice 'perc' does not exist.** `LANE_NAMES` defaults lane 4 to `perc`, `VOICES.perc` is missing, so
   `buildVoice` falls back to the kick and the voice select shows blank. Default lanes must use real voices (the Common
-  kit's). Migrate saved data that has `voice: 'perc'`. (Rio)
+  kit's). Migrate saved data that has `voice: 'perc'`. (Rio) ✅ ORBIT2-01
 - **B3 kit readout vs select.** After init the readout says `kit custom` while the select shows "Common", and picking
-  Common again fires no change. Show the real state (a "custom" entry, or blank) and let re-picking re-apply. (Maya, Greta)
+  Common again fires no change. Show the real state (a "custom" entry, or blank) and let re-picking re-apply. (Maya, Greta) ✅ ORBIT2-01
 - **B4 'cycle' ignores trig conditions and dice repeat.** `cycleSteps()` (`lanes.js` ~108) uses only lengths ×
   ratios; a step with condition `1:3` makes the true period 3× longer, and locked dice with repeat N multiply too.
-  Affects the "full cycle" slot switch, the cycle export, the readout and the alignment bloom. (Ines)
+  Affects the "full cycle" slot switch, the cycle export, the readout and the alignment bloom. (Ines) ✅ ORBIT2-01
 - **B5 exports disagree.** WAV, stems and MIDI of the same pattern each roll `Math.random` (probability, humanize),
   so they contain different hits. One export action must use one hit list; when dice are free, roll once and reuse it
-  across WAV/stems/MIDI made from the same "take" (e.g. an "export all" or a per-render seed shown in the status). (Dex)
+  across WAV/stems/MIDI made from the same "take" (e.g. an "export all" or a per-render seed shown in the status). (Dex) ✅ ORBIT2-01
 - **B6 live record drops velocity.** `liveHit` plays at pad velocity but writes only hits/accents; ghost notes come
-  back at 0.7. Write a `vel` lock for non-accent hits. (Dex)
+  back at 0.7. Write a `vel` lock for non-accent hits. (Dex) ✅ ORBIT2-01
 - **B7 loaded samples are cut short.** `assignSample` keeps the lane's previous decay, so a slice plays ~25–35 %.
-  On load set decay so the whole sample plays, and make the top of the decay knob mean "whole sample". (Dex)
+  On load set decay so the whole sample plays, and make the top of the decay knob mean "whole sample". (Dex) ✅ ORBIT2-01
 - **B8 hotkeys fire while a control is focused.** Space starts play instead of toggling a focused `<summary>`/button;
   letter keys toggle steps while a button has focus. Ignore global hotkeys when focus is on an interactive element
-  other than the canvas/body. (Greta)
+  other than the canvas/body. (Greta) ✅ ORBIT2-01
 - **B9 MIDI clock-in tempo flaps.** `midiio.js` rounds the incoming bpm, `applyTempo` rounds again → at 127.5 bpm
   with ±1 ms jitter: 767 tempo changes in 64 beats, each `retime()` ramps tempo and jumps the delay; `retime()` also
   fights the phase-lock trim. Keep a float, smooth with hysteresis, retime only on real changes, don't fight the lock.
-  (Kai)
+  (Kai) ✅ ORBIT2-01
 - **B10 audio-callback work.** `loadSlot` and `evolveNow` run `sync()` (DOM rebuild, JSON, localStorage, undo commit)
-  inside the Tone.Loop callback. Defer UI/persistence work to `T.getDraw().schedule` / a microtask. (Kai)
+  inside the Tone.Loop callback. Defer UI/persistence work to `T.getDraw().schedule` / a microtask. (Kai) ✅ ORBIT2-01
 - **B11 mutes pollute undo.** Muting is recorded in history, so Undo after a mute undoes the mute instead of the last
-  edit. Keep mute/solo out of `hist`. (Kai)
+  edit. Keep mute/solo out of `hist`. (Kai) ✅ ORBIT2-01
 - **B12 readout is aria-live and too chatty.** 5 arrow presses on a knob = 5 re-reads of ~400 chars. Remove aria-live
-  from the readout; announce only the changed value. (Greta)
+  from the readout; announce only the changed value. (Greta) ✅ ORBIT2-01
 
 ## F · First visit & musical randomize (phase 02)
 
@@ -204,3 +204,5 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   (clap, shaker) carry sub energy a 150 Hz high-pass would remove.
 - **B9 follower after a ramp** (found during ORBIT2-02's pre-check, for ORBIT2-01's pass): when a tempo ramp ends the
   follower overshoots by 1.3–2.2 bpm for about a beat (the quadratic fit extrapolated).
+- **First Tab stop** (ORBIT2-01, kai): from a cold page the first Tab lands on the "MIDI Warz" home link in the header,
+  one wasted press before the first control when playing without looking (see also "play is the 36th tab stop").
