@@ -470,7 +470,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
   body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
   body:has(#hud-left) .welcome > span { flex-basis: 100%; }
-  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button { min-height: 36px; }
+  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 36px; }
   body:has(#hud-left) .welcome .wb-x { min-width: 40px; margin-left: auto; }
 }
 /* Orbits round 3: trig conditions, samples, dice */

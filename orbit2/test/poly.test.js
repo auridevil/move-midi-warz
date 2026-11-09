@@ -73,6 +73,13 @@ test('live record quantize: nearest rounds forward, previous files under the las
   const l = new Lane('kick', { length: 4 }); // ×1: 24 ticks per step
   assert.deepEqual(l.quantize(23), { step: 1, index: 1, ahead: true }); assert.deepEqual(l.quantize(23, 'previous'), { step: 0, index: 0, ahead: false });
   assert.equal(l.quantize(24 * 5 + 2).index, 1); assert.equal(l.quantize(-3).index, 0);
+  assert.equal(l.quantize(12).step, 1, 'half way: the coming step');
+  // swung lanes: a hit played with a swung step is filed under it (round 2: at 50 % it went to the next step)
+  const h = new Lane('hat', { length: 8, ratioIndex: RATIOS.indexOf(4) }); h.swing = 0.5;   // 6 ticks per step, odd steps 3 ticks late
+  for (const s of [1, 3, 5]) { assert.equal(h.quantize(s * 6 + 3).step, s, `on swung step ${s}`); assert.equal(h.quantize(s * 6 + 4, 'previous').step, s, `just after swung step ${s}`); }
+  assert.equal(h.quantize(6 + 2, 'previous').step, 0, 'swung step 1 has not sounded yet'); assert.equal(h.quantize(6 * 2 - 1).step, 2, 'just before the beat: the beat');
+  const t = new Lane('hat', { length: 4, ratioIndex: RATIOS.indexOf(3) }); t.swing = 0.5;   // ×3: 8 ticks, only the middle of each three swings
+  assert.equal(t.quantize(8 + 4).step, 1); assert.equal(t.quantize(16 + 1).step, 2, 'the last of three is straight');
 });
 test('evolve nudges only lanes that allow it and stays in range', () => {
   const m = new Machine(); m.lanes.forEach(l => { l.setLength(8); l.setEuclid(3); }); m.lanes[0].evolve = false; m.lanes[1].muted = true;
@@ -312,9 +319,18 @@ test('B9 clock-in follower: pure, smooth, no flapping at 127.5 bpm with jitter, 
   // feed(bpmAt(i), ticks, jitter ms, seed, pauseAt, pauseMs) → [{ i, bpm }] for every tempo change
   const feed = (bpmAt, ticks, jitterMs, seed = 1, pauseAt = -1, pauseMs = 0) => { const f = makeBpmFollower(), rng = mulberry32(seed), out = []; let t = 1000; for (let i = 0; i < ticks; i++) { t += 60000 / bpmAt(i) / 24 + (i === pauseAt ? pauseMs : 0); const r = f.tick(t + (rng() * 2 - 1) * jitterMs); if (r != null) out.push({ i, bpm: r }); } return out; };
   for (const j of [1, 3]) for (let s = 1; s <= 5; s++) {
-    const out = feed(() => 127.5, 24 * 64, j, s);
-    assert.ok(out.length >= 1 && out.length <= 5 && out.at(-1).i < 24 * 16, `±${j} ms, seed ${s}: ${out.length} changes, last at tick ${out.at(-1).i} (it settles, then stays: was 767 changes)`);
-    assert.ok(Math.abs(out.at(-1).bpm - 127.5) < 0.05, `±${j} ms, seed ${s}: ${out.at(-1).bpm}`); assert.notEqual(out.at(-1).bpm % 1, 0, 'kept as a float');
+    const out = feed(() => 127.5, 24 * 64, j, s), late = out.filter(o => o.i >= 24 * 16);
+    assert.ok(out.length >= 1 && out.length <= 5, `±${j} ms, seed ${s}: ${out.length} changes (was 767)`);
+    // after 16 beats at most a touch-up of a few hundredths (the first reading comes from half a beat)
+    late.forEach(o => { const before = out[out.indexOf(o) - 1]; assert.ok(late.length <= 2 && before && Math.abs(o.bpm - before.bpm) <= 0.03 + 1e-9, `±${j} ms, seed ${s}: late change ${before?.bpm} → ${o.bpm} at tick ${o.i}`); });
+    assert.ok(Math.abs(out.at(-1).bpm - 127.5) <= 0.01 + 1e-9, `±${j} ms, seed ${s}: settles at ${out.at(-1).bpm}`); assert.notEqual(out.at(-1).bpm % 1, 0, 'kept as a float');
+  }
+  // a whole-number tempo from a clean clock ends on that tempo (round 2: a first reading 0.04 off stayed forever and
+  // drifted up to 400 ms in 10 minutes in tempo mode). Up to ±1 ms within the 0.01 display step; noisier clocks
+  // within 4 standard errors of a 16-beat fit (±2 ms at 174 bpm: 0.033)
+  for (const bpm of [90, 120, 174]) for (const j of [0.1, 0.5, 1, 2]) for (let s = 1; s <= 8; s++) {
+    const out = feed(() => bpm, 24 * 64, j, s), tol = j <= 1 ? 0.01 : 0.035;
+    assert.ok(Math.abs(out.at(-1).bpm - bpm) <= tol + 1e-9 && out.length <= 4, `${bpm} ±${j} ms, seed ${s}: ${out.map(o => o.bpm)}`);
   }
   assert.ok(feed(() => 128, 24, 1)[0].i <= 12, 'the first reading comes after half a beat');
   assert.deepEqual(feed(() => 127.5, 500, 1, 9), feed(() => 127.5, 500, 1, 9), 'pure: same input, same output');

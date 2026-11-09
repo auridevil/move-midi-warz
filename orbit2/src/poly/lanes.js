@@ -114,12 +114,16 @@ export class Lane {
     return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swungAt(step) ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
   /**
-   * Live record: the step a hit at fractional master tick `tickF` belongs to. 'nearest' rounds (early hits
-   * land on the coming step), 'previous' always files it under the step that just played.
+   * Live record: the step a hit at fractional master tick `tickF` belongs to, by where the steps are heard (a swung
+   * step sounds late, so a hit played with it is filed under it). 'nearest' takes the closest (on a tie the coming
+   * one: early hits land on the coming step), 'previous' always the step that just played.
    */
   quantize(tickF, mode = 'nearest') {
-    const f = tickF / this.stepTicks(), step = mode === 'previous' ? Math.floor(f) : Math.round(f);
-    return { step, index: ((step % this.length) + this.length) % this.length, ahead: step > f };
+    const f = tickF / this.stepTicks(), b = Math.floor(f), heard = (s) => s + (this.swungAt(s) ? this.swing : 0);
+    let step = b + 1;
+    if (mode === 'previous') while (heard(step) > f) step--;
+    else for (const s of [b, b - 1]) if (Math.abs(heard(s) - f) < Math.abs(heard(step) - f)) step = s;
+    return { step, index: ((step % this.length) + this.length) % this.length, ahead: heard(step) > f };
   }
   /** Read a step through the rotation. */
   stepIndex(i) { return ((i - this.rotation) % this.length + this.length) % this.length; }
@@ -216,8 +220,9 @@ export class Machine {
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit }; }
   static from(o) {
     const m = new Machine(); if (o?.lanes) { m.lanes = o.lanes.map(Lane.from); m.kit = o.kit; } m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0;
-    // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample that is
-    // gone: give that lane the Common kit's voice instead of a silent fallback to the kick
+    // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample lane
+    // without its sample record: give that lane the Common kit's voice instead of a silent fallback to the kick.
+    // (A record whose audio is no longer in IndexedDB can't be seen from here: that lane stays silent.)
     m.lanes.forEach((l, i) => { if (l.voice === 'sample' ? !l.sample : !VOICES[l.voice]) l.voice = KITS.common.lanes[i % 4].voice; });
     return m;
   }

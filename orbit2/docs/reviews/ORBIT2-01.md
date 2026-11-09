@@ -3,8 +3,14 @@ type: review
 phase: ORBIT2-01
 title: ORBIT2-01 bug batch (B1–B12), review panel
 date: 2026-11-06
-rounds: 1
+round: 3
 result: IN PROGRESS
+reviewers:
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
+  kai: NOT HAPPY
+  ines: HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -82,3 +88,42 @@ phase lock snaps on every incoming tick and swings away (6); tempo knob shows 12
   pauses, Stop/Start and mode switch. `npm run check` OK, `npm test` 96 + 9, `tools/smoke.mjs` 10/10. Browser e2e
   (5400/9400, desktop + phone): 27/27 checks (B8 mouse + keyboard paths, B9 pause in the app, phase lock 4 snaps then
   trims, B11 setup / reload undo, B7 sample audible in stems + WAV, whole bars + ACID, B4 readout, ×3 swing onsets).
+
+## Round 2 (2026-11-09, recovered from the interrupted session): 4 of 8 HAPPY
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none (B9 pauses, B8 mouse/touch paths, B11 checked; check, 103 + 9 tests, smoke 10/10) |
+| architect | HAPPY | none |
+| sound | HAPPY | none (B9 step 120→126: 3–15 ms, ramp 120→140: 12–25 ms, steady 127.5: 0 changes) |
+| tomi | HAPPY | none (B1 at ×3, ×3/2, ×¾: beats never swing; stems within 0.2 ms) |
+| kai | NOT HAPPY | B8: a knob drag leaves a Tab-focused button owning Space (Space cleared the lane) |
+| greta | NOT HAPPY | B8: same path (`gauge.js:22` preventDefault, `keyFocused` kept) |
+| ines | NOT HAPPY | B9: `settle` 0.05 bpm leaves the first reading's error forever → drift in tempo modes |
+| dex | NOT HAPPY | B9: same (`midiio.js:35/97`, 0.015–0.04 bpm off after 64 beats) |
+
+### Changes after round 2
+
+- B8: any pointer press or knob drag takes key ownership back from a Tab-focused control.
+- B9: `settle` 0.05 → 0.005 bpm.
+
+## Round 3 (2026-11-09, recovered): 3 of 4 HAPPY
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| dex | HAPPY | none |
+| ines | HAPPY | none (10-min steady clocks end ≤ 0.01 bpm off) |
+| greta | HAPPY | none (knob drag path fixed, keyboard focus still owns its keys) |
+| kai | NOT HAPPY | B8: turning a knob with the mouse wheel / trackpad (no pointerdown) still leaves a Tab-focused button owning Space |
+
+### Changes after round 3
+
+- B8: a wheel turn on a knob also takes key ownership back (`app.js` wheel listener next to the pointerdown one);
+  swing tooltip tightened; small style fix. The interrupted session's own browser check passed (mouse-wheel notches and
+  trackpad deltas: Space plays, `z` toggles the step, lane kept). Committed with check OK and 103 + 9 tests.
+
+## Panel from here on
+
+The playbooks were restructured on 2026-11-09 (see [[REVIEW-PANEL]]): this phase's panel is now verifier, architect,
+sound, kai, ines. Pending: kai's confirmation of the wheel fix (the close task's confirmation round).
+

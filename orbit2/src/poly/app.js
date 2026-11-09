@@ -215,7 +215,7 @@ function applyTempo(bpm, publish = true, { exact = false, transport = true } = {
 }
 /** MIDI clock in (already smoothed, called only on a real change). In phase lock while playing, the clock-tick trim
  *  drives the transport: a retime would fight it. */
-const followClockTempo = (bpm) => applyTempo(bpm, true, { exact: true, transport: !(pmidi.follow === 'lock' && playing) });
+const followClockTempo = (bpm) => { hush = true; try { applyTempo(bpm, true, { exact: true, transport: !(pmidi.follow === 'lock' && playing) }); } finally { hush = false; } };   // the clock's tempo isn't announced: you didn't touch it
 onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false, { exact: true }); });
 const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
 
@@ -225,7 +225,7 @@ const INFO = {
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
-  swing: 'Delays every second step by this fraction of a step. The steps are counted on the master clock, not the loop, so on an odd length the swung steps move through the loop and come back every 2 loops; at ×3, ×3/2 and ×¾ the count restarts on every step that falls on the beat, so beats stay put. 0 = straight, ~20% = loose groove, 33% = triplet swing (2:1), 50% = dotted swing (3:1).',
+  swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. At ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1).',
   prob: 'Chance that a programmed hit actually plays. 100% = always; 60% = the pattern breathes differently every loop.',
   tune: 'Pitch of the voice, about ±1 octave (less for some voices).',
   decay: 'Length of the sound, from a tick (40 ms) to a long tail (1.2 s). Kits scale it per voice.',
@@ -281,7 +281,7 @@ function buildSliders() {
   sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
   for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
-  // picked with the mouse, a select lets go of the focus, so Space plays again instead of reopening it (see controlOwnsKey)
+  // picked with the mouse, a select lets go of the focus, so the arrow keys don't keep changing it (see controlOwnsKey)
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
   const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => { applyKit(ks.value); letGoAfterPointer(ks); };
   const se = $('sound-sliders'); se.innerHTML = '';
@@ -518,7 +518,7 @@ function buildMidiUI() {
   ui.midiOut = mount('midi-out', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setOutput(v); saveSettings(); renderMidi(); } }));
   ui.midiIn = mount('midi-in', segmented({ options: [['', 'none']], value: '', chips: true, onChange: (v) => { pmidi.setInput(v); saveSettings(); renderMidi(); } }));
   ui.clockOut = mount('midi-clock-out', toggleChip({ label: 'send clock + start/stop', on: pmidi.clockOut, title: INFO['clock out'], onChange: (v) => { pmidi.clockOut = v; saveSettings(); } }));
-  ui.follow = mount('midi-follow', segmented({ options: [['off', 'off'], ['tempo', 'tempo'], ['transport', '+ start/stop'], ['lock', '+ phase lock', 'tempo, start/stop and beat position']], value: pmidi.follow, onChange: (v) => { pmidi.setFollow(v); saveSettings(); renderMidi(); } }));
+  ui.follow = mount('midi-follow', segmented({ options: [['off', 'off'], ['tempo', 'tempo'], ['transport', '+ start/stop'], ['lock', '+ phase lock', 'tempo, start/stop and beat position']], value: pmidi.follow, onChange: (v) => { pmidi.setFollow(v); retime(); saveSettings(); renderMidi(); } }));   // leaving the phase lock: the transport leaves its last trim
   // note + channel per lane as gauges (note names in Live's convention, C3 = 60), then the gate
   const NOTE = (p) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][p % 12] + (Math.floor(p / 12) - 2), g = $('midi-lanes');
   m.lanes.forEach((_, i) => {
@@ -935,15 +935,20 @@ $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
 window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 // Who owns a key press? A control owns it only when the keyboard put the focus there (Tab, arrows): then Space / Enter
-// press that control and letters don't reach the pads. Focus left behind by a click or a tap (or kept by a knob drag,
-// which doesn't take focus) counts for nothing: Space plays, letters toggle steps, as from the page. Text fields own
-// every key; a knob only its arrows; modifier shortcuts (Alt+1–4, Cmd/Ctrl+Z) work everywhere but in text fields.
-// (:focus-visible can't tell the two apart: Chrome turns it on at the first key press.)
-const TEXT_SEL = 'input, select, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], [role=slider], .gauge';
+// press that control and letters don't reach the pads. Focus left behind by a click or a tap counts for nothing, and
+// any press of the mouse or a finger, or a knob turned with the wheel, takes the keys back from a control the keyboard
+// focused before (knobs don't take the focus): Space plays, letters toggle steps, as from the page. Escape gives them
+// back too; scrolling the page doesn't. Text fields own every key; a knob only its arrows; a select all of them
+// (type-ahead); modifier shortcuts (Alt+1–4, Cmd/Ctrl+Z) work everywhere but in text fields. (:focus-visible can't
+// tell the two apart: Chrome turns it on at the first key press.)
+const TEXT_SEL = 'input, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], select, [role=slider], .gauge';
 const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']), keyFocused = new WeakSet();
 let lastInput = 'pointer';
-addEventListener('pointerdown', () => { lastInput = 'pointer'; }, true);
+const takeKeysBack = () => { if (document.activeElement) keyFocused.delete(document.activeElement); };
+addEventListener('pointerdown', () => { lastInput = 'pointer'; takeKeysBack(); }, true);
+addEventListener('wheel', (e) => { if (e.target instanceof Element && e.target.closest('.gauge')) takeKeysBack(); }, { capture: true, passive: true });
 addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) lastInput = 'key'; }, true);   // the keys that move focus
+addEventListener('keydown', (e) => { const a = document.activeElement; if (e.key === 'Escape' && a instanceof HTMLElement && a !== document.body && !a.closest(TEXT_SEL)) a.blur(); });
 addEventListener('focusin', (e) => { if (lastInput === 'key') keyFocused.add(e.target); else keyFocused.delete(e.target); }, true);
 function controlOwnsKey(e) {
   const el = e.target instanceof Element ? e.target : null; if (!el || el === document.body || el.id === 'cv') return false;
@@ -951,7 +956,7 @@ function controlOwnsKey(e) {
   const c = el.closest(CONTROL_SEL); if (!c || !keyFocused.has(el)) return false;
   return c.matches('[role=slider], .gauge') ? KNOB_KEYS.has(e.key) : true;
 }
-/** A select picked with the mouse gives the focus back to the page (else Space would reopen it, not play). */
+/** A select picked with the mouse gives the focus back to the page (else the arrow keys would keep changing it). */
 function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -961,6 +966,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === '0') { setFill(true); return; }
   if (e.altKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); m.select(+e.code.slice(5) - 1); lockStep = -1; sync(); return; }   // code, not key: Option+1 types ¡ on a Mac
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
+  e.preventDefault();   // a select the mouse left focused would also jump to the voice starting with that letter
   const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, null, e.shiftKey);   // keys have no velocity: Shift = accent
   const lane = m.lanes[row]; if (col >= lane.length) return;
   if (e.shiftKey) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); m.select(row); sync();

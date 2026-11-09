@@ -28,11 +28,11 @@ export function phaseCorrection(drift) {
  *    and widen the jitter to that shift, so a grid that keeps wrapping is taken as jitter from then on.
  *  - a pause (more than 3 ticks of silence) starts afresh; the bpm is kept, so the same tempo after it changes nothing.
  *  - a significant bend in the fit is a ramp: read at the newest tick, in steps that follow the ramp's speed.
- *  - a small leftover offset (under `big`) is corrected only when it holds on one side for `hold` ticks (4 beats);
- *    `settle` (0.05 bpm) is never a change: a fit that keeps sharpening would otherwise re-announce 127.51 → 127.5
- *    minutes later, a retime nobody can hear.
+ *  - a small leftover offset (under `big`) is corrected only when it holds on one side for `hold` ticks (4 beats),
+ *    however late: the first reading comes from half a beat, and a tempo left 0.04 bpm off drifts a sixteenth away
+ *    from the master in 10 minutes. Only `settle` (0.005 bpm, under the 0.01 display step) is never a change.
  */
-export function makeBpmFollower({ window = 384, first = 12, run = 6, k = 4, settle = 0.05, big = 0.3, hold = 96, zc = 4, floor = 0.25 } = {}) {
+export function makeBpmFollower({ window = 384, first = 12, run = 6, k = 4, settle = 0.005, big = 0.3, hold = 96, zc = 4, floor = 0.25 } = {}) {
   let pts = [], idx = 0, bpm = 0, jit = 2, calibrated = false, held = [], side = 0, slope = 0, cached = null, jumped = false;
   const median = (v) => { const s = Float64Array.from(v).sort(), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
   const spread = (r) => Math.max(floor, 1.4826 * median(r.map(Math.abs)));   // robust σ of residuals (MAD)

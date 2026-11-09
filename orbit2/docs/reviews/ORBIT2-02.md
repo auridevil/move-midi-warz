@@ -3,8 +3,14 @@ type: review
 phase: ORBIT2-02
 title: ORBIT2-02 first visit and musical randomize (F1–F5), review panel
 date: 2026-11-06
-rounds: 1
+round: 1
 result: IN PROGRESS
+reviewers:
+  verifier: NOT HAPPY
+  architect: NOT HAPPY
+  sound: NOT HAPPY
+  maya: NOT HAPPY
+  rio: NOT HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -106,3 +112,9 @@ reload; three quick rolls folded into one undo step; the toast's live region was
   groove undo → 97 bpm / redo → 174, three rolls = three undo steps, pattern from seed re-makes the toast's groove,
   double × and double "keep jamming" fire nothing underneath, keep jamming plays with focus on play, link loads once
   and leaves the address bar, no page errors), screenshots looked at.
+
+## Panel from here on
+
+The playbooks were restructured on 2026-11-09 (see [[REVIEW-PANEL]]): this phase's panel is now verifier, architect,
+sound, maya, rio. Round 1's fixes are committed (cd3a958); round 2 re-reviews them.
+
