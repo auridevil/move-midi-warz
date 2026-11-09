@@ -39,30 +39,101 @@ verifier 5401/9401, architect 5402/9402, sound 5403/9403, kai 5404/9404, maya 54
 ines 5407/9407, tomi 5408/9408, greta 5409/9409, rio 5410/9410. The implementing agent itself uses 5400/9400.
 Scratch files go to `/tmp/orbit2-<id>/`, deleted at the end. Always `await b.close()`.
 
-## The loop (run by the phase's review task)
+## Who reviews which phase
 
-1. Make sure the work is in place: `git status` shows the phase's changes, `npm run check` and `npm test` pass.
-2. Write the **brief** once: the phase goal, the backlog ids it covers (copy their text from `docs/BACKLOG.md`), the
-   list of changed files (`git diff --stat` + `git status --short`), how to open it (`orbit2/index.html`), and what
-   "done" means for the phase. Every reviewer gets the same brief plus their persona, ports and these rules:
-   *read-only (never edit repo files), verify claims by running things, answer with exactly this format:*
+At most **five reviewers per phase**: the three core reviewers (verifier, architect, sound) plus the **two personas**
+closest to the phase. The playbook names them in its header. The final phase (ORBIT2-17) uses all ten.
+
+| phase | personas | phase | personas |
+|---|---|---|---|
+| 01 bugs | kai, ines | 10 export | dex, kai |
+| 02 first visit | maya, rio | 11 live | kai, greta |
+| 03 touch + a11y | greta, rio | 12 generative | ines, tomi |
+| 04 calmer screen | greta, kai | 13 structure visuals | ines, greta |
+| 05 groove | tomi, dex | 14 canvas | rio, maya |
+| 06 clock + meter | ines, kai | 15 sharing | rio, dex |
+| 07 32 steps, 6 lanes | tomi, kai | 16 learning | maya, greta |
+| 08 voices | tomi, dex | 17 final | all ten |
+| 09 samples | dex, maya | | |
+
+## What blocks HAPPY (the must-fix rule)
+
+A MUST-FIX is only:
+
+1. a defect in this phase's own backlog items (it doesn't do what the item says, or does it wrong), or
+2. a regression caused by this phase's changes (something that worked before the phase and doesn't now), or
+3. a broken test, check or smoke run, a page error, or data loss (old saved data / share links no longer load).
+
+Everything else is a SHOULD and **never blocks HAPPY**: problems the shipped Orbits already had, polish, ideas,
+taste, things another phase owns. The implementer does a SHOULD only if it takes a few minutes; the rest goes to the
+"Later" section of `BACKLOG.md` with the reviewer and phase. Reviewers get this rule in their brief, and a NOT HAPPY
+without an in-scope MUST-FIX counts as HAPPY.
+
+## State lives in the review file
+
+`orbit2/docs/reviews/ORBIT2-NN.md`, so any task (and any restarted session) knows exactly where the phase stands:
+
+```yaml
+---
+type: review
+phase: ORBIT2-NN
+title: ...
+date: YYYY-MM-DD
+round: 2            # last COMPLETED round (0 = none yet)
+result: IN PROGRESS # IN PROGRESS | HAPPY | BLOCKED
+reviewers:          # this phase's panel and each one's latest verdict
+  verifier: HAPPY
+  architect: NOT HAPPY
+  sound: HAPPY
+  kai: HAPPY
+  ines: NOT HAPPY
+---
+```
+
+Body: one section per round (`## Round N`), a table `reviewer | verdict | MUST-FIX` (with evidence), then
+`### Changes after round N` (what was fixed, tests added, check/test results). Factual, short.
+
+## One review round (one playbook task)
+
+Each round is its own checkbox, so a round is a bounded piece of work and a crash loses at most one round.
+
+1. **Read the state.** If `result` is HAPPY or BLOCKED, or `round` is already ≥ this task's round, tick the box and
+   stop. (Round 1 also checks the gate: the previous phase's review file says `result: HAPPY`; if not, halt the
+   playbook saying so.)
+2. **Who:** round 1 = the whole panel; later rounds = only reviewers whose latest verdict is NOT HAPPY.
+3. **Brief** (same for everyone): the phase goal, its backlog ids with their text from `BACKLOG.md`, the must-fix rule
+   above, `git diff --stat <phase start>..HEAD` + `git status --short`, how to open `orbit2/index.html` with
+   `orbit2/tools/cdp.mjs`, and for a re-review: that reviewer's own previous MUST-FIX items plus the "Changes after
+   round N-1" section. Plus persona, ports, scratch dir and these rules: read-only (never edit repo files), verify by
+   running things, **at most ~25 tool calls, stay on this phase**, close every browser and server, answer exactly:
 
    ```
    VERDICT: HAPPY | NOT HAPPY
-   MUST-FIX (blocks HAPPY): numbered, each with evidence (file:line, repro, measurement) and expected vs actual
-   SHOULD (not blocking): numbered
+   MUST-FIX (in scope only, blocks HAPPY): numbered, each with evidence (file:line, repro, measurement), expected vs actual
+   SHOULD (never blocks): numbered
    GOOD: up to 3 things to keep
    ```
 
-3. Launch all reviewers of the phase **in parallel** (one message, several Agent calls).
-4. Fix every MUST-FIX inside `orbit2/` (respecting the rules in `orbit2/README.md`), add or update tests, re-run
-   check/test/smoke. SHOULD items: do the cheap ones, list the rest in `docs/BACKLOG.md` under "Later".
-5. Re-run **only the reviewers who were NOT HAPPY**, using SendMessage to their agent id (so they keep context), with
-   a short list of what changed. Repeat.
-6. Stop when everyone is HAPPY. **Max 4 rounds.** If a reviewer is still NOT HAPPY after round 4, or two reviewers
-   demand opposite things that cannot both be satisfied, write the conflict in the review file and halt the playbook
-   with that reason so the conductor decides (this is a real blocker, not an ordinary failure).
-7. Record everything in `orbit2/docs/reviews/<PHASE-ID>.md` (YAML front matter: type review, phase, date, rounds,
-   result): per round, each reviewer's verdict and must-fix list, and what was changed in response. Keep it factual.
+4. **Launch** them as fresh sub-agents (Agent tool, `general-purpose`) **in one message, in parallel**. Core reviewers
+   use the default model; personas use `model: "sonnet"`. Never reuse agent ids from an earlier task: they do not
+   survive a new session, which is why previous findings travel in the brief.
+5. **Record** the verdicts in the file (round table, `reviewers`, `round`, and `result: HAPPY` if all are HAPPY).
+6. **Fix** every in-scope MUST-FIX inside `orbit2/` with tests; run `npm run check`, `npm test`, `node tools/smoke.mjs`;
+   write "Changes after round N"; **commit locally** (`orbit2: phase NN review round N`). Do not start the next round
+   in the same task.
+
+## Closing a phase (the close task)
+
+1. If `result` is IN PROGRESS: a **confirmation round** with only the reviewers still NOT HAPPY, on the fixes of the last
+   round (same brief rules). If they are all HAPPY now, set `result: HAPPY`. Otherwise fix what's in scope **once**
+   more, then set `result: BLOCKED`, list each open MUST-FIX and the reviewer, and halt the playbook with that reason:
+   the conductor decides. Two reviewers demanding incompatible things is also BLOCKED.
+2. If `result: HAPPY`: mark the phase's backlog ids done, run check/test (green), confirm only `orbit2/` changed, commit
+   locally `orbit2: <phase title>`.
 
 A reviewer is never told what to conclude, and never given the implementer's opinion of the work, only the brief.
+
+## Running the playbooks
+
+Run them on a **dedicated Maestro agent** for this repo (not the agent you chat with): a message to the agent running
+an Auto Run interrupts the task in progress. Commits stay local; push when you are happy.
