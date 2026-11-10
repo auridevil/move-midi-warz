@@ -271,6 +271,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px; margin: 4px 0; }
 .gauge { display: flex; flex-direction: column; align-items: center; gap: 0; cursor: ns-resize; user-select: none; touch-action: none; padding: 2px 0 3px; border-radius: 8px; outline: none; }
 .gauge:hover, .gauge:focus { background: rgba(167,139,250,.08); }
+.gauge:focus-visible { outline: 2px solid var(--signal-cyan); outline-offset: 2px; }   /* same ring as the buttons */
 .gauge svg { width: 34px; height: 34px; display: block; }
 .gauge .g-track { fill: none; stroke: rgba(236,233,247,.16); stroke-width: 4.5; stroke-linecap: round; }
 .gauge .g-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(103,232,249,.3)); }
@@ -547,3 +548,7 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .slot-menu-title { font-size: 12px; color: var(--signal-cyan); margin-right: 2px; }
 .slot-menu button { min-height: 32px; padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
 @media (pointer: coarse) { .slot-menu button { min-height: 44px; } .slot-menu [data-act=close] { min-width: 44px; } }
+/* playhead: the step of the selected lane sounding now */
+.stepsui .st { position: relative; }
+.stepsui .st.ph::before { content: ''; position: absolute; inset: -4px 0 auto 0; height: 3px; border-radius: 2px; background: var(--ember-magenta); box-shadow: 0 0 8px var(--ember-magenta); pointer-events: none; }
+.stepsui .st.ph:not(.on):not(.acc) { background: rgba(240,171,252,.28); }

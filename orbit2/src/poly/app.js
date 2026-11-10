@@ -191,7 +191,7 @@ function onTick(time) {
     for (const h of expandHits(ev, lane, li, { humanize: m.humanize, dice: dice.locked ? dice : null, tickSec: tickSec() })) {   // swing, ±humanize, ratchets
       const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000);
     }
-    T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; paintLeds(); }, time);
+    T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
 }
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
@@ -200,7 +200,7 @@ async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
-  $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintLeds(); readout();
+  $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
@@ -262,10 +262,10 @@ const INFO = {
   'clock in': 'Follow another device: "tempo" takes its bpm, "tempo + start/stop" also starts and stops with it, "phase lock" also keeps the beat aligned to its clock ticks (and Song Position Pointer).',
 };
 const PARAMS = [
-  { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => { l.setLength(v); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); }, fmt: v => v },
-  { k: 'euclid', label: 'euclid hits', min: 0, max: MAX_STEPS, get: l => l.euclidK, set: (l, v) => l.setEuclid(v), fmt: v => v },
-  { k: 'rotation', label: 'rotation', min: 0, max: MAX_STEPS - 1, get: l => l.rotation, set: (l, v) => { l.rotation = ((Math.round(v) % l.length) + l.length) % l.length; }, fmt: v => v },
-  { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v] },
+  { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => { l.setLength(v); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
+  { k: 'euclid', label: 'euclid hits', min: 0, max: MAX_STEPS, get: l => l.euclidK, set: (l, v) => l.setEuclid(v), fmt: v => v, say: v => `${v} hit${v === 1 ? '' : 's'}` },
+  { k: 'rotation', label: 'rotation', min: 0, max: MAX_STEPS - 1, get: l => l.rotation, set: (l, v) => { l.rotation = ((Math.round(v) % l.length) + l.length) % l.length; }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
+  { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
   { k: 'swing', label: 'swing', min: 0, max: 100, get: l => Math.round(l.swing * 100), set: (l, v) => { l.swing = Math.max(0, Math.min(0.66, v / 100)); }, fmt: v => v + '%' },
   { k: 'prob', label: 'probability', min: 0, max: 100, get: l => Math.round(l.prob * 100), set: (l, v) => { l.prob = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
   { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v },
@@ -274,13 +274,13 @@ const sliders = {};   // k -> gauge handle ({ set, value })
 const laneTabs = [];  // the four coloured lane buttons: a touch-friendly alternative to tapping a ring
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
-  for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
+  for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
   sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) }); ge.appendChild(sliders.tempo.el);
   sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
-  for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
+  for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
   // picked with the mouse, a select lets go of the focus, so the arrow keys don't keep changing it (see controlOwnsKey)
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
   const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => { applyKit(ks.value); letGoAfterPointer(ks); };
@@ -292,7 +292,7 @@ function sync() {
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
   $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
-  laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); }); renderVoiceOptions(); renderLaneMix(); renderKit();
+  laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); renderLocks(); paintLeds(); save(); readout();
@@ -322,8 +322,14 @@ function buildSteps() {
     el.appendChild(b); stepBtns.push(b);
   }
 }
+/** The step of the selected lane sounding now, lit on the strip while playing (only the old and new button change). */
+let playheadAt = -1;
+function paintPlayhead() {
+  const i = playing && m.lane.shown != null && m.lane.shown < m.lane.length ? m.lane.shown : -1; if (i === playheadAt) return;
+  stepBtns[playheadAt]?.classList.remove('ph'); stepBtns[i]?.classList.add('ph'); playheadAt = i;
+}
 function renderSteps() {
-  const lane = m.lane;
+  const lane = m.lane; playheadAt = -1;
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i);
     b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
@@ -333,6 +339,7 @@ function renderSteps() {
     b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : 'on') : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
   });
+  paintPlayhead();
 }
 
 // ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
@@ -977,7 +984,7 @@ window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 // (type-ahead); modifier shortcuts (Alt+1–4, Cmd/Ctrl+Z) work everywhere but in text fields. (:focus-visible can't
 // tell the two apart: Chrome turns it on at the first key press.)
 const TEXT_SEL = 'input, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], select, [role=slider], .gauge';
-const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']), keyFocused = new WeakSet();
+const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']), keyFocused = new WeakSet();
 let lastInput = 'pointer';
 const takeKeysBack = () => { if (document.activeElement) keyFocused.delete(document.activeElement); };
 addEventListener('pointerdown', () => { lastInput = 'pointer'; takeKeysBack(); }, true);
