@@ -48,15 +48,15 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## F · First visit & musical randomize (phase 02)
 
 - **F1 starter grooves.** One-tap presets that load pattern + kit + tempo + swing: lo-fi boom bap, trap, house,
-  techno, DnB, afro (3-2 clave / bell), and a "3 vs 4 vs 5" polyrhythm demo that blooms within 2 bars. (Maya, Rio)
+  techno, DnB, afro (3-2 clave / bell), and a "3 vs 4 vs 5" polyrhythm demo that blooms within 2 bars. (Maya, Rio) ✅ ORBIT2-02
 - **F2 first visit plays something good.** `initPattern()` runs on every visit (one lonely kick). First visit: load a
-  curated demo, pulse play. (Maya, Rio)
+  curated demo, pulse play. (Maya, Rio) ✅ ORBIT2-02
 - **F3 continue last beat.** Returning visit: keep the last pattern, with a small "welcome back · keep jamming / start
-  fresh" choice instead of the invisible "one undo away". (Maya, Rio)
+  fresh" choice instead of the invisible "one undo away". (Maya, Rio) ✅ ORBIT2-02
 - **F4 musical randomize.** Groove families (tresillo, 3-2 clave, 4 vs 3, 5 over 4, four-on-the-floor, boom bap):
   kick anchored on 1, snare on 2 & 4 where the family wants it, lengths 4/8/16 (or the family's), cycle capped at 16
-  bars; keep the current "wild" randomize as a second option. Toast the family name. (Maya, Rio)
-- **F5 alignment countdown.** Show "aligns in N bars" near the core so the bloom becomes an anticipated payoff. (Rio)
+  bars; keep the current "wild" randomize as a second option. Toast the family name. (Maya, Rio) ✅ ORBIT2-02
+- **F5 alignment countdown.** Show "aligns in N bars" near the core so the bloom becomes an anticipated payoff. (Rio) ✅ ORBIT2-02
 
 ## T · Touch & accessibility (phase 03)
 
