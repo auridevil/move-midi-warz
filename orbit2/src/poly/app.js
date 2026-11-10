@@ -193,11 +193,10 @@ function onTick(time) {
   const now = T.getContext().rawContext.currentTime;
   const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
-  // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut)
-  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec(), cut: bank.nextSwitch(t, cyc) }).forEach(({ ev, hits, early: soon }, li) => {
+  // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
+  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec(), cut: bank.nextSwitch(t, cyc), skip }).forEach(({ ev, hits, early: soon }, li) => {
     const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
     if (!ev) return;
-    if (skip.delete(`${li}:${ev.step}`)) { ev.hit = false; hits = []; }   // played live a moment ago: don't double it
     for (const h of hits) play(li, lane, h);
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });

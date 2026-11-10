@@ -803,6 +803,42 @@ test('ORBIT2-05 r2: a slot switch or a chain step plays what the chain render ha
   assert.deepEqual(play(none, 96, at40(kick())), [0, 0.5, 0.75, 1.5]);
   assert.deepEqual(play(none, 96, at40(kick(k => { k.hits[2] = false; }))), [0, 0.5, 0.75, 1.5]);
 });
+// ---- ORBIT2-05 review round 3 ----
+test('ORBIT2-05 r3: a lane that changes speed between an early decision and its tick plays that moment once', async () => {
+  const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
+  const tickSec = 60 / 120 / 24, r3 = (x) => Math.round(x * 1e3) / 1e3;
+  // kick on every beat (×1), changed on the bar line (tick 96, before that tick plays: evolve, a slot) as in onTick
+  const play = (f, change, { roll = () => 0.5 } = {}) => {
+    const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(1)); k.setLength(4); k.hits.fill(true, 0, 4); f(k);
+    const ahead = [], out = [];
+    for (let t = 0; t < 150; t++) { if (t === 96) change(m); liveTick(m, t, ahead, { rng: () => roll(t), tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
+    return out.filter(x => x > 1.5);
+  };
+  const push = (k) => k.setOffset(-20), speed = (r) => (m) => m.lanes[0].setRatio(RATIOS.indexOf(r));
+  // round 3: 1.98 twice, or two downbeats (1.75 + 1.833): the lane at its new speed numbered the tick as another step
+  assert.deepEqual(play(push, speed(3 / 2)), [1.98, 2.313, 2.647, 2.98], 'the speed gauge ×1 → ×3/2 inside the early window');
+  assert.deepEqual(play(push, speed(3 / 4)), [1.98, 2.647], '×1 → ×¾');
+  assert.deepEqual(play(push, (m) => m.evolve({ scope: 'all', amount: 1 }, () => 0.8)), [1.98, 2.313, 2.647, 2.98], 'evolve "all" changes the speed on the bar line');
+  assert.deepEqual(play(k => [0, 1, 2, 3].forEach(i => k.setLock(i, 'nudge', -0.5)), speed(3 / 2)), [1.75, 2.167, 2.5, 2.833], 'one downbeat, nudged −½');
+  assert.deepEqual(play(push, (m) => { const j = m.toJSON(); j.lanes[0].ratioIndex = RATIOS.indexOf(2); m.assign(j); }), [1.98, 2.23, 2.48, 2.73, 2.98], 'a slot, undo or a link at another speed');
+  // nothing sounded yet (the early roll missed): the lane at its new speed decides its own step afresh
+  const missed = (k) => { push(k); k.prob = 0.5; };
+  assert.deepEqual(play(missed, speed(3 / 2), { roll: (t) => (t < 96 ? 0.9 : 0.1) }), [1.98, 2.313, 2.647, 2.98]);
+});
+test('ORBIT2-05 r3: live record: a step a pad just played sounds neither its early part nor its own hits (skip)', async () => {
+  const { liveTick } = await import('../src/poly/export.js');
+  const tickSec = 60 / 120 / 24, m = new Machine(); m.lanes.forEach(l => l.clear());
+  const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setOffset(-20); k.toggle(1); k.toggle(2); k.setTrig(1, { ratchet: 4 }); k.setLock(1, 'nudge', -0.3);
+  // the pad played step 1 before its tick was scheduled (liveHit adds the key): its early repeats and its own go
+  const skip = new Set(['0:1']), ahead = [], hits = [], shown = [];
+  for (let t = 0; t < 130; t++) liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ ev, early, hits: own }, li) => {
+    if (li) return; if (ev?.index === 1) shown.push(ev.hit); for (const h of [...early, ...own]) hits.push(Math.round((t * tickSec + h.dt) * 1e3) / 1e3);
+  });
+  assert.deepEqual(shown, [false, true], 'the scene shows the pad\'s hit, not a second one; the next loop plays it again');
+  assert.equal(skip.size, 0, 'the key goes at its step\'s tick');
+  assert.deepEqual(hits.filter(x => x < 2), [0.98], 'step 2 plays, pushed −20 ms; step 1 (a ×4 roll nudged −0.3, half of it early) not at all');
+  assert.deepEqual(hits.filter(x => x > 2), [2.33, 2.455, 2.58, 2.705], 'a loop later step 1 rolls ×4 again');
+});
 test('ORBIT2-05 r2: a render starts PRE_ROLL before its earliest hit, so the master has settled when the first hit comes', async () => {
   const { renderLead, PRE_ROLL } = await import('../src/poly/jam.js');
   assert.ok(PRE_ROLL >= 0.2, 'the master compressor + limiter take ~0.2 s to settle');

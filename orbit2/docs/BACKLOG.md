@@ -304,9 +304,28 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **The next slot's early first step** (ORBIT2-05 round 2): at a slot switch or a chain step the outgoing lanes leave
   the steps from the switch on to the incoming slot, whose lanes (and voices) exist only from the bar line. A first
   step nudged earlier than the scheduler's look-ahead (~0.1 s; a push of up to 30 ms fits) sounds as soon as it can,
-  late, instead of before the bar line. Deciding it from the queued slot would need that slot's voices early.
+  late, instead of before the bar line. Deciding it from the queued slot would need that slot's voices early. The other
+  way round (round 3, architect): a switch queued after the outgoing lane already sounded an early downbeat (inside its
+  early window, up to ½ step + 30 ms + 15 ms before the bar line) keeps that downbeat, and the incoming slot starts
+  from its next step, since a moment is started once (both slots with the same nudged step would flam). Starting the
+  incoming step anyway when the outgoing early part sounded well before it would keep its downbeat.
 - **One-shot MIDI past the clip end** (ORBIT2-05 round 2, verifier; the old clamp did the same): a note nudged or pushed
   past the end makes that track a little longer than N bars, and not a whole bar.
 - **dsp click / glitch peaks** (ORBIT2-05 round 2, sound): a soft click or glitch peaks 1.3–2.3 dB over an unshaped
   one (the low-pass added to an open layer rings a little), while its RMS is lower. glitch keeps a 0.5 dB step just
   under normal velocity from its own burst / crush rounding.
+- **One source for the slot-switch rules** (ORBIT2-05 round 3, architect): `SlotBank.due()` and `nextSwitch()` write
+  the switch rules twice (a test keeps them in step); derive one from the other before a new mode (P4) has to change
+  both. `nextSwitch`'s "now" branch is never reached from the master tick (`due()` takes a "now" slot first).
+- **A warm loop WAV** (ORBIT2-05 round 3, sound): the pre-roll is silence, so the master starts relaxed while a real
+  loop arrives already compressing: the first copy is still up to ~1 dB off the later ones. A pre-roll that renders the
+  pattern's own last bar would match the loop.
+- **The dsp ghost clap** (ORBIT2-05 round 3, sound): at 0.35 G5 takes 3.8 dB RMS (5.2 peak) past the plain velocity
+  drop, the synth clap ~0.2, so the two engines' ghost claps sit ~3.8 dB apart (inside the documented 4–5 dB).
+- **An early first downbeat after Play** (ORBIT2-05 round 3, sound): a downbeat nudged −½ sounds only as early as the
+  scheduler's look-ahead (~60 ms) on the first bar after Play, exact from the second. Play it on the grid, or start
+  the transport later by the earliest lead.
+- **One filter per lane** (ORBIT2-05 round 3, sound): a late, darker ratchet repeat also darkens the tail of the plain
+  step it overlaps (live and in the WAV alike).
+- **Smoke on any debug port** (ORBIT2-05 round 3, sound; a root tool, outside `orbit2/`): `tools/smoke.mjs` connects to
+  Chrome on 9222 only, so a reviewer on their own ports can't run it.

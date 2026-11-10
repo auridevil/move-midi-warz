@@ -3,12 +3,12 @@ type: review
 phase: ORBIT2-05
 title: ORBIT2-05 groove and dynamics (G1–G6), review panel
 date: 2026-11-10
-round: 2
+round: 3
 result: IN PROGRESS
 reviewers:
   verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  architect: HAPPY
+  sound: HAPPY
   tomi: HAPPY
   dex: HAPPY
 tags: [orbit2, review]
@@ -40,6 +40,12 @@ Live play: a step that can sound before its own tick (a negative nudge, or a lan
 ahead in `onTick` (`app.js`, `early[]`), and its early part is played from the step before. Offline renders start early
 enough to hold hits before tick 0 (`renderPattern`, `lead`). Save format: the three new lane fields (`swingTpl`,
 `offsetMs`, `velHuman`) are optional; a save without them loads as MPC swing, 0 ms, 0 % velocity humanize.
+
+Live play as it is since round 2 (the round-3 brief says this instead of the paragraph above): `onTick` calls pure
+`liveTick()` in `export.js`; `earlyStep()` decides a step that sounds before its own tick at the last tick that can
+schedule it (`Lane.peek()`), `ahead[]` keeps the decision until that tick, and `SlotBank.nextSwitch()` (`slots.js`)
+gives the `cut` from which a queued slot owns the steps. Renders start `PRE_ROLL` (0.5 s) before the earliest hit
+(`renderLead()`, `jam.js`); MIDI wraps like the loop WAV (`hitsToMidi`).
 
 ## Pre-checks
 
@@ -246,3 +252,76 @@ velocity humanize 7 → 1) (verifier).
   the live filter as above in both engines; Move hold step 3 + wheel −3, +1 → nudge −10 %, step not toggled, lock
   panel "locked: nudge"; phone 390 × 844 touch: tap cycle, no sideways scroll; 0 page errors; screenshots looked at.
   `app.js` 1195 → 1196 lines.
+
+## Round 3: 2 of 3 HAPPY
+
+Only the reviewers NOT HAPPY after round 2 (verifier, architect, sound), fresh sub-agents in one message, all on the
+default model, own ports 5401 / 5402 / 5403 (+ 940x; phase-start copies of `c5c49a1` ready in `/tmp/orbit2-<id>/start`,
+on +100); the verifier also ran the smoke on 9222. Brief as in round 2 (goal, G1–G6 + phase spec, the "where" table
+with the live-play paragraph as it is since round 2, the must-fix rule with the later ids and the Later items as
+SHOULDs), `git diff --stat c5c49a1..7b53282` (14 files, +802/−80), each one's own round-1 and round-2 MUST-FIX and
+"Changes after round 2". Pre-checks on 7b53282: `npm run check` clean, `npm test` 125 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | Round-2 item fixed (a same-speed replacement inside the early window plays 1.98 once; an announced switch to another speed plays one hit). New: (1) G1/G2 regression: live record plays the recorded hit twice on a pushed lane. `liveHit` plays the pad and adds `skip` for a step not scheduled yet (`app.js:493`), but `onTick` plays the step's early part (`soon`, `app.js:198`) without looking at `skip`, and with a push the early part is the whole hit. Page, 120 bpm, the kick lane ×1, 4 steps, cleared, record armed, `liveHit(0, 3, 90)` at random moments, the lane cleared 420 ms after each press: push −20 ms: 10 of 24 presses sound twice (the pad at +2 ms, the step again at +66…+229 ms); push 0: 0 of 24. (2) G1/G2: a step decided early plays again when its lane's speed changes before the step's tick: `decided()` (`export.js:41`) matches by step number, and the lane at another speed numbers that tick as another step. Evolve "all" changes the speed in place on the bar line, one tick after the bar-line step was decided; also the speed gauge inside the early window, undo / redo, a "now" recall or a link at another speed. Model (kick ×1, 4 hits, evolve forced to "ratio" at tick 96): push −20, ×1 → ×3/2 or ×¾: 1.98 twice; nudge −½: 1.750 + 1.833; `m.assign()` at ×2: 1.98 twice (at ×1: once). Page: evolve "all" every bar, push −20: a bar-line kick twice, 1 ms apart; ×1 ↔ ×3/2 flipped after tick 95 of each bar: 3 doubles in 4 bars. |
+| architect | HAPPY | none (round-2 item fixed: the five A → B chain cases, plus a cycle-mode switch, a ⅔ lane across the bar line and a ×4 ratchet nudged +½ across the switch, match `collectChain`; page, 100 bpm, recall 0 ↔ 1 in bar mode: gaps 579–619 ms, no short gaps; chained 1 bar each: no doubles; jog wheel clamps at ±0.5, the held step stays on) |
+| sound | HAPPY | none (round-2 items fixed: loop WAV, rim, nudge −½ and push −20 ms: the wrapped first hit within ~1 dB of its copies in both engines (was 13 dB under); live, every hit's own time reads the lane's 4312 Hz on steps 2–4 in all bars, the repeats still darker; one-shot downbeat level; dsp at 0.69 within ±0.2 dB of phase start; stems line up with the mix; 352800 frames, DC ~1e-6, no clipping, continuous seam) |
+
+The implementer reproduced both MUST-FIX on 7b53282 before fixing. Model (kick ×1, 4 hits, a change just before tick
+96): push −20, ×1 → ×3/2 in place: 1.98 twice; ×1 → ×¾: 1.98 twice; nudge −½, ×1 → ×3/2: 1.75 + 1.833; an assign at ×2:
+1.98 twice; at ×1, or no change: once. Page (5400/9400, `liveHit(0, 3, 90)` 24 times at seeded random moments, the lane
+cleared 420 ms after each press, `pmidi.note` logged): push −20 ms: 7 of 24 presses twice (the second +105…+221 ms);
+push 0: 0 of 24. Evolve "all" every bar, push −20, 16 s: one bar-line kick twice, 2.4 ms apart.
+
+SHOULD items recorded (never block): regression tests for both items (verifier; done); the incoming slot's early first
+step (verifier; already in Later); a bar-mode recall queued after the outgoing lane already sounded an early downbeat
+drops the incoming slot's downbeat (the `played` rule): 100 bpm, slot A's kick nudged −½ sounds at 2.1 s, nothing at
+the 2.4 s switch, slot B from 3.0 s; model: A pushed −20 ms with the recall after tick 95 → only 1.98; A nudged −½,
+recall at tick 90 → only 1.75; recalled at tick 80 → 2.00, as it should (architect); `due()` and `nextSwitch()` write
+the switch rules twice, and `nextSwitch`'s "now" branch is never reached from `onTick` (architect); the loop WAV's
+pre-roll is silence, while a real loop arrives already compressing: the first copy is still up to ~1 dB off (sound);
+the dsp ghost clap is 3.8 dB RMS past the plain drop (synth ~0.2), inside the documented 4–5 dB (sound); right after
+Play a downbeat nudged −½ sounds only 59 ms early instead of 270 ms, exact from the second bar (sound); one filter per
+lane: a late, darker ratchet repeat also darkens the tail of the plain step it overlaps, in the WAV too (sound);
+`tools/smoke.mjs` runs on debug port 9222 only (sound).
+
+GOOD: the switch logic stays in the pure model (`nextSwitch` → `liveTick`'s `cut` + `decided()`), tested against
+`collectChain`, and `liveTick` costs 2.6 µs per master tick (4 busy lanes, pushes, nudges, a chain) (architect);
+`renderLead` / `PRE_ROLL` fixes the early-hit loss and the phase-03 cold master, the loop WAV is still exactly 4 bars
+with onsets where they were at phase start (architect, sound); one timeline across the master WAV, stems and mix-raw
+at 100 bpm with nudges, a push and wrapped echoes (verifier); every hit sets the lane filter at its own time, simpler
+than the old flag (sound, architect).
+
+### Changes after round 3
+
+- **A moment is started once, whatever its lane does to its speed** (verifier 2). An early decision is keyed on the
+  master tick its step falls on (`ahead[li].tick`), not on the step number: `decided(pre, lane, step, tick)` in
+  `export.js`. Once its early part has sounded, whatever steps on that tick now (the same lane at another speed:
+  evolve "all", the speed gauge; a lane that replaced it: undo, redo, a link, a "now" recall at another speed) plays
+  the rest of that decision instead of starting the moment again. While nothing has sounded (a missed roll), the same
+  lane at the same step reuses its roll and anything else decides afresh, as before. Model: push −20, ×1 → ×3/2:
+  1.98, 2.313, 2.647, 2.98 (was 1.98 twice); ×¾: 1.98, 2.647; evolve "all" on the bar line: as ×3/2; nudge −½: 1.75,
+  then the new speed's own steps from 2.167 (was 1.75 + 1.833); an assign at ×2: 1.98 once. Page (5400/9400): evolve
+  "all" every bar for 16 s, push −20: no two kicks under 60 ms apart (7b53282: one double, 2.4 ms apart).
+- **A step a pad just played stays played** (verifier 1). `liveTick` takes the app's `skip` set (the `'lane:step'`
+  keys `liveHit` adds for a step not scheduled yet): such a step plays neither its early part nor its own hits, and
+  its key goes at its step's tick. That was `onTick`'s job, which only saw the own hits; `app.js` now passes `skip` and
+  loses the line that filtered after the fact (1196 → 1195 lines). Page (the verifier's repro, 24 presses at seeded
+  random moments): push −20 ms: 0 of 24 presses twice (7b53282: 7 of 24); push 0: 0 of 24; a recorded step then
+  nudged −½: 0 of 24.
+- Not changed (SHOULD → [[BACKLOG]] Later, in "The next slot's early first step"): the architect's recall inside the
+  outgoing slot's early window. Starting the incoming downbeat after an early outgoing one sounded brings back the
+  flam the verifier's round-2 MUST-FIX removed (recalling the same nudged snare flammed it, 47–71 ms), so a moment
+  stays started once. Also to Later: one source for the switch rules, a warm loop WAV, the dsp ghost clap, the first
+  early downbeat after Play, one filter per lane, smoke on any debug port.
+- Tests (127 orbit2: 2 new, both fail on 7b53282). A lane that changes speed between an early decision and its tick
+  (the speed gauge to ×3/2 and ×¾, evolve "all", a −½ nudge, an assign at ×2) plays each moment once, and after a
+  missed early roll the lane at its new speed decides its own step. Live record: a skipped step (a ×4 roll nudged
+  −0.3, half of it early, on a lane pushed −20 ms) sounds neither part, the scene gets `hit: false`, the key goes at
+  its tick, and the next loop rolls ×4 again. `npm run check` clean, `npm test` 127 + 9, `node tools/smoke.mjs
+  http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped). Browser (5400/9400,
+  `/tmp/orbit2-impl/`, deleted): the round-2 live checks still hold: two identical pushed slots chained 1 bar each,
+  14 kicks in 6.7 s, gaps 497–504 ms; recalls 0 ↔ 1 in bar mode, 14 kicks, 496–505 ms; undo / redo every 41 ms between
+  two real history steps (push −20, step 3 nudged −½), 11 kicks in 5 s, gaps 247–751 ms; phone 390 × 844, no sideways
+  scroll; 0 page errors.
