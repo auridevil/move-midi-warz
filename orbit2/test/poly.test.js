@@ -508,3 +508,27 @@ test('F2 / F3 boot: a share link wins, a first visit gets the demo, a returning 
   assert.equal(bootMode({ saved: true, hash: '#p=abc_-1' }), 'link'); assert.equal(bootMode({ saved: false, hash: '#p=abc' }), 'link');
   assert.equal(bootMode({ saved: true, hash: '#p=' }), 'return', 'an empty link is no link'); assert.equal(bootMode({ saved: false, hash: '#x' }), 'first');
 });
+test('a tap cycles a step off → on → accent → off; a stale accent is dropped', () => {
+  const l = new Lane('kick', { length: 4 });
+  assert.deepEqual([0, 1, 2, 3].map(() => l.cycleStep(1)), ['on', 'accent', 'off', 'on']); assert.equal(l.accents[1], false);
+  l.cycleStep(2); l.cycleStep(2); l.cycleStep(2); assert.deepEqual([l.hits[2], l.accents[2]], [false, false]);
+  l.accents[3] = true; assert.equal(l.cycleStep(3), 'on'); assert.equal(l.accents[3], false, 'turning on gives a plain hit');
+  assert.equal(l.cycleStep(9), 'off', 'beyond length is ignored'); assert.equal(l.hits[9], false);
+});
+test('long press: fires after the hold, a move or an early release is a tap, the click after it is swallowed', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { longPress, LONG_MS } = await import('../src/ui.js');
+  const ev = (type, o = {}) => Object.assign(new Event(type, { cancelable: true }), { pointerId: 1, button: 0, clientX: 0, clientY: 0, detail: 1 }, o);
+  const el = new EventTarget(); let longs = 0, clicks = 0; longPress(el, () => longs++); el.addEventListener('click', () => clicks++);
+  const press = (ms, moves = []) => { el.dispatchEvent(ev('pointerdown')); for (const [x, y] of moves) el.dispatchEvent(ev('pointermove', { clientX: x, clientY: y })); t.mock.timers.tick(ms); el.dispatchEvent(ev('pointerup')); el.dispatchEvent(ev('click')); };
+  press(LONG_MS - 1); assert.deepEqual([longs, clicks], [0, 1], 'short = a tap');
+  press(LONG_MS); assert.deepEqual([longs, clicks], [1, 1], 'held = long press, its click swallowed');
+  press(600, [[5, 5]]); assert.deepEqual([longs, clicks], [2, 1], 'a wobble within 8 px still counts');
+  press(600, [[9, 0]]); assert.deepEqual([longs, clicks], [2, 2], 'moved away = a tap (a scroll or a drag)');
+  el.dispatchEvent(ev('pointerdown')); el.dispatchEvent(ev('pointercancel')); t.mock.timers.tick(600); assert.equal(longs, 2, 'cancel stops the timer');
+  el.dispatchEvent(ev('pointerdown', { button: 2 })); t.mock.timers.tick(600); assert.equal(longs, 2, 'the right button waits for contextmenu');
+  const cm = ev('contextmenu'); el.dispatchEvent(cm); assert.equal(longs, 3, 'right-click / menu key = long press'); assert.ok(cm.defaultPrevented);
+  el.dispatchEvent(ev('click', { detail: 0 })); assert.equal(clicks, 3, 'a keyboard click always passes');
+  el.dispatchEvent(ev('pointerdown')); t.mock.timers.tick(LONG_MS); el.dispatchEvent(ev('contextmenu')); el.dispatchEvent(ev('pointerup')); el.dispatchEvent(ev('click'));
+  assert.deepEqual([longs, clicks], [4, 3], 'touch: the timer and the browser menu fire it once, no click');
+});

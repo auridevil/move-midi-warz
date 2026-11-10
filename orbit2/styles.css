@@ -246,7 +246,12 @@ body.chaos::before { display: none; }
 .stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
 .stepsui { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; margin: 8px 0; }
-.stepsui .st { height: 18px; border-radius: 4px; background: rgba(236,233,247,.14); cursor: pointer; } .stepsui .st.on { background: var(--signal-cyan); } .stepsui .st.acc { background: #fff; } .stepsui .st.off { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; }
+.stepsui .st { height: 32px; min-width: 0; padding: 0; border: 1px solid transparent; border-radius: 4px; background: rgba(236,233,247,.14); box-shadow: none; cursor: pointer; transition: none; }
+.stepsui .st:hover { background: rgba(236,233,247,.26); border-color: transparent; box-shadow: none; } .stepsui .st.on, .stepsui .st.on:hover { background: var(--signal-cyan); } .stepsui .st.acc, .stepsui .st.acc:hover { background: #fff; }
+.stepsui .st.off, .stepsui .st.off:disabled:hover { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; opacity: 1; }
+/* long-press targets: no iOS callout, no text selection, no double-tap zoom delay */
+.stepsui .st, .slots .slot { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+@media (pointer: coarse) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(8, 1fr); row-gap: 16px; } body:has(#hud-left) .stepsui .st { height: 44px; } body:has(#hud-left) .slots .slot { min-height: 44px; } }
 .sliders .pv { font-size: 11px; color: var(--signal-cyan); margin-left: 4px; }
 .lane-drawer { border-width: 1px; transition: border-color .2s; }
 .subh { font: 400 10px var(--font-display); letter-spacing: .2em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
@@ -407,7 +412,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 
 /* Orbits: slots, record, evolve, MIDI, step locks */
 .slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0 2px; }
-.slots .slot { padding: 4px 0; font-size: 11px; border-radius: 6px; background: rgba(236,233,247,.06); color: var(--muted); border: 1px dashed rgba(236,233,247,.2); }
+.slots .slot { padding: 4px 0; min-height: 32px; font-size: 12px; border-radius: 6px; background: rgba(236,233,247,.06); color: var(--muted); border: 1px dashed rgba(236,233,247,.2); }
 .slots .slot.filled { background: rgba(167,139,250,.35); color: #fff; border-style: solid; border-color: rgba(167,139,250,.6); }
 .slots .slot.chain { border-color: var(--ember-magenta); box-shadow: inset 0 0 0 1px var(--ember-magenta); }
 .slots .slot.cur { background: var(--star-white); color: var(--void-black); font-weight: 700; }
@@ -464,7 +469,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .readout { display: none; }
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
-  body:has(#hud-left) .stepsui { gap: 3px; } body:has(#hud-left) .stepsui .st { height: 28px; }
+  body:has(#hud-left) .stepsui { gap: 3px; }
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
   body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
@@ -535,3 +540,10 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .install-btn { margin: 4px 0 10px; }
 /* screen-reader only: the polite live region that announces one changed value (the readout itself is silent) */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* slot menu: the long-press way to save, chain and erase */
+.slots .slot.menu { outline: 2px solid var(--signal-cyan); outline-offset: 1px; }
+.slot-menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid rgba(103,232,249,.45); border-radius: 10px; background: rgb(18, 12, 40); }
+.slot-menu[hidden] { display: none; }
+.slot-menu-title { font-size: 12px; color: var(--signal-cyan); margin-right: 2px; }
+.slot-menu button { min-height: 32px; padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
+@media (pointer: coarse) { .slot-menu button { min-height: 44px; } .slot-menu [data-act=close] { min-width: 44px; } }

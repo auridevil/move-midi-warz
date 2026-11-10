@@ -65,6 +65,13 @@ export class Lane {
   setEuclid(k) { this.euclidK = Math.max(0, Math.min(this.length, Math.round(k))); const e = euclid(this.euclidK, this.length); for (let i = 0; i < MAX_STEPS; i++) this.hits[i] = i < this.length ? e[i] : false; return this.euclidK; }
   toggle(i) { if (i >= this.length) return false; this.hits[i] = !this.hits[i]; return this.hits[i]; }
   toggleAccent(i) { if (i >= this.length) return false; this.accents[i] = !this.accents[i]; return this.accents[i]; }
+  /** One tap, no modifier: off → on → accent → off (a stale accent on an empty step is dropped when it turns on). */
+  cycleStep(i) {
+    if (i >= this.length) return 'off';
+    if (!this.hits[i]) { this.hits[i] = true; this.accents[i] = false; return 'on'; }
+    if (!this.accents[i]) { this.accents[i] = true; return 'accent'; }
+    this.hits[i] = false; this.accents[i] = false; return 'off';
+  }
   clear() { this.hits.fill(false); this.accents.fill(false); this.locks.fill(null); this.trigs.fill(null); this.euclidK = 0; }
   /** Condition / ratchet on one stored step. ratchet 1 = a normal hit; fade = repeats get quieter. */
   setTrig(i, patch) {

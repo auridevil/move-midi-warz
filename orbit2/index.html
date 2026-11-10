@@ -46,14 +46,21 @@
     </details>
     <details class="drawer" open>
       <summary>patterns · 16 slots &amp; chains</summary>
-      <div id="slots" class="slots"></div>
+      <div id="slots" class="slots" role="group" aria-label="pattern slots"></div>
+      <div id="slot-menu" class="slot-menu" role="group" aria-labelledby="slot-menu-title" hidden>
+        <span id="slot-menu-title" class="slot-menu-title"></span>
+        <button type="button" data-act="save">save here</button>
+        <button type="button" data-act="chain">add to chain</button>
+        <button type="button" data-act="erase">erase</button>
+        <button type="button" data-act="close" aria-label="close the slot menu">×</button>
+      </div>
       <p id="chain-info" class="hint tight"></p>
       <div class="row-ctl">
         <div class="ctl" title="When a recalled slot takes over"><span class="ctl-lbl">switch</span><div id="slot-switch"></div></div>
         <div id="slot-gauges" class="gauges one"></div>
         <button id="chain-stop" class="small">stop chain</button>
       </div>
-      <p class="hint tight">Click = load · Shift+click = save · Cmd/Ctrl+click = add to a chain · Alt+click = erase. Move: hold <b>Loop</b> + step = load (several steps = chain), hold <b>Duplicate</b> + step = save.</p>
+      <p class="hint tight">Tap = load · long-press (or right-click) = save here, add to a chain, erase. Mouse shortcuts: Shift+click = save · Cmd/Ctrl+click = add to a chain · Alt+click = erase. Move: hold <b>Loop</b> + step = load (several steps = chain), hold <b>Duplicate</b> + step = save.</p>
     </details>
     <details class="drawer">
       <summary>live record · play the pads, they stick</summary>

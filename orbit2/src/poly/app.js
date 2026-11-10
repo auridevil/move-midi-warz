@@ -16,7 +16,7 @@ import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
-import { segmented, toggleChip, mount } from '../ui.js';
+import { segmented, toggleChip, mount, longPress } from '../ui.js';
 import { createScene } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 
@@ -238,7 +238,7 @@ const INFO = {
   level: 'Lane volume.',
   tempo: 'Master tempo in bpm, shared by every page. Knob 8 (no Shift), tap tempo on the Record button. Global, not per lane.',
   humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine. Wheel.',
-  'step locks': 'Hold a step button on the Move and turn knobs 1–7 (or Alt/right-click a step here) to override tune, probability, velocity, decay, tone, snap or color on that step only. Hold step + Delete clears them. Locked hits glow cyan and get a small moon.',
+  'step locks': 'Hold a step button on the Move and turn knobs 1–7 (or long-press, right-click or Alt+click a step here) to override tune, probability, velocity, decay, tone, snap or color on that step only. Hold step + Delete clears them. Locked hits glow cyan and get a small moon.',
   'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
   'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
   'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
@@ -309,16 +309,30 @@ function renderLaneMix() {
   $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
 }
 function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, p.get(m.lane) + delta); sync(); }
-function renderSteps() {
-  const el = $('stepsui'); el.innerHTML = ''; const lane = m.lane;
+// Step buttons are built once and repainted in place: a rebuild would drop the keyboard focus on every edit, and a
+// long press that opens the lock panel would leave the finger on a detached button.
+const stepBtns = [];
+function buildSteps() {
+  const el = $('stepsui'); el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'steps');
   for (let i = 0; i < MAX_STEPS; i++) {
-    const d = document.createElement('div'); d.className = `st ${i >= lane.length ? 'off' : lane.hitAt(i) ? (lane.accentAt(i) ? 'acc' : 'on') : ''}${i < lane.length && lane.lockAt(i) ? ' lk' : ''}${i < lane.length && lane.trigAt(i) ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
-    const tg = i < lane.length && lane.trigAt(i); if (tg) d.dataset.tg = `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim();
-    d.title = 'click = hit · Shift+click = accent · Alt+click or right-click = step locks, condition, repeats';
-    d.onclick = (e) => { if (i >= lane.length) return; if (e.altKey) return editLocks(i); if (e.shiftKey) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); sync(); };
-    d.oncontextmenu = (e) => { e.preventDefault(); if (i < lane.length) editLocks(i); };
-    el.appendChild(d);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'st';
+    b.title = 'tap = off → on → accent → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only';
+    b.onclick = (e) => { const lane = m.lane; if (i >= lane.length) return; if (e.altKey) return editLocks(i); const si = lane.stepIndex(i); if (e.shiftKey) lane.toggleAccent(si); else lane.cycleStep(si); sync(); };
+    longPress(b, () => { if (i < m.lane.length) editLocks(i); });
+    el.appendChild(b); stepBtns.push(b);
   }
+}
+function renderSteps() {
+  const lane = m.lane;
+  stepBtns.forEach((b, i) => {
+    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i);
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
+    const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
+    if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
+    b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
+    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : 'on') : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
+    if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
+  });
 }
 
 // ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
@@ -388,18 +402,43 @@ function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount 
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
 function recallSlot(i) { if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
 function chainSlots(list) { bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
+// Slot buttons are built once (a clock-driven slot switch repaints them mid-press). A long press (or right-click)
+// opens a small menu under the grid: the touch way to save, chain and erase.
+const slotBtns = []; let slotMenuFor = -1;
+const addToChain = (i) => chainSlots([...(bank.chain.length ? bank.chain : bank.current >= 0 ? [bank.current] : []), i]);
 function renderSlots() {
-  const el = $('slots'); el.innerHTML = '';
-  for (let i = 0; i < SLOT_COUNT; i++) {
-    const b = document.createElement('button'); b.textContent = i + 1;
-    b.className = `slot${bank.filled(i) ? ' filled' : ''}${bank.current === i ? ' cur' : ''}${bank.pending === i ? ' queued' : ''}${bank.chain.length > 1 && bank.chain.includes(i) ? ' chain' : ''}`;
-    b.title = 'click = load · Shift+click = save here · Cmd/Ctrl+click = add to chain · Alt+click = erase';
-    b.onclick = (e) => { if (e.shiftKey) saveSlot(i); else if (e.altKey) { bank.erase(i); renderSlots(); } else if (e.metaKey || e.ctrlKey) chainSlots([...(bank.chain.length ? bank.chain : bank.current >= 0 ? [bank.current] : []), i]); else recallSlot(i); };
-    el.appendChild(b);
-  }
-  $('chain-info').textContent = bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join(' → ')} · ${bank.chainBars} bar${bank.chainBars > 1 ? 's' : ''} each` : bank.pending >= 0 ? `slot ${bank.pending + 1} waits for the next ${bank.switchAt === 'now' ? 'tick' : bank.switchAt}` : bank.current >= 0 ? `playing slot ${bank.current + 1}` : 'nothing saved yet: Shift+click a slot';
+  slotBtns.forEach((b, i) => {
+    const filled = bank.filled(i), cur = bank.current === i, queued = bank.pending === i, chained = bank.chain.length > 1 && bank.chain.includes(i);
+    b.className = `slot${filled ? ' filled' : ''}${cur ? ' cur' : ''}${queued ? ' queued' : ''}${chained ? ' chain' : ''}${slotMenuFor === i ? ' menu' : ''}`;
+    b.setAttribute('aria-label', `slot ${i + 1}, ${filled ? 'saved' : 'empty'}${cur ? ', playing' : ''}${queued ? ', queued' : ''}${chained ? ', in the chain' : ''}`);
+  });
+  $('chain-info').textContent = bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join(' → ')} · ${bank.chainBars} bar${bank.chainBars > 1 ? 's' : ''} each` : bank.pending >= 0 ? `slot ${bank.pending + 1} waits for the next ${bank.switchAt === 'now' ? 'tick' : bank.switchAt}` : bank.current >= 0 ? `playing slot ${bank.current + 1}` : 'nothing saved yet: long-press a slot (or Shift+click) to save';
+  renderSlotMenu();
 }
+function renderSlotMenu() {
+  const menu = $('slot-menu'), i = slotMenuFor; menu.hidden = i < 0; if (i < 0) return;
+  $('slot-menu-title').textContent = `slot ${i + 1}`;
+  menu.querySelector('[data-act=chain]').disabled = menu.querySelector('[data-act=erase]').disabled = !bank.filled(i);
+}
+function openSlotMenu(i) { slotMenuFor = slotMenuFor === i ? -1 : i; renderSlots(); if (slotMenuFor >= 0) $('slot-menu').querySelector('[data-act=save]').focus({ preventScroll: true }); }
+function closeSlotMenu(refocus = false) { const i = slotMenuFor; if (i < 0) return; slotMenuFor = -1; renderSlots(); if (refocus) slotBtns[i].focus({ preventScroll: true }); }
 function buildSlotsUI() {
+  const el = $('slots');
+  for (let i = 0; i < SLOT_COUNT; i++) {
+    const b = document.createElement('button'); b.type = 'button'; b.textContent = i + 1;
+    b.title = 'click = load · long-press or right-click = save / chain / erase · Shift+click = save here · Cmd/Ctrl+click = add to chain · Alt+click = erase';
+    b.onclick = (e) => { closeSlotMenu(); if (e.shiftKey) saveSlot(i); else if (e.altKey) { bank.erase(i); renderSlots(); } else if (e.metaKey || e.ctrlKey) addToChain(i); else recallSlot(i); };
+    longPress(b, () => openSlotMenu(i));
+    el.appendChild(b); slotBtns.push(b);
+  }
+  $('slot-menu').onclick = (e) => {
+    const act = e.target instanceof Element && e.target.closest('button')?.dataset.act, i = slotMenuFor; if (!act || i < 0) return;
+    slotMenuFor = -1;
+    if (act === 'save') saveSlot(i); else if (act === 'chain') addToChain(i); else if (act === 'erase') bank.erase(i);
+    renderSlots(); slotBtns[i].focus({ preventScroll: true });
+  };
+  $('slot-menu').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeSlotMenu(true); } });
+
   ui.slotSwitch = mount('slot-switch', segmented({ options: [['now', 'at once'], ['bar', 'next bar'], ['cycle', 'full cycle', 'when every lane lines up again']], value: bank.switchAt, onChange: (v) => { bank.switchAt = v; bank.persist(); renderSlots(); } }));
   sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
   $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
@@ -802,7 +841,7 @@ function toast(txt, ms = 2400) {
   const t = $('toast'); t.textContent = txt; t.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = setTimeout(() => { t.textContent = ''; }, 300); }, ms);
 }
-buildSliders(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
+buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
@@ -925,11 +964,7 @@ move.addEventListener('button', (e) => {
   if (name === 'left' || name === 'right') { const dir = name === 'right' ? 1 : -1; if (shift) cycleKit(dir); else cycleVoice(m.selected, dir); }
 });
 // randomize: click = musical, Shift+click or a long press (touch) = wild; the 'wild' button says it out loud
-{ const b = $('btn-random'); let held = 0, longDone = false;
-  b.onpointerdown = () => { longDone = false; clearTimeout(held); held = setTimeout(() => { longDone = true; randomizeAll(true); }, 550); };
-  b.onpointerup = b.onpointerleave = b.onpointercancel = () => clearTimeout(held);
-  b.oncontextmenu = (e) => e.preventDefault();   // a long press on touch must not open the menu
-  b.onclick = (e) => { if (longDone) { longDone = false; return; } randomizeAll(e.shiftKey); }; }
+{ const b = $('btn-random'); longPress(b, () => randomizeAll(true)); b.onclick = (e) => randomizeAll(e.shiftKey); }
 $('btn-wild').onclick = () => randomizeAll(true);
 $('btn-clear').onclick = clearLane; $('btn-reset').onclick = () => { if (playing) resetPending = true; m.resetAll(); scene.reset(); };
 const KEYS = ['12345678', 'qwertyui', 'asdfghjk', 'zxcvbnm,'];
