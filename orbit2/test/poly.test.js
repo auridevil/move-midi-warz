@@ -569,3 +569,14 @@ test('a restart forgets the step on screen, so the playhead lights nothing until
   assert.deepEqual(m.lanes.map(l => [l.shown, l.pos]), m.lanes.map(() => [null, 0]));
   assert.equal('shown' in m.lanes[0].toJSON(), false, 'not saved');
 });
+
+test('C1/C2: with a stage, the rings and their glow stay inside the free box between the panels', async () => {
+  const { ringGeo } = await import('../src/poly/scene.js');
+  // 1280×720: header 87 px, left column ends at 364, right column starts at 856 (16 px gaps), as laid out by layoutHud
+  for (const s of [{ x: 380, y: 97, w: 460, h: 607 }, { x: 380, y: 97, w: 620, h: 787 }, { x: 10, y: 50, w: 900, h: 200 }]) {
+    const g = ringGeo(1280, 720, s), outer = g.ring(3), glow = outer + 0.1 * g.R;
+    assert.ok(Math.abs(g.cx - (s.x + s.w / 2)) < 1e-9 && Math.abs(g.cy - (s.y + s.h / 2)) < 1e-9, 'centred in the stage');
+    assert.ok(g.cx - glow >= s.x - 1e-9 && g.cx + glow <= s.x + s.w + 1e-9 && g.cy - glow >= s.y - 1e-9 && g.cy + glow <= s.y + s.h + 1e-9, `fits ${JSON.stringify(s)}`);
+  }
+  const free = ringGeo(390, 390); assert.equal(free.cx, 195); assert.equal(free.cy, 195);   // no stage: the phone's square canvas
+});

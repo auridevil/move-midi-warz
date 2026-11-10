@@ -278,7 +278,8 @@ function buildSliders() {
   for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
-  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) }); ge.appendChild(sliders.tempo.el);
+  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) });
+  $('tempo-gauge').replaceChildren(sliders.tempo.el);   // C1: tempo sits in the transport strip
   sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
   for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
@@ -1067,12 +1068,18 @@ setInterval(() => {
   const sv = $('stress-val'); sv.textContent = `${Math.round(lvl * 100)}% · ${word}`; sv.style.color = col;
   $('stress-val').parentElement.title = `stress ${Math.round(lvl * 100)}% · frame ${frameMs.toFixed(0)} ms · audio headroom ${stress.headMs.toFixed(0)} ms · visuals ${Math.round(quality * 100)}%`;
 }, 300);
+// C2: one status line (tempo, play state, slot, rec, evolve, kit + whatever is live right now); the per-lane rows and
+// the sound row repeat the knobs, so they sit in the collapsed "nerd stats" drawer with the rest of the details
 function readout() {
   poke();
-  const sd = m.lane.sound; const sline = `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`;
-  const lines = [`tempo ${tempo} bpm   ${playing ? 'playing' : 'stopped'}   kit ${KITS[m.kitKey()]?.name || 'custom'}   engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`, ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`), sline,
-    `  slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1} queued` : ''}${bank.chain.length > 1 ? `   chain ${bank.chain.map(i => i + 1).join('·')}` : ''}   ${rec.armed ? 'rec ●' : 'rec ○'}   ${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}${fill ? 'FILL   ' : ''}${jam.state === 'rec' ? `JAM ${Math.floor(jam.beats)}/${JAM_BEATS}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
-  $('readout').textContent = lines.join('\n'); announceChanges();
+  const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
+  $('readout').textContent = [`${tempo} bpm`, playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
+    ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
+  const sd = m.lane.sound, lines = [`engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
+    ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
+    `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
+    `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
+  $('nerd-stats').textContent = lines.join('\n'); announceChanges();
 }
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
 // you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
@@ -1091,17 +1098,24 @@ function announceChanges() {
   if (!changed.length || changed.length > 3) return;   // a whole new pattern (undo, slot) is not one value: stay quiet
   clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = changed.join(', '); }, 300);
 }
-// ---- layout: the left column lives between the readout (whose height changes) and the bottom-left panel ----
+// ---- layout: both columns start under the header (whose height changes: the strip and the status line wrap); the
+// left one ends above the bottom-left panel. The rings get the free stage between the columns, so no panel ever
+// covers them (wide windows only: narrower ones stack everything under a square canvas, see styles.css) ----
+const STAGE_GAP = 16;
 function layoutHud() {
-  const hl = $('hud-left'); if (innerWidth <= 1100) { hl.style.top = hl.style.bottom = ''; return; }
-  const top = $('readout').getBoundingClientRect().bottom + 12, keysOpen = $('keys-pop').open;
+  const top = Math.round($('topbar').getBoundingClientRect().bottom + 10), hl = $('hud-left');
+  document.documentElement.style.setProperty('--hud-top', `${top}px`);
+  if (innerWidth <= 1100) { hl.style.top = hl.style.bottom = ''; scene.setStage(null); poke(); return; }
+  const keysOpen = $('keys-pop').open, stress = $('hud-bl').querySelector('.stress-meter');
   // while the Move-controls popup is open it floats over the column; size the column against the closed panel
-  const blTop = keysOpen ? innerHeight - 18 - $('hud-bl').querySelector('.stress-meter').offsetHeight - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
-  hl.style.top = `${Math.round(top)}px`; hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
+  const blTop = keysOpen ? innerHeight - 18 - (stress?.offsetHeight || 0) - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
+  hl.style.top = `${top}px`; hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
+  const x0 = Math.max(hl.getBoundingClientRect().right, $('hud-bl').getBoundingClientRect().right) + STAGE_GAP, x1 = document.querySelector('.hud').getBoundingClientRect().left - STAGE_GAP;
+  scene.setStage({ x: x0, y: top, w: Math.max(120, x1 - x0), h: Math.max(120, innerHeight - STAGE_GAP - top) }); poke();
 }
-new ResizeObserver(layoutHud).observe($('readout')); new ResizeObserver(layoutHud).observe($('hud-bl')); addEventListener('resize', layoutHud);
+for (const id of ['topbar', 'hud-bl']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
 $('keys-pop').addEventListener('toggle', layoutHud);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve };
-readout(); scene.start();
+window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene };
+readout(); layoutHud(); scene.start();

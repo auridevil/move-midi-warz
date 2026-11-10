@@ -212,8 +212,16 @@ body.chaos { overflow: hidden; }
 body.chaos::before { display: none; }
 #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
-.readout { position: fixed; left: 24px; top: 74px; z-index: 3; font: 400 11px/1.9 var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.82); text-shadow: -1px 0 rgba(103,232,249,.7), 1px 0 rgba(240,171,252,.7); white-space: pre; pointer-events: none; }
-.hud { position: fixed; right: 24px; top: 74px; bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; max-width: 440px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+/* C2: the status line, the header's last row */
+.readout { flex-basis: 100%; margin: 0; font: 400 11px/1.6 var(--font-display); letter-spacing: .14em; text-transform: lowercase; color: rgba(236,233,247,.82); text-shadow: -1px 0 rgba(103,232,249,.7), 1px 0 rgba(240,171,252,.7); }
+/* C1: the transport strip, in the header between the title and the Move */
+.tstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tstrip .big-btn { padding: 8px 18px; font-size: 14px; min-width: 96px; }
+.tstrip-tempo .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
+.tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; font-size: 13px; white-space: nowrap; } .tstrip-tempo .g-label { display: none; }
+/* nerd stats: the old readout rows, small and scrollable */
+.nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
+.hud { position: fixed; right: 24px; top: var(--hud-top, 74px); bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; width: 400px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
@@ -259,10 +267,10 @@ body.chaos::before { display: none; }
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(22, 14, 46, 0.86); }
 .drawer.inner { margin-top: 8px; padding: 6px 10px; background: rgba(0,0,0,.15); }
 .sliders label[title] { cursor: help; }
-.hud-left { position: fixed; left: 24px; top: 215px; z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 380px; max-height: calc(100vh - 240px); overflow: auto; }
+.hud-left { position: fixed; left: 24px; top: var(--hud-top, 130px); z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 340px; max-height: calc(100vh - 240px); overflow: auto; }
 .hud-left .drawer { width: 100%; }
 @media (max-width: 1100px) { .hud-left { position: static; width: auto; margin: 0 16px; } }
-.hud-bl { position: fixed; left: 24px; bottom: 18px; z-index: 3; width: 380px; }
+.hud-bl { position: fixed; left: 24px; bottom: 18px; z-index: 3; width: 340px; }
 .hud-bl .drawer { width: 100%; }
 @media (max-width: 1100px) { .hud-bl { position: static; width: auto; margin: 0 16px 16px; } }
 
@@ -443,21 +451,18 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .keys-pop[open] .pop-x { display: inline; }
 .gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
 @media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } #hud-left { top: auto !important; bottom: auto !important; } }
-body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: hidden; }   /* never runs under the lane panel */
 /* Orbits on narrow windows: stack everything in one scrolling column over the fixed canvas */
 @media (max-width: 1100px) {
   body:has(#hud-left) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
-  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .readout { order: 1; } body:has(#hud-left) .hud { order: 2; }
+  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .hud { order: 2; }
   body:has(#hud-left) #hud-left { order: 3; } body:has(#hud-left) #hud-bl { order: 4; }
-  body:has(#hud-left) .readout { position: static; margin: 0 16px 12px; max-width: none; overflow-x: auto; }
-  body:has(#hud-left) .hud { position: static; max-width: none; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
+  body:has(#hud-left) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
   body:has(#hud-left) .hud-row { justify-content: flex-start; }
   body:has(#hud-left) #hud-left { position: static; width: auto; margin: 0 16px 12px; overflow: visible; }
   body:has(#hud-left) #hud-bl { position: static; width: auto; margin: 0 16px 16px; }
   /* the orbits get their own square stage right under the header, so the rings are visible and tappable instead of
      sitting behind the panels; the scene measures the canvas box, not the viewport */
   body:has(#hud-left) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
-  body:has(#hud-left) .readout { order: 2; }
   body:has(#hud-left) .lane-tabs, body:has(#hud-left) .grooves-row .chips { justify-content: flex-start; }
 }
 /* lane buttons: the touch way to pick a ring */
@@ -466,12 +471,14 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 .lane-tab.sel { background: color-mix(in srgb, var(--lane) 22%, transparent); border-color: var(--lane); box-shadow: 0 0 12px color-mix(in srgb, var(--lane) 35%, transparent); }
 /* phone */
 @media (max-width: 760px) {
-  body:has(#hud-left) .readout { display: none; }
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
+  /* C1 on a phone: play floats in the thumb zone, over the bottom of the screen; the page scrolls clear of it */
+  body:has(#hud-left) #btn-play { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 8; width: 76px; height: 76px; min-width: 0; padding: 0; border-radius: 50%; font-size: 14px; line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px rgba(14,10,32,.85), 0 0 26px rgba(103,232,249,.45); }
+  body:has(#hud-left) { padding-bottom: 104px; }
+  body:has(#hud-left) .toast { bottom: 108px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
   body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
-  body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
   body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
   body:has(#hud-left) .welcome > span { flex-basis: 100%; }

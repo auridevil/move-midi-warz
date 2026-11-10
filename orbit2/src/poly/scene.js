@@ -20,6 +20,18 @@ export function alignText(tick, cycle, bar = 96, beat = 24) {
   return `aligns in ${n} ${unit}${n > 1 ? 's' : ''}`;
 }
 
+/**
+ * Where the rings go on a W × H canvas: centre, R, ring(li) = radius of lane li (the outer one is 0.85 R). On phones the
+ * canvas is a square stage under the header (CSS), not the viewport: centre the system and use more of it. A stage set
+ * by the app ({ x, y, w, h }: the free box between the panels on a wide window) wins: the outer ring and its glow fit
+ * inside it with a margin (0.1 R), so no panel covers them.
+ */
+export function ringGeo(W, H, stage = null) {
+  const ring = (R) => (li) => R * (0.25 + li * 0.2);
+  if (stage) { const R = Math.min(stage.w, stage.h) / 2 / 0.95; return { cx: stage.x + stage.w / 2, cy: stage.y + stage.h / 2, R, ring: ring(R) }; }
+  const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return { cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R, ring: ring(R) };
+}
+
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const h = size / 2;
@@ -45,8 +57,13 @@ export function createScene(cv, o) {
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 
-  // on phones the canvas is a square stage under the header (CSS), not the viewport: centre the system and use more of it
-  const geo = () => { const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return { cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R, ring: (li) => R * (0.25 + li * 0.2) }; };
+  let stage = null;
+  const geo = () => ringGeo(W, H, stage);
+  /** s: { x, y, w, h } in client px, or null for the whole canvas. */
+  function setStage(s) {
+    const b = cv.getBoundingClientRect(), n = s && { x: Math.round(s.x - b.left), y: Math.round(s.y - b.top), w: Math.round(s.w), h: Math.round(s.h) };
+    if (JSON.stringify(n) === JSON.stringify(stage)) return; stage = n; resize();
+  }
   const nodeXY = (g, li, i, len) => { const a = (i / len) * TAU - Math.PI / 2, r = g.ring(li); return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r, a]; };
 
   function resize() {
@@ -251,5 +268,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, start: () => frameLoop(frame), reset: () => { last.length = 0; }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; }, stats: () => ({ frameMs: avgDt, quality }) };
 }
