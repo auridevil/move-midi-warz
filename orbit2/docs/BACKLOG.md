@@ -75,15 +75,15 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## C · Calmer screen (phase 04)
 
 - **C1 transport strip.** Play, tempo (with tap), undo/redo, fill, jam in one strip at the top; play in the thumb zone
-  on phones. (Greta, Rio)
+  on phones. (Greta, Rio) ✅ ORBIT2-04
 - **C2 one-line readout.** Tempo, play state, slot, rec, evolve. Per-lane rows + sound row move to a collapsible "nerd
-  stats" panel (they duplicate the knobs). Readout must not overlap rings. (Greta, Rio)
+  stats" panel (they duplicate the knobs). Readout must not overlap rings. (Greta, Rio) ✅ ORBIT2-04
 - **C3 less help text.** Headers are nouns ("Lane 1 · kick"); Move shortcuts only in the Move panel; mouse tricks in
-  tooltips or one help overlay. Remove the "what each parameter does" table (tooltips cover it). (Greta)
+  tooltips or one help overlay. Remove the "what each parameter does" table (tooltips cover it). (Greta) ✅ ORBIT2-04
 - **C4 hide diagnostics.** Stress meter behind a debug flag (`?debug`), engine switch (synth/dsp) into a settings
-  drawer, "reset phase" + "tap tempo" off the top level. (Greta)
+  drawer, "reset phase" + "tap tempo" off the top level. (Greta) ✅ ORBIT2-04
 - **C5 focus mode.** Key F hides all HUD; drawers default closed except the lane drawer; ring labels in a fixed
-  legend instead of on the rings. (Greta, Rio)
+  legend instead of on the rings. (Greta, Rio) ✅ ORBIT2-04
 
 ## G · Groove & dynamics (phase 05)
 
