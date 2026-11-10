@@ -221,7 +221,8 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   step buttons and the computer keys still toggle, with Shift for accent.
 - **Cold master on export** (ORBIT2-03, sound; pre-existing, phase 10): the first hit of a WAV export is ~5 dB low
   (mix −19.7 dBFS vs −14.6 for the next identical kicks, raw stems flat): the master compressor starts cold and
-  `LEAD_IN` (0.05 s) is shorter than its release. Pre-roll the master and cut it.
+  `LEAD_IN` (0.05 s) is shorter than its release. Pre-roll the master and cut it. ✅ ORBIT2-05 round 2 (a nudged
+  downbeat rendered 10 ms in came out 13 dB low): renders start `PRE_ROLL` (0.5 s) before the earliest hit.
 - **Slot buttons on a phone** (ORBIT2-03, rio, architect): 39 × 44 px (T7 asks 44 px tall); 44 wide needs 4 slots in
   a row.
 - **Visuals lead the sound by the output latency** (ORBIT2-03 round 2, sound): the step playhead, the orbit visuals
@@ -300,3 +301,12 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   (accent above the knob). A "keep velocity" record option would keep a played dynamic curve.
 - **Velocity humanize on accents only goes down** (ORBIT2-05, architect, sound): an accent is at 1, so its wobble is
   clamped (mean ~0.95 at 100 %); ghosts and normal hits stay centred.
+- **The next slot's early first step** (ORBIT2-05 round 2): at a slot switch or a chain step the outgoing lanes leave
+  the steps from the switch on to the incoming slot, whose lanes (and voices) exist only from the bar line. A first
+  step nudged earlier than the scheduler's look-ahead (~0.1 s; a push of up to 30 ms fits) sounds as soon as it can,
+  late, instead of before the bar line. Deciding it from the queued slot would need that slot's voices early.
+- **One-shot MIDI past the clip end** (ORBIT2-05 round 2, verifier; the old clamp did the same): a note nudged or pushed
+  past the end makes that track a little longer than N bars, and not a whole bar.
+- **dsp click / glitch peaks** (ORBIT2-05 round 2, sound): a soft click or glitch peaks 1.3–2.3 dB over an unshaped
+  one (the low-pass added to an open layer rings a little), while its RMS is lower. glitch keeps a 0.5 dB step just
+  under normal velocity from its own burst / crush rounding.

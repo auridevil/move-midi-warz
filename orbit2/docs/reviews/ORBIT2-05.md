@@ -3,14 +3,14 @@ type: review
 phase: ORBIT2-05
 title: ORBIT2-05 groove and dynamics (G1–G6), review panel
 date: 2026-11-10
-round: 1
+round: 2
 result: IN PROGRESS
 reviewers:
   verifier: NOT HAPPY
   architect: NOT HAPPY
   sound: NOT HAPPY
   tomi: HAPPY
-  dex: NOT HAPPY
+  dex: HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -151,3 +151,98 @@ and kicks follow the plain velocity curve (sound, architect).
   latency as above; 3 s of live play in dsp and in synth with early ratchets, ghosts, a triplet template and velocity
   humanize. 390×844 touch: tap cycle on / accent / ghost / off, no horizontal overflow. 0 page errors; screenshots
   looked at.
+
+## Round 2: 1 of 4 HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, dex), fresh sub-agents in one message
+(verifier, architect, sound on the default model; dex on sonnet), own ports 5401 / 5402 / 5403 / 5406 (+ 940x,
+phase-start copies on +100), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, G1–G6 + phase spec,
+the "where" table, the must-fix rule with the later ids), `git diff --stat c5c49a1..8865bae` (12 files, +598/−74), each
+one's own round-1 MUST-FIX and "Changes after round 1". Pre-checks on 8865bae: `npm run check` clean, `npm test` 121 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | Round-1 MIDI fixed (Node and the page's Export: 336 / 1512 looped, 0 / 336 one-shot; push −20 ms wraps to 1532, note off at 1536). New, from the round-1 rewrite: a pushed lane or an early-nudged step plays twice when its lanes are replaced inside the step's early window (a chain step, a slot recalled while playing, undo, redo, a link). The old lane already played the early part (`export.js:56`); the new lane (`m.assign()` in `loadSlot`, `app.js:189`, before `:196`) fails the reuse check (`:49`) and plays the whole step again (`:50`). Page: kick on every beat pushed −20 ms, two identical slots chained 1 bar each: 17 notes in 6.7 s instead of 15 (9d4cd84: 15), the bar-line kick twice at 2, 4 and 6 s (−3.0…+1.2 ms apart, both engines, two MIDI note-ons); snare nudged −25 %, `recallSlot` while playing: a flam, 70.7 / 46.6 ms. Node: the same JSON assigned at tick 96 → 1.98 s twice; an undo-like assign at tick 40 with step 3 nudged −½ → 0.75 s twice. |
+| architect | NOT HAPPY | Round-1 MUST-FIX 2 fixed (a tap cycle leaves no lock, a Move toggle or a euclid refill brings back a plain hit, a ghost isn't "locked"). MUST-FIX 1 half fixed: the new slot's downbeat plays now, but an outgoing slot whose downbeat sounds early still plays its early part too: at the last tick before the bar line `liveTick` lets the old lane decide the next bar's step 1 (`export.js:52-56`) although the switch is already queued, and at the bar line the new lanes decide it again. Page (120 bpm, slot 1 kick on every beat pushed −20 ms ↔ slot 2 the same kick at 0 ms, `recallSlot` while playing, hits logged through `pmidi.note`): two kicks on the switch downbeat, −17.0 and 0.0 ms. Model, live vs `collectChain`: A push −20 → B push 0: 1.98 + 2.00 vs 2.00; B the same pushed kick: 1.98 twice vs once; B without a downbeat: 1.98 vs none; A step 1 nudged −½ → B plain: 1.75 + 2.00 vs 2.00. Expected: what the chain render plays. |
+| sound | NOT HAPPY | Round-1 MIDI and G5 fixed (MIDI = the loop WAV in both engines; nothing louder than the plain velocity drop by more than 0.3 dB, 39 synth + 37 dsp voices; the two engines' ghost tiers within ~3 dB). (1) G1/G2 in the loop WAV: a downbeat nudged early comes out 13 dB quiet. `renderPattern` (`app.js:717`) puts the earliest hit 10 ms into the render, where the master compressor / limiter is still settling, and the loop wraps it to the end. Rim on steps 1 + 3, step 1 nudged −½, 4 bars at 120 bpm: the copies at 1.75 / 3.75 / 5.75 s peak at −17.5 / −18.2 / −17.9 dBFS, the wrapped one at 7.75 s at −31.2 (synth; dsp −13.8 vs −27.1); the raw stems are level; a lane pushed −20 ms loses 7.6 / 8 dB. (2) G1 + G5 live: a late-nudged roll leaves the synth lane low-pass closed for the plain hits after it. `hitSound` (`app.js:156`) puts the filter back only after a call that set `toneLocked`, which follows the scheduling order, not the sounding order: a ×4 fade ratchet nudged +35 % has its last repeat scheduled before step 2 but sounding after it, so steps 3 and 4 play at 843 Hz instead of the lane's 1549 Hz in every bar (a ghost roll: 954 Hz). The WAV (sorted hits) is right. |
+| dex | HAPPY | none (re-ran the round-1 repro in Node: ghost + Shift → velocity 1, accent, no lock left; on → ghost → off leaves no lock) |
+
+The implementer reproduced every MUST-FIX on 8865bae before fixing. Model (`liveTick` with an assign at the bar line
+vs `collectChain`): A push −20 → B push 0: 1.98 + 2.00 vs 2.00; B the same: 1.98 twice; B without a downbeat: 1.98 vs
+none; A nudged −½ → B plain: 1.75 + 2.00 vs 2.00; an undo-like assign of the same lanes at tick 40 with step 3 nudged
+−½: 0.75 twice. WAV (5400/9400, rim on steps 1 + 3, 4 bars at 120 bpm, loop), the step-1 hit rendered first (wrapped
+to the end when early) vs the same step a bar later: nudge −½ −13.4 dB (synth) / −13.3 (dsp), push −20 ms −8.1 / −7.8,
+a plain downbeat −5.4 / −5.4 (the phase-03 "cold master"); one hit x s into a fresh render through the master: −12.6 dB
+at 0.01 s, −5.4 at 0.05, −2.2 at 0.1, within 0.3 dB from 0.2 s on. Live filter (synth, the sound repro with a snare,
+lane at 4312 Hz): plain steps 3 and 4 at 1658 Hz in every bar.
+
+SHOULD items recorded (never block): the jog wheel nudges 5 % per message whatever its delta (`Math.sign`,
+`app.js:988`) (verifier); a one-shot MIDI note past the clip end makes that track longer than N bars (verifier;
+pre-existing, the old clamp did the same); the slot-swap test only covers an outgoing slot with the kick off: test
+pushed and nudged outgoing downbeats against `collectChain` (architect); the G5 extra drop goes past the code comment's
+"≈ 3 dB at most" in a few places (synth gong −4.4, brush −3.8, clap −3.6 at tone 0.75; ride −4.5, hat −4.0 at tone 0.5;
+dsp shaker −4.9 at tone 1, `VEL_TIMBRE.shaker` still `tone: 2.5`) (sound); dsp has a level step just below velocity
+0.7: the one-pole starts an octave above the band at any `dark`, so 0.69 is 1.3–2.1 dB under 0.70 (tambourine, shaker,
+snap, crash) and velocity humanize splits normal hits into two levels (sound); dsp `click` / `glitch` shaped hits peak
+1.3–2.3 dB over unshaped ones, RMS lower (sound, cosmetic). Dex says his HAPPY rests on the round-1 repro alone.
+
+GOOD: live play = the render on 200 random busy machines (14,152 hits, 40–240 bpm, every ratio, nudges to −½, push −30
+ms, humanize 100 %, ratchets, ghosts, every template, locked dice; the earliest hit 13.7 ms before the tick that
+schedules it) (verifier) and 232 / 232 on an extreme machine (sound); the look-ahead left `app.js` for pure, tested
+`earlyStep()` / `liveTick()` + `Lane.peek()` (architect); old data plays as before (a phase-start save and link → the
+same 71 hits; a phase-start JSON with swing, humanize, ratchets and locks → 86 / 86; MPC = the old swing at all 10
+speeds, triplet at 50 % = ⅓) (architect, sound); bad link values clamp (an unknown template → MPC, 999 ms → 30,
+velocity humanize 7 → 1) (verifier).
+
+### Changes after round 2
+
+- **A queued slot owns its steps, and a step is started once** (verifier, architect). `SlotBank.nextSwitch(tick,
+  cycleTicks)` (pure, `slots.js`) names the next tick where `due()` loads a slot (a queued slot in now / bar / cycle
+  mode, or the chain moving on). The master tick passes it to `liveTick` as `cut`, and `earlyStep` leaves every step
+  from there on to the incoming slot: the outgoing lanes no longer decide, or sound, its first step. For replacements
+  nothing announces (undo, redo, a link, evolve's way home, a "now" recall inside a step's early window), a step whose
+  early part has sounded stays decided (`played`): the new lane doesn't start it again, plays the rest of that decision
+  (unless it is muted) and takes over from the next step. A lane replaced before anything sounded still decides afresh
+  (the round-1 fix). Model, live vs `collectChain` (two slots chained 1 bar each): A pushed −20 → B on the grid 2.00
+  (was 1.98 + 2.00); the same pushed kick 1.98 once (was twice); B without a downbeat: nothing (was A's 1.98); A
+  nudged −½ → B plain 2.00 (was 1.75 + 2.00); an undo-like assign at tick 40 with step 3 nudged −½: 0.75 once (was
+  twice). Page (5400/9400, every hit logged through `pmidi.note`): two identical pushed slots chained 1 bar each: 14
+  kicks in 6.7 s, gaps 496–507 ms (8865bae: 17, gaps from 2 ms); recall 0 → 1 → 0 → 1 while playing: 15 kicks, gaps
+  479–520 ms (8865bae: from 16 ms); undo / redo every 41 ms for 5 s (121 lane swaps) on a lane pushed −20 ms with step
+  3 nudged −½: 12 kicks, gaps 250 / 500 / 750 ms (8865bae: 28 kicks, gaps from 0 ms); "now" recalls every 37 ms (92
+  swaps): 12 kicks (8865bae: 31). Known limit (→ Later): an incoming slot's first step nudged earlier than the
+  scheduler's look-ahead (~0.1 s) sounds late at the switch, since that slot's lanes and voices exist only from the bar
+  line; a push of up to 30 ms fits.
+- **Renders pre-roll the master** (sound 1): `renderLead(hits)` (`jam.js`) starts every render `PRE_ROLL` = 0.5 s
+  before its earliest hit, so the master compressor + limiter have settled (a hit 10 ms into a render came out 12.6 dB
+  low, at 50 ms 5.4 dB, settled from 0.2 s). Loop WAV, rim on steps 1 + 3, 4 bars at 120 bpm, the step-1 hit rendered
+  first vs the same step a bar later, synth / dsp: nudge −½ −0.2 / +0.9 dB (was −13.4 / −13.3), push −20 ms +0.9 /
+  +0.6 (was −8.1 / −7.8), a plain downbeat −0.3 / +0.6 (was −5.4 / −5.4: the phase-03 "cold master" is gone too,
+  marked in BACKLOG). Copies a bar apart differ by up to ~1 dB anyway.
+- **Every hit sets the lane filter at its own time** (sound 2): no more `toneLocked` flag following the scheduling
+  order; each hit sets the lane low-pass (its tone lock, its G5 darkness or the lane's tone) at its time, and the
+  automation sorts by time. The sound repro (×4 fade ratchet nudged +35 %, synth, lane at 4312 Hz): plain steps 2–4 of
+  two bars all at 4312 Hz (was 1658 Hz on steps 3 and 4). A tone knob still takes over at once (Tone's `value` setter
+  cancels what is scheduled).
+- Quick SHOULDs done. The jog wheel nudges 5 % per click of its delta (a message of −3 = −15 %) (verifier). dsp: an
+  added filter (a band-pass layer's one-pole, a low-pass put on an open layer) fades in over the first quarter octave
+  of `dark`, so a hit just under 0.7 sounds like a normal one: every dsp voice at 0.69 lands −0.52…+0.04 dB from the
+  plain velocity drop (was down to −2.14, tambourine); the ghost tier is unchanged for every voice but the two below
+  (measured, 39 voices) (sound). The fade-in showed the dsp clap up to 1.3 dB *louder* just under 0.7: G5's softer
+  snap dropped a burst at the default snap 0.5, and one burst fewer leaves a louder tail. A softer clap now keeps its
+  number of claps (`VEL_TIMBRE.clap.snap` 0; darker and shorter as before): never above the plain drop, −3.1 dB past
+  it at the ghost tier (was −1.7, with the louder tail). The shaker joins the hats (`tone` 0.5: dsp ghost −2.4 dB past
+  the plain drop, was −7.1), and the G5 comment gives the measured range (≈ 3 dB, 4–5 for snap, gong, ride and hats on
+  a dark lane) (sound). The slot-swap test covers pushed and nudged outgoing downbeats against `collectChain`
+  (architect). Later → [[BACKLOG]]: the next slot's early first step, one-shot MIDI past the clip end, dsp click /
+  glitch peaks.
+- Tests (125 orbit2: 4 new). `nextSwitch` names exactly the tick `due()` loads (a chain every 2 bars, bar, cycle,
+  now); live = the chain render across a switch for the five A → B cases, a recall while playing plays only the new
+  downbeat, undo / link assigns inside an early window never double a hit; `renderLead` puts the earliest hit
+  `PRE_ROLL` in; every dsp voice at 0.69 within −0.6…+0.3 dB of the plain drop, a softer clap never louder, the
+  fade-in weights, the shaker's amount. `npm run check` clean, `npm test` 125 + 9, `node tools/smoke.mjs
+  http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped). Browser (5400/9400,
+  `/tmp/orbit2-impl/`, deleted): the four live checks above pass here and fail on 8865bae as reported; WAV levels and
+  the live filter as above in both engines; Move hold step 3 + wheel −3, +1 → nudge −10 %, step not toggled, lock
+  panel "locked: nudge"; phone 390 × 844 touch: tap cycle, no sideways scroll; 0 page errors; screenshots looked at.
+  `app.js` 1195 → 1196 lines.

@@ -6,7 +6,7 @@ import { History } from './history.js';
 import { hitVel, liveTick, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
-import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, wholeBarCycle, trimChunks, withAcid } from './jam.js';
+import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
@@ -150,10 +150,11 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
   // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
-  // a tone lock opens / closes the lane filter for this hit only; the next unlocked hit puts it back
-  // (synth voices and samples: a soft hit closes it by p.dark octaves the same way)
+  // every hit sets the lane filter at its own time: a tone lock opens / closes it for that hit only, a soft hit (synth
+  // voices and samples) closes it by p.dark octaves, any other hit puts it back. Hits can be scheduled out of time order
+  // (a ratchet nudged past the next step is scheduled before that step, sounds after it): the automation sorts by time
   const dark = viaDsp ? 0 : p.dark;
-  if (L.tone != null || dark > 0 || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {} c.toneLocked = L.tone != null || dark > 0; }
+  try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {}
   try { if (c.voice === 'sample') playSample(c, lane, p, time); else if (viaDsp) c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p).map(x => p.dark ? { ...x, dark: p.dark } : x) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
 const ui = {};   // segmented controls / chips by name (src/ui.js)
@@ -192,8 +193,8 @@ function onTick(time) {
   const now = T.getContext().rawContext.currentTime;
   const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
-  // earlier tick (liveTick, export.js)
-  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec() }).forEach(({ ev, hits, early: soon }, li) => {
+  // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut)
+  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec(), cut: bank.nextSwitch(t, cyc) }).forEach(({ ev, hits, early: soon }, li) => {
     const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
     if (!ev) return;
     if (skip.delete(`${li}:${ev.step}`)) { ev.hit = false; hits = []; }   // played live a moment ago: don't double it
@@ -691,13 +692,13 @@ const pad2 = (n) => String(n).padStart(2, '0');
 const stamp = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
 /** Length of a render in master ticks: N bars, or whole bars holding whole polyrhythm cycles (capped at 64 bars). */
 function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? wholeBarCycle(m.cycleTicks(cycleOpts()), BAR_TICKS, 64) : { ticks: +v * BAR_TICKS, capped: false }; }
-// Every audio export is whole bars at the current tempo, so a DAW lines it up. Renders start LEAD_IN early (humanize
-// can push a hit before tick 0) and ring out for a tail long enough for the delay to die away; then either
+// Every audio export is whole bars at the current tempo, so a DAW lines it up. Renders start PRE_ROLL before the
+// earliest hit (renderLead, jam.js: the master needs it to settle) and ring out for a tail long enough for the delay to
+// die away; then either
 //   loop     (default): foldLoop wraps the tail onto the start → exactly N bars that loop seamlessly (Session clips)
 //   one-shot:           starts on the downbeat, keeps the ring-out, rounded up to whole bars (place once in a song)
 // The stereo WAV goes through the master compressor + limiter, which look ahead and so delay the sound: the measured
 // latency is taken off, so the first downbeat is on sample 0 like the (raw) stems.
-const LEAD_IN = 0.05;
 const tailSec = () => Math.max(2.5, 60 / tempo * 0.75 * 9 + 1.5);   // 9 dotted-eighth echoes at 0.3 feedback ≈ -94 dB, plus decay
 let latencyCache = null;
 async function masterLatency() {
@@ -714,7 +715,7 @@ async function renderPattern({ stems = false } = {}) {
   const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = BAR_TICKS * tickSec(), loop = ui.expLoop.value;
   const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
-  const lead = Math.max(LEAD_IN, 0.01 - hits.reduce((a, h) => Math.min(a, h.time), 0));
+  const lead = renderLead(hits);
   for (const l of m.lanes) await ensureSample(l);
   const lat = stems ? 0 : await masterLatency();
   const out = await T.Offline(async ({ transport }) => {
@@ -985,7 +986,7 @@ move.addEventListener('encoder', (e) => {
 });
 move.addEventListener('wheel', (e) => {
   if (held.size) {   // G1: hold step(s) + jog wheel = nudge those steps early / late, 5 % of a step per click
-    const lane = m.lane; for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + Math.sign(e.detail.delta) * 0.05) * 100) / 100); lockStep = i; }
+    const lane = m.lane; for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); lockStep = i; }
     stepEdited(); return;
   }
   m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });

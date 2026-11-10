@@ -92,18 +92,20 @@ export const VOICE_KEYS = Object.keys(V);
  * G5 velocity shapes the sound, in both engines: below the normal velocity (0.7) a hit gets darker (tone, in octaves
  * down at velocity 0), a softer transient (snap scaled down) and a slightly shorter decay. Per voice, so kicks stay
  * solid; a sample keeps its length and its attack (only darker). Normal and accented hits sound as they always did.
- * Darker, not quieter: a voice whose whole band sits above the lane's low-pass (hats, cymbals, tambourine, clave,
- * click) loses ~12 dB per octave it closes, so those move a fraction of an octave (a ghost ≈ 3 dB under the plain
- * velocity drop at most, in both engines). A sample can be anything, a hat too: gentle.
+ * Darker, not quieter: a voice whose whole band sits above the lane's low-pass (hats, cymbals, shaker, tambourine,
+ * clave, click) loses ~12 dB per octave it closes, so those move a fraction of an octave. At the ghost tier a voice
+ * lands within ~3 dB of the plain velocity drop in both engines, 4–5 dB for a few (snap, gong, ride and hats on a dark lane).
+ * A sample can be anything, a hat too: gentle. A soft clap keeps its number of claps (snap sets the bursts, and one
+ * burst fewer leaves a louder tail: a clap just under normal velocity came out louder than a normal one).
  */
 const VT_DEFAULT = { tone: 2, snap: 0.6, dec: 0.3 };
 export const VEL_TIMBRE = {
   kick: { tone: 0.6, snap: 0.4, dec: 0.08 }, kick909: { tone: 0.6, snap: 0.4, dec: 0.08 }, kick808: { tone: 0.5, snap: 0.3, dec: 0.05 },
   hardkick: { tone: 0.6, snap: 0.3, dec: 0.08 }, softkick: { tone: 0.4, snap: 0.2, dec: 0.05 }, sub: { tone: 0.3, snap: 0, dec: 0.05 },
   tom: { tone: 1.2, snap: 0.5, dec: 0.15 }, conga: { tone: 1.2, snap: 0.5, dec: 0.15 }, bongo: { tone: 1.2, snap: 0.5, dec: 0.15 },
-  snare: { tone: 2.2, snap: 0.7, dec: 0.3 }, snare808: { tone: 2.2, snap: 0.7, dec: 0.3 }, clap: { tone: 1.4, snap: 0.6, dec: 0.25 }, rim: { tone: 1.6, snap: 0.6, dec: 0.2 },
+  snare: { tone: 2.2, snap: 0.7, dec: 0.3 }, snare808: { tone: 2.2, snap: 0.7, dec: 0.3 }, clap: { tone: 1.4, snap: 0, dec: 0.25 }, rim: { tone: 1.6, snap: 0.6, dec: 0.2 },
   snap2: { tone: 1.4, snap: 0.6, dec: 0.3 }, glitch: { tone: 1.4, snap: 0.6, dec: 0.3 }, clave: { tone: 0.8, snap: 0.5, dec: 0.2 }, click: { tone: 1, snap: 0.5, dec: 0.2 },
-  hat: { tone: 0.5, snap: 0.6, dec: 0.4 }, ophat: { tone: 0.5, snap: 0.6, dec: 0.35 }, shaker: { tone: 2.5, snap: 0.5, dec: 0.35 }, tamb: { tone: 0.5, snap: 0.5, dec: 0.35 },
+  hat: { tone: 0.5, snap: 0.6, dec: 0.4 }, ophat: { tone: 0.5, snap: 0.6, dec: 0.35 }, shaker: { tone: 0.5, snap: 0.5, dec: 0.35 }, tamb: { tone: 0.5, snap: 0.5, dec: 0.35 },
   ride: { tone: 0.6, snap: 0.5, dec: 0.3 }, crash: { tone: 0.6, snap: 0.5, dec: 0.3 }, vinyl: { tone: 1.2, snap: 0.5, dec: 0.3 },
   sample: { tone: 0.6, snap: 0, dec: 0 },
 };

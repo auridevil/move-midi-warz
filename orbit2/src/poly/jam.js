@@ -22,6 +22,11 @@ export function mixInt16(lanes) {
   }
   return out;
 }
+/** Offline renders start this long before their earliest hit: the master compressor + limiter start cold (a hit 10 ms
+ *  into a render came out ~13 dB low, at 50 ms ~5 dB) and have settled after 0.2 s. */
+export const PRE_ROLL = 0.5;
+/** Seconds to render before tick 0: PRE_ROLL before the earliest hit (a nudge, a push or humanize can put it early). */
+export const renderLead = (hits) => PRE_ROLL - hits.reduce((a, h) => Math.min(a, h.time), 0);
 /**
  * A render with a lead-in of `pre` seconds and a ring-out tail → exactly `sec` seconds that loop seamlessly: the tail
  * past the end is added back onto the start, early hits (humanize before tick 0) onto the end. A DAW sees whole bars.

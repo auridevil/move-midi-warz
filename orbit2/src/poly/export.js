@@ -26,34 +26,40 @@ export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec })
  * Live play (G1/G2): the step after master tick `t` when part of it sounds before tick t + 1 (nudged or pushed early;
  * humanize can pull it 15 ms further), else -1. It is decided then, at the last tick that can still schedule it, not a
  * step ahead, so a stop, a mute or a new pattern reaches it as soon as possible. Swing only delays: it is counted in.
+ * cut: the tick where a queued slot takes over (SlotBank.nextSwitch). A step from there on is the next slot's: this
+ * lane leaves it alone.
  */
-export function earlyStep(lane, t, { humanize = 0, tickSec }) {
-  const st = lane.stepTicks(), step = Math.floor(t / st) + 1, i = step % lane.length; if (!lane.hitAt(i)) return -1;
+export function earlyStep(lane, t, { humanize = 0, tickSec, cut = Infinity }) {
+  const st = lane.stepTicks(), step = Math.floor(t / st) + 1, i = step % lane.length; if (step * st >= cut || !lane.hitAt(i)) return -1;
   const lead = -((lane.swingAt(step) + (lane.lockAt(i)?.nudge ?? 0)) * st * tickSec + (lane.offsetMs || 0) / 1000);
   if (lead <= 0) return -1;   // on time or late: it plays from its own tick (±15 ms of humanize fit the lookahead)
   return (step * st - t - 1) * tickSec < lead + humanize * 0.015 ? step : -1;
 }
 
+/** A step decided early stays decided: by its own lane, or by a lane that replaced it since (an undo, a link) once part
+ *  of it has sounded, so a step is never started twice. A lane replaced before anything sounded decides afresh. */
+const decided = (pre, lane, step) => pre?.step === step && (pre.lane === lane || pre.played);
 /**
  * Live play, one master tick: per lane { ev (the step at t, or null), hits (its own, dt in s from tick t), early (the
- * early part of a later step, decided now by earlyStep, dt from tick t) }. When a step decided early comes, the same roll
- * plays on (an accent or a ratchet isn't rolled twice), unless its lane was replaced since (a slot, a link, undo: it
- * decides afresh) or is muted or silenced now (what already sounded stays). `ahead` keeps those decisions between ticks.
+ * early part of a later step, decided now by earlyStep, dt from tick t) }. A step decided early plays on with the same
+ * roll at its tick (an accent or a ratchet isn't rolled twice), unless its lane is muted or silenced now (what already
+ * sounded stays). A queued slot or chain step is known in advance (cut, SlotBank.nextSwitch): the outgoing lanes leave
+ * the steps from there on to it, so a switch plays what the chain render has. `ahead` keeps the decisions between ticks.
  */
-export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec }) {
+export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity }) {
   const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec };
   return m.tick(t, rng, { fill, dice }).map((ev, li) => {
     const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] };
     if (ev) {
       const pre = ahead[li]; ahead[li] = null;
-      if (pre?.lane === lane && pre.step === ev.step && !lane.muted && !silenced) { ev.hit = pre.hit; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }
-      else out.hits = expandHits(ev, lane, li, o);
+      if (!decided(pre, lane, ev.step)) out.hits = expandHits(ev, lane, li, o);
+      else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }
     }
-    const step = earlyStep(lane, t, o);
-    if (step >= 0 && !(ahead[li]?.lane === lane && ahead[li].step === step)) {
+    const step = earlyStep(lane, t, { ...o, cut });
+    if (step >= 0 && !decided(ahead[li], lane, step)) {
       const st = lane.stepTicks(), pev = lane.peek(step * st, rng, { fill, dice, li, silenced }), hits = expandHits(pev, lane, li, o), lead = (step * st - t) * tickSec;
-      ahead[li] = { lane, step, hit: pev.hit, accent: pev.accent, hits };
       out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt }));
+      ahead[li] = { lane, step, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 };
     }
     return out;
   });

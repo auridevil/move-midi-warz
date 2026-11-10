@@ -753,3 +753,72 @@ test('ORBIT2-05 r1: G5 darker, not quieter: voices whose band sits above the lan
   for (const k of ['hat', 'ophat', 'tamb', 'ride', 'crash', 'clave', 'sample']) assert.ok(velShape(p, k).dark <= 0.4, `${k}: ${velShape(p, k).dark} octaves at the ghost tier`);
   for (const k of ['snare', 'rim', 'clap', 'tom']) assert.ok(velShape(p, k).dark >= 0.5, `${k} gets clearly darker`);
 });
+
+// ---- ORBIT2-05 review round 2 ----
+test('ORBIT2-05 r2: SlotBank.nextSwitch names the tick where due() loads the next slot (queued now / bar / cycle, a chain)', async () => {
+  const { SlotBank } = await import('../src/poly/slots.js'); const json = new Machine().toJSON();
+  const run = (setup, acts = {}) => {
+    const bank = new SlotBank(); [0, 1, 2].forEach(i => bank.save(i, json)); setup(bank); const loads = [], said = [], at = Object.keys(acts).map(Number);
+    const end = 96 * 9; for (let t = 0; t < end; t++) { acts[t]?.(bank); if (bank.due(t, 72) >= 0) loads.push(t); said.push(bank.nextSwitch(t, 72)); }
+    // right after due(t) it names the next tick that loads a slot (unless you recall something in between)
+    said.forEach((s, t) => { const next = loads.find(x => x > t); if (at.some(a => a > t && a <= (next ?? end))) return; if (next == null) assert.ok(s >= end, `tick ${t}: ${s}`); else assert.equal(s, next, `tick ${t}`); });
+    return loads;
+  };
+  assert.deepEqual(run(b => { b.chainBars = 2; b.setChain([0, 1, 2]); }), [0, 192, 384, 576, 768], 'a chain moves on every 2 bars');
+  assert.deepEqual(run(b => b.recall(0), { 130: b => b.recall(1) }), [0, 192], 'bar: the next bar line');
+  assert.deepEqual(run(b => { b.recall(0); b.switchAt = 'cycle'; }, { 130: b => b.recall(1) }), [0, 144], 'cycle: the next multiple of the cycle');
+  assert.deepEqual(run(b => { b.recall(0); b.switchAt = 'now'; }, { 130: b => b.recall(1) }), [0, 130], 'now: the next tick');
+  assert.equal(new SlotBank().nextSwitch(5, 72), Infinity, 'nothing queued');
+});
+test('ORBIT2-05 r2: a slot switch or a chain step plays what the chain render has; a lane replaced mid-step never doubles a hit', async () => {
+  const { liveTick, collectChain, collectHits } = await import('../src/poly/export.js'); const { SlotBank } = await import('../src/poly/slots.js');
+  const tickSec = 60 / 120 / 24, r4 = (x) => Math.round(x * 1e4) / 1e4;
+  const kick = (f) => { const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.hits.fill(true, 0, 4); f?.(k); return m.toJSON(); };
+  // the app's master tick (onTick): due() and its slot load first, then liveTick with the next switch as the cut
+  const play = (bank, to, act) => {
+    const m = new Machine(), ahead = [], out = [];
+    for (let t = 0; t < to; t++) {
+      act?.(t, m); const si = bank.due(t, 96); if (si >= 0) m.assign(bank.get(si));
+      liveTick(m, t, ahead, { rng: () => 0, tickSec, cut: bank.nextSwitch(t, 96) }).forEach(({ early, hits }) => { for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); });
+    }
+    return out.sort((a, b) => a - b);
+  };
+  const push = (k) => k.setOffset(-20), cases = {
+    'A pushed −20 ms → B on the grid': [kick(push), kick()], 'A and B the same pushed kick': [kick(push), kick(push)],
+    'B without a downbeat': [kick(push), kick(k => { k.hits[0] = false; })], 'A step 1 nudged −½ → B plain': [kick(k => k.setLock(0, 'nudge', -0.5)), kick()],
+    'A plain → B step 1 nudged −½': [kick(), kick(k => k.setLock(0, 'nudge', -0.5))],
+  };
+  for (const [name, [A, B]] of Object.entries(cases)) {   // round 2: 1.98 + 2.00, 1.98 twice, a kick B hasn't, 1.75 + 2.00
+    const bank = new SlotBank(); bank.save(0, A); bank.save(1, B); bank.chainBars = 1; bank.setChain([0, 1]);
+    const want = collectChain([A, B, A, B], { bars: 1, tempo: 120 }).map(h => r4(h.time)).filter(x => x >= 0);
+    assert.deepEqual(play(bank, 96 * 4).filter(x => x >= 0), want, `chain: ${name}`);
+  }
+  // a slot recalled while playing (bar mode): the bar line plays the new slot's downbeat only
+  const [A, B] = cases['A pushed −20 ms → B on the grid'], bank = new SlotBank(); bank.save(0, A); bank.save(1, B); bank.recall(0);
+  assert.deepEqual(play(bank, 192, (t) => { if (t === 70) bank.recall(1); }).filter(x => x > 1.5), [2, 2.5, 3, 3.5]);
+  // undo, redo, a link: nothing announces them. The same lanes again inside a step's early window: no second hit
+  const u = kick(k => k.setLock(2, 'nudge', -0.5)), none = new SlotBank(), at40 = (json) => (t, m) => { if (t === 0) m.assign(u); if (t === 40) m.assign(json); };
+  assert.deepEqual(play(none, 96, at40(u)), collectHits(Machine.from(u), { from: 0, to: 96, tempo: 120 }).map(h => r4(h.time)));
+  // another pattern: what already sounded stays and the step isn't started again (whether B has it on the grid or not)
+  assert.deepEqual(play(none, 96, at40(kick())), [0, 0.5, 0.75, 1.5]);
+  assert.deepEqual(play(none, 96, at40(kick(k => { k.hits[2] = false; }))), [0, 0.5, 0.75, 1.5]);
+});
+test('ORBIT2-05 r2: a render starts PRE_ROLL before its earliest hit, so the master has settled when the first hit comes', async () => {
+  const { renderLead, PRE_ROLL } = await import('../src/poly/jam.js');
+  assert.ok(PRE_ROLL >= 0.2, 'the master compressor + limiter take ~0.2 s to settle');
+  assert.equal(renderLead([{ time: 0 }, { time: 1 }]), PRE_ROLL); assert.equal(renderLead([{ time: 0.3 }]), PRE_ROLL); assert.equal(renderLead([]), PRE_ROLL);
+  assert.equal(renderLead([{ time: 1 }, { time: -0.25 }]), PRE_ROLL + 0.25, 'a hit nudged before tick 0 is PRE_ROLL into the render too');
+});
+test('ORBIT2-05 r2: dsp G5 has no level step under normal velocity; a softer clap is never louder; the shaker is a bright voice', async () => {
+  const { makeEngine, makeSlot, trigger } = await import('../src/poly/dsp-core.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js');
+  const { velShape } = await import('../src/poly/voices.js'); const { GHOST_VEL } = await import('../src/poly/lanes.js');
+  const sr = 44100, p = { vel: 0.7, tune: 0, dec: 0.3, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  const energy = (voice, vel) => { const q = velShape({ ...p, vel }, voice), e = makeEngine(sr); e.hit(DSP_VOICES[voice](q).map(L => q.dark ? { ...L, dark: q.dark } : L), 0); const o = new Float32Array(sr / 2); for (let i = 0; i < o.length; i += 128) e.render(o, i, Math.min(o.length, i + 128)); let a = 0; for (const x of o) a += x * x; return a; };
+  const beyond = (v, vel) => 10 * Math.log10(energy(v, vel) / energy(v, 0.7)) - 20 * Math.log10(vel / 0.7);   // dB past the plain velocity drop
+  // round 2: an added filter came in whole at any darkness, so 0.69 was 1–2 dB under 0.70 (tambourine −2.1, shaker −1.9)
+  for (const v of Object.keys(DSP_VOICES)) { const s = beyond(v, 0.69); assert.ok(s > -0.6 && s < 0.3, `${v}: 0.69 is ${s.toFixed(2)} dB past the plain drop`); }
+  for (const vel of [0.69, 0.65, 0.6, 0.5, GHOST_VEL]) assert.ok(beyond('clap', vel) < 0.1, `a softer clap keeps its claps and is never louder (${vel})`);
+  const s = makeSlot(); trigger(s, { kind: 1, bp: 1800, dark: 0.25 }, sr, 0, 0); assert.equal(s.dkW, 1, 'from a quarter octave on (every ghost tier): the whole filter');
+  trigger(s, { kind: 1, dark: 0.05 }, sr, 0, 0); assert.ok(s.dkLp && Math.abs(s.dkW - 0.2) < 1e-9, 'a low-pass added to an open layer fades in too');
+  assert.ok(velShape({ ...p, vel: GHOST_VEL }, 'shaker').dark <= 0.4, 'the shaker moves a fraction of an octave, like the hats');
+});
