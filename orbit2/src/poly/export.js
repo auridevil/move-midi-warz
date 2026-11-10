@@ -15,7 +15,9 @@ export const hitVel = (accent, lock) => lock?.vel != null ? Math.min(1, lock.vel
 export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec }) {
   if (!ev?.hit) return [];
   const stepSec = lane.stepTicks() * tickSec, r = dice ? dice.at(li, ev.step, lane.length, 1) : Math.random();
-  const base = (ev.swung + (ev.lock?.nudge ?? 0)) * stepSec + (lane.offsetMs || 0) / 1000 + (r - 0.5) * humanize * 0.03, n = Math.max(1, ev.ratchet || 1), v = hitVel(ev.accent, ev.lock);
+  const base = (ev.swung + (ev.lock?.nudge ?? 0)) * stepSec + (lane.offsetMs || 0) / 1000 + (r - 0.5) * humanize * 0.03, n = Math.max(1, ev.ratchet || 1);
+  // G3 velocity humanize: symmetric, ±0.2 at 100 %, its own dice salt (locked dice repeat it); never silent, never over 1
+  const vh = lane.velHuman || 0, v = vh ? Math.max(0.05, Math.min(1, hitVel(ev.accent, ev.lock) + ((dice ? dice.at(li, ev.step, lane.length, 3) : Math.random()) - 0.5) * 0.4 * vh)) : hitVel(ev.accent, ev.lock);
   return Array.from({ length: n }, (_, k) => ({ dt: base + (k * stepSec) / n, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: ev.lock }));
 }
 

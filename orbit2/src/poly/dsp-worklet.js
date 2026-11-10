@@ -11,6 +11,8 @@
 //   noise: pink (0..1 mix) · bp/bq (band-pass) · lp/hp · crush (bits, 0 = off) · bursts/bsp/bsd/bgain (claps)
 //          lfo/lfod (low-pass wobble, Hz and octaves)
 //   metal: six square waves at the 808 hat ratios × f · hp/bp/bq · noise (mix of white noise)
+//   any:   dark (octaves, G5 velocity): a soft hit closes the low-pass (one is added when the layer has none) and
+//          lowers a band-pass by half as much
 // Each slot keeps its own state; render() adds into the output. No objects are created after init().
 const RATIOS = [1, 1.4827, 1.8003, 2.5461, 2.6303, 3.8967];   // 205.3 · 304.4 · 369.6 · 522.7 · 540 · 800 Hz
 const TAU = Math.PI * 2;
@@ -57,7 +59,8 @@ function trigger(s, L, sr, start, born) {
   s.lfo = L.lfo ?? 0; s.lfod = L.lfod ?? 0; s.lfoPh = 0; s.nmix = L.noise ?? 0;
   s.p0 = 0; s.p1 = 0.17; s.p2 = 0.41; s.p3 = 0.63; s.p4 = 0.79; s.p5 = 0.93;
   // filters
-  s.lp = L.lp ?? 0; s.hp = L.hp ?? 0; s.bp = L.bp ?? 0; s.q = L.q ?? 0.7; s.bq = L.bq ?? 1; s.aS1 = s.aS2 = s.bS1 = s.bS2 = 0;
+  s.lp = L.lp ?? 0; s.hp = L.hp ?? 0; s.bp = L.bp ?? 0;
+  const dk = L.dark ?? 0; if (dk > 0) { s.lp = (s.lp || 16000) * Math.pow(2, -dk); if (s.bp) s.bp *= Math.pow(2, -dk / 2); } s.q = L.q ?? 0.7; s.bq = L.bq ?? 1; s.aS1 = s.aS2 = s.bS1 = s.bS2 = 0;
   s.lpBase = s.lp; s.aMode = s.bp ? 2 : s.lp ? 1 : 0; if (s.aMode) svfA(s, s.bp || s.lp, s.bp ? s.bq : s.q);
   s.bOn = s.hp > 0; if (s.bOn) svfB(s, s.hp, 0.7);
 }

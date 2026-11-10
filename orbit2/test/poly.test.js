@@ -389,10 +389,10 @@ test('B4 the cycle covers the swing period, and is a true period of what plays (
   assert.ok(checked >= 60, `${checked} random machines checked`);
 });
 test('B6 recordHit keeps the feel: ghost = vel lock, accent = its own flag, a soft overdub drops an old accent', () => {
-  const l = new Lane('snare', { length: 4 });
-  l.recordHit(1, { vel: 0.31 }); assert.equal(l.hits[1], true); assert.equal(l.accents[1], false); assert.equal(l.locks[1].vel, 0.31);
+  const l = new Lane('snare', { length: 4 });   // G4: the velocity lands on the nearest tier (ghost 0.35 / normal)
+  l.recordHit(1, { vel: 0.31 }); assert.equal(l.hits[1], true); assert.equal(l.accents[1], false); assert.equal(l.locks[1].vel, 0.35);
   l.recordHit(1, { accent: true }); assert.equal(l.accents[1], true); assert.equal(l.locks[1], null, 'an accent plays full: the vel lock goes');
-  l.recordHit(1, { vel: 0.4, tune: 0.2 }); assert.equal(l.accents[1], false, 'soft overdub on an accent'); assert.deepEqual(l.locks[1], { vel: 0.4, tune: 0.2 });
+  l.recordHit(1, { vel: 0.4, tune: 0.2 }); assert.equal(l.accents[1], false, 'soft overdub on an accent'); assert.deepEqual(l.locks[1], { vel: 0.35, tune: 0.2 });
   l.recordHit(2, {}); assert.equal(l.locks[2], null, 'a computer key has no velocity: the lane default');
 });
 test('B7 a loaded sample plays whole; the drum it replaced comes back with a drum voice and in share links', async () => {
@@ -508,10 +508,10 @@ test('F2 / F3 boot: a share link wins, a first visit gets the demo, a returning 
   assert.equal(bootMode({ saved: true, hash: '#p=abc_-1' }), 'link'); assert.equal(bootMode({ saved: false, hash: '#p=abc' }), 'link');
   assert.equal(bootMode({ saved: true, hash: '#p=' }), 'return', 'an empty link is no link'); assert.equal(bootMode({ saved: false, hash: '#x' }), 'first');
 });
-test('a tap cycles a step off → on → accent → off; a stale accent is dropped', () => {
+test('a tap cycles a step off → on → accent → ghost → off; a stale accent is dropped', () => {
   const l = new Lane('kick', { length: 4 });
-  assert.deepEqual([0, 1, 2, 3].map(() => l.cycleStep(1)), ['on', 'accent', 'off', 'on']); assert.equal(l.accents[1], false);
-  l.cycleStep(2); l.cycleStep(2); l.cycleStep(2); assert.deepEqual([l.hits[2], l.accents[2]], [false, false]);
+  assert.deepEqual([0, 1, 2, 3, 4].map(() => l.cycleStep(1)), ['on', 'accent', 'ghost', 'off', 'on']); assert.equal(l.accents[1], false); assert.equal(l.locks[1], null, 'on again: no ghost lock left');
+  l.cycleStep(2); l.cycleStep(2); l.cycleStep(2); l.cycleStep(2); assert.deepEqual([l.hits[2], l.accents[2]], [false, false]);
   l.accents[3] = true; assert.equal(l.cycleStep(3), 'on'); assert.equal(l.accents[3], false, 'turning on gives a plain hit');
   assert.equal(l.cycleStep(9), 'off', 'beyond length is ignored'); assert.equal(l.hits[9], false);
 });
@@ -630,4 +630,44 @@ test('ORBIT2-05: a save without the new fields loads unchanged (MPC swing, no of
   const m = Machine.from(old), l = m.lanes[0]; assert.equal(l.swingTpl, 'mpc'); assert.equal(l.offsetMs, 0); assert.deepEqual(l.locks[0], { vel: 0.5 });
   assert.equal(l.at(24, () => 0).swung, 0.25, 'old swing plays as before');
   const j = l.toJSON(); assert.equal(j.swingTpl, 'mpc'); assert.equal(j.offsetMs, 0);
+});
+test('G4 velocity tiers: ghost / normal / accent from taps, from a vel lock and from recorded pad velocity', async () => {
+  const { GHOST_VEL, tierOfVel } = await import('../src/poly/lanes.js'); const { hitVel } = await import('../src/poly/export.js');
+  const l = new Lane('snare', { length: 4 });
+  l.cycleStep(0); assert.equal(l.tierAt(0), 'normal'); assert.equal(hitVel(l.accents[0], l.locks[0]), 0.7);
+  l.cycleStep(0); assert.equal(l.tierAt(0), 'accent'); assert.equal(hitVel(l.accents[0], l.locks[0]), 1);
+  l.cycleStep(0); assert.equal(l.tierAt(0), 'ghost'); assert.equal(l.locks[0].vel, GHOST_VEL); assert.equal(hitVel(l.accents[0], l.locks[0]), 0.35);
+  l.setLock(0, 'tune', 0.3); l.cycleStep(0); assert.equal(l.tierAt(0), 'off'); l.cycleStep(0); assert.deepEqual(l.locks[0], { tune: 0.3 }, 'other locks stay');
+  assert.deepEqual([0.1, 0.35, 0.5, 0.53, 0.7, 0.9].map(tierOfVel), ['ghost', 'ghost', 'ghost', 'normal', 'normal', 'normal']);
+  for (const [vel, tier] of [[0.25, 'ghost'], [0.6, 'normal'], [1, 'normal']]) { l.recordHit(2, { vel }); assert.equal(l.tierAt(2), tier, `pad ${vel}`); }
+  l.recordHit(2, { accent: true }); assert.equal(l.tierAt(2), 'accent');
+  l.setLock(3, 'vel', 0.5); l.hits[3] = true; assert.equal(l.tierAt(3), 'ghost', 'an old soft vel lock reads as a ghost');
+});
+test('G3 velocity humanize: per lane, symmetric around the tier, seeded by locked dice, saved', async () => {
+  const { collectHits } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const h = m.lanes[2]; h.setRatio(9); h.setLength(16); h.setEuclid(16);
+  const plain = collectHits(m, { from: 0, to: 96 * 8, tempo: 120 }); assert.ok(plain.every(x => x.vel === 0.7), 'off: every hit at its tier');
+  h.velHuman = 1; const d = Dice.take(7), a = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d }), b = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d });
+  assert.deepEqual(a.map(x => x.vel), b.map(x => x.vel), 'locked dice: the same velocities'); assert.deepEqual(a.map(x => x.time), plain.map(x => x.time), 'velocity humanize leaves timing alone');
+  const vs = a.map(x => x.vel), mean = vs.reduce((s, v) => s + v, 0) / vs.length;
+  assert.ok(vs.every(v => v >= 0.5 - 1e-9 && v <= 0.9 + 1e-9), '±0.2 at 100 %'); assert.ok(Math.abs(mean - 0.7) < 0.03, `symmetric (mean ${mean.toFixed(3)})`); assert.ok(new Set(vs).size > 20);
+  assert.equal(Machine.from(JSON.parse(JSON.stringify(m))).lanes[2].velHuman, 1); assert.equal(Machine.from({ lanes: [{ name: 'kick' }] }).lanes[0].velHuman, 0);
+  h.prob = 1; const mm = new Machine(); mm.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); }); mm.lanes[0].setEuclid(4); mm.lanes[0].velHuman = 0.5; assert.equal(mm.cycleSteps({ repeat: 3 }), 12, 'velocity rolls count for the dice repeat');
+});
+test('G5 velocity shapes timbre per voice: soft = darker, softer snap, a little shorter; kicks barely change; normal untouched', async () => {
+  const { velShape, VEL_TIMBRE } = await import('../src/poly/voices.js');
+  const p = { vel: 0.7, tune: 0, dec: 0.34, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  assert.deepEqual(velShape(p, 'snare'), { ...p, dark: 0 }, 'normal velocity: as before'); assert.equal(velShape({ ...p, vel: 1 }, 'hat').dark, 0, 'accent: as before');
+  const g = (k) => velShape({ ...p, vel: 0.35 }, k), sn = g('snare'), kk = g('kick');
+  assert.ok(sn.dark > 0 && sn.snap < p.snap && sn.dec < p.dec, 'a ghost snare is darker, softer, shorter');
+  assert.ok(kk.dark < sn.dark && kk.dec > sn.dec && kk.dec > p.dec * 0.95, 'the kick stays solid');
+  const smp = g('sample'); assert.equal(smp.dec, p.dec); assert.equal(smp.snap, p.snap, 'a sample keeps its length and attack');
+  assert.ok(velShape({ ...p, vel: 0.1 }, 'hat').dark > velShape({ ...p, vel: 0.5 }, 'hat').dark, 'monotonic');
+  for (const k of Object.keys(VEL_TIMBRE)) assert.ok(k === 'sample' || VOICE_KEYS.includes(k), `${k} is a voice`);
+});
+test('G5 dsp engine: a dark layer renders duller (less high-frequency energy), same level class', async () => {
+  const { makeEngine } = await import('../src/poly/dsp-core.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js');
+  const sr = 44100, p = { vel: 0.35, tune: 0, dec: 0.3, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  const hf = (dark) => { const e = makeEngine(sr); e.hit(DSP_VOICES.hat(p).map(L => ({ ...L, dark })), 0); const o = new Float32Array(sr / 4); for (let i = 0; i < o.length; i += 128) e.render(o, i, Math.min(o.length, i + 128)); let d = 0, a = 0; for (let i = 1; i < o.length; i++) { d += (o[i] - o[i - 1]) ** 2; a += o[i] ** 2; } return { ratio: d / a, a }; };
+  const open = hf(0), dull = hf(1.5); assert.ok(dull.ratio < open.ratio * 0.8, `brightness ${dull.ratio.toFixed(3)} vs ${open.ratio.toFixed(3)}`); assert.ok(dull.a > 0, 'still sounds');
 });

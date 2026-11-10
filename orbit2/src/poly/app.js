@@ -11,7 +11,7 @@ import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
-import { VOICES, VOICE_KEYS } from './voices.js';
+import { VOICES, VOICE_KEYS, velShape } from './voices.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -145,12 +145,16 @@ function applySound(li, k = kit) {
 }
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
-  const p = { vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color };
+  // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
+  const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color }, c.voice);
+  const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
   // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
   // a tone lock opens / closes the lane filter for this hit only; the next unlocked hit puts it back
-  if (L.tone != null || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone), time); } catch {} c.toneLocked = L.tone != null; }
-  try { if (c.voice === 'sample') playSample(c, lane, p, time); else if (c.engine === 'dsp') c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
+  // (synth voices and samples: a soft hit closes it by p.dark octaves the same way)
+  const dark = viaDsp ? 0 : p.dark;
+  if (L.tone != null || dark > 0 || c.toneLocked) { try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {} c.toneLocked = L.tone != null || dark > 0; }
+  try { if (c.voice === 'sample') playSample(c, lane, p, time); else if (viaDsp) c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p).map(x => p.dark ? { ...x, dark: p.dark } : x) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
 const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;

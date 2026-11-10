@@ -88,3 +88,23 @@ V.noiseburst = { label: 'noise burst', make: (T, out) => { const f = new T.AutoF
   hit: (T, n, p, t) => { n.f.frequency.value = 2 + p.snap * 20; n.f.baseFrequency = 200 + p.color * 2000; n.n.triggerAttackRelease(0.05 + p.dec * 0.5, t, p.vel); } };
 export const VOICES = V;
 export const VOICE_KEYS = Object.keys(V);
+/**
+ * G5 velocity shapes the sound, in both engines: below the normal velocity (0.7) a hit gets darker (tone, in octaves
+ * down at velocity 0), a softer transient (snap scaled down) and a slightly shorter decay. Per voice, so kicks stay
+ * solid; a sample keeps its length and its attack (only darker). Normal and accented hits sound as they always did.
+ */
+const VT_DEFAULT = { tone: 2, snap: 0.6, dec: 0.3 };
+export const VEL_TIMBRE = {
+  kick: { tone: 0.6, snap: 0.4, dec: 0.08 }, kick909: { tone: 0.6, snap: 0.4, dec: 0.08 }, kick808: { tone: 0.5, snap: 0.3, dec: 0.05 },
+  hardkick: { tone: 0.6, snap: 0.3, dec: 0.08 }, softkick: { tone: 0.4, snap: 0.2, dec: 0.05 }, sub: { tone: 0.3, snap: 0, dec: 0.05 },
+  tom: { tone: 1.2, snap: 0.5, dec: 0.15 }, conga: { tone: 1.2, snap: 0.5, dec: 0.15 }, bongo: { tone: 1.2, snap: 0.5, dec: 0.15 },
+  snare: { tone: 2.2, snap: 0.7, dec: 0.3 }, snare808: { tone: 2.2, snap: 0.7, dec: 0.3 }, clap: { tone: 2, snap: 0.6, dec: 0.25 }, rim: { tone: 1.6, snap: 0.6, dec: 0.2 },
+  hat: { tone: 2.5, snap: 0.6, dec: 0.4 }, ophat: { tone: 2.5, snap: 0.6, dec: 0.35 }, shaker: { tone: 2.5, snap: 0.5, dec: 0.35 }, tamb: { tone: 2.5, snap: 0.5, dec: 0.35 },
+  sample: { tone: 1.5, snap: 0, dec: 0 },
+};
+/** p (the hit params) shaped by its velocity for voice `key`: { ...p, dec, snap, dark } — dark = octaves to darken. */
+export function velShape(p, key) {
+  const a = VEL_TIMBRE[key] || VT_DEFAULT, k = Math.max(0, Math.min(1, (0.7 - (p.vel ?? 0.7)) / 0.7));
+  if (!k) return { ...p, dark: 0 };
+  return { ...p, dec: p.dec * (1 - a.dec * k), snap: p.snap * (1 - a.snap * k), dark: a.tone * k };
+}
