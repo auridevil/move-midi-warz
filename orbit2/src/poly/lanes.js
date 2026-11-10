@@ -136,7 +136,7 @@ export class Lane {
   stepIndex(i) { return ((i - this.rotation) % this.length + this.length) % this.length; }
   hitAt(i) { return this.hits[this.stepIndex(i)]; }
   accentAt(i) { return this.accents[this.stepIndex(i)]; }
-  reset() { this.pos = 0; }
+  reset() { this.pos = 0; this.shown = null; }   // shown = the step on screen (the app sets it): a restart lights none until one sounds
   /**
    * Loops of this lane before it sounds exactly the same again (an empty lane: 1): the lcm of every a:b condition's b
    * on its active steps; × 2 (or 3) when swing is on and the length is odd (the swung steps move through the loop);

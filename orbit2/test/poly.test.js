@@ -532,3 +532,21 @@ test('long press: fires after the hold, a move or an early release is a tap, the
   el.dispatchEvent(ev('pointerdown')); t.mock.timers.tick(LONG_MS); el.dispatchEvent(ev('contextmenu')); el.dispatchEvent(ev('pointerup')); el.dispatchEvent(ev('click'));
   assert.deepEqual([longs, clicks], [4, 3], 'touch: the timer and the browser menu fire it once, no click');
 });
+test('long press: the mouse events a touch sends after it keep the focus where the long press put it', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { longPress, LONG_MS } = await import('../src/ui.js');
+  const ev = (type, o = {}) => Object.assign(new Event(type, { cancelable: true }), { pointerId: 1, button: 0, clientX: 0, clientY: 0, detail: 1 }, o);
+  const el = new EventTarget(); let longs = 0; longPress(el, () => longs++);
+  el.dispatchEvent(ev('pointerdown')); t.mock.timers.tick(LONG_MS); el.dispatchEvent(ev('pointerup'));   // touch: hold, lift, then the mouse events
+  const late = ev('mousedown'); el.dispatchEvent(late); el.dispatchEvent(ev('click'));
+  assert.equal(longs, 1); assert.ok(late.defaultPrevented, "the touch's mousedown doesn't move the focus");
+  el.dispatchEvent(ev('pointerdown')); const early = ev('mousedown'); el.dispatchEvent(early); t.mock.timers.tick(LONG_MS); el.dispatchEvent(ev('pointerup')); el.dispatchEvent(ev('click'));
+  assert.equal(longs, 2); assert.equal(early.defaultPrevented, false, "a mouse's mousedown (before the hold) focuses as usual");
+  el.dispatchEvent(ev('pointerdown')); el.dispatchEvent(ev('pointerup')); const tap = ev('mousedown'); el.dispatchEvent(tap); el.dispatchEvent(ev('click'));
+  assert.equal(longs, 2); assert.equal(tap.defaultPrevented, false, 'a tap focuses as usual');
+});
+test('a restart forgets the step on screen, so the playhead lights nothing until a step sounds', () => {
+  const m = new Machine(); m.lanes.forEach((l, i) => { l.shown = i + 1; l.pos = 5; }); m.resetAll();
+  assert.deepEqual(m.lanes.map(l => [l.shown, l.pos]), m.lanes.map(() => [null, 0]));
+  assert.equal('shown' in m.lanes[0].toJSON(), false, 'not saved');
+});

@@ -1,0 +1,101 @@
+---
+type: review
+phase: ORBIT2-03
+title: ORBIT2-03 touch and accessibility (T1–T7), review panel
+date: 2026-11-10
+round: 1
+result: IN PROGRESS
+reviewers:
+  verifier: NOT HAPPY
+  architect: NOT HAPPY
+  sound: NOT HAPPY
+  greta: HAPPY
+  rio: HAPPY
+tags: [orbit2, review]
+related:
+  - '[[REVIEW-PANEL]]'
+  - '[[BACKLOG]]'
+  - '[[ORBIT2-02]]'
+---
+
+# ORBIT2-03 · Touch and accessibility: review panel
+
+Reviewers: verifier (Vera), architect (Arjun), sound (Sofia), greta, rio. Process: [[REVIEW-PANEL]].
+Brief: phase goal (everything can be done with a finger, a keyboard and a screen reader; nothing needs Shift, Alt, Cmd
+or right-click), T1–T7 verbatim from [[BACKLOG]] plus the phase spec, `git diff --stat 50aba0e..8e574da` (7 files,
++226/−74, commits 32117cf / a0395b1 / d4ac357 / 8e574da), `git status --short` (clean), how to drive
+`orbit2/index.html` with `orbit2/tools/cdp.mjs` (own ports, one browser per viewport, time limits).
+
+## Pre-checks
+
+`npm run check` clean, `npm test` 105 + 9 green on 8e574da before the panel started.
+
+## Round 1: 2 of 5 HAPPY
+
+Fresh sub-agents in one message (verifier, architect, sound on the default model; greta, rio on sonnet), own ports
+5401 / 5402 / 5403 / 5409 / 5410 (+ 940x), the verifier also ran the smoke on 9222. Each MUST-FIX was reproduced by the
+implementer on 8e574da (5400/9400) before fixing.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | T2: steps tall enough but not wide enough: 21.6 × 32 px on desktop (16 in a row on the 440 px panel; the phase start was 21.6 × 18), 39.6 × 44 on a 390 px phone (8 in a row can't be 44 px wide there). A target size counts both sides; T7 says "tall", T2 doesn't. |
+| architect | NOT HAPPY | T6: the toggle is `disabled` while it connects, so Chrome drops the keyboard focus to `<body>` (Tab to it, Enter: focus on BODY during "Connecting…" and after, with denied MIDI and with a 300 ms fake handshake; at 50aba0e it stayed on the button). T6 semantics: the label flips *and* `aria-pressed` flips, so a screen reader says "Disconnect Move, toggle button, pressed" (APG: a toggle's label doesn't change). |
+| sound | NOT HAPPY | Regression from T2: holding Space on a step the mouse just clicked starts play *and* toggles the step (accent → off). The keydown handler returned on `e.repeat` before it prevented Space (`app.js:1004`), so the repeats armed the focused step button and the browser pressed it on release. At 50aba0e steps were divs, focus stayed on the page. |
+| greta | HAPPY | none (T1–T7 driven on desktop and phone; her "Space on a script-focused step plays" is B8 by design: only a Tab focus hands Space to a control) |
+| rio | HAPPY | none (phone: tap cycle, long touch → locks, slot menu save, 44 px heights, playhead) |
+
+SHOULD items recorded (never block): the playhead lit the step it stopped on for 25–90 ms after a restart (verifier,
+sound); gauges without a unit in `aria-valuetext` (bars per slot, every, repeat, accent above, sound / lock knobs,
+pan "50") (verifier); after a *touch* long-press on a slot the focus ends on the slot, not on "save here", and the menu
+can open below the fold (verifier, architect, greta); the Move status shows until the module runs, a flash on iOS
+(verifier); selects and the dice seed 31–33 px tall on touch (verifier); right-click on randomize now rolls wild
+(sound: the helper treats contextmenu as a long press); three `(pointer: coarse)` blocks and `row-gap` set twice
+(architect); `#stepsui` gets its role in JS, `#slots` in the HTML (architect); no modifier-free keyboard route to the
+locks / slot menu on a Mac (verifier, architect: no menu key, Shift+F10 does nothing in Chrome on macOS); twelve
+disabled "outside the loop" steps in the accessibility tree at length 4 (architect: noise; rio: Tab skips them);
+readout still Major Mono 11 px (verifier); "add to chain" on the playing slot makes "chain 3 → 3" (verifier,
+pre-existing); Move pads / step buttons / keys still toggle on-off with Shift for accent (sound); the first hit of a WAV
+export ~5 dB low, master comp starts cold (sound, pre-existing, phase 10); slot buttons 39 px wide on a phone (rio,
+architect); the target floor's specificity (1,1,2) beats component rules (architect); `short()` derives the slider
+name from " · " in the label (architect). Tooling notes: CDP reports `valuetext: ""` for every slider (a Chrome / CDP
+artefact, the DOM carries it); smooth page scrolling makes taps right after `scrollIntoView` miss (greta), so harness
+scripts should scroll with `behavior: 'instant'`. Kept as they are: `aria-pressed` = the step sounds, the accent is in
+its name (greta); the lane buttons' names ("lane 1 kick") contain their visible text "1 kick" (rio's label-in-name
+worry holds).
+
+### Changes after round 1
+
+- **T2 step targets both ways**: 8 steps in a row (two rows for 16), 4 in a row on a touch screen ≤ 440 px wide (8 × 44
+  px + gaps needs a 373 px strip, a 390 phone has 338). Measured: desktop 1440 47.1 × 32 px, narrow desktop 1000
+  113.1 × 32, phone 390 touch 82.3 × 44, tablet 820 touch 91.5 × 44. The phone rule `gap: 3px` was also overriding the
+  16 px row gap a step's condition label needs (rows are new on phones in this phase) → `column-gap` only; labels end
+  1 px above the next row.
+- **T6 toggle**: `aria-disabled` + a `connecting` guard instead of `disabled`, so the focus stays on the button
+  through Connecting… → Disconnect Move → Connect Move and a second press while connecting does nothing; no
+  `aria-pressed` (the words say what it does next, the `role=status` pill says how it went); the Move status starts
+  `hidden` in the HTML and is shown only where Web MIDI exists (no flash on iOS); the disabled look covers
+  `[aria-disabled=true]`.
+- **Held Space**: the page prevents Space's repeats too when it owns Space (`if (e.repeat) { if (e.key === ' ' &&
+  !controlOwnsKey(e)) e.preventDefault(); return; }`): play/stop only. A Tab-focused step still takes Space (one press
+  per hold, native).
+- Quick SHOULDs: `Lane.reset()` forgets `shown`, so a restart lights nothing until a step sounds (not saved);
+  `say` on every unit-less gauge (sound knobs and step locks "%", pan "centre" / "30% left", "4 bars", "velocity 100",
+  "every 2 loops", "3 mutations", "channel 10"); `longPress` prevents the late `mousedown` a touch sends after a fired
+  long press (a mouse's mousedown comes before the hold and passes), and the slot menu scrolls into view
+  (`block: 'nearest'`) before it takes the focus; selects and inputs 44 px tall on touch; one `(pointer: coarse)`
+  block for the targets (the slot-menu and slot rules folded into the 32 / 44 px floor); `#stepsui` group role in the
+  HTML; randomize's title names right-click (kept: contextmenu = long press everywhere).
+- Tests: 105 → 107 orbit2 tests (long press: a touch's late mousedown is prevented, a mouse's and a tap's are not;
+  `resetAll` forgets the shown step and doesn't save it). `npm run check` clean, `npm test` 107 + 9,
+  `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped).
+  Browser (5400/9400, one browser per viewport): 32/32: desktop: 8 a row ≥ 32 × 32 and 16 px rows; held Space (1 +
+  4 auto-repeats) on a clicked accent step plays and keeps the accent; a Space tap stops; Tab-focused step + held
+  Space cycles once, no play; restart lights no stale step, then the playhead runs; valuetexts with units; Tab → Enter
+  on the toggle with a 400 ms fake Move: focus kept, aria-disabled during, "Disconnect Move" with fw 2.1.7, one MIDI
+  request for two presses, AX plain button without a pressed state, 18+ named sliders with values, 16 step buttons
+  with a pressed state; Enter → "Connect Move", focus kept; right-click → slot menu with focus on "save here", Escape →
+  back on the slot; no Web MIDI → status hidden. Phone 390 × 844 touch: 4 a row ≥ 44 × 44; taps cycle off → on →
+  accent → off; long touch → locks, step unchanged; long touch on a slot → menu on screen, focus on "save here"; save,
+  erase; selects / toggle / slots ≥ 44 px; no sideways scroll. Tablet 820 touch: 8 a row ≥ 44. Narrow 1000: 8 a row
+  ≥ 32. 0 page errors everywhere; screenshots looked at (desktop two rows of 8; phone 4 × 4 with "1:2" / "×3" labels
+  clear of the next row).

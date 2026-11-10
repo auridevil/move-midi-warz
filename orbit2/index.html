@@ -21,9 +21,9 @@
   <canvas id="cv"></canvas>
   <header class="bar chaos-bar">
     <h1><a href="../index.html" class="home">MIDI Warz</a> <span class="sub">orbits 2 · lab · a testing copy of orbits</span></h1>
-    <div class="status" id="move-status">
+    <div class="status" id="move-status" hidden>
       <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
-      <button id="btn-connect" class="primary" type="button" aria-pressed="false">Connect Move</button>
+      <button id="btn-connect" class="primary" type="button">Connect Move</button>
     </div>
   </header>
   <div id="readout" class="readout"></div>
@@ -171,7 +171,7 @@
       <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
       <button id="btn-save" title="Save this setup under a name (library)">save</button>
       <button id="btn-load" title="Open the library of saved setups">load</button>
-      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click or long-press: wild (undoable)">randomize</button>
+      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
       <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
       <button id="btn-clear">clear lane</button>
       <button id="btn-tap">tap tempo</button>
@@ -187,7 +187,7 @@
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary>lane <span id="lane-name">kick</span> · tap a ring or a lane button, Alt+1–4, or the Move's track buttons <em id="shift-ind" class="shift-ind"></em></summary>
       <div id="sliders" class="gauges"></div>
-      <div id="stepsui" class="stepsui"></div>
+      <div id="stepsui" class="stepsui" role="group" aria-label="steps"></div>
       <div id="lockpanel" class="lockpanel" hidden>
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>

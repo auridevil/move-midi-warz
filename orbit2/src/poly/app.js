@@ -285,7 +285,8 @@ function buildSliders() {
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
   const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => { applyKit(ks.value); letGoAfterPointer(ks); };
   const se = $('sound-sliders'); se.innerHTML = '';
-  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
+  const panSay = (v) => v === 50 ? 'centre' : `${Math.abs(v - 50) * 2}% ${v < 50 ? 'left' : 'right'}`;   // spoken: the knob shows 0–100
+  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
 function sync() {
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
@@ -313,7 +314,7 @@ function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, 
 // long press that opens the lock panel would leave the finger on a detached button.
 const stepBtns = [];
 function buildSteps() {
-  const el = $('stepsui'); el.setAttribute('role', 'group'); el.setAttribute('aria-label', 'steps');
+  const el = $('stepsui');
   for (let i = 0; i < MAX_STEPS; i++) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'st';
     b.title = 'tap = off → on → accent → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only';
@@ -359,7 +360,7 @@ function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); reado
 function buildLockGauges() {
   const el = $('lock-gauges'); el.innerHTML = '';
   for (const k of LOCK_KEYS) {
-    const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
+    const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, say: u.fmt || ((v) => v + '%'), title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
       onChange: (v) => { if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); } });
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
@@ -427,7 +428,10 @@ function renderSlotMenu() {
   $('slot-menu-title').textContent = `slot ${i + 1}`;
   menu.querySelector('[data-act=chain]').disabled = menu.querySelector('[data-act=erase]').disabled = !bank.filled(i);
 }
-function openSlotMenu(i) { slotMenuFor = slotMenuFor === i ? -1 : i; renderSlots(); if (slotMenuFor >= 0) $('slot-menu').querySelector('[data-act=save]').focus({ preventScroll: true }); }
+function openSlotMenu(i) {
+  slotMenuFor = slotMenuFor === i ? -1 : i; renderSlots(); if (slotMenuFor < 0) return;
+  const menu = $('slot-menu'); menu.scrollIntoView({ block: 'nearest' }); menu.querySelector('[data-act=save]').focus({ preventScroll: true });   // under the grid, maybe below the fold
+}
 function closeSlotMenu(refocus = false) { const i = slotMenuFor; if (i < 0) return; slotMenuFor = -1; renderSlots(); if (refocus) slotBtns[i].focus({ preventScroll: true }); }
 function buildSlotsUI() {
   const el = $('slots');
@@ -447,7 +451,7 @@ function buildSlotsUI() {
   $('slot-menu').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeSlotMenu(true); } });
 
   ui.slotSwitch = mount('slot-switch', segmented({ options: [['now', 'at once'], ['bar', 'next bar'], ['cycle', 'full cycle', 'when every lane lines up again']], value: bank.switchAt, onChange: (v) => { bank.switchAt = v; bank.persist(); renderSlots(); } }));
-  sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
+  sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
   $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
   renderSlots();
 }
@@ -467,7 +471,7 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
 function setRec(on) { rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
 function buildRecUI() {
   $('btn-rec').onclick = () => setRec(!rec.armed);
-  sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
+  sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, say: (v) => `velocity ${v}`, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
   ui.quant = mount('rec-quant', segmented({ options: [['nearest', 'nearest step', 'early hits land on the coming step'], ['previous', 'step just played']], value: rec.quant, onChange: (v) => { rec.quant = v; saveSettings(); } }));
   ui.pitchPads = mount('rec-pitch', toggleChip({ label: 'pitch pads', on: rec.pitchPads, title: INFO['pitch pads'], onChange: (v) => { rec.pitchPads = v; saveSettings(); } }));
 }
@@ -539,9 +543,9 @@ function renderLanesEvolve() {
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = 'home set'; readout(); };
   const g = $('evo-gauges');
-  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 1, max: 32, value: evo.every, title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { evo.every = v; saveSettings(); readout(); } });
+  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 1, max: 32, value: evo.every, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { evo.every = v; saveSettings(); readout(); } });
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
-  sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
+  sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', say: v => v ? `${v} mutation${v === 1 ? '' : 's'}` : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
   g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
   ui.evoScope = mount('evo-scope', segmented({ options: [['rotate', 'rotation'], ['hits', '+ hits'], ['all', 'everything', 'rotation, fill, length and speed']], value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
   renderLanesEvolve();
@@ -569,7 +573,7 @@ function buildMidiUI() {
   const NOTE = (p) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][p % 12] + (Math.floor(p / 12) - 2), g = $('midi-lanes');
   m.lanes.forEach((_, i) => {
     g.appendChild(makeGauge({ label: `lane ${i + 1} note`, min: 0, max: 127, value: pmidi.lanes[i].note, fmt: (v) => `${NOTE(v)} · ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].note = v; saveSettings(); } }).el);
-    g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); } }).el);
+    g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, say: (v) => `channel ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); } }).el);
   });
   g.appendChild(makeGauge({ label: 'gate', min: 5, max: 500, value: pmidi.gateMs, fmt: (v) => `${v} ms`, color: 'var(--star-white)', title: 'how long each MIDI note is held', onChange: (v) => { pmidi.gateMs = v; saveSettings(); } }).el);
   pmidi.handlers = { tempo: (bpm) => { followClockTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
@@ -652,7 +656,7 @@ function buildDiceUI() {
   $('dice-roll').onclick = () => { dice.reroll(); saveSettings(); renderDice(); readout(); };
   // the groove randomize rolls from this seed (the toast's "dice N" makes it again); Shift+click: the wild roll
   $('dice-make').onclick = (e) => rollPattern(e.shiftKey, true);
-  sliders.diceRepeat = makeGauge({ label: 'repeat · loops', min: 1, max: 16, value: dice.repeat, title: INFO['dice repeat'], color: 'var(--signal-cyan)', onChange: (v) => { dice.repeat = v; saveSettings(); readout(); } }); $('dice-gauges').appendChild(sliders.diceRepeat.el);
+  sliders.diceRepeat = makeGauge({ label: 'repeat · loops', min: 1, max: 16, value: dice.repeat, say: (v) => `every ${v} loop${v === 1 ? '' : 's'}`, title: INFO['dice repeat'], color: 'var(--signal-cyan)', onChange: (v) => { dice.repeat = v; saveSettings(); readout(); } }); $('dice-gauges').appendChild(sliders.diceRepeat.el);
   renderDice();
 }
 
@@ -1001,7 +1005,9 @@ function controlOwnsKey(e) {
 /** A select picked with the mouse gives the focus back to the page (else the arrow keys would keep changing it). */
 function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
-  if (e.repeat) return;
+  // a held Space repeats: the repeats are the page's too, or the browser presses the button the mouse left focused on
+  // release (holding Space to play also toggled the step just clicked)
+  if (e.repeat) { if (e.key === ' ' && !controlOwnsKey(e)) e.preventDefault(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return; e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   if (controlOwnsKey(e)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
@@ -1016,12 +1022,14 @@ window.addEventListener('keydown', (e) => {
 
 // ---- Move connection ----
 function setPill(t, cls) { const el = $('midi-state'); el.textContent = t; el.className = `pill ${cls}`; }
-// One toggle shows the state (connect → connecting… → disconnect). Where Web MIDI is missing (iOS Safari, Firefox
-// without the add-on) the Move can't work at all, so the connect UI isn't shown.
-let moveOn = false, portsWatched = false;
+// One button says what it does next (Connect Move → Connecting… → Disconnect Move); the pill beside it says how it went.
+// Its words carry the state, so no aria-pressed (a toggle's label must not change). While connecting it is
+// aria-disabled, not disabled: a disabled button drops the keyboard focus to the page. Where Web MIDI is missing (iOS
+// Safari, Firefox without the add-on) the Move can't work at all, so the connect UI (hidden in the HTML) stays hidden.
+let moveOn = false, connecting = false, portsWatched = false;
 function paintConnect(busy = false) {
-  const b = $('btn-connect'); b.disabled = busy; b.textContent = busy ? 'Connecting…' : moveOn ? 'Disconnect Move' : 'Connect Move';
-  b.classList.toggle('primary', !moveOn); b.setAttribute('aria-pressed', moveOn);
+  const b = $('btn-connect'); connecting = busy; b.setAttribute('aria-disabled', busy);
+  b.textContent = busy ? 'Connecting…' : moveOn ? 'Disconnect Move' : 'Connect Move'; b.classList.toggle('primary', !moveOn);
 }
 async function connectMove() {
   paintConnect(true);
@@ -1036,8 +1044,8 @@ async function connectMove() {
   } catch (e) { setPill(`Move: ${e.message}`, 'pill-off'); } finally { paintConnect(); }
 }
 function disconnectMove() { move.disconnect(); moveOn = false; setPill('Move: disconnected (back to standalone)', 'pill-off'); paintConnect(); }
-$('btn-connect').onclick = () => (moveOn ? disconnectMove() : connectMove());
-if (!midi.supported) $('move-status').hidden = true; else paintConnect();
+$('btn-connect').onclick = () => { if (!connecting) (moveOn ? disconnectMove() : connectMove()); };
+if (midi.supported) { $('move-status').hidden = false; paintConnect(); }
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----

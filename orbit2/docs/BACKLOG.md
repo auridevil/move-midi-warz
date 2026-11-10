@@ -206,3 +206,25 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   follower overshoots by 1.3–2.2 bpm for about a beat (the quadratic fit extrapolated).
 - **First Tab stop** (ORBIT2-01, kai): from a cold page the first Tab lands on the "MIDI Warz" home link in the header,
   one wasted press before the first control when playing without looking (see also "play is the 36th tab stop").
+- **Keyboard route to step locks and the slot menu on a Mac** (ORBIT2-03, verifier, architect): Mac keyboards have no
+  menu key and Chrome on macOS ignores Shift+F10, so a keyboard-only user needs Alt+Enter (locks) or Shift+Enter (save)
+  there (VoiceOver's VO+Shift+M sends contextmenu, which works). Ideas: a visible "⋯" next to the strip and the slot
+  grid, or Enter held.
+- **Steps outside the loop** (ORBIT2-03, architect, rio): at length 4 the strip holds twelve disabled "outside the
+  loop" buttons: noise for a screen reader listing buttons (architect), yet Tab never reaches them (rio). Pick one:
+  hide them from the tree and say "4 of 16 steps" on the strip, or keep them reachable.
+- **Readout font** (ORBIT2-03, verifier): the readout is the last small text in Major Mono (11 px decorative status);
+  phase 04's calmer screen decides its fate.
+- **Chain of one** (ORBIT2-03, verifier; pre-existing): "add to chain" on the playing slot with no chain makes
+  "chain 3 → 3".
+- **One step rule everywhere** (ORBIT2-03, sound): the screen's tap cycles off → on → accent, while the Move's pads and
+  step buttons and the computer keys still toggle, with Shift for accent.
+- **Cold master on export** (ORBIT2-03, sound; pre-existing, phase 10): the first hit of a WAV export is ~5 dB low
+  (mix −19.7 dBFS vs −14.6 for the next identical kicks, raw stems flat): the master compressor starts cold and
+  `LEAD_IN` (0.05 s) is shorter than its release. Pre-roll the master and cut it.
+- **Slot buttons on a phone** (ORBIT2-03, rio, architect): 39 × 44 px (T7 asks 44 px tall); 44 wide needs 4 slots in
+  a row.
+- **Target floor specificity** (ORBIT2-03, architect): `body:has(#hud-left) button:not(.st)` is (1,1,2) and beats
+  component rules (it took `.lane-tab` from 36 to 32 px on desktop); a `:where()` floor lets components win but then
+  each needs its own touch size. Also: a slider's name is the label before " · " (`short()` in `gauge.js`); an
+  explicit `name` option would be plainer.

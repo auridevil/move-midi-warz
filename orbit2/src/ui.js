@@ -45,6 +45,9 @@ export function longPress(el, onLong, { ms = LONG_MS, slop = LONG_SLOP } = {}) {
   for (const t of ['pointerup', 'pointercancel', 'pointerleave']) el.addEventListener(t, (e) => { if (e.pointerId === id) cancel(); });
   // capture: runs before the element's own onclick. Keyboard clicks (detail 0) always pass.
   el.addEventListener('click', (e) => { const f = fired; fired = false; if (f && e.detail !== 0) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  // a touch sends its mouse events after the finger lifts: their mousedown must not pull the focus back here from
+  // wherever the long press put it (the slot menu). A mouse's own mousedown comes before the hold, so it passes.
+  el.addEventListener('mousedown', (e) => { if (fired) e.preventDefault(); }, true);
   el.addEventListener('contextmenu', (e) => { e.preventDefault(); if (fired && id !== null) return; const down = id !== null; fire(e); fired = down; });   // touch: the timer may have won already
   return cancel;
 }

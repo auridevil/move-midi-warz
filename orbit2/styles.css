@@ -43,11 +43,11 @@ button, select, input { background: rgba(167, 139, 250, 0.16); color: var(--fg);
 select, input[type=number] { border-radius: 8px; }
 button { cursor: pointer; font-weight: 500; color: var(--star-white); border-color: rgba(167,139,250,.6); transition: all .25s; }
 button:hover { color: var(--void-black); background: var(--nebula-purple); border-color: var(--nebula-purple); box-shadow: 0 0 18px rgba(167,139,250,.4); }
-button:disabled { opacity: .4; cursor: default; box-shadow: none; } button:disabled:hover { color: var(--star-white); background: rgba(167, 139, 250, 0.16); border-color: rgba(167,139,250,.6); }
+button:disabled, button[aria-disabled=true] { opacity: .4; cursor: default; box-shadow: none; } button:disabled:hover, button[aria-disabled=true]:hover { color: var(--star-white); background: rgba(167, 139, 250, 0.16); border-color: rgba(167,139,250,.6); }
 button.mini { padding: 2px 10px; font-size: 11px; }
 button.primary { background: var(--signal-cyan); color: #06222a; border-color: transparent; font-weight: 700; padding: 8px 18px; font-size: 14px; box-shadow: 0 0 22px rgba(103,232,249,.35); }
 button.primary:hover { background: var(--star-white); }
-button.primary:disabled { background: rgba(167,139,250,.15); color: var(--muted); box-shadow: none; }
+button.primary:disabled, button.primary[aria-disabled=true] { background: rgba(167,139,250,.15); color: var(--muted); box-shadow: none; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .panel-wide { grid-column: 1 / -1; }
@@ -245,13 +245,12 @@ body.chaos::before { display: none; }
 .stress-val { min-width: 13ch; font-variant-numeric: tabular-nums; }
 .stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
-.stepsui { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; margin: 8px 0; }
+.stepsui { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 8px 0; }   /* 8 in a row: a target 32 px wide too (16 in a row were 22 px) */
 .stepsui .st { height: 32px; min-width: 0; padding: 0; border: 1px solid transparent; border-radius: 4px; background: rgba(236,233,247,.14); box-shadow: none; cursor: pointer; transition: none; }
 .stepsui .st:hover { background: rgba(236,233,247,.26); border-color: transparent; box-shadow: none; } .stepsui .st.on, .stepsui .st.on:hover { background: var(--signal-cyan); } .stepsui .st.acc, .stepsui .st.acc:hover { background: #fff; }
 .stepsui .st.off, .stepsui .st.off:disabled:hover { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; opacity: 1; }
 /* long-press targets: no iOS callout, no text selection, no double-tap zoom delay */
 .stepsui .st, .slots .slot { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
-@media (pointer: coarse) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(8, 1fr); row-gap: 16px; } body:has(#hud-left) .stepsui .st { height: 44px; } body:has(#hud-left) .slots .slot { min-height: 44px; } }
 .sliders .pv { font-size: 11px; color: var(--signal-cyan); margin-left: 4px; }
 .lane-drawer { border-width: 1px; transition: border-color .2s; }
 .subh { font: 600 11px var(--font-body); letter-spacing: .08em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
@@ -470,7 +469,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .readout { display: none; }
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
-  body:has(#hud-left) .stepsui { gap: 3px; }
+  body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their 16 px: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
   body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
@@ -546,21 +545,25 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .slot-menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid rgba(103,232,249,.45); border-radius: 10px; background: rgb(18, 12, 40); }
 .slot-menu[hidden] { display: none; }
 .slot-menu-title { font-size: 12px; color: var(--signal-cyan); margin-right: 2px; }
-.slot-menu button { min-height: 32px; padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
-@media (pointer: coarse) { .slot-menu button { min-height: 44px; } .slot-menu [data-act=close] { min-width: 44px; } }
+.slot-menu button { padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
 @media (max-width: 760px) { .slot-menu-title { flex-basis: 100%; } }   /* title on its own line: the four buttons fit one row */
 /* playhead: the step of the selected lane sounding now */
 .stepsui .st { position: relative; }
 .stepsui .st.ph::before { content: ''; position: absolute; inset: -4px 0 auto 0; height: 3px; border-radius: 2px; background: var(--ember-magenta); box-shadow: 0 0 8px var(--ember-magenta); pointer-events: none; }
 .stepsui .st.ph:not(.on):not(.acc) { background: rgba(240,171,252,.28); }
-/* T7 target sizes on the Orbits page: drawer headers and buttons 32 px, 44 px for a finger */
+/* T2 / T7 target sizes on the Orbits page: drawer headers, buttons and steps 32 px (steps 32 wide too), 44 px for a
+   finger, all in this one block. A phone too narrow for 8 steps of 44 px (8 × 44 + gaps = 373 px of strip) lays them
+   out 4 in a row. */
 body:has(#hud-left) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
 body:has(#hud-left) button:not(.st) { min-height: 32px; }
 @media (pointer: coarse) {
   body:has(#hud-left) .drawer > summary { min-height: 44px; padding: 13px 0; }
-  body:has(#hud-left) button:not(.st) { min-height: 44px; }
+  body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 44px; }
+  body:has(#hud-left) .stepsui .st { height: 44px; }
   body:has(#hud-left) .ldot { width: 44px; height: 44px; }
+  .slot-menu [data-act=close] { min-width: 44px; }
 }
+@media (pointer: coarse) and (max-width: 440px) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(4, 1fr); } }
 /* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
    (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
 body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }
