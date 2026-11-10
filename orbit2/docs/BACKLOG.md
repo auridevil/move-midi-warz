@@ -61,16 +61,16 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## T · Touch & accessibility (phase 03)
 
 - **T1 everything reachable by touch.** Long-press replaces Shift/Alt/Cmd/right-click: steps (tap cycles off → on →
-  accent, long-press opens locks/condition), slots (long-press menu: save / add to chain / erase). (Maya, Greta, Rio)
-- **T2 step cells are buttons.** Real `<button aria-pressed>`, keyboard reachable, ≥32 px desktop, ≥44 px touch. (Greta, Rio)
+  accent, long-press opens locks/condition), slots (long-press menu: save / add to chain / erase). (Maya, Greta, Rio) ✅ ORBIT2-03
+- **T2 step cells are buttons.** Real `<button aria-pressed>`, keyboard reachable, ≥32 px desktop, ≥44 px touch. (Greta, Rio) ✅ ORBIT2-03
 - **T3 gauges are sliders.** `gauge.js`: `role="slider"`, `aria-valuenow/min/max/valuetext`, short `aria-label`,
-  visible 2 px focus ring like buttons. (Greta)
-- **T4 lane tabs semantics.** `role="tab"` + `aria-selected` + arrow keys, or plain buttons with `aria-pressed`. (Greta)
-- **T5 playhead on the step strip.** Highlight the sounding step of the selected lane while playing. (Greta)
+  visible 2 px focus ring like buttons. (Greta) ✅ ORBIT2-03
+- **T4 lane tabs semantics.** `role="tab"` + `aria-selected` + arrow keys, or plain buttons with `aria-pressed`. (Greta) ✅ ORBIT2-03
+- **T5 playhead on the step strip.** Highlight the sounding step of the selected lane while playing. (Greta) ✅ ORBIT2-03
 - **T6 Move UI only when it can work.** Hide Connect/Disconnect where `navigator.requestMIDIAccess` is missing (iOS);
-  one toggle button instead of Connect + disabled Disconnect. (Greta, Rio)
+  one toggle button instead of Connect + disabled Disconnect. (Greta, Rio) ✅ ORBIT2-03
 - **T7 opaque popovers + sizes.** Move-controls popover gets a solid background; labels ≥11 px in the body font,
-  drawer headers/buttons ≥32 px (44 px touch). (Greta)
+  drawer headers/buttons ≥32 px (44 px touch). (Greta) ✅ ORBIT2-03
 
 ## C · Calmer screen (phase 04)
 
