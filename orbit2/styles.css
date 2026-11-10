@@ -32,11 +32,11 @@ main, header { position: relative; z-index: 1; }
 
 .bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; gap: 12px; flex-wrap: wrap; background: rgba(22, 14, 46, 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline); }
 h1 { font: 400 15px var(--font-display); letter-spacing: .22em; text-transform: lowercase; margin: 0; color: var(--star-white); text-shadow: -1px 0 var(--signal-cyan), 1px 0 var(--ember-magenta), 0 0 18px rgba(103, 232, 249, 0.25); }
-h1 .sub { color: rgba(167, 139, 250, 0.8); font-weight: normal; margin-left: 12px; letter-spacing: .18em; text-shadow: none; font-size: 11px; }
+h1 .sub { color: rgba(167, 139, 250, 0.8); font: 500 11px var(--font-body); margin-left: 12px; letter-spacing: .14em; text-shadow: none; }
 .home { color: var(--star-white); text-decoration: none; }
 h2 { font: 400 11px var(--font-display); margin: 0 0 10px; color: rgba(167, 139, 250, 0.9); text-transform: lowercase; letter-spacing: .22em; text-shadow: 0 0 14px rgba(167,139,250,.25); }
 h2 small { text-transform: none; letter-spacing: 0; margin-left: 8px; font-family: var(--font-body); color: var(--muted); }
-.status { display: flex; gap: 8px; align-items: center; }
+.status { display: flex; gap: 8px; align-items: center; } .status[hidden] { display: none; }
 .pill { padding: 5px 12px; border-radius: 999px; font: 500 12px var(--font-body); border: 1px solid var(--hairline); background: rgba(167,139,250,.12); }
 .pill-off { color: var(--muted); } .pill-on { color: #0a2a30; background: var(--signal-cyan); border-color: var(--signal-cyan); box-shadow: 0 0 14px rgba(103,232,249,.35); } .pill-warn { color: #3a0a3e; background: var(--ember-magenta); border-color: var(--ember-magenta); }
 button, select, input { background: rgba(167, 139, 250, 0.16); color: var(--fg); border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 12px; font: 13px var(--font-body); }
@@ -241,7 +241,7 @@ body.chaos::before { display: none; }
 .gtable { border-collapse: collapse; font-size: 12px; margin-top: 6px; } .gtable th { text-align: left; color: var(--fg); padding: 3px 8px 3px 0; white-space: nowrap; } .gtable td { color: var(--muted); padding: 3px 14px 3px 0; }
 .chaos .bar .sub { color: rgba(240,171,252,.85); }
 
-.stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 400 10px var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.75); cursor: help; }
+.stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 500 11px var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: rgba(236,233,247,.75); cursor: help; }
 .stress-val { min-width: 13ch; font-variant-numeric: tabular-nums; }
 .stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
@@ -254,7 +254,7 @@ body.chaos::before { display: none; }
 @media (pointer: coarse) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(8, 1fr); row-gap: 16px; } body:has(#hud-left) .stepsui .st { height: 44px; } body:has(#hud-left) .slots .slot { min-height: 44px; } }
 .sliders .pv { font-size: 11px; color: var(--signal-cyan); margin-left: 4px; }
 .lane-drawer { border-width: 1px; transition: border-color .2s; }
-.subh { font: 400 10px var(--font-display); letter-spacing: .2em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
+.subh { font: 600 11px var(--font-body); letter-spacing: .08em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
 .shift-ind { font-style: normal; color: var(--ember-magenta); margin-left: 8px; font-size: 11px; }
 /* pages with a live full-screen canvas: blur would be recomputed every frame, so go opaque instead */
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(22, 14, 46, 0.86); }
@@ -275,7 +275,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .gauge svg { width: 34px; height: 34px; display: block; }
 .gauge .g-track { fill: none; stroke: rgba(236,233,247,.16); stroke-width: 4.5; stroke-linecap: round; }
 .gauge .g-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(103,232,249,.3)); }
-.gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 9.5px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
+.gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
 
 /* launcher credit */
@@ -438,9 +438,9 @@ button.small { padding: 3px 10px; font-size: 11px; }
 /* Orbits layout: the left column is placed by JS between the readout and the bottom-left panel (layoutHud) */
 #hud-left { max-height: none; }
 /* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
-.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgba(18, 12, 40, 0.97); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
-.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgba(18, 12, 40, 0.97); padding: 8px 0; }
-.keys-pop .pop-x { display: none; float: right; font-size: 10px; color: var(--muted); letter-spacing: .1em; }
+.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgb(18, 12, 40); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
+.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgb(18, 12, 40); padding: 8px 0; }
+.keys-pop .pop-x { display: none; float: right; font-size: 11px; color: var(--muted); letter-spacing: .1em; }
 .keys-pop[open] .pop-x { display: inline; }
 .gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
 @media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } #hud-left { top: auto !important; bottom: auto !important; } }
@@ -476,12 +476,12 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
   body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
   body:has(#hud-left) .welcome > span { flex-basis: 100%; }
-  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 36px; }
+  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 44px; }
   body:has(#hud-left) .welcome .wb-x { min-width: 40px; margin-left: auto; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
-.stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto 0 -13px 0; font-size: 8px; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
-.stepsui { margin-bottom: 14px; }
+.stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto -2px -15px -2px; font-size: 11px; line-height: 1.2; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
+.stepsui { margin-bottom: 16px; row-gap: 16px; }
 .trig-row { border-top: 1px solid rgba(103,232,249,.2); padding-top: 6px; }
 .sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
 #btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
@@ -491,7 +491,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 /* ---- src/ui.js controls: segmented bars, chips, toggle chips (no dropdowns) ---- */
 .ctl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctl-col { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
-.ctl-lbl { font: 400 9.5px var(--font-display); letter-spacing: .16em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
+.ctl-lbl { font: 600 11px var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
 .seg-ui button { padding: 5px 10px; font-size: 11.5px; }
 .seg-ui button.on { background: var(--signal-cyan); color: var(--void-black); }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -503,7 +503,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 /* condition picker: "1 in N" + loop dots */
 .cond-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
 .loop-dots { display: flex; gap: 6px; }
-.ldot { --chip: var(--signal-cyan); width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 11px; background: transparent; color: var(--muted); border: 1.5px dashed color-mix(in srgb, var(--chip) 60%, transparent); box-shadow: none; }
+.ldot { --chip: var(--signal-cyan); width: 32px; height: 32px; padding: 0; border-radius: 50%; font-size: 11px; background: transparent; color: var(--muted); border: 1.5px dashed color-mix(in srgb, var(--chip) 60%, transparent); box-shadow: none; }
 .ldot.on { background: var(--chip); color: var(--void-black); border-style: solid; font-weight: 700; box-shadow: 0 0 10px color-mix(in srgb, var(--chip) 45%, transparent); }
 .trig-row { flex-direction: column; align-items: flex-start; gap: 8px; }
 /* Unassembler slices as waveform tiles */
@@ -512,7 +512,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 .slice { position: relative; padding: 2px; border-radius: 6px; background: rgba(103,232,249,.06); border: 1px solid rgba(103,232,249,.25); box-shadow: none; }
 .slice:hover { background: rgba(103,232,249,.18); border-color: var(--signal-cyan); }
 .slice canvas { display: block; width: 100%; height: 22px; }
-.slice span { position: absolute; top: 1px; left: 4px; font-size: 8.5px; color: var(--muted); }
+.slice span { position: absolute; top: 1px; left: 4px; font-size: 11px; line-height: 1; color: var(--muted); }
 .evo-lanes { gap: 6px; }
 .midi-gauges { grid-template-columns: repeat(4, 1fr); }
 /* jam: the recorder is the loudest thing on the page while it runs */
@@ -535,7 +535,7 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .lib-row.cur { border-color: var(--signal-cyan); background: rgba(103,232,249,.08); }
 .lib-name { justify-self: start; padding: 0; border: 0; background: none; box-shadow: none; color: var(--star-white); font-weight: 700; font-size: 13px; text-align: left; cursor: pointer; }
 .lib-name:hover { color: var(--signal-cyan); background: none; }
-.lib-meta { grid-column: 1 / -1; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-meta { grid-column: 1 / -1; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-acts { display: flex; gap: 3px; } .lib-acts button { padding: 2px 8px; min-width: 26px; }
 .lib-acts button.danger { background: #ef4444; border-color: #ef4444; color: #fff; }
 .install-btn { margin: 4px 0 10px; }
@@ -552,3 +552,14 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .stepsui .st { position: relative; }
 .stepsui .st.ph::before { content: ''; position: absolute; inset: -4px 0 auto 0; height: 3px; border-radius: 2px; background: var(--ember-magenta); box-shadow: 0 0 8px var(--ember-magenta); pointer-events: none; }
 .stepsui .st.ph:not(.on):not(.acc) { background: rgba(240,171,252,.28); }
+/* T7 target sizes on the Orbits page: drawer headers and buttons 32 px, 44 px for a finger */
+body:has(#hud-left) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
+body:has(#hud-left) button:not(.st) { min-height: 32px; }
+@media (pointer: coarse) {
+  body:has(#hud-left) .drawer > summary { min-height: 44px; padding: 13px 0; }
+  body:has(#hud-left) button:not(.st) { min-height: 44px; }
+  body:has(#hud-left) .ldot { width: 44px; height: 44px; }
+}
+/* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
+   (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
+body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }

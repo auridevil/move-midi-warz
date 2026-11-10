@@ -1016,16 +1016,28 @@ window.addEventListener('keydown', (e) => {
 
 // ---- Move connection ----
 function setPill(t, cls) { const el = $('midi-state'); el.textContent = t; el.className = `pill ${cls}`; }
-$('btn-connect').onclick = async () => {
+// One toggle shows the state (connect → connecting… → disconnect). Where Web MIDI is missing (iOS Safari, Firefox
+// without the add-on) the Move can't work at all, so the connect UI isn't shown.
+let moveOn = false, portsWatched = false;
+function paintConnect(busy = false) {
+  const b = $('btn-connect'); b.disabled = busy; b.textContent = busy ? 'Connecting…' : moveOn ? 'Disconnect Move' : 'Connect Move';
+  b.classList.toggle('primary', !moveOn); b.setAttribute('aria-pressed', moveOn);
+}
+async function connectMove() {
+  paintConnect(true);
   try {
-    await wake(); const inputs = midi.access ? midi.inputs() : (await midi.init()).inputs; midi.addEventListener('ports', () => { pmidi.refresh(); renderMidi(); }); const port = midi.pickDefault(inputs); midi.select(port);
+    await wake(); const inputs = midi.access ? midi.inputs() : (await midi.init()).inputs;
+    if (!portsWatched) { portsWatched = true; midi.addEventListener('ports', () => { pmidi.refresh(); renderMidi(); }); }
+    const port = midi.pickDefault(inputs); midi.select(port);
     if (!port) { setPill('Move: no MIDI input found', 'pill-off'); return; }
     if (!midi.sysexAllowed) { setPill('Move: SysEx denied — allow it in the Chrome prompt', 'pill-warn'); return; }
-    setPill(`Handshaking with ${port.name}…`, 'pill-warn'); const { identity } = await move.connect(); paintLeds();
-    setPill(`Move: ready${identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''}`, 'pill-on'); $('btn-disconnect').disabled = false; pmidi.refresh(); renderMidi();
-  } catch (e) { setPill(`Move: ${e.message}`, 'pill-off'); }
-};
-$('btn-disconnect').onclick = () => { move.disconnect(); setPill('Move: disconnected (back to standalone)', 'pill-off'); $('btn-disconnect').disabled = true; };
+    setPill(`Handshaking with ${port.name}…`, 'pill-warn'); const { identity } = await move.connect(); moveOn = true; paintLeds();
+    setPill(`Move: ready${identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''}`, 'pill-on'); pmidi.refresh(); renderMidi();
+  } catch (e) { setPill(`Move: ${e.message}`, 'pill-off'); } finally { paintConnect(); }
+}
+function disconnectMove() { move.disconnect(); moveOn = false; setPill('Move: disconnected (back to standalone)', 'pill-off'); paintConnect(); }
+$('btn-connect').onclick = () => (moveOn ? disconnectMove() : connectMove());
+if (!midi.supported) $('move-status').hidden = true; else paintConnect();
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----

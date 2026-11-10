@@ -21,10 +21,9 @@
   <canvas id="cv"></canvas>
   <header class="bar chaos-bar">
     <h1><a href="../index.html" class="home">MIDI Warz</a> <span class="sub">orbits 2 · lab · a testing copy of orbits</span></h1>
-    <div class="status">
-      <span id="midi-state" class="pill pill-off">Move: not connected</span>
-      <button id="btn-connect" class="primary">Connect Move</button>
-      <button id="btn-disconnect" disabled>Disconnect</button>
+    <div class="status" id="move-status">
+      <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
+      <button id="btn-connect" class="primary" type="button" aria-pressed="false">Connect Move</button>
     </div>
   </header>
   <div id="readout" class="readout"></div>
