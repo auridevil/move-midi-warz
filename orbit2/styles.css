@@ -548,6 +548,7 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .slot-menu-title { font-size: 12px; color: var(--signal-cyan); margin-right: 2px; }
 .slot-menu button { min-height: 32px; padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
 @media (pointer: coarse) { .slot-menu button { min-height: 44px; } .slot-menu [data-act=close] { min-width: 44px; } }
+@media (max-width: 760px) { .slot-menu-title { flex-basis: 100%; } }   /* title on its own line: the four buttons fit one row */
 /* playhead: the step of the selected lane sounding now */
 .stepsui .st { position: relative; }
 .stepsui .st.ph::before { content: ''; position: absolute; inset: -4px 0 auto 0; height: 3px; border-radius: 2px; background: var(--ember-magenta); box-shadow: 0 0 8px var(--ember-magenta); pointer-events: none; }
