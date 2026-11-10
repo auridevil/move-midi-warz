@@ -475,6 +475,9 @@ button.small { padding: 3px 10px; font-size: 11px; }
   /* C1 on a phone: play floats in the thumb zone, over the bottom of the screen; the page scrolls clear of it */
   body:has(#hud-left) #btn-play { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 8; width: 76px; height: 76px; min-width: 0; padding: 0; border-radius: 50%; font-size: 14px; line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px rgba(14,10,32,.85), 0 0 26px rgba(103,232,249,.45); }
   body:has(#hud-left) { padding-bottom: 104px; }
+  /* the button lives in the header: the header's layer must sit over the panels (flex items with a z-index, like
+     .hud, stack even when static), or a panel scrolled under the button takes its taps */
+  body:has(#hud-left) .chaos-bar { z-index: 8; }
   body:has(#hud-left) .toast { bottom: 108px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
   body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
