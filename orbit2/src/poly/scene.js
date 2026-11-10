@@ -183,12 +183,16 @@ export function createScene(cv, o) {
       }
       // step ticks and hit planets
       for (let i = 0; i < len; i++) {
-        const a = (i / len) * TAU - Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a), x = g.cx + ca * r, y = g.cy + sa * r;
+        const a = (i / len) * TAU - Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); let x = g.cx + ca * r, y = g.cy + sa * r;
         if (!lane.hitAt(i)) { ctx.strokeStyle = 'rgba(236,233,247,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 4, y - sa * 4); ctx.lineTo(x + ca * 4, y + sa * 4); ctx.stroke(); continue; }
-        const acc = lane.accentAt(i), f = flash.get(`${li}:${i}`), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;
-        const size = (acc ? 15 : 10) * (1 + fl * 0.9);
-        ctx.globalAlpha = 0.55 + fl * 0.45; ctx.drawImage(sprite(hex), x - size * 2, y - size * 2, size * 4, size * 4); ctx.globalAlpha = 1;
-        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = fl > 0.4 ? '#ffffff' : hex; ctx.beginPath(); ctx.arc(x, y, (acc ? 5.5 : 4) * (1 + fl * 0.4), 0, TAU); ctx.fill();
+        // G1 a nudged hit sits off its tick by the nudge (a fraction of the step), the tick stays as a faint mark
+        const nd = lane.lockAt(i)?.nudge || 0;
+        if (nd) { ctx.strokeStyle = 'rgba(236,233,247,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 5, y - sa * 5); ctx.lineTo(x + ca * 5, y + sa * 5); ctx.stroke(); const an = ((i + nd) / len) * TAU - Math.PI / 2; x = g.cx + Math.cos(an) * r; y = g.cy + Math.sin(an) * r; }
+        // G4 a ghost (soft vel lock) is a smaller, dimmer planet
+        const acc = lane.accentAt(i), ghost = lane.tierAt?.(lane.stepIndex(i)) === 'ghost', f = flash.get(`${li}:${i}`), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;
+        const size = (acc ? 15 : ghost ? 7 : 10) * (1 + fl * 0.9);
+        ctx.globalAlpha = (ghost ? 0.35 : 0.55) + fl * 0.45; ctx.drawImage(sprite(hex), x - size * 2, y - size * 2, size * 4, size * 4); ctx.globalAlpha = 1;
+        ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = fl > 0.4 ? '#ffffff' : hex; ctx.beginPath(); ctx.arc(x, y, (acc ? 5.5 : ghost ? 2.8 : 4) * (1 + fl * 0.4), 0, TAU); ctx.fill();
         ctx.globalCompositeOperation = 'lighter';
         const tg = lane.trigAt?.(i);
         if (tg && tg.cond !== 'always') {   // conditional step: a dashed halo (it doesn't always play)

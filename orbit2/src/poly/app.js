@@ -1,6 +1,6 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
@@ -238,7 +238,10 @@ const INFO = {
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
-  swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. At ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1).',
+  swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. At ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
+  'swing template': 'Which steps the swing moves, and how far. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
+  offset: 'Push / pull: the whole lane early (−) or late (+) by up to 30 ms. A hat a few ms late lays back; a snare early drives.',
+  velHuman: 'Random velocity on every hit of this lane, up and down around its tier (up to ±20% at 100%). With locked dice it repeats.',
   prob: 'Chance that a programmed hit actually plays. 100% = always; 60% = the pattern breathes differently every loop.',
   tune: 'Pitch of the voice, about ±1 octave (less for some voices).',
   decay: 'Length of the sound, from a tick (40 ms) to a long tail (1.2 s). Kits scale it per voice.',
@@ -250,8 +253,9 @@ const INFO = {
   pan: 'Stereo position, left to right.',
   level: 'Lane volume.',
   tempo: 'Master tempo in bpm, shared by every page. Global, not per lane.',
-  humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine.',
-  'step locks': 'Long-press, right-click or Alt+click a step to override tune, probability, velocity, decay, tone, snap or color on that step only. Locked hits glow cyan and get a small moon.',
+  humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine. Velocity humanize is per lane, in the lane drawer.',
+  'lock nudge': 'Moves this step early (−) or late (+) by up to half a step. On the Move: hold the step and turn the jog wheel.',
+  'step locks': 'Long-press, right-click or Alt+click a step to override tune, probability, velocity, decay, tone, snap, color or nudge on that step only. Locked hits glow cyan and get a small moon.',
   'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
   'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
   'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
@@ -274,14 +278,17 @@ const INFO = {
   share: 'Copy link puts the whole pattern (not samples) in the URL: open it anywhere to get the groove. WAV renders the current pattern; MIDI writes the pattern or the running chain, one track per lane with the MIDI I/O notes.',
   'clock in': 'Follow another device: "tempo" takes its bpm, "tempo + start/stop" also starts and stops with it, "phase lock" also keeps the beat aligned to its clock ticks (and Song Position Pointer).',
 };
+// grid order: swing last, so its template can sit beside it on the same row
 const PARAMS = [
   { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => { l.setLength(v); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
   { k: 'euclid', label: 'euclid hits', min: 0, max: MAX_STEPS, get: l => l.euclidK, set: (l, v) => l.setEuclid(v), fmt: v => v, say: v => `${v} hit${v === 1 ? '' : 's'}` },
   { k: 'rotation', label: 'rotation', min: 0, max: MAX_STEPS - 1, get: l => l.rotation, set: (l, v) => { l.rotation = ((Math.round(v) % l.length) + l.length) % l.length; }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
   { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
-  { k: 'swing', label: 'swing', min: 0, max: 100, get: l => Math.round(l.swing * 100), set: (l, v) => { l.swing = Math.max(0, Math.min(0.66, v / 100)); }, fmt: v => v + '%' },
   { k: 'prob', label: 'probability', min: 0, max: 100, get: l => Math.round(l.prob * 100), set: (l, v) => { l.prob = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
   { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v, say: tuneSay },
+  { k: 'offset', label: 'push / pull', min: -OFFSET_MS, max: OFFSET_MS, get: l => l.offsetMs, set: (l, v) => l.setOffset(v), fmt: v => (v > 0 ? '+' : '') + v + ' ms', say: v => v ? `${Math.abs(v)} ms ${v > 0 ? 'late' : 'early'}` : 'on time' },
+  { k: 'velHuman', label: 'vel humanize', min: 0, max: 100, get: l => Math.round(l.velHuman * 100), set: (l, v) => { l.velHuman = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
+  { k: 'swing', label: 'swing', min: 0, max: 100, get: l => Math.round(l.swing * 100), set: (l, v) => { l.swing = Math.max(0, Math.min(0.66, v / 100)); }, fmt: v => v + '%' },
 ];
 function tuneSay(v) { return v === 0 ? 'centre' : `${Math.abs(v)}% ${v > 0 ? 'up' : 'down'}`; }   // spoken: ±100 = about an octave
 const sliders = {};   // k -> gauge handle ({ set, value })
@@ -289,6 +296,9 @@ const laneTabs = [];  // the four coloured lane buttons: a touch-friendly altern
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
   for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
+  // G6: the swing template sits right after the swing gauge
+  ui.swingTpl = segmented({ options: SWING_KEYS.map(k => [k, SWING_TEMPLATES[k].name, INFO['swing template']]), value: m.lane.swingTpl, onChange: (k) => { m.lane.setSwingTpl(k); sync(); } });
+  const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
   sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) });
@@ -304,6 +314,7 @@ function buildSliders() {
 }
 function sync() {
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
+  ui.swingTpl.set(m.lane.swingTpl);
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
@@ -331,7 +342,7 @@ function buildSteps() {
   const el = $('stepsui');
   for (let i = 0; i < MAX_STEPS; i++) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'st';
-    b.title = 'tap = off → on → accent → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only';
+    b.title = 'tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only';
     b.onclick = (e) => { const lane = m.lane; if (i >= lane.length) return; if (e.altKey) return editLocks(i); const si = lane.stepIndex(i); if (e.shiftKey) lane.toggleAccent(si); else lane.cycleStep(si); sync(); };
     longPress(b, () => { if (i < m.lane.length) editLocks(i); });
     el.appendChild(b); stepBtns.push(b);
@@ -347,12 +358,12 @@ function renderSteps() {
   const lane = m.lane; playheadAt = -1;
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   stepBtns.forEach((b, i) => {
-    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i);
-    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
+    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost';
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
-    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : 'on') : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
+    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
   });
   paintPlayhead();
@@ -978,7 +989,12 @@ move.addEventListener('encoder', (e) => {
   if (shift) { const k = SOUND_KEYS[index]; m.lane.setSound(k, m.lane.sound[k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
   const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) applyTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
 });
-move.addEventListener('wheel', (e) => { m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
+move.addEventListener('wheel', (e) => {
+  if (held.size) {   // G1: hold step(s) + jog wheel = nudge those steps early / late, 5 % of a step per click
+    const lane = m.lane; for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + Math.sign(e.detail.delta) * 0.05) * 100) / 100); lockStep = i; }
+    stepEdited(); return;
+  }
+  m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; return; }
@@ -1102,7 +1118,7 @@ function readout() {
     ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
     const sd = m.lane.sound, lines = [`engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
-      ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
+      ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}%${l.swingTpl !== 'mpc' ? ` ${SWING_TEMPLATES[l.swingTpl].name}` : ''}${l.offsetMs ? ` ${l.offsetMs > 0 ? '+' : ''}${l.offsetMs}ms` : ''} prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
       `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
       `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
     $('nerd-stats').textContent = lines.join('\n');
