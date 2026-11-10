@@ -469,7 +469,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
   body:has(#hud-left) .readout { display: none; }
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
-  body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their 16 px: a step's condition label sits under it */
+  body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
   body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
@@ -480,7 +480,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 }
 /* Orbits round 3: trig conditions, samples, dice */
 .stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto -2px -15px -2px; font-size: 11px; line-height: 1.2; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
-.stepsui { margin-bottom: 16px; row-gap: 16px; }
+.stepsui { margin-bottom: 16px; row-gap: 20px; }   /* a row: the condition labels under it (15 px), then the next row's playhead bar (4 px over it) */
 .trig-row { border-top: 1px solid rgba(103,232,249,.2); padding-top: 6px; }
 .sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
 #btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
@@ -555,7 +555,7 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
    finger, all in this one block. A phone too narrow for 8 steps of 44 px (8 × 44 + gaps = 373 px of strip) lays them
    out 4 in a row. */
 body:has(#hud-left) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
-body:has(#hud-left) button:not(.st) { min-height: 32px; }
+body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 32px; }
 @media (pointer: coarse) {
   body:has(#hud-left) .drawer > summary { min-height: 44px; padding: 13px 0; }
   body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 44px; }

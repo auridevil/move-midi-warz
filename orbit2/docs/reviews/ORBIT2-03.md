@@ -3,12 +3,12 @@ type: review
 phase: ORBIT2-03
 title: ORBIT2-03 touch and accessibility (T1–T7), review panel
 date: 2026-11-10
-round: 1
+round: 2
 result: IN PROGRESS
 reviewers:
-  verifier: NOT HAPPY
+  verifier: HAPPY
   architect: NOT HAPPY
-  sound: NOT HAPPY
+  sound: HAPPY
   greta: HAPPY
   rio: HAPPY
 tags: [orbit2, review]
@@ -99,3 +99,54 @@ worry holds).
   erase; selects / toggle / slots ≥ 44 px; no sideways scroll. Tablet 820 touch: 8 a row ≥ 44. Narrow 1000: 8 a row
   ≥ 32. 0 page errors everywhere; screenshots looked at (desktop two rows of 8; phone 4 × 4 with "1:2" / "×3" labels
   clear of the next row).
+
+## Round 2: 2 of 3 HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound), fresh sub-agents in one message, all on the
+default model, own ports 5401 / 5402 / 5403 (+ 940x), the verifier also ran the smoke on 9222. Brief as in round 1
+(goal, T1–T7 + phase spec, must-fix rule), `git diff --stat 50aba0e..de785ff` (9 files, +396/−89), each one's own
+round-1 MUST-FIX and "Changes after round 1". The MUST-FIX was reproduced by the implementer on de785ff (5400/9400,
+phone 390 × 844 touch, slot scrolled to the bottom edge, held 700 ms): the page scrolled 1687 → 1823 under the finger
+and the lift's click ran the menu: slot 1 overwritten (click@save), slot 4 chained, slot 6 erased, slot 8 closed it.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. Round-1 T2 fixed: smallest step 47.1 × 32 desktop, 82.3 × 44 phone 390, 74.8 × 44 phone 360, 94.5 × 44 landscape 844, 85 × 44 tablet 768, no sideways scroll. No regressions (held Space, restart, playhead with a rotation at 40–240 bpm, long press / modifier clicks / slot menu, toggle, 39 sliders, 118 touch targets ≥ 44, text ≥ 11 px, contrast ≥ 7.77:1, saved data); check, 107 + 9, smoke 10/10 on 5401. |
+| architect | NOT HAPPY | T1 regression from round 1 + data loss: a slot long press runs a menu action by itself on lift. `openSlotMenu` (`app.js:433`) scrolls the menu into view from the long-press timer while the finger is down; the page scrolls smoothly, so it moves under the finger, and `longPress` swallowed the gesture's click only on its own element (`ui.js:47`). The click hit the slot-menu button that slid there: empty slot 1 saved, filled slot 6 **erased** (not undoable), slot 3 added to the chain, filled slot 1 overwritten. At 8e574da (no scroll) and for a slot mid-screen nothing ran. Round-1 T6 fixed (focus kept through a silent 4.7 s handshake and a denied request, one MIDI request for three presses, plain button, status hidden without Web MIDI). |
+| sound | HAPPY | none. Round-1 held Space fixed (2 clicks = accent, Space + 4 repeats + up plays, the step keeps its accent and the focus). No regressions (drawer header + held Space, Tab-focused step cycles once, Alt+1–4, `shown` not saved, restart). Playhead 150.2 ms median per step, 0 skips, 0 long tasks on the phone; A/B render of the same pattern 50aba0e vs HEAD: same length, onset, RMS −26.74 dBFS, hat stem bit-identical. |
+
+SHOULD items recorded (never block): after shortening a lane with the locks open on a step now outside the loop, the
+step kept `.sel` and `aria-expanded="true"` (verifier: `renderSteps` ran before `renderLocks` closed the panel);
+`#dice-seed` 31 px tall on desktop (verifier); the two tune knobs spoke a bare number (verifier, sound); on desktop the
+row-2 playhead bar sat on the bottom 3 px of a row-1 condition label (verifier); `Lane.reset()` cleared `shown`, a
+field the constructor never declared (architect); a Move that never answers shows "Connecting…" ~4.7 s and then
+"ready" with no firmware (architect, pre-existing, the movewire driver); the playhead is drawn at the step's audio
+time, so it leads what you hear by the output latency (sound: noticeable on Bluetooth, can't be measured headless; the
+orbit visuals and Move LEDs already did the same); the accent barely sounds on hat (+0.3 dB peak) and wood (+1.5 dB),
+so the second tap sounds like the first there (sound, pre-existing, hat stem identical at 50aba0e). Tooling note: a
+mouse click never leaves the focus on a gauge (both trees), so the new Home/End/Page keys move a knob only after a Tab.
+
+### Changes after round 2
+
+- **The end of a long press is the long press's, wherever it lands** (`orbit2/src/ui.js`): one guard per page
+  (`gestureGuard`, capture listeners on the window) is armed when a long press fires while the pointer is held; it
+  swallows that gesture's click (keyboard clicks, detail 0, pass) and the late mousedown a touch sends after the lift
+  (focus stays on "save here"), and the next pointerdown or key press anywhere disarms it (a browser may send no click
+  after a long touch). The element's own click / mousedown swallow is gone (the guard covers it); a right-click or
+  the menu key holds nothing down, so it arms nothing. The slot menu still scrolls into view during the hold.
+- Quick SHOULDs: `renderSteps` closes the locks of a step a shorter loop left out, so no step stays expanded; the tune
+  knobs (lane and lock) say "centre", "N% up" or "N% down"; inputs and selects ≥ 32 px on desktop too (the seed was
+  31); step rows 20 px apart (the condition label 15 px + the next row's playhead bar 4 px, now 1 px clear); `shown`
+  declared in the `Lane` constructor (runtime, not saved). The rest → BACKLOG "Later".
+- Tests: 107 → 108 orbit2 tests (long press with the page as root: the lift's mousedown and click on the menu that
+  slid under the finger are swallowed; the next tap counts, also when no click came; a key press disarms; a keyboard
+  click passes; a right-click arms nothing; a short press is a tap); it fails on de785ff's helper. `npm run check`
+  clean, `npm test` 108 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome
+  9222, both stopped). Browser (5400/9400, one browser per viewport): 20/20: phone 390 × 844 touch: the architect's
+  repro on slots 1, 4, 6, 8 (page scrolls 1699 → 1835 under the finger): menu open, focus on "save here", every slot
+  kept, no chain; then a tap on "erase" erases; long touch on a step opens the locks and leaves it off, the next tap
+  cycles it once; long press on randomize = one wild roll; steps 82 × 44, no sideways scroll. Desktop 1440: shortening
+  the lane with the keyboard closes the locks, 0 expanded / selected steps; tune "centre" → "10% up", lock tune "10%
+  up"; inputs / selects 32–34 px; row-2 playhead bar 1 px below the row-1 "1:2" label; one playhead while playing;
+  mouse hold on a step opens the locks, the next click cycles it; right-click on a slot → "save here", Escape → the
+  slot; Enter on a focused step cycles it. 0 page errors; screenshots looked at.

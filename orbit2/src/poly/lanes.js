@@ -44,6 +44,7 @@ export class Lane {
     this.trigs = new Array(MAX_STEPS).fill(null);   // per stored step: { cond, ratchet, fade } or null
     this.solo = false; this.choke = -1;             // choke: index of the lane this one cuts off when it hits   // locks: per stored step, {key: value} or null
     this.sound = { ...DEFAULT_SOUND }; this.voice = name;   // voice = engine key from voices.js; defaults to the lane's classic sound
+    this.shown = null;   // runtime, not saved: the visible step that sounded last (the playhead; the app sets it)
   }
   /** Switching between a drum voice and the lane's sample swaps decay / snap / color: each side keeps its own. */
   setVoice(key) {
@@ -136,7 +137,7 @@ export class Lane {
   stepIndex(i) { return ((i - this.rotation) % this.length + this.length) % this.length; }
   hitAt(i) { return this.hits[this.stepIndex(i)]; }
   accentAt(i) { return this.accents[this.stepIndex(i)]; }
-  reset() { this.pos = 0; this.shown = null; }   // shown = the step on screen (the app sets it): a restart lights none until one sounds
+  reset() { this.pos = 0; this.shown = null; }   // a restart lights no step until one sounds
   /**
    * Loops of this lane before it sounds exactly the same again (an empty lane: 1): the lcm of every a:b condition's b
    * on its active steps; × 2 (or 3) when swing is on and the length is odd (the swung steps move through the loop);

@@ -545,6 +545,25 @@ test('long press: the mouse events a touch sends after it keep the focus where t
   el.dispatchEvent(ev('pointerdown')); el.dispatchEvent(ev('pointerup')); const tap = ev('mousedown'); el.dispatchEvent(tap); el.dispatchEvent(ev('click'));
   assert.equal(longs, 2); assert.equal(tap.defaultPrevented, false, 'a tap focuses as usual');
 });
+test('long press: the end of a fired press is swallowed wherever it lands, until the next press or key', async (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { longPress, LONG_MS } = await import('../src/ui.js');
+  const ev = (type, o = {}) => Object.assign(new Event(type, { cancelable: true }), { pointerId: 1, button: 0, clientX: 0, clientY: 0, detail: 1 }, o);
+  // page = the window: every event passes it first (capture). The menu's click handler sits behind it: the menu slid
+  // under the held finger (it scrolled into view), so the lift's click lands there, not on the slot.
+  const page = new EventTarget(), slot = new EventTarget(); let longs = 0, menu = 0;
+  longPress(slot, () => longs++, { root: page }); page.addEventListener('click', () => menu++);
+  const down = () => { page.dispatchEvent(ev('pointerdown')); slot.dispatchEvent(ev('pointerdown')); };
+  const hold = () => { down(); t.mock.timers.tick(LONG_MS); slot.dispatchEvent(ev('pointerup')); };
+  hold(); const md = ev('mousedown'), click = ev('click'); page.dispatchEvent(md); page.dispatchEvent(click);
+  assert.deepEqual([longs, menu], [1, 0], "the lift's click on the menu doesn't run it"); assert.ok(click.defaultPrevented); assert.ok(md.defaultPrevented, 'nor does its mousedown take the focus');
+  page.dispatchEvent(ev('pointerdown')); page.dispatchEvent(ev('click')); assert.equal(menu, 1, 'the next tap is the user\'s');
+  hold(); page.dispatchEvent(ev('pointerdown')); page.dispatchEvent(ev('click')); assert.deepEqual([longs, menu], [2, 2], 'no click after a long touch: the next tap still counts');
+  hold(); page.dispatchEvent(ev('keydown')); page.dispatchEvent(ev('click')); assert.equal(menu, 3, 'a key press starts afresh too');
+  hold(); page.dispatchEvent(ev('click', { detail: 0 })); assert.equal(menu, 4, 'a keyboard click always passes');
+  page.dispatchEvent(ev('pointerdown')); slot.dispatchEvent(ev('contextmenu')); page.dispatchEvent(ev('click')); assert.deepEqual([longs, menu], [5, 5], 'a right-click holds nothing down: no click to swallow');
+  down(); t.mock.timers.tick(LONG_MS - 1); slot.dispatchEvent(ev('pointerup')); page.dispatchEvent(ev('click')); assert.deepEqual([longs, menu], [5, 6], 'a short press is a tap');
+});
 test('a restart forgets the step on screen, so the playhead lights nothing until a step sounds', () => {
   const m = new Machine(); m.lanes.forEach((l, i) => { l.shown = i + 1; l.pos = 5; }); m.resetAll();
   assert.deepEqual(m.lanes.map(l => [l.shown, l.pos]), m.lanes.map(() => [null, 0]));

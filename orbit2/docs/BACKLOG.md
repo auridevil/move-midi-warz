@@ -224,6 +224,17 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   `LEAD_IN` (0.05 s) is shorter than its release. Pre-roll the master and cut it.
 - **Slot buttons on a phone** (ORBIT2-03, rio, architect): 39 × 44 px (T7 asks 44 px tall); 44 wide needs 4 slots in
   a row.
+- **Visuals lead the sound by the output latency** (ORBIT2-03 round 2, sound): the step playhead, the orbit visuals
+  and the Move LEDs are drawn at a step's audio time (`T.getDraw().schedule(…, time)` in `onTick`), which is
+  `outputLatency` before you hear it (`heardTick()` already subtracts it); on Bluetooth (150–250 ms) the lit step
+  visibly leads the sound, and swung / humanized hits light at the unswung time. One place to change for all of them
+  (`time + outputLatency`); headless Chrome reports no `outputLatency`, so check it on real outputs.
+- **Accent on hat and wood** (ORBIT2-03 round 2, sound; pre-existing, phase 08): accent − on is +3 dB for kick and
+  snare but +0.3 dB peak for the hat (the ranges overlap) and +1.5 dB for wood, so there the screen's second tap
+  (accent) sounds like the first.
+- **A Move that never answers** (ORBIT2-03 round 2, architect; pre-existing, movewire): "Connecting…" lasts ~4.7 s
+  (3 × 1.5 s identity waits), then the page says "Move: ready" and "Disconnect Move" with no firmware, because
+  movewire counts no reply as control mode (`inControl = mode === null`, `movewire/src/device.js:39`).
 - **Target floor specificity** (ORBIT2-03, architect): `body:has(#hud-left) button:not(.st)` is (1,1,2) and beats
   component rules (it took `.lane-tab` from 36 to 32 px on desktop); a `:where()` floor lets components win but then
   each needs its own touch size. Also: a slider's name is the label before " · " (`short()` in `gauge.js`); an

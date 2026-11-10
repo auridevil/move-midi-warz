@@ -268,8 +268,9 @@ const PARAMS = [
   { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
   { k: 'swing', label: 'swing', min: 0, max: 100, get: l => Math.round(l.swing * 100), set: (l, v) => { l.swing = Math.max(0, Math.min(0.66, v / 100)); }, fmt: v => v + '%' },
   { k: 'prob', label: 'probability', min: 0, max: 100, get: l => Math.round(l.prob * 100), set: (l, v) => { l.prob = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
-  { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v },
+  { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v, say: tuneSay },
 ];
+function tuneSay(v) { return v === 0 ? 'centre' : `${Math.abs(v)}% ${v > 0 ? 'up' : 'down'}`; }   // spoken: ±100 = about an octave
 const sliders = {};   // k -> gauge handle ({ set, value })
 const laneTabs = [];  // the four coloured lane buttons: a touch-friendly alternative to tapping a ring
 function buildSliders() {
@@ -331,6 +332,7 @@ function paintPlayhead() {
 }
 function renderSteps() {
   const lane = m.lane; playheadAt = -1;
+  if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i);
     b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
@@ -346,7 +348,7 @@ function renderSteps() {
 // ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
 let lockStep = -1;   // visible step the lock panel edits (-1 = closed)
 const LOCK_UI = {
-  tune: { label: 'tune', min: -100, max: 100, fmt: v => (v > 0 ? '+' : '') + v, base: l => l.tune },
+  tune: { label: 'tune', min: -100, max: 100, fmt: v => (v > 0 ? '+' : '') + v, say: tuneSay, base: l => l.tune },
   prob: { label: 'probability', fmt: v => v + '%', base: l => l.prob },
   vel: { label: 'velocity', fmt: v => v + '%', base: () => 0.7 },
   decay: { label: 'decay', base: l => l.sound.decay }, tone: { label: 'tone', base: l => l.sound.tone },
@@ -360,7 +362,7 @@ function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); reado
 function buildLockGauges() {
   const el = $('lock-gauges'); el.innerHTML = '';
   for (const k of LOCK_KEYS) {
-    const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, say: u.fmt || ((v) => v + '%'), title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
+    const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, say: u.say || u.fmt || ((v) => v + '%'), title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
       onChange: (v) => { if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); } });
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
