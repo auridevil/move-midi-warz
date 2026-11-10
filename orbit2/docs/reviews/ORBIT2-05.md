@@ -3,8 +3,8 @@ type: review
 phase: ORBIT2-05
 title: ORBIT2-05 groove and dynamics (G1–G6), review panel
 date: 2026-11-10
-round: 3
-result: IN PROGRESS
+round: 4
+result: BLOCKED
 reviewers:
   verifier: NOT HAPPY
   architect: HAPPY
@@ -325,3 +325,69 @@ than the old flag (sound, architect).
   14 kicks in 6.7 s, gaps 497–504 ms; recalls 0 ↔ 1 in bar mode, 14 kicks, 496–505 ms; undo / redo every 41 ms between
   two real history steps (push −20, step 3 nudged −½), 11 kicks in 5 s, gaps 247–751 ms; phone 390 × 844, no sideways
   scroll; 0 page errors.
+
+## Round 4 (confirmation, close task): 0 of 1 HAPPY, phase BLOCKED
+
+Only the verifier was still NOT HAPPY after round 3. Fresh sub-agent on the default model, ports 5401 / 9401, copies of
+the phase start `c5c49a1` (5501 / 9501) and of `7b53282` (5601 / 9601) in `/tmp/orbit2-verifier/`, smoke on 9222. Brief
+as in round 3 (goal, G1–G6 + phase spec, the "where" table with live play as it is since round 3, the must-fix rule with
+the later ids and this phase's Later items as SHOULDs), `git diff --stat c5c49a1..f7d5da0` (14 files, +940/−80), the
+verifier's MUST-FIX of rounds 1–3 and "Changes after round 3". Pre-checks on f7d5da0: `npm run check` clean, `npm test`
+127 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | Round-3 items fixed (live record, push −20: 0 of 24 presses twice, 7b53282: 7–10; the reported speed-change repros play once). New, also on 7b53282 (round 3 left it rather than caused it): G1: a nudged step still plays twice when its lane speeds up inside the early window and the new speed has a step before the decided tick. `ahead[li]` holds one decision per lane: the new speed's earlier step consumes it (`export.js:58`) or replaces it with its own (`:63-67`), so at the decided tick `decided()` finds nothing and the moment starts again. Model (kick ×1, 4 steps nudged −½, 120 bpm): ×1 → ×4 before tick 89: 1.75 + 1.9375; → ×3 at 86: 1.75 + 1.9167; nudge −0.3 → ×4 at 89: 1.85 + 1.9625; `m.assign()` at ×4 at 89: 1.75 + 1.9375; ×½ nudged −½ → ×2 at 80: 1.5 + 1.875; only the downbeat nudged: 1.75 + 1.9375. Page (5401): the speed gauge's path or an assign at ×4 at tick 89 of every bar: 26 kicks where 22 belong, every downbeat twice (−250 and −62.5 ms before the bar line). A push alone can't do it: it takes a nudge longer than a step of the new speed (×1 nudged −25 % or more, then ×3 or ×4: a gauge drag, undo / redo, a link, a "now" recall). |
+
+The implementer reproduced it on f7d5da0 before fixing: the six model cases, the same times.
+
+SHOULD items (never block): `skip` is keyed on the step number (`app.js:492`, `export.js:59/66`) while decisions are
+keyed on the tick, so a speed change between a pad press and its step doubles the pad's hit (×1 → ×2: the ×2 step 8
+plays again at 2.0 s) and leaves the key behind to silence another moment (×1 → ×½: its step 4 at 4.0 s); pre-existing,
+the phase start keys it the same way; a test for a new speed with a step before the decided tick.
+
+GOOD: round-3 item 1 fixed on the page (0 of 24 doubled, none missing; 0 with the step nudged −½ too) and in the model
+(the key goes at its tick); the round-3 repros of item 2 fixed (page: ×1 ↔ ×3/2 flipped on every bar line with push
+−20, no two notes under 330 ms apart; model: push −20 → ×3/2 at 96 plays 1.98 once, nudge −½ → ×3/2 1.75 then 2.167);
+gates pass (check clean, 127 + 9, smoke 10/10, no page errors), and the live-play rules stay in one pure `liveTick` the
+tests drive tick by tick.
+
+### Changes after round 4
+
+- **Every early decision waits for its own tick** (verifier). `ahead[li]` is a Map from the master tick a decided step
+  falls on to its decision (`liveTick`, `export.js`), so a lane that speeds up inside an early window holds both: the
+  old speed's step (already sounded) and the new speed's earlier step. Each is used at its own tick only, and a
+  decision goes when its tick comes, with or without a step on it. Model, the verifier's six cases: ×1 → ×4 at tick 89:
+  1.75, 1.8125 (the ×4 step 15), then the ×4 steps from 2.0625 (was 1.9375 too); an assign at ×4: the same; → ×3 at
+  86: 1.75, plus the ×3 step at tick 88 nudged −½, another moment that also falls on 1.75, then 2.0833 (was 1.9167
+  too); −0.3: 1.8375, 1.85 (was 1.9625 too); ×½ → ×2: 1.5, 1.625, 2.125 (was 1.875 too); only the downbeat nudged:
+  1.5, 1.75, 1.875 (was 1.9375 too). Page (5400/9400, the verifier's setup, 4 bars at 120 bpm): the speed gauge's path
+  and an assign at ×4 at tick 89 of every bar: 22 kicks each, the control's 18 plus the ×4 step 15 once a bar, no
+  second downbeat (the verifier on f7d5da0: 26). Random check, 400 machines (40–300 bpm, every ratio, nudges to ±½, pushes to ±30 ms,
+  ratchets, swing, humanize, 12 random speed changes / assigns / evolves each): no moment started twice (f7d5da0: 6);
+  live = the render on machines that don't change.
+- **A pad's moment is keyed on the master tick too** (verifier's SHOULD): `liveHit` adds `'lane:tick'`, and
+  `liveTick` drops the key at its tick, whatever steps there. After ×1 → ×2 the pad's hit plays once (was again at
+  1.98); after ×1 → ×½ no key is left to silence a later moment. Page, the round-3 repro (push −20 ms, 24 presses at
+  seeded random moments): 0 of 24 twice.
+- The reset button clears both in `onTick`: their keys are the old ticks, and a sounded decision kept across a reset
+  would silence the downbeat a bar later. Page: reset at tick 186 (bar 2's downbeat already sounded early): 19 kicks,
+  every downbeat after the reset there.
+- Tests (129: 2 new, both fail on f7d5da0; 1 updated). New: the six speed-change cases (the moment once, the new
+  speed's steps before it as well); a pad's moment across ×1 → ×2 and ×1 → ×½ (once, no key left). Updated: the round-3
+  live-record test uses the tick key (`'0:24'`). `npm run check` clean, `npm test` 129 + 9, `node tools/smoke.mjs
+  http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped). Browser (5400/9400,
+  `/tmp/orbit2-impl/`, deleted): as above; phone 390 × 844 loads and plays without sideways scroll; 0 page errors.
+  `app.js` still 1195 lines.
+
+## Result: BLOCKED
+
+The close task fixes in-scope MUST-FIX once and stops ([[REVIEW-PANEL]], "Closing a phase"). Open, fixed in the commit
+`orbit2: phase 05 confirmation round (blocked: verifier)` and not yet confirmed by its reviewer:
+
+1. **verifier** (round 4): G1 live play started a nudged step twice when its lane sped up inside the early window and
+   the new speed had a step before the decided tick (the speed gauge, undo / redo, a link, a "now" recall).
+
+The conductor decides: a confirmation round with the verifier on that commit (set `result: IN PROGRESS` and run the
+close task again), or accept the fix (set `verifier: HAPPY` and `result: HAPPY`, then run the close task again: it marks
+G1–G6 done and commits `orbit2: groove and dynamics`).

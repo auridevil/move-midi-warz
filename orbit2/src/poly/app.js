@@ -173,8 +173,8 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 // ---- the master clock: one loop at 24 ticks per beat drives every lane, MIDI clock, slots and evolve ----
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
 const stress = { level: 0, headMs: 100 };
-let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:step' already played live
-const early = [];   // per lane: a step decided ahead of its tick because part of it sounds before it (liveTick)
+let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
+const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
@@ -183,7 +183,7 @@ const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.c
 const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onTick(time), `${T.getTransport().PPQ / PPQ}i`); loop.start(0); }
 function onTick(time) {
-  if (resetPending) { tick = 0; resetPending = false; }
+  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; }   // both are keyed on the old ticks
   const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clock(at); jamTick(t, time);
@@ -489,7 +489,7 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   if (!rec.armed || !playing) { m.select(li); sync(); return; }
   const q = lane.quantize(heardTick(), rec.quant), idx = lane.stepIndex(q.index);
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
-  if (q.step * lane.stepTicks() > clockRef.tick) skip.add(`${li}:${q.step}`);   // that step hasn't been scheduled yet: don't play it twice
+  const qTick = q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
 function setRec(on) { rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }

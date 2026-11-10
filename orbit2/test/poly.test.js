@@ -829,8 +829,8 @@ test('ORBIT2-05 r3: live record: a step a pad just played sounds neither its ear
   const { liveTick } = await import('../src/poly/export.js');
   const tickSec = 60 / 120 / 24, m = new Machine(); m.lanes.forEach(l => l.clear());
   const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setOffset(-20); k.toggle(1); k.toggle(2); k.setTrig(1, { ratchet: 4 }); k.setLock(1, 'nudge', -0.3);
-  // the pad played step 1 before its tick was scheduled (liveHit adds the key): its early repeats and its own go
-  const skip = new Set(['0:1']), ahead = [], hits = [], shown = [];
+  // the pad played step 1 before its tick was scheduled (liveHit adds 'lane:tick', tick 24 here): its early repeats and its own go
+  const skip = new Set(['0:24']), ahead = [], hits = [], shown = [];
   for (let t = 0; t < 130; t++) liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ ev, early, hits: own }, li) => {
     if (li) return; if (ev?.index === 1) shown.push(ev.hit); for (const h of [...early, ...own]) hits.push(Math.round((t * tickSec + h.dt) * 1e3) / 1e3);
   });
@@ -838,6 +838,41 @@ test('ORBIT2-05 r3: live record: a step a pad just played sounds neither its ear
   assert.equal(skip.size, 0, 'the key goes at its step\'s tick');
   assert.deepEqual(hits.filter(x => x < 2), [0.98], 'step 2 plays, pushed −20 ms; step 1 (a ×4 roll nudged −0.3, half of it early) not at all');
   assert.deepEqual(hits.filter(x => x > 2), [2.33, 2.455, 2.58, 2.705], 'a loop later step 1 rolls ×4 again');
+});
+// ---- ORBIT2-05 close (confirmation round) ----
+test('ORBIT2-05 close: a lane that speeds up inside an early window plays the decided moment once, and the new speed\'s steps before it', async () => {
+  const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
+  const tickSec = 60 / 120 / 24, r4 = (x) => Math.round(x * 1e4) / 1e4;
+  // a kick on every step of 4 (all nudged, or only the downbeat), changed before tick `at` plays (as in onTick)
+  const play = ({ ratio = 1, nudge = -0.5, steps = [0, 1, 2, 3] }, at, change) => {
+    const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(ratio)); k.setLength(4); k.hits.fill(true, 0, 4); steps.forEach(i => k.setLock(i, 'nudge', nudge));
+    const ahead = [], out = [];
+    for (let t = 0; t < 120; t++) { if (t === at) change(m); liveTick(m, t, ahead, { rng: () => 0, tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); }); }
+    return out.sort((a, b) => a - b).filter(x => x > 1.4);
+  };
+  const speed = (r) => (m) => m.lanes[0].setRatio(RATIOS.indexOf(r)), assign = (r) => (m) => { const j = m.toJSON(); j.lanes[0].ratioIndex = RATIOS.indexOf(r); m.assign(j); };
+  // confirmation round: the new speed's step before the bar line (×4 step 15, tick 90) took the lane's one decision, so
+  // the bar-line moment, sounded at 1.75 s, started again (×4 step 16 at 1.9375; ×3 1.9167, −0.3 1.9625, ×½ → ×2 1.875)
+  assert.deepEqual(play({}, 89, speed(4)), [1.75, 1.8125, 2.0625, 2.1875, 2.3125, 2.4375], 'the speed gauge ×1 → ×4');
+  assert.deepEqual(play({}, 89, assign(4)), [1.75, 1.8125, 2.0625, 2.1875, 2.3125, 2.4375], 'undo, a link or a "now" recall at ×4');
+  assert.deepEqual(play({}, 86, speed(3)), [1.75, 1.75, 2.0833, 2.25, 2.4167], '×1 → ×3 (its step at tick 88, nudged −½, is another moment at the same time)');
+  assert.deepEqual(play({ nudge: -0.3 }, 89, speed(4)), [1.8375, 1.85, 2.0875, 2.2125, 2.3375, 2.4625], 'nudged −0.3');
+  assert.deepEqual(play({ ratio: 1 / 2 }, 80, speed(2)), [1.5, 1.625, 2.125, 2.375], '×½ → ×2');
+  assert.deepEqual(play({ steps: [0] }, 89, speed(4)), [1.5, 1.75, 1.875, 2.125, 2.25, 2.375, 2.4375], 'only the downbeat nudged');
+});
+test('ORBIT2-05 close: a pad\'s moment is keyed on the master tick, so a speed change before it neither doubles it nor silences another', async () => {
+  const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
+  const tickSec = 60 / 120 / 24, r3 = (x) => Math.round(x * 1e3) / 1e3;
+  // a kick on every beat pushed −20 ms; the pad played the bar line (step 4, tick 96) before it was scheduled; the speed changes at tick 90
+  const play = (r) => {
+    const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(1)); k.setLength(4); k.hits.fill(true, 0, 4); k.setOffset(-20);
+    const skip = new Set([`0:${4 * k.stepTicks()}`]), ahead = [], out = [];
+    for (let t = 0; t < 200; t++) { if (t === 90) k.setRatio(RATIOS.indexOf(r)); liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
+    return { hits: out.filter(x => x > 1.5), left: skip.size };
+  };
+  // keyed on the step number: ×2 numbers tick 96 as step 8 and played it again (1.98); ×½ kept the key and silenced its step 4 (3.98)
+  assert.deepEqual(play(2), { hits: [2.23, 2.48, 2.73, 2.98, 3.23, 3.48, 3.73, 3.98], left: 0 }, '×1 → ×2: the pad\'s moment once');
+  assert.deepEqual(play(1 / 2), { hits: [2.98, 3.98], left: 0 }, '×1 → ×½: the key goes at its tick, a later moment plays');
 });
 test('ORBIT2-05 r2: a render starts PRE_ROLL before its earliest hit, so the master has settled when the first hit comes', async () => {
   const { renderLead, PRE_ROLL } = await import('../src/poly/jam.js');

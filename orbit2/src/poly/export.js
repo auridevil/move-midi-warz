@@ -46,25 +46,29 @@ const decided = (pre, lane, step, tick) => pre?.tick === tick && (pre.played || 
  * early part of a later step, decided now by earlyStep, dt from tick t) }. A step decided early plays on with the same
  * roll at its tick (an accent or a ratchet isn't rolled twice), unless its lane is muted or silenced now (what already
  * sounded stays). A queued slot or chain step is known in advance (cut, SlotBank.nextSwitch): the outgoing lanes leave
- * the steps from there on to it, so a switch plays what the chain render has. `ahead` keeps the decisions between ticks.
- * skip: 'lane:step' keys of steps a pad just played (live record): neither their early part nor their own hits sound;
- * a key goes at its step's tick.
+ * the steps from there on to it, so a switch plays what the chain render has.
+ * ahead: the decisions between ticks, per lane a Map from the master tick a step falls on to its decision. A lane that
+ * speeds up inside an early window holds two (the old speed's step, and a step of the new speed that comes first),
+ * each used at its own tick only. A restart from tick 0 (the reset button) starts a fresh `ahead`: its keys are old ticks.
+ * skip: 'lane:tick' keys of moments a pad just played (live record), on the master tick like `ahead`: neither the
+ * early part nor the own hits of what steps there sound; a key goes at its tick.
  */
 export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null }) {
   const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec };
   return m.tick(t, rng, { fill, dice }).map((ev, li) => {
-    const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] };
+    const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] }, due = (ahead[li] ??= new Map());
+    const pre = due.get(t), padded = !!skip?.size && skip.delete(`${li}:${t}`);
+    for (const k of due.keys()) if (k <= t) due.delete(k);   // its tick has come (or passed with no step on it)
     if (ev) {
-      const pre = ahead[li]; ahead[li] = null;
-      if (skip?.delete(`${li}:${ev.step}`)) ev.hit = false;   // played live from a pad a moment ago: don't double it
+      if (padded) ev.hit = false;   // played live from a pad a moment ago: don't double it
       else if (!decided(pre, lane, ev.step, t)) out.hits = expandHits(ev, lane, li, o);
       else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }
     }
     const step = earlyStep(lane, t, { ...o, cut }), at = step * lane.stepTicks();
-    if (step >= 0 && !decided(ahead[li], lane, step, at)) {
+    if (step >= 0 && !decided(due.get(at), lane, step, at)) {
       const pev = lane.peek(at, rng, { fill, dice, li, silenced }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
-      if (!skip?.has(`${li}:${step}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt }));
-      ahead[li] = { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 };
+      if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt }));
+      due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
     }
     return out;
   });
