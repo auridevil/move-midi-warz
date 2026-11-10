@@ -570,13 +570,21 @@ test('a restart forgets the step on screen, so the playhead lights nothing until
   assert.equal('shown' in m.lanes[0].toJSON(), false, 'not saved');
 });
 
-test('C1/C2: with a stage, the rings and their glow stay inside the free box between the panels', async () => {
-  const { ringGeo } = await import('../src/poly/scene.js');
-  // 1280×720: header 87 px, left column ends at 364, right column starts at 856 (16 px gaps), as laid out by layoutHud
-  for (const s of [{ x: 380, y: 97, w: 460, h: 607 }, { x: 380, y: 97, w: 620, h: 787 }, { x: 10, y: 50, w: 900, h: 200 }]) {
-    const g = ringGeo(1280, 720, s), outer = g.ring(3), glow = outer + 0.1 * g.R;
-    assert.ok(Math.abs(g.cx - (s.x + s.w / 2)) < 1e-9 && Math.abs(g.cy - (s.y + s.h / 2)) < 1e-9, 'centred in the stage');
-    assert.ok(g.cx - glow >= s.x - 1e-9 && g.cx + glow <= s.x + s.w + 1e-9 && g.cy - glow >= s.y - 1e-9 && g.cy + glow <= s.y + s.h + 1e-9, `fits ${JSON.stringify(s)}`);
+test('C1/C2: the rings and their glow stay inside the free box between the panels, under the legend', async () => {
+  const { ringGeo, stageBox } = await import('../src/poly/scene.js');
+  const fits = (g, s) => { const glow = g.ring(3) + 0.1 * g.R; return g.cx - glow >= s.x - 1e-9 && g.cx + glow <= s.x + s.w + 1e-9 && g.cy - glow >= s.y - 1e-9 && g.cy + glow <= s.y + s.h + 1e-9; };
+  // wide windows as layoutHud measures them: the header ends at 87 px (+10), the left column is 24 + 340 px, the right
+  // one 400 + 24 px; the legend wraps onto 1–4 lines of 18 px (+8) when voices are long or lanes muted
+  for (const [W, H] of [[1280, 720], [1440, 900], [1101, 640]]) {
+    const cols = { left: 24 + 340, right: W - 24 - 400, top: 97, bottom: H, gap: 16 };
+    for (const lines of [1, 2, 3, 4]) {
+      const legend = lines * 18 + 8, s = stageBox({ ...cols, legend }), g = ringGeo(W, H, s);
+      assert.deepEqual([s.x, s.y, s.x + s.w, s.y + s.h], [cols.left + 16, cols.top + legend, cols.right - 16, H - 16], 'clear of both columns, under the legend, 16 px off the bottom');
+      assert.ok(Math.abs(g.cx - (s.x + s.w / 2)) < 1e-9 && Math.abs(g.cy - (s.y + s.h / 2)) < 1e-9, 'centred in the stage');
+      assert.ok(fits(g, s), `fits ${W}×${H} with ${lines} legend line(s)`);
+    }
   }
+  assert.ok(fits(ringGeo(1280, 720, { x: 10, y: 50, w: 900, h: 200 }), { x: 10, y: 50, w: 900, h: 200 }), 'a flat stage: sized by its height');
+  assert.deepEqual(stageBox({ left: 0, right: 100, top: 0, bottom: 50 }), { x: 16, y: 0, w: 120, h: 120 }, 'never smaller than 120 px a side');
   const free = ringGeo(390, 390); assert.equal(free.cx, 195); assert.equal(free.cy, 195);   // no stage: the phone's square canvas
 });

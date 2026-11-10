@@ -17,7 +17,7 @@ import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress } from '../ui.js';
-import { createScene } from './scene.js';
+import { createScene, stageBox } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 
 const $ = (id) => document.getElementById(id);
@@ -1010,17 +1010,19 @@ function controlOwnsKey(e) {
 /** A select picked with the mouse gives the focus back to the page (else the arrow keys would keep changing it). */
 function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
-  if (document.querySelector('dialog[open]')) return;   // the help is modal: keys are its own (Esc closes it)
+  if ($('help').open) return;   // the help is modal: keys are its own (Esc closes it)
   // a held Space repeats: the repeats are the page's too, or the browser presses the button the mouse left focused on
   // release (holding Space to play also toggled the step just clicked)
   if (e.repeat) { if (e.key === ' ' && !controlOwnsKey(e)) e.preventDefault(); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return; e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
+  // ? = help from anywhere but a text field: a button or a drawer header the keyboard reached has no use for it
+  if (e.key === '?' && !e.metaKey && !e.ctrlKey && !(e.target instanceof Element && e.target.closest(TEXT_SEL))) { e.preventDefault(); openHelp(); return; }
   if (controlOwnsKey(e)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
   if (e.key === '0') { setFill(true); return; }
-  if (e.key === '?') { e.preventDefault(); openHelp(); return; }
-  // F = focus mode; while record is armed the keys are pads, so F plays its pad (Esc still leaves focus mode)
-  if (e.key === 'f' && !e.altKey && !e.metaKey && !e.ctrlKey && !rec.armed) { e.preventDefault(); setFocusMode(!focusMode); return; }
+  // F = focus mode (Caps Lock too; Shift+F accents the pad); while record is armed the keys are pads, so F plays its pad
+  // (Esc still leaves focus mode)
+  if (e.key.toLowerCase() === 'f' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey && !rec.armed) { e.preventDefault(); setFocusMode(!focusMode); return; }
   if (e.altKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); m.select(+e.code.slice(5) - 1); lockStep = -1; sync(); return; }   // code, not key: Option+1 types ¡ on a Mac
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
   e.preventDefault();   // a select the mouse left focused would also jump to the voice starting with that letter
@@ -1064,8 +1066,8 @@ $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
 // C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
 const DEBUG = new URLSearchParams(location.search).has('debug'); $('stress-meter').hidden = !DEBUG;
-setInterval(() => {
-  if (document.hidden || !DEBUG) return; const { frameMs, quality } = scene.stats();
+if (DEBUG) setInterval(() => {
+  if (document.hidden) return; const { frameMs, quality } = scene.stats();
   const jank = playing ? Math.min(1, Math.max(0, (frameMs - 18) / 40)) : 0, late = playing ? Math.min(1, Math.max(0, (30 - stress.headMs) / 50)) : 0;   // < 30 ms of headroom starts to count, < −20 ms = notes in the past
   const lvl = (stress.level = stress.level * 0.6 + Math.max(jank, late) * 0.4); if (!playing && lvl < 0.005 && $('stress').style.width === '0%') return;
   const col = lvl > 0.7 ? 'var(--bad)' : lvl > 0.4 ? '#fde047' : 'var(--signal-cyan)', word = lvl > 0.7 ? 'overload' : lvl > 0.4 ? 'busy' : quality < 1 ? 'shedding visuals' : 'calm';
@@ -1080,12 +1082,16 @@ function readout() {
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
   $('readout').textContent = [`${tempo} bpm`, playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
     ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
-  const sd = m.lane.sound, lines = [`engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
-    ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
-    `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
-    `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
-  $('nerd-stats').textContent = lines.join('\n'); renderLegend(); announceChanges();
+  if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
+    const sd = m.lane.sound, lines = [`engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
+      ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
+      `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
+      `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
+    $('nerd-stats').textContent = lines.join('\n');
+  }
+  renderLegend(); announceChanges();
 }
+$('nerd').addEventListener('toggle', () => { if ($('nerd').open) readout(); });
 // C5: the lane names live in a fixed legend (colour dot, voice, length × speed), not on the rings
 function renderLegend() {
   const ul = $('legend'); if (!ul.children.length) LANE_HEX.forEach((hex) => { const li = document.createElement('li'); li.style.setProperty('--lane', hex); ul.appendChild(li); });
@@ -1111,30 +1117,44 @@ function announceChanges() {
 // ---- layout: both columns start under the header (whose height changes: the strip and the status line wrap); the
 // left one ends above the bottom-left panel. The rings get the free stage between the columns, so no panel ever
 // covers them (wide windows only: narrower ones stack everything under a square canvas, see styles.css) ----
-const STAGE_GAP = 16;
+const STAGE_GAP = 16, NARROW = matchMedia('(max-width: 1100px)');   // the CSS's own test, so both agree at a zoomed 1100.5 px
 function layoutHud() {
   const top = Math.round($('topbar').getBoundingClientRect().bottom + 10), hl = $('hud-left'), lg = $('legend');
-  document.documentElement.style.setProperty('--hud-top', `${top}px`);
-  if (innerWidth <= 1100 || focusMode) { hl.style.top = hl.style.bottom = lg.style.left = lg.style.top = lg.style.width = ''; scene.setStage(null); poke(); return; }
+  document.documentElement.style.setProperty('--hud-top', `${top}px`);   // where both columns start (CSS)
+  if (NARROW.matches || focusMode) { hl.style.bottom = lg.style.left = lg.style.top = lg.style.width = ''; scene.setStage(null); poke(); return; }
   const keysOpen = $('keys-pop').open, stress = $('hud-bl').querySelector('.stress-meter');
   // while the Move-controls popup is open it floats over the column; size the column against the closed panel
   const blTop = keysOpen ? innerHeight - 18 - (stress?.offsetHeight || 0) - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
-  hl.style.top = `${top}px`; hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
-  const x0 = Math.max(hl.getBoundingClientRect().right, $('hud-bl').getBoundingClientRect().right) + STAGE_GAP, x1 = document.querySelector('.hud').getBoundingClientRect().left - STAGE_GAP;
+  hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
+  const cols = { left: Math.max(hl.getBoundingClientRect().right, $('hud-bl').getBoundingClientRect().right), right: document.querySelector('.hud').getBoundingClientRect().left, top, bottom: innerHeight, gap: STAGE_GAP };
   // the legend heads the stage; the rings get what is left under it
-  lg.style.left = `${x0}px`; lg.style.top = `${top}px`; lg.style.width = `${Math.max(120, x1 - x0)}px`; const y = top + lg.offsetHeight + 8;
-  scene.setStage({ x: x0, y, w: Math.max(120, x1 - x0), h: Math.max(120, innerHeight - STAGE_GAP - y) }); poke();
+  const head = stageBox(cols); lg.style.left = `${head.x}px`; lg.style.top = `${head.y}px`; lg.style.width = `${head.w}px`;
+  scene.setStage(stageBox({ ...cols, legend: lg.offsetHeight + 8 })); poke();
 }
-for (const id of ['topbar', 'hud-bl']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
+// the legend too: a longer voice name or a muted lane can wrap it onto more lines, and the rings must move down
+for (const id of ['topbar', 'hud-bl', 'legend']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
 $('keys-pop').addEventListener('toggle', layoutHud);
-addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !document.querySelector('dialog[open]')) setFocusMode(false); });
+addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !$('help').open) setFocusMode(false); });
 // ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
-let focusMode = false;
+// Coming back puts the focus and the page where they were, and the keys with whoever owned them: a control the keyboard
+// had reached gets them back, anything else (a click's leftover, the page) leaves them to the page, so F, F, Space plays.
+// The scroll comes back too: on a phone the page shrinks to the window while the panels are hidden.
+let focusMode = false, beforeFocus = null;
 function setFocusMode(on) {
+  if (on === focusMode) return;
+  if (on) {   // before the panels go: hidden, the page is one window tall and scrollY already 0
+    const a = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY };
+    if (a?.closest('header, .hud, #hud-left, #hud-bl')) a.blur();   // focus must not stay in a hidden panel
+  }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
-  if (on && document.activeElement instanceof HTMLElement && document.activeElement.closest('header, .hud, #hud-left, #hud-bl')) document.activeElement.blur();   // focus must not stay in a hidden panel
-  if (!on && lastInput === 'key') $('btn-focus').focus({ preventScroll: true });
   layoutHud(); poke();
+  if (!on && beforeFocus) {
+    const { el, owned, y } = beforeFocus; beforeFocus = null; scrollTo({ top: y, behavior: 'instant' });
+    // focusin marks it keyboard-owned whenever the last input was a key: set the ownership it had (a click on
+    // "exit focus" took the keys back, so then the page keeps them)
+    if (el?.isConnected) { el.focus({ preventScroll: true }); if (owned && lastInput === 'key') keyFocused.add(el); else keyFocused.delete(el); }
+  }
 }
 $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () => setFocusMode(false);
 // ---- C3 help: the keys and the mouse tricks, in one overlay (button "?" or the ? key) ----

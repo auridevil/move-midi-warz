@@ -24,7 +24,9 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   if (!port || !debugPort) throw new Error('launch({ port, debugPort }): pick your own ports');
   const profile = `/tmp/orbit2-cdp-${debugPort}`;
   const server = spawn('python3', ['serve.py', String(port)], { cwd: root, stdio: 'ignore' });
-  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+  // --disable-audio-output: a fake output stream clocks the AudioContext, so the transport runs (silently) even when the
+  // Mac's own output device stalls (then currentTime freezes and nothing plays, on any commit)
+  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--disable-audio-output', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
   for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${debugPort}/json/version`); break; } catch { await sleep(250); } }
   const base = `http://localhost:${port}`;
   return {
@@ -48,6 +50,9 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
         pr.catch(() => {}); return pr;   // a raced call that times out later must not crash the script (unhandled rejection)
       };
       await send('Runtime.enable'); await send('Page.enable');
+      // in front and focused, like a real window: without it the page can turn hidden (Escape's native key code does
+      // it), and a hidden page runs no rAF, no resize events, no ResizeObserver and no Tone.Draw callbacks
+      await send('Page.bringToFront'); await send('Emulation.setFocusEmulationEnabled', { enabled: true });
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
       if (mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
       await send('Page.navigate', { url: `${base}/${path}` }); await sleep(wait);

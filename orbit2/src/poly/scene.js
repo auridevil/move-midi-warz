@@ -32,6 +32,16 @@ export function ringGeo(W, H, stage = null) {
   const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return { cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R, ring: ring(R) };
 }
 
+/**
+ * The rings' stage on a wide window, in client px: the free box between the left panels (right edge `left`) and the
+ * right column (left edge `right`), from `top` (under the header) to `bottom`, `gap` clear of everything. `legend` px
+ * at its top belong to the legend; the rings get the rest. Never smaller than `min` px a side.
+ */
+export function stageBox({ left, right, top, bottom, legend = 0, gap = 16, min = 120 }) {
+  const x = left + gap, y = top + legend;
+  return { x, y, w: Math.max(min, right - gap - x), h: Math.max(min, bottom - gap - y) };
+}
+
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const h = size / 2;
@@ -62,23 +72,27 @@ export function createScene(cv, o) {
   /** s: { x, y, w, h } in client px, or null for the whole canvas. */
   function setStage(s) {
     const b = cv.getBoundingClientRect(), n = s && { x: Math.round(s.x - b.left), y: Math.round(s.y - b.top), w: Math.round(s.w), h: Math.round(s.h) };
-    if (JSON.stringify(n) === JSON.stringify(stage)) return; stage = n; resize();
+    if (JSON.stringify(n) === JSON.stringify(stage)) return; stage = n; backdrop();   // same canvas: only the nebulae follow the rings
   }
   const nodeXY = (g, li, i, len) => { const a = (i / len) * TAU - Math.PI / 2, r = g.ring(li); return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r, a]; };
 
   function resize() {
     DPR = Math.min(1.75, devicePixelRatio || 1); W = cv.clientWidth || innerWidth; H = cv.clientHeight || innerHeight;   // the canvas box, which CSS sizes
     cv.width = W * DPR; cv.height = H * DPR; ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
-    // static backdrop: void gradient + two nebulae, rendered once per size
-    bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height; const b = bg.getContext('2d'); b.scale(DPR, DPR);
+    const n = Math.round(Math.min(320, W * H / 5200));   // stars turn around the rings' centre, so a new stage keeps them
+    stars = Array.from({ length: n }, () => ({ a: Math.random() * TAU, d: Math.sqrt(Math.random()) * Math.hypot(W, H) * 0.62, s: 0.3 + Math.random() ** 3 * 1.6, tw: Math.random() * TAU, sp: 0.4 + Math.random() * 1.6 }));
+    backdrop();
+  }
+  // static backdrop: void gradient + two nebulae around the rings, rendered once per size and stage
+  function backdrop() {
+    if (!bg || bg.width !== cv.width || bg.height !== cv.height) { bg = document.createElement('canvas'); bg.width = cv.width; bg.height = cv.height; }
+    const b = bg.getContext('2d'); b.setTransform(DPR, 0, 0, DPR, 0, 0);
     const { cx, cy, R } = geo();
     let gr = b.createRadialGradient(cx, cy, 0, cx, cy, Math.max(W, H) * 0.75); gr.addColorStop(0, '#1a1236'); gr.addColorStop(0.5, '#0e0a20'); gr.addColorStop(1, '#050208');
-    b.fillStyle = gr; b.fillRect(0, 0, W, H);
+    b.fillStyle = gr; b.fillRect(0, 0, W, H);   // opaque: covers the previous stage's backdrop
     for (const [x, y, rad, hex, a] of [[W * 0.18, H * 0.78, R * 1.3, '#67e8f9', 0.07], [W * 0.82, H * 0.25, R * 1.4, '#a78bfa', 0.1], [W * 0.62, H * 0.9, R, '#f0abfc', 0.05]]) {
       gr = b.createRadialGradient(x, y, 0, x, y, rad); gr.addColorStop(0, rgba(hex, a)); gr.addColorStop(1, rgba(hex, 0)); b.fillStyle = gr; b.fillRect(0, 0, W, H);
     }
-    const n = Math.round(Math.min(320, W * H / 5200));
-    stars = Array.from({ length: n }, () => ({ a: Math.random() * TAU, d: Math.sqrt(Math.random()) * Math.hypot(W, H) * 0.62, s: 0.3 + Math.random() ** 3 * 1.6, tw: Math.random() * TAU, sp: 0.4 + Math.random() * 1.6 }));
   }
   addEventListener('resize', resize); new ResizeObserver(() => { if (cv.clientWidth !== W || cv.clientHeight !== H) resize(); }).observe(cv); resize();
 

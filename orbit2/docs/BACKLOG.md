@@ -239,3 +239,40 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   component rules (it took `.lane-tab` from 36 to 32 px on desktop); a `:where()` floor lets components win but then
   each needs its own touch size. Also: a slider's name is the label before " · " (`short()` in `gauge.js`); an
   explicit `name` option would be plainer.
+- **One Escape handler** (ORBIT2-04, architect): Esc is handled in three places (blur in the key-ownership block,
+  Move popup + focus mode in the layout block, the help's native `<dialog>`); one handler in a stated order (dialog →
+  popup → focus mode → give the keys back) would be plainer. The focus-mode `display: none !important` adds to the
+  `body:has(#hud-left) #…` specificity fight.
+- **A CSS grid stage** (ORBIT2-04, architect): a grid with one observed `#stage` cell would replace most of
+  `layoutHud()`'s measuring (columns, legend, stage).
+- **Phone header height** (ORBIT2-04, architect): 250 px at 390 × 844 (strip on two rows, Move status, a two-line
+  status line), the orbit at y 250–640; tight on a 360 × 640 phone.
+- **F is also a pad** (ORBIT2-04, sound, architect): with record not armed plain F is focus mode, so the keyboard can no
+  longer place a plain hit on lane 2 step 4 (Shift+F accents it; a click, its step button or the Move pad still can). A
+  focus key outside the pad rows (e.g. backtick) would keep both; the backlog asked for F.
+- **Jam label width** (ORBIT2-04, sound): between ~1101 and 1180 px the longer jam labels ("● jam: next bar…") wrap the
+  header (87 → 135 px), so the rings shrink while a take is armed; a fixed width on the jam button or shorter labels.
+  At 1280 and 1440 it never wraps.
+- **Bit-identical exports** (ORBIT2-04, sound; pre-existing): with dice locked and `Math.random` seeded, two renders of
+  the same code differ by 1 LSB in up to 37 of 705,600 samples (~−110 dB); seeded noise everywhere would make A/B
+  checks exact.
+- **Jam raw-mix headroom** (ORBIT2-04, sound; pre-existing, phase 10): the jam download's raw mix (four lane buses
+  summed) peaked at −0.19 dBFS on the demo groove with dsp; a −1 dBFS ceiling or a limiter on that sum.
+- **Floating play over content** (ORBIT2-04, greta): at the top of a 390 phone the 76 px play sits over the welcome
+  bar's "×" and the "wild" button until you scroll; move the welcome bar, or a ~64 px button.
+- **F on screen** (ORBIT2-04, greta): nothing visible names the F key; "focus mode (F)" on the Settings button would.
+- **Status line emphasis** (ORBIT2-04, kai, greta): 11 px Major Mono with wide tracking and the chromatic shadow; the
+  live states (queued slot, FILL, rec ●, jam) don't stand out from stage distance: an accent colour or a pill for them,
+  or a larger line.
+- **Nerd stats below the fold** (ORBIT2-04, greta): at 1280 × 720 the open drawer shows a sliver above "Move" (it
+  scrolls).
+- **Tempo nudge** (ORBIT2-04, kai): the strip's tempo knob is 92 × 30 px and its arrows step 10 bpm after a Tab (a
+  click doesn't focus a knob, by design); a ±1 bpm nudge key or a bigger target for live tempo moves.
+- **Undo next to fill** (ORBIT2-04, kai): a stray click on undo mid-set; a gap between undo / redo and fill.
+- **Mute in focus mode** (ORBIT2-04, kai; phase 11): focus mode hides the lane drawer, so mutes and solo are Move or
+  keyboard only there; a mute key, or legend dots you can tap, would make focus mode playable.
+- **Move panel over the rings** (ORBIT2-04, verifier; pre-existing): the open Move popup (`.keys-pop[open]`, up to 560
+  px) reaches 171 px into the outer ring at 1440 × 900; it closes on Esc or a click outside. Keep it at the column
+  width on wide windows, or move the stage while it's open.
+- **Toast over the stage** (ORBIT2-04, verifier; pre-existing): at 1280 × 720 the first-visit toast (x 360–920, y
+  640–690) covers the lane drawer's voice select and the outer ring's glow until it fades.
