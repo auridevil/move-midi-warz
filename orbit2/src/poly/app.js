@@ -1001,6 +1001,8 @@ addEventListener('wheel', (e) => { if (e.target instanceof Element && e.target.c
 addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) lastInput = 'key'; }, true);   // the keys that move focus
 addEventListener('keydown', (e) => { const a = document.activeElement; if (e.key === 'Escape' && a instanceof HTMLElement && a !== document.body && !a.closest(TEXT_SEL)) a.blur(); });
 addEventListener('focusin', (e) => { if (lastInput === 'key') keyFocused.add(e.target); else keyFocused.delete(e.target); }, true);
+/** Focus a control on the page's behalf (no scroll) with the ownership given: focusin alone goes by the last input. */
+function focusAs(el, owned) { el.focus({ preventScroll: true }); if (owned) keyFocused.add(el); else keyFocused.delete(el); }
 function controlOwnsKey(e) {
   const el = e.target instanceof Element ? e.target : null; if (!el || el === document.body || el.id === 'cv') return false;
   if (el.closest(TEXT_SEL)) return true; if (e.altKey || e.metaKey || e.ctrlKey) return false;
@@ -1134,26 +1136,28 @@ function layoutHud() {
 // the legend too: a longer voice name or a muted lane can wrap it onto more lines, and the rings must move down
 for (const id of ['topbar', 'hud-bl', 'legend']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
 $('keys-pop').addEventListener('toggle', layoutHud);
-addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !$('help').open) setFocusMode(false); });
+addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !$('help').open) setFocusMode(false, true); });
 // ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
-// Coming back puts the focus and the page where they were, and the keys with whoever owned them: a control the keyboard
-// had reached gets them back, anything else (a click's leftover, the page) leaves them to the page, so F, F, Space plays.
-// The scroll comes back too: on a phone the page shrinks to the window while the panels are hidden.
+// Coming back puts the focus and the page where they were. F gives the keys back to whoever owned them: a control the
+// keyboard had reached gets them, anything else (a click's leftover, the page) leaves them to the page, so F, F, Space
+// plays. Esc gives them to the page, as it does everywhere. The scroll comes back too: the page's (on a phone it shrinks
+// to the window while the panels are hidden) and each column's (a hidden column forgets it).
 let focusMode = false, beforeFocus = null;
-function setFocusMode(on) {
+const columns = () => [$('hud-left'), document.querySelector('.hud')];
+function setFocusMode(on, esc = false) {
   if (on === focusMode) return;
   if (on) {   // before the panels go: hidden, the page is one window tall and scrollY already 0
     const a = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
-    beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY };
+    beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY, cols: columns().map(c => c.scrollTop) };
     if (a?.closest('header, .hud, #hud-left, #hud-bl')) a.blur();   // focus must not stay in a hidden panel
   }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
   layoutHud(); poke();
   if (!on && beforeFocus) {
-    const { el, owned, y } = beforeFocus; beforeFocus = null; scrollTo({ top: y, behavior: 'instant' });
-    // focusin marks it keyboard-owned whenever the last input was a key: set the ownership it had (a click on
-    // "exit focus" took the keys back, so then the page keeps them)
-    if (el?.isConnected) { el.focus({ preventScroll: true }); if (owned && lastInput === 'key') keyFocused.add(el); else keyFocused.delete(el); }
+    const { el, owned, y, cols } = beforeFocus; beforeFocus = null; scrollTo({ top: y, behavior: 'instant' });
+    columns().forEach((c, i) => c.scrollTo({ top: cols[i], behavior: 'instant' }));
+    // a click on "exit focus" took the keys back (lastInput), so then the page keeps them
+    if (el?.isConnected) focusAs(el, owned && lastInput === 'key' && !esc);
   }
 }
 $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () => setFocusMode(false);

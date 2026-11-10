@@ -3,11 +3,11 @@ type: review
 phase: ORBIT2-04
 title: ORBIT2-04 calmer screen (C1–C5), review panel
 date: 2026-11-10
-round: 1
-result: IN PROGRESS
+round: 2
+result: HAPPY
 reviewers:
   verifier: HAPPY
-  architect: NOT HAPPY
+  architect: HAPPY
   sound: HAPPY
   greta: HAPPY
   kai: HAPPY
@@ -167,3 +167,53 @@ label is hidden by design, its value "N bpm" shows (greta).
   the floating play visible and on top, the rest of the header hidden, tap plays and stops without leaving focus
   mode, pill 76 × 44, tap it → back at the same scroll, square canvas again; nothing over the rings. 0 page errors;
   screenshots looked at.
+
+## Round 2: architect HAPPY, all five HAPPY
+
+Only the architect re-reviewed (the one NOT HAPPY after round 1): a fresh sub-agent on the default model, ports
+5402 / 9402, scratch `/tmp/orbit2-architect/` (deleted). Brief: the phase goal, C1–C5 verbatim from [[BACKLOG]] plus
+the phase spec, a pointer to the moved-controls table above, the must-fix rule, `git diff --stat 9c22a4e..53a0033`
+(8 files, +482/−100), `git status --short` (clean), the architect's own round-1 MUST-FIX with its repro, "Changes after
+round 1" verbatim, how to drive `orbit2/index.html` with `orbit2/tools/cdp.mjs` and how to run the phase-start version.
+Pre-checks on 53a0033: `npm run check` clean, `npm test` 109 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| architect | HAPPY | none. Round-1 item fixed (`app.js:1143-1157`): Settings opened with a click, ArrowUp, F, F → focus on the Settings header, not `#btn-focus`; Space plays, focus mode stays off. Also: from the keyboard-reached tempo knob, F, F → back on the knob, ArrowUp turns it, Space plays; click "focus mode" → "exit focus" → Space plays; keyboard on `#btn-focus`, Enter, F → back on the button, Space presses it. No regression: check clean, 109 + 9; nothing over the rings at 1280×720 and 1440×900 (closed, every drawer open, legend on two lines with all lanes muted: the rings move down 11 px, 58–79 px under it); phone 390×844 focus mode: floating play visible and on top, a tap plays, a ring tap selects its lane, pill 76 × 44 at .9, back at the same scroll (2212); `?` from a keyboard-owned button, Esc closes only the help and a second one leaves focus mode, Caps Lock F; stress meter only with `?debug`; only the lane drawer open; phase-start localStorage (`orbit2.v2`, `.tempo`, `.slots.v1`) and a phase-start `#p=` link load the same machine (slot 2 too); 0 page errors, no ResizeObserver loop errors. |
+
+SHOULD items (never block): (1) leaving focus mode lost the columns' own scroll: `#hud-left` / `.hud` come back
+scrolled to the top, so the refocused control (focused with `preventScroll`) sat off-screen, e.g. the Settings button
+2026 px down a column scrolled to 1451 at 1440×900; (2) the key-ownership rule lived in two places (the `focusin` hook
+and `setFocusMode` undoing it): a `focusAs(el, owned)` helper next to `keyFocused`; (3) Esc out of focus mode left a
+keyboard user on `#btn-focus` still owning the keys, so Esc, Space went back into focus mode, while everywhere else
+Esc gives the keys back (taste); (4) a stale JSDoc in `scene.js` still listed `label` and `ratioLabel`; (5) focus mode
+keeps play only up to 760 px: a touch tablet at 761–1100 px loses play / stop there, `(pointer: coarse)` would be the
+better test; (6) `app.js` grew by 58 lines this phase; the layout + focus-mode block is the next thing to split out.
+GOOD: the pure `stageBox()` next to `ringGeo()` with its table test; the focus restore remembers element, ownership
+and scroll with no special case for `#btn-focus`; idle and audio-path work kept light (stress interval only with
+`?debug`, nerd stats only while open, jam status through `Tone.Draw`, a new stage repaints only the backdrop).
+
+### Changes after round 2
+
+No MUST-FIX to fix. Quick SHOULDs done:
+
+- **The columns keep their scroll** (1): `setFocusMode` also remembers both columns' `scrollTop` and puts it back
+  before refocusing, so the control you left from is in view again.
+- **Esc gives the keys back** (3): leaving focus mode with Esc refocuses the control you were on but leaves the keys
+  with the page, as Esc does everywhere (the help's "Esc: give the keys back to the page"); F keeps the ownership the
+  control had. Keyboard on "focus mode", Enter, Esc, Space plays; Enter, F, Space presses the button again.
+- **One place sets a control's key ownership by hand** (2): `focusAs(el, owned)` next to `keyFocused` / the `focusin`
+  hook; `setFocusMode` uses it. (The welcome bar's refocus keeps the `focusin` rule: it wants exactly that.)
+- **JSDoc** (4): `createScene` no longer lists `label` / `ratioLabel`.
+- Later → [[BACKLOG]]: play in focus mode on a touch tablet (5), splitting the layout + focus-mode block out of
+  `app.js` (6).
+- Tests: DOM behaviour in `app.js`, checked in the browser (5400/9400, one browser per viewport,
+  `/tmp/orbit2-impl/e2e.mjs`, deleted): 21/21. 1440×900: every left drawer open, the column scrolled to 1451, keyboard
+  on "focus mode", Enter → focus mode, F → back, the column at 1451, the button focused and inside the column; Space
+  presses it (focus mode again); Esc → back, column at 1451, the button focused; Space plays, Space stops; the right
+  column scrolled to 163 survives F, F. The round-1 repro (Settings by click, ArrowUp, F, F) → focus on the Settings
+  header, Space plays; click "focus mode", click the pill, Space plays. 1280×720 fresh page: Tab, Esc, F, F, Space
+  plays; while playing F, Esc, Space stops; the columns at their sides. Phone 390×844: focus mode from Settings far
+  down the page keeps the floating play visible, tapping the pill comes back at the same scroll (2212). 0 page errors
+  in every page; screenshots looked at. `npm run check` clean, `npm test` 109 + 9, `node tools/smoke.mjs
+  http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped).

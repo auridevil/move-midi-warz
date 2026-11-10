@@ -276,3 +276,8 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   width on wide windows, or move the stage while it's open.
 - **Toast over the stage** (ORBIT2-04, verifier; pre-existing): at 1280 × 720 the first-visit toast (x 360–920, y
   640–690) covers the lane drawer's voice select and the outer ring's glow until it fades.
+- **Play in focus mode on a touch tablet** (ORBIT2-04, architect): focus mode keeps play only up to 760 px, where it
+  floats; a touch tablet at 761–1100 px loses play / stop there and has no Space bar. Float play in focus mode on
+  `(pointer: coarse)` too.
+- **Split the layout + focus-mode block out of `app.js`** (ORBIT2-04, architect): `app.js` grew by about 60 lines this
+  phase (1107 → 1169); `layoutHud()`, the Escape handler and `setFocusMode()` are the natural next module.

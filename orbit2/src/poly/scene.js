@@ -52,8 +52,8 @@ function glowSprite(hex, size = 96) {
 
 /**
  * @param {HTMLCanvasElement} cv
- * @param {{ machine: () => any, laneHex: string[], label: (lane) => string, ratioLabel: string[],
- *           isPlaying: () => boolean, isBusy: () => boolean, stepMs: (lane) => number }} o
+ * @param {{ machine: () => any, laneHex: string[], isPlaying: () => boolean, isBusy: () => boolean,
+ *           stepMs: (lane) => number }} o
  *   isBusy: the app wants frames (playing, or something just changed); the scene adds its own live effects.
  */
 export function createScene(cv, o) {
