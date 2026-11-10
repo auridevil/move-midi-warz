@@ -25,11 +25,12 @@
     <div id="transport" class="tstrip" role="group" aria-label="transport">
       <button id="btn-play" class="primary big-btn">▶ play</button>
       <div id="tempo-gauge" class="tstrip-tempo"></div>
-      <button id="btn-tap" class="small" title="Tap tempo: tap on the beat (Move: Shift+Record)">tap</button>
-      <button id="btn-undo" title="Undo (Cmd/Ctrl+Z · Move: Undo)">undo</button>
-      <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z · Move: Shift+Undo)">redo</button>
-      <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0 · Move: hold Layout)">fill (hold)</button>
-      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as 4 lane tracks, up to 256 beats (Move: Sampling)">● jam</button>
+      <button id="btn-tap" class="small" title="Tap tempo: tap on the beat">tap</button>
+      <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">undo</button>
+      <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z)">redo</button>
+      <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill (hold)</button>
+      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as 4 lane tracks, up to 256 beats">● jam</button>
+      <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
     <div class="status" id="move-status" hidden>
       <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
@@ -40,22 +41,45 @@
   </header>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- C5: which ring is which (filled by app.js); heads the stage on wide windows, sits under the canvas on narrow ones -->
+  <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
+  <button id="focus-exit" class="small focus-exit" type="button" hidden title="Show the panels again (F or Esc)">exit focus</button>
+  <!-- C3: every key and mouse trick in one place (button "?" or the ? key); the Move's buttons are in the Move panel -->
+  <dialog id="help" class="help" aria-labelledby="help-title">
+    <form method="dialog" class="help-head"><h2 id="help-title">keys &amp; mouse</h2><button class="small" aria-label="close help">close</button></form>
+    <table class="gtable keys">
+      <tr><th>Space</th><td>play / stop</td></tr>
+      <tr><th>F</th><td>focus mode: only the orbits (F or Esc to come back; while record is armed F plays its pad)</td></tr>
+      <tr><th>?</th><td>this help</td></tr>
+      <tr><th>z–, · a–k · q–i · 1–8</th><td>steps 1–8 of lanes 1 · 2 · 3 · 4 (one row per lane, like the Move's pads) · Shift = accent · record armed: play and record</td></tr>
+      <tr><th>hold 0</th><td>fill</td></tr>
+      <tr><th>Alt+1–4</th><td>select a lane</td></tr>
+      <tr><th>Cmd/Ctrl+Z</th><td>undo · with Shift: redo</td></tr>
+      <tr><th>Esc</th><td>close a popup, give the keys back to the page</td></tr>
+      <tr><th>knobs</th><td>drag up / down (Shift = fine), scroll, or arrow keys · double-click = back to the start value</td></tr>
+      <tr><th>rings</th><td>click a ring to select its lane · drop an audio file on a ring to load it as a sample</td></tr>
+      <tr><th>steps</th><td>tap = off → on → accent → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only</td></tr>
+      <tr><th>slots</th><td>tap = load · long-press or right-click = save, chain, erase · Shift+click = save here · Cmd/Ctrl+click = add to the chain · Alt+click = erase</td></tr>
+      <tr><th>randomize</th><td>Shift+click, long-press or right-click = wild</td></tr>
+      <tr><th>pattern from seed</th><td>Shift+click = the wild roll</td></tr>
+    </table>
+    <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
+  </dialog>
   <div class="hud-left" id="hud-left">
-    <details class="drawer" open>
-      <summary>global · humanize</summary>
+    <details class="drawer">
+      <summary>Humanize</summary>
       <div id="global-sliders" class="gauges two"></div>
     </details>
     <details class="drawer" id="lib-drawer">
-      <summary>library · saved setups</summary>
-      <form id="lib-form" class="lib-form" autocomplete="off">
+      <summary>Library</summary>
+      <form id="lib-form" class="lib-form" autocomplete="off" title="A setup is everything: patterns, voices, kit, sounds, locks, conditions, samples, humanize, tempo, volume and dice. Same name = overwrite.">
         <input id="lib-name" type="text" maxlength="40" placeholder="name this setup" aria-label="setup name" />
         <button class="primary small" type="submit">save</button>
       </form>
       <div id="lib-list" class="lib-list"></div>
-      <p class="hint tight">A setup is everything: patterns, voices, kit, sounds, locks, conditions, samples, humanize, tempo, volume and dice. Same name = overwrite. Click a name to load (undoable).</p>
     </details>
-    <details class="drawer" open>
-      <summary>patterns · 16 slots &amp; chains</summary>
+    <details class="drawer">
+      <summary>Patterns</summary>
       <div id="slots" class="slots" role="group" aria-label="pattern slots"></div>
       <div id="slot-menu" class="slot-menu" role="group" aria-labelledby="slot-menu-title" hidden>
         <span id="slot-menu-title" class="slot-menu-title"></span>
@@ -70,10 +94,10 @@
         <div id="slot-gauges" class="gauges one"></div>
         <button id="chain-stop" class="small">stop chain</button>
       </div>
-      <p class="hint tight">Tap = load · long-press (or right-click) = save here, add to a chain, erase. Mouse shortcuts: Shift+click = save · Cmd/Ctrl+click = add to a chain · Alt+click = erase. Move: hold <b>Loop</b> + step = load (several steps = chain), hold <b>Duplicate</b> + step = save.</p>
+      <p class="hint tight">Tap = load · long-press = save, chain, erase.</p>
     </details>
     <details class="drawer">
-      <summary>live record · play the pads, they stick</summary>
+      <summary>Record</summary>
       <div class="row-ctl">
         <button id="btn-rec" class="rec-btn">● arm record</button>
         <div id="rec-gauges" class="gauges one"></div>
@@ -82,10 +106,10 @@
         <div class="ctl" title="Where a hit is filed"><span class="ctl-lbl">quantize</span><div id="rec-quant"></div></div>
         <div id="rec-pitch"></div>
       </div>
-      <p class="hint tight">Armed + playing: pads (or keys 1–8 / q–i / a–k / z–,) play their row's lane and write the nearest step. Hard hits = accents. Move: <b>Record</b> arms, Shift+Record = tap tempo.</p>
+      <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents.</p>
     </details>
     <details class="drawer">
-      <summary>evolve · the pattern drifts on its own</summary>
+      <summary>Evolve</summary>
       <div class="row-ctl">
         <button id="btn-evolve" class="rec-btn">◌ evolve</button>
         <button id="evo-home-now" class="small" title="Use the current pattern as home">home = now</button>
@@ -94,10 +118,10 @@
       </div>
       <div id="evo-gauges" class="gauges three"></div>
       <div id="evo-lanes" class="evo-lanes"></div>
-      <p class="hint tight">Every N bars some lanes get nudged (rotation, fill, length, speed). Untick a lane to keep it steady. Move: Shift+Capture toggles.</p>
+      <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady.</p>
     </details>
     <details class="drawer">
-      <summary>dice · free or repeatable randomness</summary>
+      <summary>Dice</summary>
       <div class="row-ctl">
         <button id="btn-dice" class="rec-btn">○ dice free</button>
         <label title="Same seed = same groove">seed <input type="number" id="dice-seed" min="1" max="99999" /></label>
@@ -108,7 +132,7 @@
       <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
     </details>
     <details class="drawer">
-      <summary>share &amp; export · link, WAV, MIDI</summary>
+      <summary>Export</summary>
       <div class="row-ctl">
         <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
       </div>
@@ -123,7 +147,7 @@
       <p id="exp-status" class="hint tight"></p>
     </details>
     <details class="drawer">
-      <summary>MIDI I/O · notes, clock out, clock in</summary>
+      <summary>MIDI</summary>
       <button id="btn-midi-enable">enable MIDI ports</button>
       <div id="midi-body" hidden>
         <div class="ctl-col"><span class="ctl-lbl">send notes &amp; clock to</span><div id="midi-out"></div></div>
@@ -135,14 +159,23 @@
       </div>
       <p id="midi-status" class="hint tight"></p>
     </details>
+    <details class="drawer" id="settings-drawer">
+      <summary>Settings</summary>
+      <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
+      <p id="engine-note" class="hint tight"></p>
+      <div class="row-ctl">
+        <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
+        <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
+      </div>
+    </details>
     <details class="drawer nerd" id="nerd">
-      <summary>nerd stats</summary>
+      <summary>Nerd stats</summary>
       <pre id="nerd-stats" class="nerd-stats"></pre>
     </details>
   </div>
   <div class="hud-bl" id="hud-bl">
     <details class="drawer keys-pop" id="keys-pop">
-      <summary>Move controls <span class="pop-x">esc ×</span></summary>
+      <summary>Move <span class="pop-x">esc ×</span></summary>
       <table class="gtable keys">
         <tr><th>Pads row</th><td>lane's steps 1–8 (toggle) · Shift+pad = accent · record armed: play + record</td></tr>
         <tr><th>Steps</th><td>selected lane, all 16 · tap = toggle</td></tr>
@@ -170,7 +203,7 @@
         <tr><th>Volume</th><td>volume</td></tr>
       </table>
     </details>
-    <div class="stress-meter" title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
+    <div class="stress-meter" id="stress-meter" hidden title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
   </div>
   <div class="hud">
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
@@ -185,12 +218,11 @@
       <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
       <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
       <button id="btn-clear">clear lane</button>
-      <button id="btn-reset">reset phase</button>
     </div>
     <div class="hud-row grooves-row"><span class="hint">grooves</span><div id="grooves" class="chips" role="group" aria-label="starter grooves"></div></div>
     <div id="lane-tabs" class="lane-tabs" role="group" aria-label="lane"></div>
     <details class="drawer lane-drawer" id="lane-drawer" open>
-      <summary>lane <span id="lane-name">kick</span> · tap a ring or a lane button, Alt+1–4, or the Move's track buttons <em id="shift-ind" class="shift-ind"></em></summary>
+      <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
       <div id="sliders" class="gauges"></div>
       <div id="stepsui" class="stepsui" role="group" aria-label="steps"></div>
       <div id="lockpanel" class="lockpanel" hidden>
@@ -207,15 +239,13 @@
           <div id="trig-fade"></div>
         </div>
       </div>
-      <h3 class="subh">sound · Shift + knobs 1–8</h3>
-      <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
-      <p id="engine-note" class="hint tight"></p>
+      <h3 class="subh">sound</h3>
       <div class="sliders">
         <label>voice <select id="voice-select"></select></label>
         <label>kit (all lanes) <select id="kit-select"></select></label>
       </div>
       <div class="row-ctl">
-        <button id="btn-solo" class="small" title="Only soloed lanes play (Move: Shift+Mute)">solo</button>
+        <button id="btn-solo" class="small" title="Only soloed lanes play">solo</button>
         <div class="ctl" title="When this lane hits it cuts off…"><span class="ctl-lbl">chokes</span><div id="choke-select"></div></div>
       </div>
       <div class="row-ctl sample-row" title="Load a file, record the mic, take an Unassembler slice, or drop a file on a ring">
@@ -226,11 +256,6 @@
       <div id="slice-select" class="slice-grid" title="Slices sent from Unassembler (→ orbits): tap one to put it on this lane"></div>
       <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sound-sliders" class="gauges"></div>
-      <details class="drawer inner">
-        <summary>what each parameter does</summary>
-        <table id="param-glossary" class="gtable"></table>
-      </details>
-      <p class="hint">Gauges: drag up/down (Shift = fine), scroll, or arrow keys; double‑click resets. At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm. Euclid spreads k hits evenly; rotation shifts them.</p>
     </details>
   </div>
   <script src="../vendor/tone/Tone.js"></script>

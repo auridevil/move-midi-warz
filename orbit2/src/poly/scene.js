@@ -200,14 +200,7 @@ export function createScene(cv, o) {
         ctx.lineCap = 'butt';
         const hx = g.cx + Math.cos(a) * r, hy = g.cy + Math.sin(a) * r; ctx.drawImage(white, hx - 14, hy - 14, 28, 28); ctx.drawImage(sprite(hex), hx - 22, hy - 22, 44, 44);
       }
-      // label on the ring's lower-right diagonal so the four never overlap
-      ctx.globalCompositeOperation = 'source-over';
-      const la = Math.PI / 4 + li * 0.12; let lx = g.cx + Math.cos(la) * (r + 16); const ly = g.cy + Math.sin(la) * (r + 16) + 4, txt = `${o.label(lane)} ${len} ×${o.ratioLabel[lane.ratioIndex]}${lane.muted ? ' m' : ''}`;
-      ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'left';
-      lx = Math.min(lx, W - 8 - ctx.measureText(txt).width);   // a narrow stage: keep the label on screen
-      if (isSel) { ctx.fillStyle = 'rgba(103,232,249,.6)'; ctx.fillText(txt, lx - 1, ly); ctx.fillStyle = 'rgba(240,171,252,.6)'; ctx.fillText(txt, lx + 1, ly); }
-      ctx.fillStyle = isSel ? hex : 'rgba(236,233,247,.5)'; ctx.fillText(txt, lx, ly);
-      ctx.globalCompositeOperation = 'lighter';
+      // C5: no label on the ring: the app's fixed legend names the lanes (voice, length × speed)
     });
 
     // live record armed: the outer orbit breathes red

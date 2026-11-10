@@ -236,9 +236,9 @@ const INFO = {
   send: 'How much of the lane goes to the tempo-synced delay (dotted eighth).',
   pan: 'Stereo position, left to right.',
   level: 'Lane volume.',
-  tempo: 'Master tempo in bpm, shared by every page. Knob 8 (no Shift), tap tempo on the Record button. Global, not per lane.',
-  humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine. Wheel.',
-  'step locks': 'Hold a step button on the Move and turn knobs 1–7 (or long-press, right-click or Alt+click a step here) to override tune, probability, velocity, decay, tone, snap or color on that step only. Hold step + Delete clears them. Locked hits glow cyan and get a small moon.',
+  tempo: 'Master tempo in bpm, shared by every page. Global, not per lane.',
+  humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine.',
+  'step locks': 'Long-press, right-click or Alt+click a step to override tune, probability, velocity, decay, tone, snap or color on that step only. Locked hits glow cyan and get a small moon.',
   'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
   'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
   'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
@@ -251,9 +251,9 @@ const INFO = {
   'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
   'clock out': 'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
-  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (Move: hold Layout · keyboard: hold 0), never while it is, or only/never on the first loop after Play. Move: hold step + knob 8.',
-  repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter. Move: hold step + Shift + knob 8.',
-  solo: 'Solo: only soloed lanes play (several can be). Move: Shift + Mute.',
+  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, or only/never on the first loop after Play.',
+  repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
+  solo: 'Solo: only soloed lanes play (several can be).',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
   sample: 'Load a file, record up to 4 s from the mic, take one of the 8 slices Unassembler sent, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit.',
   dice: 'Free dice = every probability roll is new. Locked dice = rolls come from the seed, so a probabilistic groove (and humanize, evolve, randomize) repeats exactly. Same seed, same groove.',
@@ -278,10 +278,9 @@ function buildSliders() {
   for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
-  sliders.tempo = makeGauge({ label: 'master tempo · knob 8', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) });
+  sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) });
   $('tempo-gauge').replaceChildren(sliders.tempo.el);   // C1: tempo sits in the transport strip
-  sliders.humanize = makeGauge({ label: 'humanize · wheel', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
-  $('param-glossary').innerHTML = Object.entries(INFO).map(([k, v]) => `<tr><th>${k}</th><td>${v}</td></tr>`).join('');
+  sliders.humanize = makeGauge({ label: 'humanize', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   for (let i = 0; i < 4; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
   // picked with the mouse, a select lets go of the focus, so the arrow keys don't keep changing it (see controlOwnsKey)
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
@@ -294,7 +293,7 @@ function sync() {
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
-  $('lane-name').textContent = `${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
+  $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
   laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
@@ -1011,6 +1010,7 @@ function controlOwnsKey(e) {
 /** A select picked with the mouse gives the focus back to the page (else the arrow keys would keep changing it). */
 function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
+  if (document.querySelector('dialog[open]')) return;   // the help is modal: keys are its own (Esc closes it)
   // a held Space repeats: the repeats are the page's too, or the browser presses the button the mouse left focused on
   // release (holding Space to play also toggled the step just clicked)
   if (e.repeat) { if (e.key === ' ' && !controlOwnsKey(e)) e.preventDefault(); return; }
@@ -1018,6 +1018,9 @@ window.addEventListener('keydown', (e) => {
   if (controlOwnsKey(e)) return;
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
   if (e.key === '0') { setFill(true); return; }
+  if (e.key === '?') { e.preventDefault(); openHelp(); return; }
+  // F = focus mode; while record is armed the keys are pads, so F plays its pad (Esc still leaves focus mode)
+  if (e.key === 'f' && !e.altKey && !e.metaKey && !e.ctrlKey && !rec.armed) { e.preventDefault(); setFocusMode(!focusMode); return; }
   if (e.altKey && /^Digit[1-4]$/.test(e.code)) { e.preventDefault(); m.select(+e.code.slice(5) - 1); lockStep = -1; sync(); return; }   // code, not key: Option+1 types ¡ on a Mac
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
   e.preventDefault();   // a select the mouse left focused would also jump to the voice starting with that letter
@@ -1055,12 +1058,14 @@ if (midi.supported) { $('move-status').hidden = false; paintConnect(); }
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, label: voiceLabel, ratioLabel: RATIO_LABEL, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
+// C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
+const DEBUG = new URLSearchParams(location.search).has('debug'); $('stress-meter').hidden = !DEBUG;
 setInterval(() => {
-  if (document.hidden) return; const { frameMs, quality } = scene.stats();
+  if (document.hidden || !DEBUG) return; const { frameMs, quality } = scene.stats();
   const jank = playing ? Math.min(1, Math.max(0, (frameMs - 18) / 40)) : 0, late = playing ? Math.min(1, Math.max(0, (30 - stress.headMs) / 50)) : 0;   // < 30 ms of headroom starts to count, < −20 ms = notes in the past
   const lvl = (stress.level = stress.level * 0.6 + Math.max(jank, late) * 0.4); if (!playing && lvl < 0.005 && $('stress').style.width === '0%') return;
   const col = lvl > 0.7 ? 'var(--bad)' : lvl > 0.4 ? '#fde047' : 'var(--signal-cyan)', word = lvl > 0.7 ? 'overload' : lvl > 0.4 ? 'busy' : quality < 1 ? 'shedding visuals' : 'calm';
@@ -1079,7 +1084,12 @@ function readout() {
     ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}% prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
     `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
     `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
-  $('nerd-stats').textContent = lines.join('\n'); announceChanges();
+  $('nerd-stats').textContent = lines.join('\n'); renderLegend(); announceChanges();
+}
+// C5: the lane names live in a fixed legend (colour dot, voice, length × speed), not on the rings
+function renderLegend() {
+  const ul = $('legend'); if (!ul.children.length) LANE_HEX.forEach((hex) => { const li = document.createElement('li'); li.style.setProperty('--lane', hex); ul.appendChild(li); });
+  m.lanes.forEach((l, i) => { const li = ul.children[i], t = `${voiceLabel(l)} ${l.length} ×${RATIO_LABEL[l.ratioIndex]}${l.muted ? ' · muted' : ''}`; if (li.textContent !== t) li.textContent = t; li.classList.toggle('sel', i === m.selected); li.classList.toggle('muted', !!l.muted); });
 }
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
 // you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
@@ -1103,19 +1113,33 @@ function announceChanges() {
 // covers them (wide windows only: narrower ones stack everything under a square canvas, see styles.css) ----
 const STAGE_GAP = 16;
 function layoutHud() {
-  const top = Math.round($('topbar').getBoundingClientRect().bottom + 10), hl = $('hud-left');
+  const top = Math.round($('topbar').getBoundingClientRect().bottom + 10), hl = $('hud-left'), lg = $('legend');
   document.documentElement.style.setProperty('--hud-top', `${top}px`);
-  if (innerWidth <= 1100) { hl.style.top = hl.style.bottom = ''; scene.setStage(null); poke(); return; }
+  if (innerWidth <= 1100 || focusMode) { hl.style.top = hl.style.bottom = lg.style.left = lg.style.top = lg.style.width = ''; scene.setStage(null); poke(); return; }
   const keysOpen = $('keys-pop').open, stress = $('hud-bl').querySelector('.stress-meter');
   // while the Move-controls popup is open it floats over the column; size the column against the closed panel
   const blTop = keysOpen ? innerHeight - 18 - (stress?.offsetHeight || 0) - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
   hl.style.top = `${top}px`; hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
   const x0 = Math.max(hl.getBoundingClientRect().right, $('hud-bl').getBoundingClientRect().right) + STAGE_GAP, x1 = document.querySelector('.hud').getBoundingClientRect().left - STAGE_GAP;
-  scene.setStage({ x: x0, y: top, w: Math.max(120, x1 - x0), h: Math.max(120, innerHeight - STAGE_GAP - top) }); poke();
+  // the legend heads the stage; the rings get what is left under it
+  lg.style.left = `${x0}px`; lg.style.top = `${top}px`; lg.style.width = `${Math.max(120, x1 - x0)}px`; const y = top + lg.offsetHeight + 8;
+  scene.setStage({ x: x0, y, w: Math.max(120, x1 - x0), h: Math.max(120, innerHeight - STAGE_GAP - y) }); poke();
 }
 for (const id of ['topbar', 'hud-bl']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
 $('keys-pop').addEventListener('toggle', layoutHud);
-addEventListener('keydown', (e) => { if (e.key === 'Escape') $('keys-pop').open = false; });
+addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !document.querySelector('dialog[open]')) setFocusMode(false); });
+// ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
+let focusMode = false;
+function setFocusMode(on) {
+  focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
+  if (on && document.activeElement instanceof HTMLElement && document.activeElement.closest('header, .hud, #hud-left, #hud-bl')) document.activeElement.blur();   // focus must not stay in a hidden panel
+  if (!on && lastInput === 'key') $('btn-focus').focus({ preventScroll: true });
+  layoutHud(); poke();
+}
+$('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () => setFocusMode(false);
+// ---- C3 help: the keys and the mouse tricks, in one overlay (button "?" or the ? key) ----
+function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
+$('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene };
+window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();

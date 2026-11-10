@@ -60,8 +60,10 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
         },
         async click(x, y) { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); },
         async tap(x, y) { await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); },
-        // Enter needs its text ('\r'): without it Chrome sends a raw key down and a focused button is never pressed
-        async key(key, code = key === ' ' ? 'Space' : key) { const text = key === 'Enter' ? '\r' : key.length === 1 ? key : undefined; for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key, code, text: type === 'keyDown' ? text : undefined }); },
+        // Enter needs its text ('\r'): without it Chrome sends a raw key down and a focused button is never pressed.
+        // Escape needs its native key code (27): without it page scripts see it, but Chrome's own default (a modal
+        // <dialog> closing) never runs
+        async key(key, code = key === ' ' ? 'Space' : key) { const text = key === 'Enter' ? '\r' : key.length === 1 ? key : undefined, vk = key === 'Escape' ? { windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 } : {}; for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key, code, ...vk, text: type === 'keyDown' ? text : undefined }); },
         async shot(file) { const { result } = await send('Page.captureScreenshot', { format: 'png' }); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, Buffer.from(result.data, 'base64')); return file; },
         captureDownloads() { return page.eval(`(() => { window.__dl = []; HTMLAnchorElement.prototype.click = function () { window.__dl.push({ name: this.download, href: this.href }); }; })()`); },
         async downloads() {
