@@ -17,6 +17,13 @@ export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5] };
 /** Lane push / pull: the whole lane early (−) or late (+), in ms. */
 export const OFFSET_MS = 30;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+/** A loaded step lock with every known value back in its range (a share link is text anyone can edit; live play looks
+ *  only one step ahead, so a nudge must stay within half a step). A nudge of 0 is no lock. */
+const lockFrom = (lk) => {
+  if (!lk) return null; const o = { ...lk };
+  for (const k of LOCK_KEYS) if (o[k] != null) { const [lo, hi] = LOCK_RANGE[k] || [0, 1]; o[k] = clamp(+o[k] || 0, lo, hi); }
+  if (o.nudge === 0) delete o.nudge; return Object.keys(o).length ? o : null;
+};
 /**
  * Swing templates: how far each step of a repeating group is delayed, as a multiple of the lane's swing amount (in
  * steps). Counted on the absolute step, like the classic swing. 'mpc' (null) is the classic rule in Lane.swungAt:
@@ -89,19 +96,26 @@ export class Lane {
   setRatio(i) { this.ratioIndex = Math.max(0, Math.min(RATIOS.length - 1, Math.round(i))); return this.ratioIndex; }
   setEuclid(k) { this.euclidK = Math.max(0, Math.min(this.length, Math.round(k))); const e = euclid(this.euclidK, this.length); for (let i = 0; i < MAX_STEPS; i++) this.hits[i] = i < this.length ? e[i] : false; return this.euclidK; }
   toggle(i) { if (i >= this.length) return false; this.hits[i] = !this.hits[i]; return this.hits[i]; }
-  toggleAccent(i) { if (i >= this.length) return false; this.accents[i] = !this.accents[i]; return this.accents[i]; }
+  /** The accent flag alone (Shift+tap). Turning it on lifts a ghost to an accent: the soft vel lock goes, or the accent
+   *  would play under a normal hit. */
+  toggleAccent(i) { if (i >= this.length) return false; this.accents[i] = !this.accents[i]; if (this.accents[i]) this.dropGhost(i); return this.accents[i]; }
   /** Tier of stored step i: 'off', 'ghost' (a vel lock under the ghost/normal midpoint), 'normal' or 'accent'. */
   tierAt(i) { if (!this.hits[i]) return 'off'; if (this.accents[i]) return 'accent'; const v = this.locks[i]?.vel; return v != null && tierOfVel(v) === 'ghost' ? 'ghost' : 'normal'; }
-  /** Put stored step i on a tier: ghost = vel lock 0.35, normal = no vel lock, accent = the flag (no vel lock). */
+  /** A soft vel lock is the ghost tier itself: leaving the tier takes it away (a loud hand-set one stays). */
+  dropGhost(i) { const v = this.locks[i]?.vel; if (v != null && tierOfVel(v) === 'ghost') this.unlock(i, 'vel'); }
+  /** Put stored step i on a tier: ghost = vel lock 0.35, normal = no soft vel lock, accent = the flag, off = empty. Any
+   *  tier but ghost drops the ghost's lock; a loud hand-set vel lock stays (an accent adds on top, as it always did). */
   setTier(i, tier) {
-    if (i < 0 || i >= MAX_STEPS) return 'off'; if (tier === 'off') { this.hits[i] = false; this.accents[i] = false; return 'off'; }
-    this.hits[i] = true; this.accents[i] = tier === 'accent'; if (tier === 'ghost') this.setLock(i, 'vel', GHOST_VEL); else this.unlock(i, 'vel'); return tier;
+    if (i < 0 || i >= MAX_STEPS) return 'off'; if (tier !== 'ghost') this.dropGhost(i);
+    if (tier === 'off') { this.hits[i] = false; this.accents[i] = false; return 'off'; }
+    this.hits[i] = true; this.accents[i] = tier === 'accent'; if (tier === 'ghost') this.setLock(i, 'vel', GHOST_VEL); return tier;
   }
-  /** One tap, no modifier: off → on → accent → ghost → off (a stale accent or vel lock on an empty step is dropped
-   *  when it turns on: the first tap is always a plain hit). */
+  /** One tap, no modifier: off → on → accent → ghost → off. The first tap is always a plain hit (a stale accent or vel
+   *  lock on an empty step goes); a full cycle leaves the step as it found it, other locks included. */
   cycleStep(i) {
     if (i >= this.length) return 'off';
-    const next = { off: 'normal', normal: 'accent', accent: 'ghost', ghost: 'off' }[this.tierAt(i)], t = this.setTier(i, next);
+    const from = this.tierAt(i); if (from === 'off') { this.accents[i] = false; this.unlock(i, 'vel'); }
+    const t = this.setTier(i, { off: 'normal', normal: 'accent', accent: 'ghost', ghost: 'off' }[from]);
     return t === 'normal' ? 'on' : t;
   }
   clear() { this.hits.fill(false); this.accents.fill(false); this.locks.fill(null); this.trigs.fill(null); this.euclidK = 0; }
@@ -113,7 +127,11 @@ export class Lane {
   }
   trigAt(i) { return this.trigs[this.stepIndex(i)]; }
   /** Lock a parameter on one stored step (use stepIndex() for a visible position). */
-  setLock(i, k, v) { if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(v, lo, hi); (this.locks[i] ||= {})[k] = x; return x; }
+  setLock(i, k, v) {
+    if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(+v || 0, lo, hi);
+    if (k === 'nudge' && !x) { this.unlock(i, k); return 0; }   // back on the grid is no lock at all
+    (this.locks[i] ||= {})[k] = x; return x;
+  }
   setOffset(ms) { this.offsetMs = clamp(Math.round(+ms || 0), -OFFSET_MS, OFFSET_MS); return this.offsetMs; }
   setSwingTpl(key) { if (SWING_TEMPLATES[key]) this.swingTpl = key; return this.swingTpl; }
   clearLocks(i) { this.locks[i] = null; }
@@ -124,10 +142,12 @@ export class Lane {
    * so a soft overdub plays soft. vel null = no velocity (a computer key): normal. tune = the pitch pads' lock.
    */
   recordHit(i, { accent = false, vel = null, tune = null } = {}) {
-    this.setTier(i, accent ? 'accent' : vel != null ? tierOfVel(vel) : 'normal');
+    this.unlock(i, 'vel'); this.setTier(i, accent ? 'accent' : vel != null ? tierOfVel(vel) : 'normal');   // the hit you play sets the velocity
     if (tune != null) this.setLock(i, 'tune', tune);
   }
   lockAt(i) { return this.locks[this.stepIndex(i)]; }
+  /** The locks to show as "locked" at visible position i: a lone ghost vel lock is the tier, shown as a ghost instead. */
+  shownLock(i) { const lk = this.lockAt(i); return lk && !(lk.vel === GHOST_VEL && Object.keys(lk).length === 1) ? lk : null; }
   /** Master-clock ticks per step: ×1 = 24 (a beat), ×4 = 6, ⅔ = 36. */
   stepTicks() { return Math.round(PPQ / this.ratio); }
   /** Steps from one step on a beat to the next: 1 (every step is on a beat), 2, 4, or 3 at ×3, ×3/2 and ×¾. */
@@ -158,6 +178,8 @@ export class Lane {
     // step every other loop, which would swing the downbeat
     return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
+  /** at() without moving the playhead (pos): live play looks ahead with it. */
+  peek(tick, rng, ctx) { const pos = this.pos, ev = this.at(tick, rng, ctx); this.pos = pos; return ev; }
   /**
    * Live record: the step a hit at fractional master tick `tickF` belongs to, by where the steps are heard (a swung
    * step sounds late, so a hit played with it is filed under it). 'nearest' takes the closest (on a tie the coming
@@ -191,7 +213,7 @@ export class Lane {
   }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {

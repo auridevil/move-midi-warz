@@ -281,3 +281,22 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   `(pointer: coarse)` too.
 - **Split the layout + focus-mode block out of `app.js`** (ORBIT2-04, architect): `app.js` grew by about 60 lines this
   phase (1107 → 1169); `layoutHud()`, the Escape handler and `setFocusMode()` are the natural next module.
+- **Swing templates and the beat** (ORBIT2-05, verifier, architect, sound): templates count on the absolute step, so
+  on ×3 / ×3/2 lanes triplet, amapiano and aksak move beat downbeats (MPC keeps its beat rule), 3-3-2 delays beat 2 of
+  a 16-step ×4 lane, and aksak's period 7 stretches the cycle. Decide per template whether it restarts on the beat or
+  the bar (phase 06 owns meters), or label the ones meant for ×4 lanes.
+- **Ghost hats are only a little darker** (ORBIT2-05, sound): a hat's whole band sits above the lane low-pass (4.3 kHz
+  at tone 0.75), so closing it is a level drop, not a tone change; round 1 cut hats / cymbals / tambourine to a
+  fraction of an octave (−3 dB at the ghost tier instead of −16). A real tilt (a high shelf per lane, or the metal
+  voices' own resonance) would darken them without the loss. dsp hats darken less than synth ones.
+- **Gentler amounts for tonal voices** (ORBIT2-05, sound): 15 voices still use the 2-octave default (tabla, cowbell,
+  marimba, bell, kalimba…); at the ghost tier they land between −3.8 dB (synth brush) and +0.3 dB of the plain velocity
+  drop, but the tonal ones may want less darkening.
+- **Templates at swing 0 %** (ORBIT2-05, dex): a template shapes the swing amount, so picking amapiano or 3-3-2 at 0 %
+  sounds straight (the tooltip now says so). Picking a template could offer a starting amount.
+- **Live record ignores nudge and push** (ORBIT2-05, dex): `quantize` places a hit by swing only; over a step nudged
+  far or a lane pushed 30 ms, a hit near the midpoint can land on the neighbour.
+- **Two velocity levels when recording** (ORBIT2-05, tomi; by G4's design): pad velocity snaps to ghost or normal
+  (accent above the knob). A "keep velocity" record option would keep a played dynamic curve.
+- **Velocity humanize on accents only goes down** (ORBIT2-05, architect, sound): an accent is at 1, so its wobble is
+  clamped (mean ~0.95 at 100 %); ghosts and normal hits stay centred.

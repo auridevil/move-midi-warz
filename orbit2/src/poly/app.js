@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { hitVel, expandHits, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, liveTick, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, wholeBarCycle, trimChunks, withAcid } from './jam.js';
@@ -173,7 +173,7 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:step' already played live
-const early = [];   // per lane: the next step, decided a step ahead because part of it sounds before its tick
+const early = [];   // per lane: a step decided ahead of its tick because part of it sounds before it (liveTick)
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
@@ -190,20 +190,14 @@ function onTick(time) {
   if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
   if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS, true);
   const now = T.getContext().rawContext.currentTime;
-  const dk = dice.locked ? dice : null, play = (li, lane, h, when) => { const ht = Math.max(now, when); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
-  m.tick(t, Math.random, { fill, dice: dk }).forEach((ev, li) => {
-    if (!ev) return; const lane = m.lanes[li], pre = early[li]; early[li] = null;
-    // decided a step ago (it had an early part): the same roll plays on, so a ratchet or an accent isn't re-rolled
-    let hs; if (pre?.step === ev.step) { Object.assign(ev, pre.ev); hs = pre.hits.filter(h => h.dt >= 0); } else hs = expandHits(ev, lane, li, { humanize: m.humanize, dice: dk, tickSec: tickSec() });
-    if (skip.delete(`${li}:${ev.step}`)) { ev.hit = false; hs = []; }   // played live a moment ago: don't double it
-    for (const h of hs) play(li, lane, h, time + h.dt);   // swing, nudge, push/pull, ±humanize, ratchets
-    // G1/G2: the next step may sound before its own tick (nudged or pushed early): decide it now, play its early part
-    const st = lane.stepTicks(), nxt = (ev.index + 1) % lane.length;
-    if (lane.offsetMs < 0 || lane.lockAt(nxt)?.nudge < 0) {   // humanize (±15 ms) fits in the scheduler's lookahead
-      const pos = lane.pos, solo = m.lanes.some(l => l.solo), pev = lane.at(t + st, Math.random, { fill, dice: dk, li, silenced: solo && !lane.solo }); lane.pos = pos;
-      const ph = expandHits(pev, lane, li, { humanize: m.humanize, dice: dk, tickSec: tickSec() }); early[li] = { step: pev.step, ev: { hit: pev.hit, accent: pev.accent }, hits: ph };
-      for (const h of ph) if (h.dt < 0) play(li, lane, h, time + st * tickSec() + h.dt);
-    }
+  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
+  // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
+  // earlier tick (liveTick, export.js)
+  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec() }).forEach(({ ev, hits, early: soon }, li) => {
+    const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
+    if (!ev) return;
+    if (skip.delete(`${li}:${ev.step}`)) { ev.hit = false; hits = []; }   // played live a moment ago: don't double it
+    for (const h of hits) play(li, lane, h);
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
 }
@@ -238,10 +232,10 @@ const INFO = {
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
-  swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. At ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
-  'swing template': 'Which steps the swing moves, and how far. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
+  swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. With the MPC template, at ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
+  'swing template': 'Which steps the swing moves, and how far: it shapes the swing amount, so at 0% swing every template plays straight. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
   offset: 'Push / pull: the whole lane early (−) or late (+) by up to 30 ms. A hat a few ms late lays back; a snare early drives.',
-  velHuman: 'Random velocity on every hit of this lane, up and down around its tier (up to ±20% at 100%). With locked dice it repeats.',
+  velHuman: 'Random velocity on every hit of this lane, up and down around its tier (at 100% up to ±20% of the hit\'s own velocity, so a ghost wobbles as much as an accent). With locked dice it repeats.',
   prob: 'Chance that a programmed hit actually plays. 100% = always; 60% = the pattern breathes differently every loop.',
   tune: 'Pitch of the voice, about ±1 octave (less for some voices).',
   decay: 'Length of the sound, from a tick (40 ms) to a long tail (1.2 s). Kits scale it per voice.',
@@ -358,7 +352,7 @@ function renderSteps() {
   const lane = m.lane; playheadAt = -1;
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   stepBtns.forEach((b, i) => {
-    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.lockAt(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost';
+    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost';
     b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
@@ -765,7 +759,7 @@ function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const bars = chain ? bank.chainBars * bank.chain.length : ticks / BAR_TICKS;
   const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars });
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value });   // early notes wrap like the loop WAV
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
@@ -780,7 +774,7 @@ async function loadShared({ first = false } = {}) {
 }
 function buildExportUI() {
   ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'whole bars that hold whole polyrhythm cycles (max 64 bars)']], value: 4 }));
-  ui.expLoop = mount('exp-loop', toggleChip({ label: 'render as loop', on: true, title: 'on: the ring-out wraps onto the start, so the file is exactly N bars and loops seamlessly (Session clips). off: one-shot that starts on the downbeat and keeps its ring-out, rounded up to whole bars (place it once in a song).' }));
+  ui.expLoop = mount('exp-loop', toggleChip({ label: 'render as loop', on: true, title: 'on: the ring-out wraps onto the start, so the file is exactly N bars and loops seamlessly (Session clips). off: one-shot that starts on the downbeat and keeps its ring-out, rounded up to whole bars (place it once in a song). MIDI follows it: a note nudged or pushed before the downbeat wraps to the end (on) or starts on the downbeat (off).' }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   $('exp-roll').onclick = () => { expRoll = newRoll(); $('exp-status').textContent = dice.locked ? `dice are locked: exports use dice ${dice.seed} (re-roll in the dice drawer)` : `roll ${expRoll}: the next WAV, stems and MIDI share these hits`; };
@@ -956,7 +950,7 @@ function paintLeds() {
   const lane = m.lane;
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
-  } else for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.lockAt(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]);
+  } else for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]);
   for (let t = 1; t <= 4; t++) { const li = 4 - t; move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);

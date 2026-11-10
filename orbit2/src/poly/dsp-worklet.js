@@ -11,8 +11,10 @@
 //   noise: pink (0..1 mix) · bp/bq (band-pass) · lp/hp · crush (bits, 0 = off) · bursts/bsp/bsd/bgain (claps)
 //          lfo/lfod (low-pass wobble, Hz and octaves)
 //   metal: six square waves at the 808 hat ratios × f · hp/bp/bq · noise (mix of white noise)
-//   any:   dark (octaves, G5 velocity): a soft hit closes the low-pass (one is added when the layer has none) and
-//          lowers a band-pass by half as much
+//   any:   dark (octaves, G5 velocity): a soft hit closes the low-pass (one is added when the layer has none); a
+//          band-pass layer keeps its band (lowering it onto a tonal layer's fundamental made soft hits louder) and
+//          gets a gentle one-pole low-pass instead, from an octave above its centre down by dark octaves, which can
+//          only take energy away
 // Each slot keeps its own state; render() adds into the output. No objects are created after init().
 const RATIOS = [1, 1.4827, 1.8003, 2.5461, 2.6303, 3.8967];   // 205.3 · 304.4 · 369.6 · 522.7 · 540 · 800 Hz
 const TAU = Math.PI * 2;
@@ -35,6 +37,7 @@ function makeSlot() {
     lp: 0, hp: 0, bp: 0, q: 0.7, bq: 1,
     aG: 0, aK: 1, aA1: 0, aA2: 0, aA3: 0, aS1: 0, aS2: 0, aMode: 0,   // mode 0 off 1 lp 2 bp
     bG: 0, bK: 1, bA1: 0, bA2: 0, bA3: 0, bS1: 0, bS2: 0, bOn: false,
+    dkA: 0, dkZ: 0,   // G5: a one-pole low-pass after a band-pass, for soft hits (0 = off)
     sr: 44100,
   };
 }
@@ -60,7 +63,9 @@ function trigger(s, L, sr, start, born) {
   s.p0 = 0; s.p1 = 0.17; s.p2 = 0.41; s.p3 = 0.63; s.p4 = 0.79; s.p5 = 0.93;
   // filters
   s.lp = L.lp ?? 0; s.hp = L.hp ?? 0; s.bp = L.bp ?? 0;
-  const dk = L.dark ?? 0; if (dk > 0) { s.lp = (s.lp || 16000) * Math.pow(2, -dk); if (s.bp) s.bp *= Math.pow(2, -dk / 2); } s.q = L.q ?? 0.7; s.bq = L.bq ?? 1; s.aS1 = s.aS2 = s.bS1 = s.bS2 = 0;
+  const dk = L.dark ?? 0; s.dkA = 0; s.dkZ = 0;
+  if (dk > 0) { if (s.bp) s.dkA = 1 - Math.exp(-TAU * Math.min(s.bp * Math.pow(2, 1 - dk), sr * 0.45) / sr); else s.lp = (s.lp || 16000) * Math.pow(2, -dk); }
+  s.q = L.q ?? 0.7; s.bq = L.bq ?? 1; s.aS1 = s.aS2 = s.bS1 = s.bS2 = 0;
   s.lpBase = s.lp; s.aMode = s.bp ? 2 : s.lp ? 1 : 0; if (s.aMode) svfA(s, s.bp || s.lp, s.bp ? s.bq : s.q);
   s.bOn = s.hp > 0; if (s.bOn) svfB(s, s.hp, 0.7);
 }
@@ -96,7 +101,7 @@ function render(s, out, from, to) {
         if (s.nmix) x = x * (1 - s.nmix) + w * s.nmix;
       }
     }
-    if (s.aMode) x = runA(s, x); if (s.bOn) x = runB(s, x);
+    if (s.aMode) x = runA(s, x); if (s.bOn) x = runB(s, x); if (s.dkA) x = s.dkZ += s.dkA * (x - s.dkZ);
     out[i] += x * env * s.gain; t++;
   }
   s.t = t; s.env = env;

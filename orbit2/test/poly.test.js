@@ -309,7 +309,9 @@ test('B5 one roll, one hit list: WAV hits and MIDI notes of the same take are id
   assert.deepEqual(again, wav, 'the same roll gives the same hits'); assert.ok(wav.length > 20 && wav.length < 96, `probability thinned the pattern (${wav.length})`);
   const lanes = [36, 38, 42, 39].map(note => ({ note, ch: 10 })), mid = readMidi(hitsToMidi(midiHits, { tempo: 120, lanes, names: ['a', 'b', 'c', 'd'], bars: 4 }));
   const notes = mid.tracks.flatMap(t => t.notes); assert.equal(notes.length, wav.length, 'same count');
-  const ons = notes.map(n => n.on).sort((a, b) => a - b), want = wav.map(h => Math.round(Math.max(0, h.time) / (60 / 120 / 4) * 24)).sort((a, b) => a - b);
+  // a hit humanized before the downbeat wraps to the clip's end, as in the loop WAV (ORBIT2-05)
+  const tickOf = (sec) => { const s = ((sec / (60 / 120 / 4)) % 64 + 64) % 64, t = Math.round(s * 24); return t >= 64 * 24 ? 0 : t; };
+  const ons = notes.map(n => n.on).sort((a, b) => a - b), want = wav.map(h => tickOf(h.time)).sort((a, b) => a - b);
   assert.deepEqual(ons, want, 'same times (MIDI ticks)');
   assert.notDeepEqual(take(7), wav, 'another roll is another take');
   const free = [0, 1].map(() => collectHits(m, { from: 0, to: 96 * 4, tempo: 120 })); assert.notDeepEqual(free[0], free[1], 'without a roll every render differs (the old bug)');
@@ -643,14 +645,17 @@ test('G4 velocity tiers: ghost / normal / accent from taps, from a vel lock and 
   l.recordHit(2, { accent: true }); assert.equal(l.tierAt(2), 'accent');
   l.setLock(3, 'vel', 0.5); l.hits[3] = true; assert.equal(l.tierAt(3), 'ghost', 'an old soft vel lock reads as a ghost');
 });
-test('G3 velocity humanize: per lane, symmetric around the tier, seeded by locked dice, saved', async () => {
+test('G3 velocity humanize: per lane, symmetric around the tier (±20 % of the velocity), seeded by locked dice, saved', async () => {
   const { collectHits } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const h = m.lanes[2]; h.setRatio(9); h.setLength(16); h.setEuclid(16);
   const plain = collectHits(m, { from: 0, to: 96 * 8, tempo: 120 }); assert.ok(plain.every(x => x.vel === 0.7), 'off: every hit at its tier');
   h.velHuman = 1; const d = Dice.take(7), a = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d }), b = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d });
   assert.deepEqual(a.map(x => x.vel), b.map(x => x.vel), 'locked dice: the same velocities'); assert.deepEqual(a.map(x => x.time), plain.map(x => x.time), 'velocity humanize leaves timing alone');
   const vs = a.map(x => x.vel), mean = vs.reduce((s, v) => s + v, 0) / vs.length;
-  assert.ok(vs.every(v => v >= 0.5 - 1e-9 && v <= 0.9 + 1e-9), '±0.2 at 100 %'); assert.ok(Math.abs(mean - 0.7) < 0.03, `symmetric (mean ${mean.toFixed(3)})`); assert.ok(new Set(vs).size > 20);
+  assert.ok(vs.every(v => v >= 0.56 - 1e-9 && v <= 0.84 + 1e-9), '±20 % of 0.7 at 100 %'); assert.ok(Math.abs(mean - 0.7) < 0.03, `symmetric (mean ${mean.toFixed(3)})`); assert.ok(new Set(vs).size > 20);
+  // a ghost wobbles by the same ratio (dB), not by a fixed amount that would spread it over 11 dB
+  for (let i = 0; i < 16; i++) h.setTier(i, 'ghost'); const gv = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d }).map(x => x.vel);
+  assert.ok(gv.every(v => v >= 0.28 - 1e-9 && v <= 0.42 + 1e-9), `ghosts ${Math.min(...gv).toFixed(3)}–${Math.max(...gv).toFixed(3)}`); for (let i = 0; i < 16; i++) h.setTier(i, 'normal');
   assert.equal(Machine.from(JSON.parse(JSON.stringify(m))).lanes[2].velHuman, 1); assert.equal(Machine.from({ lanes: [{ name: 'kick' }] }).lanes[0].velHuman, 0);
   h.prob = 1; const mm = new Machine(); mm.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); }); mm.lanes[0].setEuclid(4); mm.lanes[0].velHuman = 0.5; assert.equal(mm.cycleSteps({ repeat: 3 }), 12, 'velocity rolls count for the dice repeat');
 });
@@ -665,9 +670,86 @@ test('G5 velocity shapes timbre per voice: soft = darker, softer snap, a little 
   assert.ok(velShape({ ...p, vel: 0.1 }, 'hat').dark > velShape({ ...p, vel: 0.5 }, 'hat').dark, 'monotonic');
   for (const k of Object.keys(VEL_TIMBRE)) assert.ok(k === 'sample' || VOICE_KEYS.includes(k), `${k} is a voice`);
 });
-test('G5 dsp engine: a dark layer renders duller (less high-frequency energy), same level class', async () => {
-  const { makeEngine } = await import('../src/poly/dsp-core.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js');
+test('G5 dsp engine: a dark layer renders duller and never louder; a band-pass layer keeps its band (the rim, round 1)', async () => {
+  const { makeEngine, makeSlot, trigger } = await import('../src/poly/dsp-core.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js');
   const sr = 44100, p = { vel: 0.35, tune: 0, dec: 0.3, decayRaw: 0.5, snap: 0.5, color: 0.5 };
-  const hf = (dark) => { const e = makeEngine(sr); e.hit(DSP_VOICES.hat(p).map(L => ({ ...L, dark })), 0); const o = new Float32Array(sr / 4); for (let i = 0; i < o.length; i += 128) e.render(o, i, Math.min(o.length, i + 128)); let d = 0, a = 0; for (let i = 1; i < o.length; i++) { d += (o[i] - o[i - 1]) ** 2; a += o[i] ** 2; } return { ratio: d / a, a }; };
-  const open = hf(0), dull = hf(1.5); assert.ok(dull.ratio < open.ratio * 0.8, `brightness ${dull.ratio.toFixed(3)} vs ${open.ratio.toFixed(3)}`); assert.ok(dull.a > 0, 'still sounds');
+  const hf = (voice, dark) => { const e = makeEngine(sr); e.hit(DSP_VOICES[voice](p).map(L => ({ ...L, dark })), 0); const o = new Float32Array(sr / 4); for (let i = 0; i < o.length; i += 128) e.render(o, i, Math.min(o.length, i + 128)); let d = 0, a = 0; for (let i = 1; i < o.length; i++) { d += (o[i] - o[i - 1]) ** 2; a += o[i] ** 2; } return { ratio: d / a, a }; };
+  // lowering the rim's band-pass onto its 880 Hz square made a soft rim 3.5 dB louder than the plain velocity drop
+  for (const v of ['hat', 'ophat', 'rim', 'clap', 'cowbell', 'snare', 'tom']) {
+    const open = hf(v, 0), dull = hf(v, 1);
+    assert.ok(dull.ratio < open.ratio * 0.97, `${v}: brightness ${dull.ratio.toFixed(3)} vs ${open.ratio.toFixed(3)}`);
+    assert.ok(dull.a <= open.a * 1.0001 && dull.a > 0, `${v}: ${(10 * Math.log10(dull.a / open.a)).toFixed(2)} dB, never louder, still sounds`);
+  }
+  const s = makeSlot(); trigger(s, { kind: 1, bp: 1800, bq: 2, dark: 1 }, sr, 0, 0); assert.equal(s.bp, 1800, 'the band stays'); assert.ok(s.dkA > 0 && s.dkA < 1);
+  trigger(s, { kind: 1, bp: 1800, bq: 2 }, sr, 0, 0); assert.equal(s.dkA, 0, 'a normal hit: no extra filter');
+});
+
+// ---- ORBIT2-05 review round 1 ----
+test('ORBIT2-05 r1: the MIDI export wraps a hit nudged or pushed out of the clip like the loop WAV; one-shot clamps', async () => {
+  const { collectHits, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
+  const lanes = [36, 38, 42, 39].map(note => ({ note, ch: 10 })), notes = (hits, o = {}) => readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: [], bars: 4, ...o })).tracks.flatMap(t => t.notes);
+  // ×1 lane, 4 bars at 120 bpm = 1536 ticks (96 a beat): every step 1 nudged −½ step = 48 ticks early; the first wraps to 1488
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setEuclid(4); k.setLock(0, 'nudge', -0.5);
+  const hits = collectHits(m, { from: 0, to: 4 * 96, tempo: 120 }); assert.equal(hits[0].time, -0.25);
+  const ons = notes(hits).map(n => n.on).sort((a, b) => a - b);
+  assert.deepEqual(ons, [96, 192, 288, 336, 480, 576, 672, 720, 864, 960, 1056, 1104, 1248, 1344, 1440, 1488]);
+  assert.deepEqual(notes(hits, { loop: false }).map(n => n.on).sort((a, b) => a - b)[0], 0, 'one-shot: onto the downbeat, as the one-shot WAV');
+  // past the end wraps to the start; no note rings past the clip, so a DAW keeps it 4 bars
+  const edge = notes([{ li: 1, time: 8.01, vel: 0.7 }, { li: 1, time: 7.99, vel: 0.7 }, { li: 1, time: -0.02, vel: 0.7 }, { li: 1, time: 7.9999, vel: 0.7 }]);
+  assert.deepEqual(edge.map(n => n.on).sort((a, b) => a - b), [0, 2, 1532, 1534], 'a hit rounding onto the end lands on the downbeat');
+  assert.ok(edge.every(n => n.off <= 1536 && n.off > n.on), JSON.stringify(edge.map(n => [n.on, n.off])));
+});
+test('ORBIT2-05 r1: live play = the render; an early step is decided at the last tick; a slot swap decides afresh; a mute drops the rest', async () => {
+  const { collectHits, liveTick, earlyStep } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
+  const tickSec = 60 / 120 / 24, dice = Dice.take(99), r9 = (x) => Math.round(x * 1e9) / 1e9;
+  const live = (m, to, { ahead = [], before } = {}) => {
+    const out = []; let firstEarly = Infinity;
+    for (let t = 0; t < to; t++) { before?.(t); liveTick(m, t, ahead, { dice, tickSec }).forEach((r, li) => { if (r.early.length) firstEarly = Math.min(firstEarly, ...r.early.map(h => h.dt)); for (const h of [...r.early, ...r.hits]) out.push({ li, time: r9(t * tickSec + h.dt), vel: h.vel }); }); }
+    return { hits: out.sort((a, b) => a.time - b.time || a.li - b.li), firstEarly };
+  };
+  const same = (hs, upTo) => hs.filter(h => h.time < upTo).map(h => ({ li: h.li, time: r9(h.time), vel: h.vel })).sort((a, b) => a.time - b.time || a.li - b.li);
+  // a busy machine: pushes both ways, nudges both ways, a template, a ratchet split by its nudge, humanize, probability, vel humanize
+  const m = new Machine(); m.humanize = 0.5; m.lanes.forEach((l, i) => { l.clear(); l.setRatio(5 + (i % 2) * 2); l.setLength(8); l.setEuclid(5); l.prob = 0.8; });
+  m.lanes[0].setOffset(-20); m.lanes[1].setOffset(25); m.lanes[1].setLock(2, 'nudge', -0.5); m.lanes[2].setLock(1, 'nudge', 0.4); m.lanes[2].setLock(3, 'nudge', -0.3);
+  m.lanes[3].setTrig(0, { ratchet: 4 }); m.lanes[3].setLock(0, 'nudge', -0.3); m.lanes[3].swing = 0.4; m.lanes[3].setSwingTpl('amapiano'); m.lanes[2].velHuman = 1;
+  const L = live(m, 96 * 8), want = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice }), upTo = (96 * 8 - 48) * tickSec;
+  assert.deepEqual(same(L.hits, upTo), same(want, upTo), 'live play holds exactly the hits of the render');
+  assert.ok(L.firstEarly >= -1e-9 && L.firstEarly < tickSec + 0.015 * m.humanize, `early parts go out at the last tick that can hold them (${L.firstEarly})`);
+  // when: −20 ms at 120 bpm (a tick is 20.8 ms) → one tick ahead; −½ step (0.25 s = 12 ticks) → at tick 12, not a step ahead
+  const p = new Lane('kick', { length: 4, ratioIndex: 5 }); p.setEuclid(4); p.setOffset(-20);
+  assert.deepEqual([22, 23].map(t => earlyStep(p, t, { tickSec })), [-1, 1]);
+  p.setOffset(0); p.setLock(1, 'nudge', -0.5); assert.deepEqual([10, 12, 23].map(t => earlyStep(p, t, { tickSec })), [-1, 1, 1]);
+  p.swing = 0.5; assert.equal(earlyStep(p, 23, { tickSec }), -1, 'MPC swing on step 2 cancels the −½ nudge'); p.swing = 0;
+  p.toggle(1); assert.equal(earlyStep(p, 23, { tickSec }), -1, 'an empty step: nothing to decide');
+  // the architect's repro: slot A (kick off, pushed −20 ms) → slot B (kick on every beat) on the bar line at tick 96
+  const A = new Machine(); A.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); }); A.lanes[2].setEuclid(4); A.lanes[0].setOffset(-20);
+  const B = Machine.from(A.toJSON()); B.lanes[0].setEuclid(4); const mm = Machine.from(A.toJSON());
+  const kicks = live(mm, 96 * 2, { before: (t) => { if (t === 96) mm.assign(B.toJSON()); } }).hits.filter(h => h.li === 0).map(h => h.time);
+  assert.deepEqual(kicks, [1.98, 2.48, 2.98, 3.48, 3.98], 'the new slot\'s downbeat kick plays (it was dropped)');
+  // a ratchet ×4 nudged −0.3: two repeats go out early; muted before its tick, the other two are dropped
+  const r = new Machine(); r.lanes.forEach(l => l.clear()); const R = r.lanes[1]; R.setRatio(5); R.setLength(4); R.toggle(0); R.setTrig(0, { ratchet: 4 }); R.setLock(0, 'nudge', -0.3);
+  const count = (mute) => live(r, 97, { before: (t) => { if (t === 90 && mute) R.muted = true; } }).hits.filter(h => h.li === 1 && h.time > 1).length;
+  assert.deepEqual([count(false), count(true)], [4, 2]);
+});
+test('ORBIT2-05 r1: tiers leave no trace; Shift lifts a ghost to a real accent; a loud hand-set vel lock survives; a ghost is not "locked"', async () => {
+  const { GHOST_VEL } = await import('../src/poly/lanes.js'); const { hitVel } = await import('../src/poly/export.js');
+  const l = new Lane('snare', { length: 4 });
+  [0, 1, 2, 3].forEach(() => l.cycleStep(1)); assert.equal(l.tierAt(1), 'off'); assert.equal(l.locks[1], null, 'ghost → off: a clean step');
+  l.toggle(1); assert.equal(l.tierAt(1), 'normal', 'a Move toggle or a euclid refill brings back a plain hit, not a ghost');
+  l.setTier(2, 'ghost'); assert.equal(l.toggleAccent(2), true); assert.equal(l.tierAt(2), 'accent'); assert.equal(hitVel(l.accents[2], l.locks[2]), 1, 'Shift on a ghost: a real accent (was 0.65)');
+  l.toggleAccent(2); assert.equal(l.tierAt(2), 'normal'); assert.equal(l.locks[2], null);
+  l.toggle(3); l.setLock(3, 'vel', 0.9); assert.equal(l.cycleStep(3), 'accent'); assert.equal(l.locks[3].vel, 0.9, 'normal → accent keeps a loud hand-set lock (as before the phase)');
+  assert.equal(l.cycleStep(3), 'ghost'); assert.equal(l.locks[3].vel, GHOST_VEL); assert.equal(l.cycleStep(3), 'off'); assert.equal(l.locks[3], null);
+  l.setLock(0, 'vel', 0.9); l.recordHit(0, { vel: 0.7 }); assert.equal(l.locks[0], null, 'a recorded hit sets the velocity outright');
+  l.setTier(1, 'ghost'); assert.equal(l.shownLock(1), null, 'a ghost shows as a ghost'); l.setLock(1, 'tune', 0.2); assert.ok(l.shownLock(1), 'plus a tune lock: locked');
+  assert.equal(l.setLock(2, 'nudge', 0.2), 0.2); assert.equal(l.setLock(2, 'nudge', 0), 0); assert.equal(l.locks[2], null, 'a nudge back on the grid is no lock');
+  // a share link is text: loaded locks go back into range (live play looks one step ahead, a nudge must stay within ½)
+  const back = Lane.from({ name: 'kick', length: 4, locks: [{ nudge: -2, vel: 3, tune: -9 }, { nudge: 0 }, { vel: 0.5 }] });
+  assert.deepEqual(back.locks.slice(0, 3), [{ nudge: -0.5, vel: 1, tune: -1 }, null, { vel: 0.5 }]);
+});
+test('ORBIT2-05 r1: G5 darker, not quieter: voices whose band sits above the lane filter move a fraction of an octave', async () => {
+  const { velShape } = await import('../src/poly/voices.js'); const { GHOST_VEL } = await import('../src/poly/lanes.js');
+  const p = { vel: GHOST_VEL, tune: 0, dec: 0.34, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  for (const k of ['hat', 'ophat', 'tamb', 'ride', 'crash', 'clave', 'sample']) assert.ok(velShape(p, k).dark <= 0.4, `${k}: ${velShape(p, k).dark} octaves at the ghost tier`);
+  for (const k of ['snare', 'rim', 'clap', 'tom']) assert.ok(velShape(p, k).dark >= 0.5, `${k} gets clearly darker`);
 });

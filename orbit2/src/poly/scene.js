@@ -201,7 +201,7 @@ export function createScene(cv, o) {
         if (tg && tg.ratchet > 1) for (let k = 1; k < tg.ratchet; k++) {   // repeats: small echoes trailing outward
           ctx.fillStyle = rgba(hex, 0.8 - k * 0.15); ctx.beginPath(); ctx.arc(x + ca * (size + 4 + k * 5), y + sa * (size + 4 + k * 5), 1.8, 0, TAU); ctx.fill();
         }
-        if (lane.lockAt(i)) {   // step locks: a small cyan moon circling the planet
+        if (lane.shownLock ? lane.shownLock(i) : lane.lockAt(i)) {   // step locks: a small cyan moon circling the planet (a ghost is its tier, not a lock)
           const q = now * 0.003 + i, mx = x + Math.cos(q) * (size + 3), my = y + Math.sin(q) * (size + 3);
           ctx.drawImage(sprite('#67e8f9'), mx - 6, my - 6, 12, 12);
         }
