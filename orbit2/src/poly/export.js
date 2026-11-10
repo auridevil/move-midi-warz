@@ -8,13 +8,14 @@ import { writeMidi } from '../punch/smf.js';
 export const hitVel = (accent, lock) => lock?.vel != null ? Math.min(1, lock.vel + (accent ? 0.3 : 0)) : accent ? 1 : 0.7;
 
 /**
- * The hits one lane event produces, as offsets in seconds from the tick's time. Humanize is symmetric (early and
- * late, up to ±15 ms at 100%): callers schedule ahead, so an early hit is still in the future.
+ * The hits one lane event produces, as offsets in seconds from the tick's time: swing (through the lane's template),
+ * the step's nudge lock (±½ step), the lane's push/pull offset (ms) and humanize, symmetric (early and late, up to
+ * ±15 ms at 100%). dt can be negative: live play fires early hits from the step before (app.js), renders start early.
  */
 export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec }) {
   if (!ev?.hit) return [];
   const stepSec = lane.stepTicks() * tickSec, r = dice ? dice.at(li, ev.step, lane.length, 1) : Math.random();
-  const base = ev.swung * stepSec + (r - 0.5) * humanize * 0.03, n = Math.max(1, ev.ratchet || 1), v = hitVel(ev.accent, ev.lock);
+  const base = (ev.swung + (ev.lock?.nudge ?? 0)) * stepSec + (lane.offsetMs || 0) / 1000 + (r - 0.5) * humanize * 0.03, n = Math.max(1, ev.ratchet || 1), v = hitVel(ev.accent, ev.lock);
   return Array.from({ length: n }, (_, k) => ({ dt: base + (k * stepSec) / n, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: ev.lock }));
 }
 

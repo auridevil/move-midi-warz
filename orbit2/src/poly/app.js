@@ -169,6 +169,7 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:step' already played live
+const early = [];   // per lane: the next step, decided a step ahead because part of it sounds before its tick
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
@@ -185,11 +186,19 @@ function onTick(time) {
   if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
   if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS, true);
   const now = T.getContext().rawContext.currentTime;
-  m.tick(t, Math.random, { fill, dice: dice.locked ? dice : null }).forEach((ev, li) => {
-    if (!ev) return; const lane = m.lanes[li];
-    if (skip.delete(`${li}:${ev.step}`)) ev.hit = false;   // played live a moment ago: don't double it
-    for (const h of expandHits(ev, lane, li, { humanize: m.humanize, dice: dice.locked ? dice : null, tickSec: tickSec() })) {   // swing, ±humanize, ratchets
-      const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000);
+  const dk = dice.locked ? dice : null, play = (li, lane, h, when) => { const ht = Math.max(now, when); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
+  m.tick(t, Math.random, { fill, dice: dk }).forEach((ev, li) => {
+    if (!ev) return; const lane = m.lanes[li], pre = early[li]; early[li] = null;
+    // decided a step ago (it had an early part): the same roll plays on, so a ratchet or an accent isn't re-rolled
+    let hs; if (pre?.step === ev.step) { Object.assign(ev, pre.ev); hs = pre.hits.filter(h => h.dt >= 0); } else hs = expandHits(ev, lane, li, { humanize: m.humanize, dice: dk, tickSec: tickSec() });
+    if (skip.delete(`${li}:${ev.step}`)) { ev.hit = false; hs = []; }   // played live a moment ago: don't double it
+    for (const h of hs) play(li, lane, h, time + h.dt);   // swing, nudge, push/pull, ±humanize, ratchets
+    // G1/G2: the next step may sound before its own tick (nudged or pushed early): decide it now, play its early part
+    const st = lane.stepTicks(), nxt = (ev.index + 1) % lane.length;
+    if (lane.offsetMs < 0 || lane.lockAt(nxt)?.nudge < 0) {   // humanize (±15 ms) fits in the scheduler's lookahead
+      const pos = lane.pos, solo = m.lanes.some(l => l.solo), pev = lane.at(t + st, Math.random, { fill, dice: dk, li, silenced: solo && !lane.solo }); lane.pos = pos;
+      const ph = expandHits(pev, lane, li, { humanize: m.humanize, dice: dk, tickSec: tickSec() }); early[li] = { step: pev.step, ev: { hit: pev.hit, accent: pev.accent }, hits: ph };
+      for (const h of ph) if (h.dt < 0) play(li, lane, h, time + st * tickSec() + h.dt);
     }
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
@@ -199,7 +208,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -353,6 +362,7 @@ const LOCK_UI = {
   vel: { label: 'velocity', fmt: v => v + '%', base: () => 0.7 },
   decay: { label: 'decay', base: l => l.sound.decay }, tone: { label: 'tone', base: l => l.sound.tone },
   snap: { label: 'snap', base: l => l.sound.snap }, color: { label: 'color', base: l => l.sound.color },
+  nudge: { label: 'nudge', min: -50, max: 50, fmt: v => (v > 0 ? '+' : '') + v + '%', say: v => v ? `${Math.abs(v)}% of a step ${v > 0 ? 'late' : 'early'}` : 'on the grid', base: () => 0 },
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); }
@@ -694,6 +704,8 @@ async function masterLatency() {
 async function renderPattern({ stems = false } = {}) {
   const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = BAR_TICKS * tickSec(), loop = ui.expLoop.value;
   const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
+  // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
+  const lead = Math.max(LEAD_IN, 0.01 - hits.reduce((a, h) => Math.min(a, h.time), 0));
   for (const l of m.lanes) await ensureSample(l);
   const lat = stems ? 0 : await masterLatency();
   const out = await T.Offline(async ({ transport }) => {
@@ -704,10 +716,10 @@ async function renderPattern({ stems = false } = {}) {
       k.chains.forEach((c, i) => { const sp = ctx.createChannelSplitter(2); c.bus.disconnect(); c.bus.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); });
     }
     // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
-    for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + LEAD_IN, h.accent, h.lock, h.vel, k);
+    for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k);
     await dspFlush(k);   // the worklets must hold every hit before the offline render starts
-  }, LEAD_IN + sec + tailSec(), stems ? 8 : 2, 44100);
-  const b = out.get(), sr = b.sampleRate, pre = LEAD_IN + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
+  }, lead + sec + tailSec(), stems ? 8 : 2, 44100);
+  const b = out.get(), sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
   const chans = loop ? raw.map(d => foldLoop(d, sr, sec, pre)) : oneShot(raw, sr, sec, pre, barSec);
   return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / BAR_TICKS, hits, capped, loop };
 }

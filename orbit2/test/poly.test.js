@@ -588,3 +588,46 @@ test('C1/C2: the rings and their glow stay inside the free box between the panel
   assert.deepEqual(stageBox({ left: 0, right: 100, top: 0, bottom: 50 }), { x: 16, y: 0, w: 120, h: 120 }, 'never smaller than 120 px a side');
   const free = ringGeo(390, 390); assert.equal(free.cx, 195); assert.equal(free.cy, 195);   // no stage: the phone's square canvas
 });
+
+// ---- ORBIT2-05 · groove and dynamics ----
+test('G1 nudge lock: ±½ step, clamped, moves the hit in collectHits by the expected seconds', async () => {
+  const { collectHits } = await import('../src/poly/export.js');
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setEuclid(4);   // quarters: 0.5 s at 120
+  assert.equal(k.setLock(1, 'nudge', 0.9), 0.5, 'clamped to half a step'); assert.equal(k.setLock(1, 'nudge', -0.9), -0.5);
+  k.setLock(1, 'nudge', 0.2); k.setLock(2, 'nudge', -0.3);
+  const t = collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6));
+  assert.deepEqual(t, [0, 0.6, 0.85, 1.5], '+20 % of 0.5 s = +0.1 s, −30 % = −0.15 s');
+  k.setLock(0, 'nudge', -0.5); assert.equal(collectHits(m, { from: 0, to: 96, tempo: 120 })[0].time, -0.25, 'the first step can land before tick 0');
+});
+test('G2 lane offset: ±30 ms on every hit of the lane, rounded and clamped; old saves default to 0', async () => {
+  const { collectHits } = await import('../src/poly/export.js');
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const s = m.lanes[1]; s.setRatio(5); s.setLength(4); s.setEuclid(2);
+  assert.equal(s.setOffset(-45), -30); assert.equal(s.setOffset(12.4), 12);
+  assert.deepEqual(collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6)), [0.012, 1.012]);
+  s.setOffset(-20); assert.deepEqual(collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6)), [-0.02, 0.98]);
+  const back = Machine.from(JSON.parse(JSON.stringify(m))); assert.equal(back.lanes[1].offsetMs, -20, 'saved and loaded');
+});
+test('G6 swing templates: data, MPC = the old rule, triplet at 50 % = exactly ⅓ step, straight ignores the amount', async () => {
+  const { SWING_TEMPLATES, SWING_KEYS } = await import('../src/poly/lanes.js'); const { collectHits } = await import('../src/poly/export.js');
+  assert.deepEqual(SWING_KEYS, ['straight', 'mpc', 'triplet', '3-3-2', 'amapiano', 'aksak']);
+  for (const k of SWING_KEYS) { const sh = SWING_TEMPLATES[k].shift; if (sh) { assert.equal(sh[0], 0, `${k}: the group's first step stays on the grid`); assert.ok(sh.every(x => x >= 0 && x <= 1), k); } }
+  const l = new Lane('hat', { length: 16, ratioIndex: 9 }); l.swing = 0.5;
+  assert.deepEqual([0, 1, 2, 3].map(s => l.swingAt(s)), [0, 0.5, 0, 0.5], 'MPC by default');
+  l.setSwingTpl('triplet'); assert.ok(Math.abs(l.swingAt(1) - 1 / 3) < 1e-12, 'triplet 50 % → ⅓');
+  l.setSwingTpl('straight'); assert.equal(l.swingAt(1), 0); l.setSwingTpl('nope'); assert.equal(l.swingTpl, 'straight', 'an unknown key is ignored');
+  l.setSwingTpl('amapiano'); assert.ok(l.swingAt(1) > l.swingAt(3) && l.swingAt(3) > 0, 'amapiano: the e is pushed further than the a'); assert.equal(l.swingAt(2), 0);
+  l.setSwingTpl('aksak'); assert.equal(l.swingPeriod(), 7); l.setSwingTpl('3-3-2'); assert.equal(l.swingPeriod(), 8);
+  // collectHits: a ×4 lane at 120 bpm, steps 0.125 s; triplet 50 % puts step 1 at 0.125 + 0.125/3
+  const m = new Machine(); m.lanes.forEach(x => x.clear()); const h = m.lanes[2]; h.setRatio(9); h.setLength(4); h.setEuclid(4); h.swing = 0.5; h.setSwingTpl('triplet');
+  const t = collectHits(m, { from: 0, to: 24, tempo: 120 }).map(x => x.time);
+  assert.ok(Math.abs(t[1] - (0.125 + 0.125 / 3)) < 1e-9 && Math.abs(t[3] - (0.375 + 0.125 / 3)) < 1e-9 && t[2] === 0.25);
+  // an odd lane with a 7-step template: the cycle covers the whole swing group
+  const mm = new Machine(); mm.lanes.forEach(x => { x.clear(); x.setRatio(5); x.setLength(4); }); mm.lanes[0].setLength(4); mm.lanes[0].setEuclid(4); mm.lanes[0].swing = 0.3; mm.lanes[0].setSwingTpl('aksak');
+  assert.equal(mm.cycleSteps(), 28, 'lcm(4, 7) steps');
+});
+test('ORBIT2-05: a save without the new fields loads unchanged (MPC swing, no offset, no nudge)', () => {
+  const old = { lanes: [{ name: 'kick', length: 4, ratioIndex: 5, hits: [true, false, true, false], accents: [], rotation: 0, swing: 0.25, prob: 1, tune: 0, muted: false, euclidK: 2, sound: {}, voice: 'kick', locks: [{ vel: 0.5 }], trigs: [] }], selected: 0, humanize: 0 };
+  const m = Machine.from(old), l = m.lanes[0]; assert.equal(l.swingTpl, 'mpc'); assert.equal(l.offsetMs, 0); assert.deepEqual(l.locks[0], { vel: 0.5 });
+  assert.equal(l.at(24, () => 0).swung, 0.25, 'old swing plays as before');
+  const j = l.toJSON(); assert.equal(j.swingTpl, 'mpc'); assert.equal(j.offsetMs, 0);
+});

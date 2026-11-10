@@ -11,9 +11,27 @@ export const SOUND_KEYS = ['decay', 'tone', 'drive', 'snap', 'color', 'send', 'p
 export const DEFAULT_SOUND = { decay: 0.5, tone: 0.75, drive: 0, snap: 0.5, color: 0.5, send: 0.15, pan: 0.5, level: 0.8 };
 /** Master clock resolution (ticks per beat). 24 = MIDI clock, and every ratio's step is a whole number of ticks. */
 export const PPQ = 24, BAR_TICKS = PPQ * 4;
-/** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, the rest 0..1. */
-export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color'];
+/** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, nudge −½..½ of a step (early/late), the rest 0..1. */
+export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
+export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5] };
+/** Lane push / pull: the whole lane early (−) or late (+), in ms. */
+export const OFFSET_MS = 30;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+/**
+ * Swing templates: how far each step of a repeating group is delayed, as a multiple of the lane's swing amount (in
+ * steps). Counted on the absolute step, like the classic swing. 'mpc' (null) is the classic rule in Lane.swungAt:
+ * every second step, or the middle one of three at the triplet speeds. triplet at swing 50 % = exactly ⅓ of a step
+ * (the 2:1 shuffle). amapiano pushes the "e" further than the "a"; 3-3-2 and aksak 2+2+3 lean on their groups.
+ */
+export const SWING_TEMPLATES = {
+  straight: { name: 'straight', shift: [0] },
+  mpc: { name: 'MPC 16th', shift: null },
+  triplet: { name: 'triplet', shift: [0, 2 / 3] },
+  '3-3-2': { name: '3-3-2', shift: [0, 0.5, 0.25, 0, 0.5, 0.25, 0, 0.5] },
+  amapiano: { name: 'amapiano', shift: [0, 0.8, 0, 0.45] },
+  aksak: { name: 'aksak 2+2+3', shift: [0, 0.6, 0, 0.6, 0, 0.4, 0.8] },
+};
+export const SWING_KEYS = Object.keys(SWING_TEMPLATES);
 /** Trig conditions per step. 'a:b' = play on loop a of every b; fill = only while Fill is held; first = first loop after Play. */
 export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4', '3:4', '4:4', 'fill', 'not fill', 'first', 'not first'];
 export const MAX_RATCHET = 4;
@@ -41,6 +59,7 @@ export class Lane {
     this.hits = new Array(MAX_STEPS).fill(false); this.accents = new Array(MAX_STEPS).fill(false);
     this.rotation = 0; this.swing = 0; this.prob = 1; this.tune = 0; this.muted = false; this.pos = 0; this.euclidK = 0;
     this.locks = new Array(MAX_STEPS).fill(null); this.evolve = true;
+    this.swingTpl = 'mpc'; this.offsetMs = 0;       // G6 swing template, G2 push (−) / pull (+) in ms
     this.trigs = new Array(MAX_STEPS).fill(null);   // per stored step: { cond, ratchet, fade } or null
     this.solo = false; this.choke = -1;             // choke: index of the lane this one cuts off when it hits   // locks: per stored step, {key: value} or null
     this.sound = { ...DEFAULT_SOUND }; this.voice = name;   // voice = engine key from voices.js; defaults to the lane's classic sound
@@ -82,7 +101,9 @@ export class Lane {
   }
   trigAt(i) { return this.trigs[this.stepIndex(i)]; }
   /** Lock a parameter on one stored step (use stepIndex() for a visible position). */
-  setLock(i, k, v) { if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const x = clamp(v, k === 'tune' ? -1 : 0, 1); (this.locks[i] ||= {})[k] = x; return x; }
+  setLock(i, k, v) { if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(v, lo, hi); (this.locks[i] ||= {})[k] = x; return x; }
+  setOffset(ms) { this.offsetMs = clamp(Math.round(+ms || 0), -OFFSET_MS, OFFSET_MS); return this.offsetMs; }
+  setSwingTpl(key) { if (SWING_TEMPLATES[key]) this.swingTpl = key; return this.swingTpl; }
   clearLocks(i) { this.locks[i] = null; }
   unlock(i, k) { const lk = this.locks[i]; if (!lk) return; delete lk[k]; if (!Object.keys(lk).length) this.locks[i] = null; }
   /**
@@ -105,8 +126,13 @@ export class Lane {
    * span a beat (or a bar at ×¾) the count restarts on each step that falls on the beat, so the beat is never swung.
    */
   swungAt(step) { const g = this.beatGroup(); return (g > 1 && g % 2 ? step % g : step) % 2 === 1; }
-  /** Steps after which the swing pattern repeats: 2, or 3 for the triplet speeds. */
-  swingPeriod() { const g = this.beatGroup(); return g > 1 && g % 2 ? g : 2; }
+  /** How late absolute step `step` sounds, in steps: the swing amount through the lane's template. */
+  swingAt(step) {
+    const sh = SWING_TEMPLATES[this.swingTpl]?.shift; if (!sh) return this.swungAt(step) ? this.swing : 0;
+    return sh[((step % sh.length) + sh.length) % sh.length] * this.swing;
+  }
+  /** Steps after which the swing pattern repeats: the template's group, or 2 (3 at the triplet speeds) for MPC. */
+  swingPeriod() { const sh = SWING_TEMPLATES[this.swingTpl]?.shift; if (sh) return sh.length; const g = this.beatGroup(); return g > 1 && g % 2 ? g : 2; }
   /**
    * What this lane does at master tick `tick`, or null when it doesn't step there. The position is derived
    * from the tick, never accumulated, so lanes stay phase-locked through ratio, length and tempo changes.
@@ -119,7 +145,7 @@ export class Lane {
     this.pos = (i + 1) % this.length;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swungAt(step) ? this.swing : 0, lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
+    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
   /**
    * Live record: the step a hit at fractional master tick `tickF` belongs to, by where the steps are heard (a swung
@@ -127,7 +153,7 @@ export class Lane {
    * one: early hits land on the coming step), 'previous' always the step that just played.
    */
   quantize(tickF, mode = 'nearest') {
-    const f = tickF / this.stepTicks(), b = Math.floor(f), heard = (s) => s + (this.swungAt(s) ? this.swing : 0);
+    const f = tickF / this.stepTicks(), b = Math.floor(f), heard = (s) => s + this.swingAt(s);
     let step = b + 1;
     if (mode === 'previous') while (heard(step) > f) step--;
     else for (const s of [b, b - 1]) if (Math.abs(heard(s) - f) < Math.abs(heard(step) - f)) step = s;
@@ -152,9 +178,9 @@ export class Lane {
     const rolls = humanize > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1);
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
-  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
+  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; return l; }
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => (o.locks?.[i] ? { ...o.locks[i] } : null)); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {
