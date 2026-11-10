@@ -3,14 +3,14 @@ type: review
 phase: ORBIT2-02
 title: ORBIT2-02 first visit and musical randomize (F1–F5), review panel
 date: 2026-11-06
-round: 1
-result: IN PROGRESS
+round: 2
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
-  maya: NOT HAPPY
-  rio: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
+  maya: HAPPY
+  rio: HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -112,6 +112,32 @@ reload; three quick rolls folded into one undo step; the toast's live region was
   groove undo → 97 bpm / redo → 174, three rolls = three undo steps, pattern from seed re-makes the toast's groove,
   double × and double "keep jamming" fire nothing underneath, keep jamming plays with focus on play, link loads once
   and leaves the address bar, no page errors), screenshots looked at.
+
+## Round 2: 5 of 5 HAPPY
+
+Re-review of round 1's fixes with the whole panel (every reviewer was NOT HAPPY in round 1).
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. Undo of a groove load restores tempo (100 → 130 → 100 → 130); two `dice-make` rolls after init give the same "five over four · dice 1596" pattern. `npm run check` clean, `npm test` 103 + 9, 300 seeds × 6 families: kick on 1, cycle ≤ 16 bars (max 5), 7 grooves round-trip. |
+| architect | HAPPY | none. Techno hats are sixteenths (`xgXgxgXgxgXgxgXg`), asserted in `test/poly.test.js`. Save format: 30 pre-F1 saves from `9da4eff` load with the same lanes and hits; malformed inputs don't throw. Its browser smoke was blocked by empty `node_modules/movewire` in its own run, but `node_modules/movewire` and `vendor/tone` are populated in the repo (checked by the author); not a phase defect. |
+| sound | HAPPY | none. Mix LUFS −24.2 to −26.1 (spread 1.9 LU) matches the round 1 table; peaks −3.6 to −9.4 dBFS, zero clipped samples, DC ≤ 0.07 %; backbeat −5 to −8.7 LU and hats/bells/perc −8 to −15 LU under the kick. Demo kick starts at frame 8; triplets within ±35 frames. |
+| maya | HAPPY | none. First visit plays the demo after one tap on the pulsing play; undo restores tempo (100 → 140 → 100); thirty randomize rolls only named families; welcome bar on return; chips wrap at 390 px with no horizontal scroll. |
+| rio | HAPPY | none. Techno toast names its sixteenth hats; welcome bar stacks 36 px buttons on phone; "start fresh" and link loads undo cleanly; `#p=` loads once and clears the hash. |
+
+SHOULD items recorded (never block): the demo toast covers the pad area on a 390 px phone (rio, maya); the
+`#p=` failure toast reads "Failed to fetch" (maya); the core label "KICK 90 4 ×1" overlaps the ring on return (rio);
+the "aligns in N bars" label was not seen in screenshots (verifier, maya), needs a visual check; mix table is
+measured on the WAV path, which sits about 1.1 LU under the raw stem path (sound); onset counts are not
+envelope-based (sound).
+
+### Changes after round 2
+
+- No code changes: round 2 had no in-scope MUST-FIX. The round is recorded here and in the frontmatter (`round: 2`,
+  `result: HAPPY`).
+- Checks run by the implementer: `npm run check` clean; `npm test` root 9/9 pass, orbit2 103 + 9 (per verifier);
+  `node tools/smoke.mjs http://localhost:5400` 10/10 ok (`orbit2/index.html` ok), with `serve.py 5400` and
+  headless Chrome on `--remote-debugging-port=9222`, both stopped afterwards.
 
 ## Panel from here on
 
