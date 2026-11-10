@@ -4,13 +4,14 @@
 //   const b = await launch({ port: 5401, debugPort: 9401 });        // starts serve.py + Chrome on YOUR ports
 //   const p = await b.open('orbit2/index.html', { width: 1440, height: 900 });   // { mobile: true } for touch
 //   await p.eval('__poly.applyTempo(120)');                         // window.__poly exposes the app internals
-//   await p.click(200, 300); await p.key(' ');                      // trusted input events
+//   await p.click(200, 300); await p.key(' '); await p.key('Enter');   // trusted input events (Enter presses a focused button)
 //   await p.shot('/tmp/me/desktop.png');                            // look at it with the Read tool
 //   p.captureDownloads(); await p.eval('__poly.exportWav()'); const files = await p.downloads();   // [{ name, bytes }]
 //   console.log(p.errors);                                          // page exceptions + console.error
 //   await b.close();                                                // kills Chrome + server, deletes the profile
 //
 // Every reviewer uses its own port pair (see orbit2/docs/REVIEW-PANEL.md) so parallel reviews never collide.
+// A CDP call that never answers fails after 30 s instead of hanging the script (eval: 120 s, or `eval(expr, { timeout })`).
 import { spawn } from 'node:child_process';
 import { rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -30,7 +31,8 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
     base,
     async open(path, { width = 1440, height = 900, mobile = false, wait = 3500 } = {}) {
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
-      const ws = new WebSocket(webSocketDebuggerUrl); await new Promise(r => { ws.onopen = r; });
+      const ws = new WebSocket(webSocketDebuggerUrl);
+      await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 10 s')), 10000).unref(); });
       let id = 0; const pending = new Map(), errors = [];
       ws.onmessage = (m) => {
         const d = JSON.parse(m.data);
@@ -38,21 +40,28 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
         if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
         if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map(a => a.value ?? a.description).join(' '));
       };
-      const send = (method, params = {}) => new Promise(r => { const i = ++id; pending.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
+      const send = (method, params = {}, ms = 30000) => {   // e.g. a wheel event in a background tab never acks
+        const pr = new Promise((r, j) => {
+          const i = ++id, t = setTimeout(() => { pending.delete(i); j(new Error(`cdp: ${method} got no answer in ${ms / 1000} s`)); }, ms);
+          pending.set(i, (d) => { clearTimeout(t); r(d); }); ws.send(JSON.stringify({ id: i, method, params }));
+        });
+        pr.catch(() => {}); return pr;   // a raced call that times out later must not crash the script (unhandled rejection)
+      };
       await send('Runtime.enable'); await send('Page.enable');
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
       if (mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
       await send('Page.navigate', { url: `${base}/${path}` }); await sleep(wait);
       const page = {
         errors, send,
-        async eval(expression) {
-          const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true });
+        async eval(expression, { timeout = 120000 } = {}) {   // awaits promises: an offline render takes a while
+          const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true }, timeout);
           if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'eval failed');
           return r.result?.result?.value;
         },
         async click(x, y) { for (const type of ['mousePressed', 'mouseReleased']) await send('Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 }); },
         async tap(x, y) { await send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] }); await send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); },
-        async key(key, code = key === ' ' ? 'Space' : key) { for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key, code, text: type === 'keyDown' && key.length === 1 ? key : undefined }); },
+        // Enter needs its text ('\r'): without it Chrome sends a raw key down and a focused button is never pressed
+        async key(key, code = key === ' ' ? 'Space' : key) { const text = key === 'Enter' ? '\r' : key.length === 1 ? key : undefined; for (const type of ['keyDown', 'keyUp']) await send('Input.dispatchKeyEvent', { type, key, code, text: type === 'keyDown' ? text : undefined }); },
         async shot(file) { const { result } = await send('Page.captureScreenshot', { format: 'png' }); mkdirSync(dirname(file), { recursive: true }); writeFileSync(file, Buffer.from(result.data, 'base64')); return file; },
         captureDownloads() { return page.eval(`(() => { window.__dl = []; HTMLAnchorElement.prototype.click = function () { window.__dl.push({ name: this.download, href: this.href }); }; })()`); },
         async downloads() {

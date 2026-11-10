@@ -3,11 +3,11 @@ type: review
 phase: ORBIT2-03
 title: ORBIT2-03 touch and accessibility (T1–T7), review panel
 date: 2026-11-10
-round: 2
-result: IN PROGRESS
+round: 3
+result: HAPPY
 reviewers:
   verifier: HAPPY
-  architect: NOT HAPPY
+  architect: HAPPY
   sound: HAPPY
   greta: HAPPY
   rio: HAPPY
@@ -150,3 +150,48 @@ mouse click never leaves the focus on a gauge (both trees), so the new Home/End/
   up"; inputs / selects 32–34 px; row-2 playhead bar 1 px below the row-1 "1:2" label; one playhead while playing;
   mouse hold on a step opens the locks, the next click cycles it; right-click on a slot → "save here", Escape → the
   slot; Enter on a focused step cycles it. 0 page errors; screenshots looked at.
+
+## Round 3: 1 of 1 HAPPY, the whole panel HAPPY
+
+Only the reviewer NOT HAPPY after round 2 (architect), a fresh sub-agent on the default model, own ports 5402 / 9402.
+Brief as in round 1 (goal, T1–T7 + phase spec, must-fix rule), `git diff --stat 50aba0e..9b30a00` (9 files,
++494/−91), the architect's round-1 and round-2 MUST-FIX and "Changes after round 2". Pre-checks on 9b30a00:
+`npm run check` clean, `npm test` 108 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| architect | HAPPY | none. Round-2 MUST-FIX fixed: own repro re-run on a phone 390 × 844 touch, slots 1, 4, 6, 8, 9, 13, 16 at the bottom edge, filled and empty, held 700 ms (some again for 1300 ms): the page scrolls 1797 → 1930 / 1845 → 1930 under the finger, the lift's mousedown and click on save / chain / erase / × are cancelled by the guard, bank and machine JSON unchanged, menu open for the right slot, focus on "save here"; the next tap is the user's ("erase" erased 6, "save here" saved 8, "add to chain" made 8 → 4, a plain tap on slot 1 loads it); with no click after the hold the next tap's pointerdown resets the guard. No regression from the round-2 changes (mouse hold on a step, right-click on a slot arms nothing, Enter on "save here", phone long touch on a step, a shorter loop closes the locks, tune spoken, 32 px floor, `shown` not saved); check, 108 + 9, 0 page errors. |
+
+SHOULD items recorded (never block): a long touch on an *empty* slot whose menu slides the disabled "add to chain" or
+"erase" under the finger drops the keyboard focus to `<body>` (Chrome sends a disabled button no mousedown, so the
+guard can't cancel it, yet the focus still moves; nothing runs or is lost, but Escape no longer reaches the menu);
+`renderSteps` and `renderLocks` both close a step a shorter loop left out (duplication); `cdp.mjs`: `p.key('Enter')`
+sends no `text`, so Enter never presses a button (a review's Enter check can pass without doing anything), and
+`send()` / the page socket have no timeout (a scratch run hung without output).
+
+### Changes after round 3
+
+All four SHOULDs were quick, so they are done (nothing new for "Later"):
+
+- **Slot menu**: "add to chain" and "erase" of an empty slot are `aria-disabled` (the Move toggle's pattern), not
+  `disabled`, and the menu ignores a press on them. A finger lifting on one now sends its mousedown and click like on
+  any button, so the gesture guard cancels them and the focus stays on "save here". They stay in the Tab order, the
+  accessibility tree calls them disabled, and they look as before (`button[aria-disabled=true]`).
+- `renderLocks` no longer repeats the clamp: its three callers (`sync`, `editLocks`, `stepEdited`) run `renderSteps`
+  first, which closes a step a shorter loop left out.
+- `orbit2/tools/cdp.mjs`: `key('Enter')` sends `text: '\r'`, so it presses a focused button; every CDP call fails
+  after 30 s instead of hanging (`eval` 120 s, or `eval(expr, { timeout })`), the page socket after 10 s; a raced call
+  that times out later doesn't crash the script.
+- Tests: no new unit test (the menu is DOM in `app.js`, the harness needs Chrome). `npm run check` clean, `npm test`
+  108 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both
+  stopped). Browser (5400/9400, one browser per viewport): 51/51. Before the fix (9b30a00, phone 390 × 844 touch):
+  empty slots 11–14 at the bottom edge, held 700 ms, the finger ends on the disabled "add to chain" / "erase" and the
+  focus on BODY. After: the finger ends on the aria-disabled buttons and the focus stays on "save here" for all eight
+  empty slots 9–16, nothing saved; a tap on the aria-disabled "erase" / "add to chain" does nothing and keeps the menu;
+  "save here" saves and focuses the slot; the round-2 repro on filled slots 9–16 runs nothing (bank unchanged); a long
+  touch on a step opens its locks, the next tap cycles it once. Desktop 1440: `p.key('Enter')` cycles a focused step;
+  right-click on an empty slot → "save here", Tab reaches the aria-disabled "add to chain" (AX: button, disabled,
+  focusable), Enter on it and on "erase" does nothing, Escape → the slot, Enter on "save here" saves, a filled slot
+  erases by keyboard; length 16 → 11 with the keyboard closes the locks on step 12 (0 expanded / selected), locks
+  reopen on step 4; an eval that never settles fails after its 1.5 s timeout and the next eval answers. 0 page errors;
+  screenshots looked at (the empty slot's menu shows "add to chain" / "erase" dimmed).

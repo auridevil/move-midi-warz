@@ -376,8 +376,8 @@ function buildLockGauges() {
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
   $('lock-close').onclick = () => editLocks(lockStep);
 }
-function renderLocks() {
-  const lane = m.lane, panel = $('lockpanel'); if (lockStep >= lane.length) lockStep = -1;
+function renderLocks() {   // always after renderSteps, which closes a step a shorter loop left out
+  const lane = m.lane, panel = $('lockpanel');
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
   renderTrig(lane.trigAt(lockStep));
@@ -428,7 +428,9 @@ function renderSlots() {
 function renderSlotMenu() {
   const menu = $('slot-menu'), i = slotMenuFor; menu.hidden = i < 0; if (i < 0) return;
   $('slot-menu-title').textContent = `slot ${i + 1}`;
-  menu.querySelector('[data-act=chain]').disabled = menu.querySelector('[data-act=erase]').disabled = !bank.filled(i);
+  // aria-disabled, not disabled: the menu can slide under a held finger, and a finger lifting on a disabled button
+  // drops the focus to the page (the gesture guard never sees that press)
+  for (const act of ['chain', 'erase']) menu.querySelector(`[data-act=${act}]`).setAttribute('aria-disabled', !bank.filled(i));
 }
 function openSlotMenu(i) {
   slotMenuFor = slotMenuFor === i ? -1 : i; renderSlots(); if (slotMenuFor < 0) return;
@@ -445,7 +447,8 @@ function buildSlotsUI() {
     el.appendChild(b); slotBtns.push(b);
   }
   $('slot-menu').onclick = (e) => {
-    const act = e.target instanceof Element && e.target.closest('button')?.dataset.act, i = slotMenuFor; if (!act || i < 0) return;
+    const btn = e.target instanceof Element && e.target.closest('button'), act = btn?.dataset.act, i = slotMenuFor;
+    if (!act || i < 0 || btn.getAttribute('aria-disabled') === 'true') return;
     slotMenuFor = -1;
     if (act === 'save') saveSlot(i); else if (act === 'chain') addToChain(i); else if (act === 'erase') bank.erase(i);
     renderSlots(); slotBtns[i].focus({ preventScroll: true });
