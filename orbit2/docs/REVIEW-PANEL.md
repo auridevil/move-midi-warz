@@ -59,7 +59,7 @@ closest to the phase. The playbook names them in its header. The final phase (OR
 | 06 clock + meter | ines, kai | 15 sharing | rio, dex |
 | 07 32 steps, 6 lanes | tomi, kai | 16 learning | maya, greta |
 | 08 voices | tomi, dex | 17 final | all ten |
-| 09 samples | dex, maya | | |
+| 09 samples | dex, maya | 18 automation | kai, dex |
 
 ## What blocks HAPPY (the must-fix rule)
 

@@ -171,6 +171,23 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **I7 simple mode / plain words**: "hits" not "euclid hits", "shift" not "rotation"; advanced controls tucked behind
   "advanced". (Maya)
 
+## A · Parameter automation (phase 18)
+
+Added 2026-11-06 by the conductor: "record an automation on a parameter, e.g. a change in decay, that gets rooted in the
+pattern". Design first: `orbit2/docs/design/automation.md`.
+
+- **A1 step automation**: turning a knob while recording writes its value as step locks on every step of the selected
+  lane that plays during the gesture (decay, snap, color, tune, vel, prob, nudge, slice, stroke…), Elektron-style.
+- **A2 smooth automation**: a per-lane curve for parameters that sound continuous (tone filter, drive, pan, send, level,
+  master filter), recorded in real time and replayed as audio-param ramps.
+- **A3 recording modes**: arm, touch / latch, the hand overrides playback while touching, one undo step per gesture.
+- **A4 see and clear it**: "A" mark on automated gauges, a curve strip with the playhead, gauges moving on playback;
+  clear one parameter / the lane.
+- **A5 everywhere it plays**: live, WAV / stems / jam renders identical to live, slots and chains, share links.
+- **A6 Move gestures**: encoder touch (notes 0–8) starts and ends a gesture; documented in the Move panel.
+- **A7 MIDI export**: step automation as per-note values / CC, smooth automation as CC curves (CC per parameter,
+  editable).
+
 ## Deferred
 
 (In-scope MUST-FIX items the whole panel agreed to move to a follow-up playbook, see [[REVIEW-PANEL]] "Motion to
