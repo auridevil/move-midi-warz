@@ -5,7 +5,7 @@ import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from './pages.js';
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
-import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
+import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
@@ -317,7 +317,7 @@ const INFO = {
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
-  sample: 'Load a file, record up to 4 s from the mic, take one of the 8 slices Unassembler sent, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit. A slice set plays slice N on step N; lock a step to another slice in its lock panel (Move: hold the step, turn knob 7).',
+  sample: 'Load a file, record up to 4 s from the mic, take a slice Unassembler sent (or all of them as a slice set), load a whole break and cut it into 8 or 16 slices, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit. A slice set plays slice N on step N; lock a step to another slice in its lock panel (Move: hold the step, turn knob 7).',
   trim: 'Start and end: the part of the sample (of each slice) that plays, from 0 to 100 % of it. With backwards it plays from the end to the start.',
   dice: 'Free dice = every probability roll is new. Locked dice = rolls come from the seed, so a probabilistic groove (and humanize, evolve, randomize) repeats exactly. Same seed, same groove.',
   'dice repeat': 'Locked dice: the rolls repeat every N loops of each lane (1 = every loop identical).',
@@ -758,18 +758,36 @@ async function toggleMic() {
     mr.start();
   } catch (e) { $('sample-name').textContent = `mic: ${e.message || e}`; }
 }
+/** S2: the Unassembler hand-off (8 slices today, 16 in the v2 payload: samples.js readSlices) as tiles, one to a lane,
+ *  or all of them to the selected lane as a slice set. */
 async function renderSlices() {
-  const sl = await getSample(SLICES_KEY), el = $('slice-select'); el.innerHTML = '';
+  const sl = readSlices(await getSample(SLICES_KEY)), el = $('slice-select'); el.innerHTML = '';
   if (!sl) { el.innerHTML = '<p class="hint tight">No slices yet: in Unassembler press <b>→ orbits</b>, they show up here.</p>'; return; }
-  const head = document.createElement('p'); head.className = 'hint tight slice-head'; head.textContent = `slices of ${sl.name.split(' · ')[0]} · tap one to put it on this lane`; el.appendChild(head);
-  sl.slices.forEach((ch, k) => el.appendChild(sliceTile(ch[0], k + 1, `slice ${k + 1}`, () => assignSample(m.selected, { name: `${sl.name.replace(/\.[^.]+$/, '').split(' · ')[0].slice(0, 16)} #${k + 1}`, sampleRate: sl.sampleRate, channels: ch }))));
+  const short = sl.name.replace(/\.[^.]+$/, '').split(' · ')[0].slice(0, 16), head = document.createElement('p'); head.className = 'hint tight slice-head';
+  head.textContent = `${sl.slices.length} slices of ${sl.name.split(' · ')[0]}${sl.mode === 'set' ? ' (sent as one break)' : ''} · tap one to put it on this lane, or `;
+  const all = document.createElement('button'); all.type = 'button'; all.className = 'small'; all.id = 'btn-slices-all'; all.textContent = 'all to this lane'; all.title = 'Put every slice on the selected lane as a slice set: step N plays slice N';
+  all.onclick = () => assignSlices(m.selected, short, sl.sampleRate, sl.slices); head.appendChild(all); el.appendChild(head);
+  sl.slices.forEach((ch, k) => el.appendChild(sliceTile(ch[0], k + 1, `slice ${k + 1}`, () => assignSample(m.selected, { name: `${short} #${k + 1}`, sampleRate: sl.sampleRate, channels: ch }))));
 }
-/** S1: put a slice set on lane li: each slice stored under its own id, the lane plays slice i on step i. */
+/** S1: put a slice set on lane li: each slice stored under its own id, the lane plays slice i on step i. An empty lane
+ *  gets a step per slice, all on, so the break plays straight away; a lane with a pattern keeps it. */
 async function assignSlices(li, name, sampleRate, slices) {
   if (!slices?.length) return; await wake(); const base = `orbits-${Date.now().toString(36)}-${li}`, ctx = T.getContext().rawContext;
   const ids = await Promise.all(slices.slice(0, MAX_SLICES).map(async (channels, k) => { const id = `${base}-s${k}`, rec = { name: `${name} #${k + 1}`, sampleRate, channels }; await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, ctx)); return id; }));
-  const lane = m.lanes[li]; lane.loadSlices({ name, slices: ids }); buildVoice(li); m.select(li); sync();
+  const lane = m.lanes[li]; lane.loadSlices({ name, slices: ids });
+  if (!lane.hits.some((h, i) => h && i < lane.length)) { lane.setLength(ids.length); lane.setEuclid(ids.length); }
+  buildVoice(li); m.select(li); sync();
   if (!playing) hitSound(lane, T.now(), false, null, null, kit, 0);
+}
+/** S2: a whole break from a file, cut into 8 or 16 equal slices, onto lane li as a slice set. Kept as it is (no
+ *  silence trim: the cut points follow the bar), up to 16 s. */
+let breakN = 16;
+async function breakFromFile(li, file, n = breakN) {
+  try {
+    await wake(); const buf = await T.getContext().rawContext.decodeAudioData(await file.arrayBuffer()), rec = fromAudioBuffer(buf, file.name);
+    const cap = Math.round(16 * rec.sampleRate); if (rec.channels[0].length > cap) rec.channels = rec.channels.map(d => d.slice(0, cap));
+    await assignSlices(li, file.name.replace(/\.[^.]+$/, '').slice(0, 16), rec.sampleRate, chopEqual(rec, n));
+  } catch (e) { $('sample-name').textContent = `could not read ${file.name}: ${e.message || e}`; }
 }
 /** S3: the lane's own start / end and direction, under the sample row (only on a sample lane). */
 function renderTrim() {
@@ -780,6 +798,9 @@ function buildSampleUI() {
   $('btn-sample-file').onclick = () => $('sample-file').click();
   $('sample-file').onchange = () => { const f = $('sample-file').files[0]; if (f) sampleFromFile(m.selected, f); $('sample-file').value = ''; };
   $('btn-mic').onclick = toggleMic;
+  $('btn-break-file').onclick = () => $('break-file').click();
+  $('break-file').onchange = () => { const f = $('break-file').files[0]; if (f) breakFromFile(m.selected, f); $('break-file').value = ''; };
+  ui.breakN = mount('break-n', segmented({ options: [[8, '8'], [16, '16']], value: breakN, onChange: (n) => { breakN = n; } }));
   const trim = (k, v) => { m.lane.setTrim(k, v); save(); if (awake && !playing) hitSound(m.lane, T.now(), false); };
   for (const k of ['start', 'end']) { const g = makeGauge({ label: k, value: k === 'end' ? 100 : 0, fmt: v => v + '%', title: INFO.trim, onChange: (v) => trim(k, v / 100) }); sliders['trim:' + k] = g; $('sample-trim-gauges').appendChild(g.el); }
   ui.rev = mount('sample-rev', toggleChip({ label: 'backwards', title: 'Play the sample (every slice) backwards', onChange: (v) => trim('rev', v) }));
@@ -1343,5 +1364,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, assignSlices, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();

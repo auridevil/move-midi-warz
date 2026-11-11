@@ -1324,3 +1324,21 @@ test('S1 / S3 slice sets: a slice per step, slice / start / end / rev locks, kep
   const mm = Machine.from(old); assert.equal(mm.lanes[1].sliceCount(), 0, 'an old single sample stays one'); assert.equal(mm.lanes[1].sliceAt(3, null), null); assert.equal(mm.lanes[1].sampleId(null), 'x');
   assert.deepEqual(mm.lanes[2].sample.slices, ['q'], 'bad ids dropped'); assert.equal(mm.lanes[2].sample.id, 'q'); assert.equal(mm.lanes[2].sample.start, 1, 'clamped');
 });
+test('S2 hand-off: v1 (8 slices) and v2 (a region + cuts, up to 16) read as one shape; a break cuts into equal slices', async () => {
+  const { readSlices, chopEqual, MAX_HANDOFF } = await import('../src/samples.js');
+  const f = (n, v = 0) => Float32Array.from({ length: n }, (_, i) => v + i);
+  const v1 = readSlices({ name: 'a.wav', sampleRate: 44100, slices: Array.from({ length: 8 }, (_, k) => [f(10, k * 10)]) });
+  assert.equal(v1.slices.length, 8); assert.equal(v1.mode, 'tiles'); assert.equal(v1.slices[3][0][0], 30);
+  assert.equal(readSlices({ sampleRate: 44100, slices: Array.from({ length: 20 }, () => [f(4)]) }).slices.length, MAX_HANDOFF, 'at most 16');
+  assert.equal(readSlices({ sampleRate: 44100, slices: [[f(4)], [], [new Float32Array(0)], 'x'] }).slices.length, 1, 'bad slices dropped');
+  assert.equal(readSlices(null), null); assert.equal(readSlices({ slices: [[f(4)]] }), null, 'no rate'); assert.equal(readSlices({ sampleRate: 1, slices: [] }), null);
+  const v2 = readSlices({ v: 2, name: 'b', sampleRate: 48000, channels: [f(160), f(160, 1000)], cuts: [40, 120, 80, 80, 0, 999, 10.4], mode: 'set' });
+  assert.deepEqual(v2.slices.map(s => s[0].length), [10, 30, 40, 40, 40], 'sorted, deduplicated, out-of-range dropped, rounded');
+  assert.equal(v2.slices[1][1][0], 1010, 'every channel cut at the same points'); assert.equal(v2.mode, 'set');
+  const many = readSlices({ v: 2, sampleRate: 1, channels: [f(100)], cuts: Array.from({ length: 30 }, (_, k) => (k + 1) * 3) });
+  assert.equal(many.slices.length, 16); assert.equal(many.slices[15][0][0], 45, '16th slice starts at the 15th cut'); assert.equal(many.slices[15][0].length, 3, 'and ends at the 16th');
+  assert.equal(readSlices({ v: 2, sampleRate: 1, channels: [f(100)] }).slices.length, 1, 'no cuts = one slice'); assert.equal(readSlices({ v: 2, sampleRate: 1, channels: [] }), null);
+  const brk = { sampleRate: 10, channels: [f(103), f(103, 500)] }, ch = chopEqual(brk, 16);
+  assert.equal(ch.length, 16); assert.deepEqual(ch.slice(0, 15).map(s => s[0].length), Array(15).fill(6)); assert.equal(ch[15][0].length, 13, 'the remainder goes to the last slice');
+  assert.equal(ch[2][1][0], 512); assert.equal(chopEqual(brk, 8).length, 8); assert.equal(chopEqual({ channels: [f(3)] }, 16).length, 3, 'never an empty slice');
+});
