@@ -351,3 +351,6 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   `app.js` without unit tests (the bar anchor moved to `slots.js` `trackBars`, tested).
 - **The clock-in trim after lock** (ORBIT2-06 round 1, sound; not checked against the phase start, the trim is
   ORBIT2-01's): after a phase-lock test, `setFollow('off')` left the tempo trimmed (clock out 119.751 bpm).
+- **Tie order of rendered hits** (ORBIT2-06 round 2, verifier): `collectHits` sorts by time only, so two hits at the same
+  instant (a ratchet repeat and another lane's hit) can come out in another order than at 24 PPQ; the same hits, but a
+  digest that compares lists in order changes. Ties by lane would make it stable.

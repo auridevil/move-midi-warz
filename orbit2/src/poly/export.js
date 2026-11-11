@@ -1,6 +1,7 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
 import { Machine, PPQ, meterParts } from './lanes.js';
+import { trackBars } from './slots.js';
 import { KITS } from './kits.js';
 import { writeMidi } from '../punch/smf.js';
 
@@ -95,13 +96,13 @@ export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false,
 }
 
 /** A chain of slot states, `bars` each (in each slot's own time signature), on one continuous master clock, as it plays
- *  live: a slot whose bar is another length starts its lanes on its own first bar line (the app's bar anchor), a slot
- *  in the same bar length goes on counting from where the last anchor was. */
+ *  live: the bar anchor follows the app's rule (trackBars), so a slot whose bar is another length starts its lanes on
+ *  its own first bar line and a slot in the same bar length goes on counting from where the anchor was. */
 export function collectChain(slotStates, { bars, tempo, dice = null }) {
-  const out = []; let from = 0, origin = 0, bar = 0;
-  slotStates.forEach((json, k) => {
-    const m = Machine.from(json), b = m.barTicks(), to = from + bars * b; if (k && b !== bar) origin = from; bar = b;
-    out.push(...collectHits(m, { from, to, tempo, dice, origin })); from = to;
+  const out = []; let from = 0, anchor = null;
+  slotStates.forEach((json) => {
+    const m = Machine.from(json), b = m.barTicks(), to = from + bars * b; anchor = anchor ? trackBars(anchor, from, b) : { at: 0, len: b, next: null };
+    out.push(...collectHits(m, { from, to, tempo, dice, origin: anchor.at })); from = to;
   });
   return out;
 }

@@ -85,8 +85,10 @@ Sorted for the speed knob: `¼ ⅓ ½ ⅔ ¾ 1 5/4 4/3 3/2 7/4 2 3 4 5 6`. Inser
   `setOrigin`), so a pattern in a new meter starts on its own downbeat: the meter control during play, a next-bar slot
   or a chain step in another meter. With one bar length since Play the origin is 0 and everything is as before (old
   data, the ORBIT2-05 tests); a switch within the same bar length goes on counting (polymeter lanes run through it, as
-  they always did). `collectChain` moves the origin by the same rule (a slot whose bar is another length starts at its
-  `from`), so live play and the render agree. A step from the new bar line on belongs to the new origin: the outgoing
+  they always did). `collectChain` moves the origin with the same `trackBars` (a slot whose bar is another length
+  starts at its `from`), so live play and the render agree. Inside a master tick the order is: the anchor, a slot
+  load (and the anchor again), evolve (its way home can bring back another meter: the anchor again), then the jam, so a
+  take that starts on that bar line counts in the meter that plays from there. A step from the new bar line on belongs to the new origin: the outgoing
   lanes don't decide it early (the `cut` also stops at a pending anchor), so a first step nudged earlier than the
   scheduler's look-ahead sounds late, as at a slot switch. The "full cycle" switch and the bloom count from the origin
   too. A "now" switch to another meter plays the new pattern at once on the old origin and restarts it on step 1 at the

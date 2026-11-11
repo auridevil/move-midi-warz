@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-06
 title: ORBIT2-06 clock resolution and meter (R1–R4), review panel
 date: 2026-11-11
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
   ines: HAPPY
   kai: HAPPY
 tags: [orbit2, review]
@@ -139,3 +139,60 @@ FF 58 7/3/12/8, jam 7/8 185220 frames).
   Browser (5400/9400, one browser per viewport, `/tmp/orbit2-impl/`, deleted): 11/11, the page checks above plus the
   "if last failed" chip storing `not pre`, 390×844 tap on 12/8 (44 × 44, readout "12/8", no overflow), 0 page errors;
   screenshots looked at. `app.js` 1222 → 1221 lines.
+
+## Round 2 (re-check): 3 of 3 HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound), fresh sub-agents in one message on the default
+model, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `9f436da` on +100 and the code before the round-1 fixes
+`a91e5e1` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, R1–R4, the phase spec, the
+"where" table plus what round 1 added, the must-fix rule with the later ids and the BACKLOG "Later" items), `git diff
+--stat 9f436da..a4a7e17` (12 files, +868/−202), each one's own round-1 MUST-FIX and "Changes after round 1", with the
+instruction to confirm their items first with the same repro, then check nearby, anything new only in scope and
+marked NEW. Pre-checks on `a4a7e17`: `npm run check` clean, `npm test` 144 + 9. `stalled: 0`: every round-1 MUST-FIX
+is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. (1) FIXED: chain [7/8, 4/4] live at 240 bpm, kicks at beats 0, 3.5, 7.5, 11, 15, 18.5, 22.5, `m.origin` 0 / 2940 / 6300 / 9240 / 12600 / 15540 / 18900 (`a91e5e1`: 0, 4, 10.5, 12…); `collectChain` the same; live MIDI vs the render 12 / 12 notes; a next-bar switch 4/4 → 7/8 queued at 5000 plays its kicks at 6720, 9660, 12600, 15540 (`a91e5e1`: 8820…). (2) FIXED: evolve at 3360, 6720, 10080, 12600, 15120, 17640 (`a91e5e1` skipped 10080). (3) FIXED: undo at beat 18.5 and a redo at 22.5, the 1:2 step alternates `18:L5- 20:L6+ 24:L7- 27:L8+` (`a91e5e1`: `18:L5- 20:L5-`). Nearby: the meter clicked mid-bar with a lane pushed −20 ms (its step 1 20 ms before the new bar line, the outgoing steps after it never play); undo across a meter change keeps the count through both origin moves; 150 phase-start patterns identical (order-insensitive); chain MIDI 7/8 · 4/4 · 7/8 at 0 / 336 / 720; check, 144 + 9, smoke 10/10, 0 page errors. |
+| architect | HAPPY | none. (1) FIXED: `collectChain([7/8, 4/4, 7/8, 4/4], { bars: 2 })` kicks on the bar lines 0 · 1.75 · 3.5 · 5.5 · 7.5 · 9.25 · 11 · 13 s; live (5402) meter control 7/8 at tick 3920: kicks 0, 2940, 5880, 6720, 9660…, `bars = { at: 6720, len: 2940 }`, origin 6720, after Play again 0; a next-bar slot and a chain over 5 bars: live = render 31 / 31; 40 / 40 random old patterns with the meter clicked mid-bar = old render + new render from the anchor. (2) FIXED: L4 lane, 1:2 + `pre`, length 5 at step 22, `assign(…, { keep: true })` at 36: `35:8x 37:8x 40:9. 42:9. 45:10x` (as with no assign); live with evolve home every 2nd bar and an undo: the count goes up by exactly 1 per wrap, the PRE step follows its 1:2 in every loop. Nearby: 150 phase-start patterns identical (9,160 hits); the per-tick work 222 µs per beat (359 at `a91e5e1`). |
+| sound | HAPPY | none. (1) FIXED: the chain render, kicks +0 from every bar line, the 4/4 snares +1 / +3, at 44.1 kHz frames 0 / 77175 / 165375 / 242550 (the bar lines); live chain at 240 bpm every note within ±10 ticks of its bar-line tick (was ≥ 420 off); 4/4 → 7/8 → 4/4 by the control: origin 6300, a jam armed for the return starts at 6300 and is exactly 2 bars (96000 frames at 48 kHz) with the kick on frame 8. Nearby: a swung ×2 lane after a 7/8 bar plays a straight downbeat (was 62.5 ms late); 60 random 4/4 chains = the phase start (3902 hits, ≤ 7e-15 s); 120 single renders in all 6 meters = `a91e5e1`; headroom 74 ms, stress ~0. |
+
+SHOULD items recorded (never block): `collectHits` sorts by time only, so hits at the same instant can come out in
+another order than at the phase start (21 of 150 old patterns looked different order-sensitively; same hits) — ties by
+lane would make digests stable (verifier); a step saved with the in-phase key `nei` loads as an unknown condition and
+never plays — `nei` never left this machine (main is ahead of origin, not pushed) (verifier, information); NEW:
+evolve's way home into another meter on a bar line starts its bars a bar late, since nothing re-tracks the meter after
+`evolveNow` (architect; confirmed from the rule, not in the page); NEW: `collectChain` repeats the anchor rule
+instead of using `trackBars` (architect); NEW, taste: `++barN` inside the evolve condition makes the count depend on
+the order of the `&&` terms (architect).
+
+GOOD: one runtime value (`Machine.origin`) moved only by the pure, tested `trackBars`, the same rule live and in the
+render (verifier, architect); old data untouched, the origin stays 0 with one bar length since Play (verifier,
+architect, sound); the R4 counter only goes up and survives undo, redo and origin moves; a chain's MIDI time signatures
+sit exactly on the kicks; the audio path is cheaper than before the round (architect, sound).
+
+### Changes after round 2
+
+- **Evolve's way home starts its meter on the bar line** (architect's NEW SHOULD): `onTick` calls `trackMeter(t)`
+  after `evolveNow`, as after a slot load. Reproduced on `a4a7e17` first (page 5400/9400: evoSnap in 4/4, 7/8 set while
+  evolving, home after 2: the restored 4/4 waited in `next` and started at 12600, a 7/8 bar after the home at 9660);
+  now its bars start at 9660.
+- **A jam that starts with a switch into another meter counts that meter** (found by the implementer while doing the
+  above; R3, jam start): `jamTick` ran before the slot load on the same bar line, so a take armed for a switch into 7/8
+  took the outgoing bar and meter. Reproduced on `a4a7e17` (page: `jam.bar` 3360, `jam.meter` 4/4 while 7/8 played; the
+  take 48000 frames = 1.143 bars of 7/8, labelled "1 bar" with an ACID 4/4); `jamTick` now runs after the slot and
+  evolve steps: `jam.bar` 2940, 7/8, the take 42000 frames = exactly 1 bar of 7/8, "1 bar of 7/8".
+- Quick SHOULDs: `collectChain` takes its origin from `trackBars` (one rule for live and the render); the bar count
+  is its own statement (`barN` counts every bar line whether evolve is on or not). Later → [[BACKLOG]]: tie order in
+  `collectHits`.
+- Checks: `npm run check` clean, `npm test` 144 + 9 (the chain render and live = render tests hold the trackBars path),
+  `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped). Browser
+  (5400/9400, `/tmp/orbit2-impl/`, deleted): the two repros above, 3 checks that failed on `a4a7e17` and pass now (0
+  page errors), and the round-1 page
+  checks again: 7/8 clicked mid-bar, kicks at 6720 (the anchor), 9660, 12600, 15540, 18480; evolve at 3360, 6720,
+  9660, 12600, 15540, 18480; 390×844 tap on 5/4; 0 page errors.
+
+## Result: HAPPY
+
+All five reviewers HAPPY after round 2 (ines and kai in round 1; verifier, architect and sound on the re-check).
+Nothing deferred. Next: the close task marks R1–R4 done.

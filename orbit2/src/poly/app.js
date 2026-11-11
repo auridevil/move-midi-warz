@@ -199,11 +199,14 @@ function onBlock(time) {
   for (let t = t0; t < t0 + MIDI_DIV; t++) cyc = onTick(t, time + (t - t0) * ts, cyc, ts);
 }
 function onTick(t, time, cyc, ts) {
-  trackMeter(t); jamTick(t, time);
+  trackMeter(t);
   const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars (and lanes) here
   if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included)
-  if (t > 0 && onBar(t, bars) && ++barN % evo.every === 0 && evo.on) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); }
+  // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
+  // its way home can bring back another meter, which starts on this bar line too
+  const line = t > 0 && onBar(t, bars); if (line) barN++;
+  if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
