@@ -4,6 +4,7 @@
 // control mode: notes there would repaint its pads instead of playing anything.
 
 import { MIDI_DIV } from './lanes.js';
+import { articNote } from './export.js';
 
 export const DEFAULT_NOTES = [36, 38, 42, 39, 46, 49];   // GM drums: kick, snare, closed hat, clap, open hat, crash (L2 lanes 5–6)
 export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
@@ -130,8 +131,8 @@ export class PolyMidi {
   /** Re-resolve ports after the device list changes (plug / unplug). */
   refresh() { this.setOutput(this.outName); if (this.inName && !this.input) this.setInput(this.inName); }
   send(bytes, at) { try { this.out?.send(bytes, at); } catch {} }
-  note(li, vel01, at) {
-    if (!this.out) return; const { note, ch } = this.lanes[li], st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
+  note(li, vel01, at, artic = null) {   // artic: L3, the lane's note + the articulation (export.js articNote)
+    if (!this.out) return; const { ch } = this.lanes[li], note = articNote(this.lanes[li].note, artic), st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
     this.send([st, note & 127, v], at); this.send([0x80 | ((ch - 1) & 15), note & 127, 0], at + this.gateMs);
   }
   clock(at) { if (this.out && this.clockOut) this.send([0xF8], at); }

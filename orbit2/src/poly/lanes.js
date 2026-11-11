@@ -1,7 +1,7 @@
 // Polyrhythm drum machine model: 4 lanes, each with its own length, speed ratio, euclidean fill, rotation,
 // swing, probability and accents. Pure logic (no audio), unit-tested.
 import { KITS } from './kits.js';
-import { VOICES } from './voices.js';
+import { VOICES, ARTICS, ARTIC_MAX, articAt } from './voices.js';
 /** L1: a lane loops over up to 32 steps (two bars of sixteenths). Saves from before hold 16 per lane: the rest load empty. */
 export const MAX_STEPS = 32;
 /** Speed ratios, slowest first (the speed knob's order). Saved as the value (`ratio`); older saves only have an index
@@ -48,7 +48,10 @@ const BAR_OF = Object.fromEntries(METERS.map(k => { const { num, den } = meterPa
 export const barTicks = (meter) => BAR_OF[meter] ?? BAR_TICKS;
 /** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, nudge −½..½ of a step (early/late), the rest 0..1. */
 export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
-export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5] };
+export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5], artic: [0, ARTIC_MAX] };
+/** Every step lock: the knob locks plus L3 `artic` (a whole number, the voice's articulation: voices.js ARTICS). It has
+ *  no knob or gauge of its own (lock panel: a chooser; Move: hold the step and push the jog wheel). */
+export const STEP_LOCKS = [...LOCK_KEYS, 'artic'];
 /** Lane push / pull: the whole lane early (−) or late (+), in ms. */
 export const OFFSET_MS = 30;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -56,7 +59,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  *  only one step ahead, so a nudge must stay within half a step). A nudge of 0 is no lock. */
 const lockFrom = (lk) => {
   if (!lk) return null; const o = { ...lk };
-  for (const k of LOCK_KEYS) if (o[k] != null) { const [lo, hi] = LOCK_RANGE[k] || [0, 1]; o[k] = clamp(+o[k] || 0, lo, hi); }
+  for (const k of STEP_LOCKS) if (o[k] != null) { const [lo, hi] = LOCK_RANGE[k] || [0, 1]; o[k] = clamp(k === 'artic' ? Math.round(+o[k] || 0) : +o[k] || 0, lo, hi); }
   if (o.nudge === 0) delete o.nudge; return Object.keys(o).length ? o : null;
 };
 /**
@@ -175,12 +178,14 @@ export class Lane {
   trigAt(i) { return this.trigs[this.stepIndex(i)]; }
   /** Lock a parameter on one stored step (use stepIndex() for a visible position). */
   setLock(i, k, v) {
-    if (!LOCK_KEYS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(+v || 0, lo, hi);
+    if (!STEP_LOCKS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(k === 'artic' ? Math.round(+v || 0) : +v || 0, lo, hi);
     if (k === 'nudge' && !x) { this.unlock(i, k); return 0; }   // back on the grid is no lock at all
     (this.locks[i] ||= {})[k] = x; return x;
   }
   setOffset(ms) { this.offsetMs = clamp(Math.round(+ms || 0), -OFFSET_MS, OFFSET_MS); return this.offsetMs; }
   setSwingTpl(key) { if (SWING_TEMPLATES[key]) this.swingTpl = key; return this.swingTpl; }
+  /** L3: the next articulation of stored step i for this lane's voice: lane sound → first → … → last → lane sound. */
+  cycleArtic(i) { const n = ARTICS[this.voice]?.length || 0; if (!n) return null; const a = articAt(this.voice, this.locks[i]); if (a == null || a < n - 1) return this.setLock(i, 'artic', a == null ? 0 : a + 1); this.unlock(i, 'artic'); return null; }
   clearLocks(i) { this.locks[i] = null; }
   unlock(i, k) { const lk = this.locks[i]; if (!lk) return; delete lk[k]; if (!Object.keys(lk).length) this.locks[i] = null; }
   /**

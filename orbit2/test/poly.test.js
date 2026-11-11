@@ -1200,3 +1200,31 @@ test('ORBIT2-08 L4: djembe, log drum, agogo, shekere in both engines; Afro and J
   assert.ok(Math.abs(f0(DSP_VOICES.agogo({ ...p, color: 1 })) / f0(DSP_VOICES.agogo({ ...p, color: 0 })) - 1.5) < 1e-9);
   assert.equal(DSP_VOICES.logdrum({ ...p, color: 0 })[0].glide, 1); assert.ok(DSP_VOICES.logdrum({ ...p, color: 1 })[0].glide < 0.7);
 });
+test('ORBIT2-08 L3: artic step lock — whole numbers in range, cycles per voice, survives a save, voices play it, MIDI on neighbouring notes', async () => {
+  const { ARTICS, ARTIC_MAX, articAt, velShape } = await import('../src/poly/voices.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js'); const { makeEngine } = await import('../src/poly/dsp-core.js');
+  const { collectHits, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js'); const { STEP_LOCKS, LOCK_KEYS } = await import('../src/poly/lanes.js');
+  assert.ok(STEP_LOCKS.includes('artic') && !LOCK_KEYS.includes('artic'), 'no knob or gauge of its own'); assert.equal(ARTIC_MAX, 2);
+  for (const k of ['conga', 'djembe', 'hat']) assert.ok(ARTICS[k].length >= 2, k);
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const c = m.lanes[3]; c.setVoice('conga'); c.setLength(4); c.setRatio(5); for (let i = 0; i < 4; i++) c.hits[i] = true;
+  assert.equal(c.setLock(1, 'artic', 1.4), 1); assert.equal(c.setLock(2, 'artic', 9), 2, 'clamped'); assert.equal(c.setLock(3, 'artic', -3), 0);
+  // cycle: lane sound → open → mute → slap → lane sound; a voice without strokes takes none
+  const seen = []; for (let k = 0; k < 4; k++) seen.push(c.cycleArtic(0)); assert.deepEqual(seen, [0, 1, 2, null]); assert.equal(c.locks[0], null, 'back to no lock');
+  const kk = m.lanes[0]; assert.equal(kk.cycleArtic(0), null); assert.equal(kk.locks[0], null);
+  const h = m.lanes[2]; h.setVoice('hat'); assert.deepEqual([h.cycleArtic(0), h.cycleArtic(0), h.cycleArtic(0)], [0, 1, null], 'hat: closed, open, lane');
+  // saves: kept, a hand-edited link is brought back in range; a lane that changed voice ignores a stroke it lacks
+  const back = Machine.from(JSON.parse(JSON.stringify(m))); assert.deepEqual(back.lanes[3].locks.slice(0, 4).map(l => l?.artic ?? null), [null, 1, 2, 0]);
+  const j = JSON.parse(JSON.stringify(m)); j.lanes[3].locks[1] = { artic: '7.6', tune: 0.5 }; assert.deepEqual(Machine.from(j).lanes[3].locks[1], { artic: 2, tune: 0.5 });
+  assert.equal(articAt('conga', { artic: 2 }), 2); assert.equal(articAt('hat', { artic: 2 }), null); assert.equal(articAt('kick', { artic: 0 }), null); assert.equal(articAt('conga', null), null);
+  assert.equal(velShape({ vel: 0.35, tune: 0, dec: 0.3, snap: 0.5, color: 0.5, artic: 2 }, 'conga').artic, 2, 'a soft hit keeps its stroke');
+  // the dsp voices: a mute is shorter than an open tone, a slap brighter; an open hat rings longer than a closed one
+  const sr = 44100, p = { vel: 0.7, tune: 0, dec: 0.34, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  const len = (layers) => { const e = makeEngine(sr); e.hit(layers, 0); const o = new Float32Array(sr * 2); for (let i = 0; i < o.length; i += 128) e.render(o, i, i + 128); let last = 0; for (let i = 0; i < o.length; i++) if (Math.abs(o[i]) > 1e-3) last = i; return last / sr; };
+  assert.ok(len(DSP_VOICES.conga({ ...p, artic: 1 })) < len(DSP_VOICES.conga(p)) * 0.5, 'mute');
+  assert.ok(DSP_VOICES.conga({ ...p, artic: 2 })[0].f > DSP_VOICES.conga(p)[0].f * 1.4, 'slap higher');
+  assert.ok(len(DSP_VOICES.hat({ ...p, artic: 1 })) > len(DSP_VOICES.hat(p)) * 1.5, 'open hat');
+  assert.deepEqual(DSP_VOICES.conga({ ...p, artic: 0 }), DSP_VOICES.conga(p), 'open = the unlocked conga');
+  // MIDI: the lane's note + the stroke; no stroke (or one the voice lacks) = the lane's note
+  const hits = collectHits(m, { from: 0, to: 4 * c.stepTicks(), tempo: 120 }).filter(x => x.li === 3); assert.deepEqual(hits.map(x => x.artic), [null, 1, 2, 0]);
+  const lanes = [36, 38, 42, 60, 46, 49].map(note => ({ note, ch: 10 })), notes = readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: [], bars: 1 })).tracks.flatMap(t => t.notes);
+  assert.deepEqual(notes.map(n => n.p ?? n.note).sort(), [60, 60, 61, 62]);
+});

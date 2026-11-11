@@ -48,11 +48,15 @@ D.rim = (p) => [
 ];
 // ---- toms, hand drums ----
 D.tom = (p) => [{ kind: 0, wave: 0, f: mf(55 + p.tune * 24), sweep: 1.6 + p.color * 2.5, pd: 0.03 + p.snap * 0.15, dec: p.dec, att: 0.0005, drive: 0.2, lp: 4000, vel: p.vel, gain: 0.9 }];
-D.conga = (p) => [
-  { kind: 0, wave: 0, f: mf(52 + p.tune * 12 + p.color * 5), sweep: 1.5, pd: 0.012, dec: 0.08 + p.dec * 0.4, att: 0.0005, drive: 0.15, vel: p.vel, gain: 0.9 },
-  { kind: 1, dec: 0.02, hp: 1500, vel: p.vel * (p.snap > 0.3 ? p.snap : 0), gain: 0.25 },
-];
-D.bongo = (p) => [{ kind: 0, wave: 0, f: mf(64 + p.tune * 12 + p.color * 7), sweep: 1.4, pd: 0.008, dec: 0.05 + p.dec * 0.2, att: 0.0003, drive: 0.2, vel: p.vel, gain: 0.8 }];
+// conga / bongo: artic 0 open (the lane's sound), 1 mute (short, a touch higher), 2 slap (high, cracking)
+D.conga = (p) => { const a = p.artic ?? 0; return [
+  { kind: 0, wave: 0, f: mf(52 + p.tune * 12 + p.color * 5 + [0, 1, 7][a]), sweep: 1.5, pd: 0.012, dec: [0.08 + p.dec * 0.4, 0.03 + p.dec * 0.05, 0.04 + p.dec * 0.08][a], att: 0.0005, drive: a === 2 ? 0.35 : 0.15, vel: p.vel * [1, 0.9, 0.8][a], gain: 0.9 },
+  { kind: 1, dec: a === 2 ? 0.03 : 0.02, hp: 1500, vel: p.vel * (a === 2 ? 1 : p.snap > 0.3 ? p.snap * (a ? 0.5 : 1) : 0), gain: a === 2 ? 0.45 : 0.25 },
+]; };
+D.bongo = (p) => { const a = p.artic ?? 0; return [
+  { kind: 0, wave: 0, f: mf(64 + p.tune * 12 + p.color * 7 + [0, 1, 7][a]), sweep: 1.4, pd: 0.008, dec: [0.05 + p.dec * 0.2, 0.02 + p.dec * 0.03, 0.03 + p.dec * 0.05][a], att: 0.0003, drive: a === 2 ? 0.35 : 0.2, vel: p.vel * [1, 0.9, 0.8][a], gain: 0.8 },
+  ...(a === 2 ? [{ kind: 1, dec: 0.025, hp: 1800, vel: p.vel, gain: 0.4 }] : []),
+]; };
 D.tabla = (p) => [{ kind: 0, wave: 0, f: mf(50 + p.tune * 12), glide: 1.2 + p.color * 0.6, gd: (0.1 + p.dec * 0.6) * (0.3 + p.snap * 0.5), dec: 0.1 + p.dec * 0.6, att: 0.001, drive: 0.15, vel: p.vel, gain: 0.9 }];
 D.cuica = (p) => [{ kind: 0, wave: 1, f: mf(70 + p.tune * 12), sweep: p.color > 0.5 ? 0.7 : 1.3, pd: (0.08 + p.dec * 0.3) * 0.35, dec: 0.08 + p.dec * 0.3, att: 0.01, drive: 0.4, vel: p.vel, gain: 0.6 }];
 D.clave = (p) => [{ kind: 0, wave: 0, f: 2500 * Math.pow(2, p.tune * 0.5 + p.color * 0.3), dec: 0.02 + p.dec * 0.08, att: 0.0003, vel: p.vel, gain: 0.7 }];
@@ -95,8 +99,8 @@ D.shekere = (p) => {
   return [{ ...beads, att: 0.001, vel: p.vel * 0.8 }, { kind: 0, wave: 0, f: mf(50 + p.tune * 12), sweep: 1.4, pd: 0.006, dec: 0.05 + p.dec * 0.1, att: 0.0005, drive: 0.2, vel: p.vel, gain: 0.6 }];
 };
 // ---- cymbals ----
-D.hat = (p) => [
-  { kind: 2, f: 205 * Math.pow(2, p.tune + (p.color - 0.5) * 0.6), dec: p.dec * 0.5, att: 0.0005, hp: 5000 + p.snap * 3000, bp: 9000, bq: 0.9, noise: p.color > 0.6 ? (p.color - 0.6) * 1.2 : 0, vel: p.vel, gain: 4.5 },
+D.hat = (p) => [   // artic 1 = open
+  { kind: 2, f: 205 * Math.pow(2, p.tune + (p.color - 0.5) * 0.6), dec: p.artic === 1 ? 0.15 + p.dec * 0.6 : p.dec * 0.5, att: 0.0005, hp: 5000 + p.snap * 3000, bp: 9000, bq: 0.9, noise: p.color > 0.6 ? (p.color - 0.6) * 1.2 : 0, vel: p.vel, gain: 4.5 },
 ];
 D.ophat = (p) => [
   { kind: 2, f: 205 * Math.pow(2, p.tune), dec: 0.15 + p.dec * 0.6, att: 0.001, hp: 4000 + p.color * 3000, bp: 8000, bq: 0.8, noise: 0.25, vel: p.vel, gain: 3.5 },

@@ -3,6 +3,7 @@
 import { Machine, PPQ, meterParts } from './lanes.js';
 import { trackBars } from './slots.js';
 import { KITS } from './kits.js';
+import { articAt } from './voices.js';
 import { writeMidi } from '../punch/smf.js';
 
 /** Velocity of a hit: a 'vel' lock wins, an accent adds on top. */
@@ -91,7 +92,7 @@ export function liveQuiet(m, t, ahead, { humanize = 0, tickSec, cut = Infinity }
  *  the render's own and the live ones are left alone. */
 export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false, origin = 0 }) {
   const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON()); m.origin = origin;
-  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock }); });
+  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, artic: articAt(m.lanes[li].voice, h.lock) }); });
   return out.sort((a, b) => a.time - b.time);
 }
 
@@ -120,6 +121,8 @@ export const chainSixteenths = (slotStates, bars) => slotStates.reduce((n, json)
  * note rings past the end, so the clip stays N bars. Off (one-shot): a hit before the downbeat starts on it, as in the
  * one-shot WAV.
  */
+/** L3: an articulation plays the lane's note + its index (a conga lane on note 60: open / mute / slap = 60 / 61 / 62), live and in the file. */
+export const articNote = (note, artic) => Math.min(127, note + (artic || 0));
 export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null }) {
   const { num, den } = meterParts(meter), toSteps = (sec) => sec / (60 / tempo / 4), len = sixteenths ?? bars * 16 * num / den, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
   const place = (sec) => {
@@ -127,7 +130,7 @@ export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = '
     let s = ((toSteps(sec) % len) + len) % len; if (Math.round(s * 24) >= len * 24) s = 0;   // rounds onto the end: the downbeat
     return { s, d: Math.min(gate, len - s) };
   };
-  const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: l.note, ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
+  const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: articNote(l.note, h.artic), ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
   const sigs = meters?.map(({ s, meter: k }) => { const p = meterParts(k); return { s, num: p.num, den: p.den }; });
   return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den], meters: sigs });   // the clip is the full N bars, not up to the last note
 }

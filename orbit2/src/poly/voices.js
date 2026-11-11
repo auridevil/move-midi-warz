@@ -15,7 +15,7 @@ V.rim = { label: 'rim', make: (T, out) => ({ o: new T.Synth({ oscillator: { type
 V.tom = { label: 'tom', make: (T, out) => ({ m: new T.MembraneSynth({ pitchDecay: 0.08, octaves: 3, envelope: { attack: 0.001, decay: 0.4, sustain: 0 }, volume: -4 }).connect(out) }),
   hit: (T, n, p, t) => { n.m.set({ pitchDecay: 0.03 + p.snap * 0.15, octaves: 1 + p.color * 4, envelope: { decay: p.dec } }); n.m.triggerAttackRelease(mf(T, 55 + p.tune * 24), p.dec, t, p.vel); } };
 V.hat = { label: 'hat', make: (T, out) => ({ m: new T.MetalSynth({ envelope: { attack: 0.001, decay: 0.08, release: 0.02 }, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5, volume: -16 }).connect(out), n: new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.05, sustain: 0 }, volume: -22 }).connect(out) }),
-  hit: (T, n, p, t) => { n.m.set({ envelope: { decay: p.dec * 0.5 }, harmonicity: 3 + p.color * 6, modulationIndex: 10 + p.snap * 50 }); n.m.triggerAttackRelease(mf(T, 84 + p.tune * 12), p.dec * 0.5, t, p.vel * 0.8); if (p.color > 0.6) n.n.triggerAttackRelease(p.dec * 0.3, t, p.vel * (p.color - 0.6)); } };
+  hit: (T, n, p, t) => { const d = p.artic === 1 ? 0.15 + p.dec * 0.6 : p.dec * 0.5; n.m.set({ envelope: { decay: d }, harmonicity: 3 + p.color * 6, modulationIndex: 10 + p.snap * 50 }); n.m.triggerAttackRelease(mf(T, 84 + p.tune * 12), d, t, p.vel * 0.8); if (p.color > 0.6) n.n.triggerAttackRelease(p.dec * 0.3, t, p.vel * (p.color - 0.6)); } };   // artic 1 = open
 V.shaker = { label: 'shaker', make: (T, out) => ({ n: new T.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.01, decay: 0.07, sustain: 0 }, volume: -14 }).connect(out) }),
   hit: (T, n, p, t) => { n.n.set({ envelope: { attack: 0.003 + (1 - p.snap) * 0.03, decay: 0.03 + p.dec * 0.15 } }); n.n.triggerAttackRelease(0.03 + p.dec * 0.15, t, p.vel); } };
 V.cowbell = { label: 'cowbell', make: (T, out) => ({ a: new T.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.3, sustain: 0 }, volume: -16 }).connect(out), b: new T.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.001, decay: 0.3, sustain: 0 }, volume: -16 }).connect(out) }),
@@ -60,10 +60,11 @@ V.crash = { label: 'crash', make: (T, out) => { const hp = new T.Filter({ type: 
 V.tamb = { label: 'tambourine', make: (T, out) => { const hp = new T.Filter({ type: 'highpass', frequency: 6000 }).connect(out); return { hp, n: new T.NoiseSynth({ envelope: { attack: 0.002, decay: 0.12, sustain: 0 }, volume: -10 }).connect(hp), m: new T.MetalSynth({ envelope: { attack: 0.001, decay: 0.15, release: 0.05 }, harmonicity: 8, modulationIndex: 20, resonance: 7000, octaves: 0.5, volume: -26 }).connect(out) }; },
   hit: (T, n, p, t) => { const d = 0.05 + p.dec * 0.25; n.n.triggerAttackRelease(d, t, p.vel); for (let i = 0; i < 2 + Math.round(p.snap * 3); i++) n.m.triggerAttackRelease(mf(T, 96 + p.tune * 12), d, t + i * 0.012, p.vel * 0.5); } };
 // ---- hand percussion ----
+// conga / bongo: open (the lane's sound), mute (a hand left on the skin: short, a touch higher), slap (high, cracking)
 V.conga = { label: 'conga', make: (T, out) => ({ m: new T.MembraneSynth({ pitchDecay: 0.015, octaves: 1.5, envelope: { attack: 0.001, decay: 0.3, sustain: 0 }, volume: -4 }).connect(out), slap: new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.02, sustain: 0 }, volume: -18 }).connect(out) }),
-  hit: (T, n, p, t) => { n.m.set({ envelope: { decay: 0.08 + p.dec * 0.4 } }); n.m.triggerAttackRelease(mf(T, 52 + p.tune * 12 + p.color * 5), 0.08 + p.dec * 0.4, t, p.vel); if (p.snap > 0.3) n.slap.triggerAttackRelease(0.02, t, p.vel * p.snap); } };
-V.bongo = { label: 'bongo', make: (T, out) => ({ m: new T.MembraneSynth({ pitchDecay: 0.01, octaves: 1.2, envelope: { attack: 0.001, decay: 0.15, sustain: 0 }, volume: -6 }).connect(out) }),
-  hit: (T, n, p, t) => { n.m.set({ envelope: { decay: 0.05 + p.dec * 0.2 } }); n.m.triggerAttackRelease(mf(T, 64 + p.tune * 12 + p.color * 7), 0.05 + p.dec * 0.2, t, p.vel); } };
+  hit: (T, n, p, t) => { const a = p.artic ?? 0, d = [0.08 + p.dec * 0.4, 0.03 + p.dec * 0.05, 0.04 + p.dec * 0.08][a]; n.m.set({ envelope: { decay: d } }); n.m.triggerAttackRelease(mf(T, 52 + p.tune * 12 + p.color * 5 + [0, 1, 7][a]), d, t, p.vel * [1, 0.9, 0.8][a]); if (a === 2) n.slap.triggerAttackRelease(0.03, t, p.vel); else if (p.snap > 0.3) n.slap.triggerAttackRelease(0.02, t, p.vel * p.snap * (a ? 0.5 : 1)); } };
+V.bongo = { label: 'bongo', make: (T, out) => ({ m: new T.MembraneSynth({ pitchDecay: 0.01, octaves: 1.2, envelope: { attack: 0.001, decay: 0.15, sustain: 0 }, volume: -6 }).connect(out), slap: new T.NoiseSynth({ envelope: { attack: 0.001, decay: 0.02, sustain: 0 }, volume: -18 }).connect(out) }),
+  hit: (T, n, p, t) => { const a = p.artic ?? 0, d = [0.05 + p.dec * 0.2, 0.02 + p.dec * 0.03, 0.03 + p.dec * 0.05][a]; n.m.set({ envelope: { decay: d } }); n.m.triggerAttackRelease(mf(T, 64 + p.tune * 12 + p.color * 7 + [0, 1, 7][a]), d, t, p.vel * [1, 0.9, 0.8][a]); if (a === 2) n.slap.triggerAttackRelease(0.025, t, p.vel); } };
 V.clave = { label: 'clave', make: (T, out) => ({ o: new T.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.0005, decay: 0.05, sustain: 0 }, volume: -6 }).connect(out) }),
   hit: (T, n, p, t) => { n.o.set({ envelope: { decay: 0.02 + p.dec * 0.08 } }); n.o.triggerAttackRelease(2500 * Math.pow(2, p.tune * 0.5 + p.color * 0.3), 0.02 + p.dec * 0.08, t, p.vel); } };
 V.tabla = { label: 'tabla', make: (T, out) => ({ o: new T.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.001, decay: 0.4, sustain: 0 }, volume: -4 }).connect(out) }),
@@ -114,6 +115,15 @@ V.noiseburst = { label: 'noise burst', make: (T, out) => { const f = new T.AutoF
   hit: (T, n, p, t) => { n.f.frequency.value = 2 + p.snap * 20; n.f.baseFrequency = 200 + p.color * 2000; n.n.triggerAttackRelease(0.05 + p.dec * 0.5, t, p.vel); } };
 export const VOICES = V;
 export const VOICE_KEYS = Object.keys(V);
+/**
+ * L3 articulations: the voices with more than one stroke, and their names. An `artic` step lock is an index here (0 is
+ * the first stroke, not "no lock": an unlocked step plays the lane's own sound, which for djembe and agogo comes from
+ * color). Both engines read p.artic; MIDI plays the lane's note + the index (neighbouring notes).
+ */
+export const ARTICS = { conga: ['open', 'mute', 'slap'], bongo: ['open', 'mute', 'slap'], djembe: ['bass', 'tone', 'slap'], hat: ['closed', 'open'], agogo: ['low', 'high'], shekere: ['shake', 'slap'] };
+export const ARTIC_MAX = Math.max(...Object.values(ARTICS).map(a => a.length)) - 1;
+/** The articulation a lock gives voice `key`, or null (no lock, or one this voice doesn't have: the lane changed voice). */
+export const articAt = (key, lock) => { const a = lock?.artic; return a != null && a < (ARTICS[key]?.length ?? 0) ? a : null; };
 /**
  * G5 velocity shapes the sound, in both engines: below the normal velocity (0.7) a hit gets darker (tone, in octaves
  * down at velocity 0), a softer transient (snap scaled down) and a slightly shorter decay. Per voice, so kicks stay

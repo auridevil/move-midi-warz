@@ -156,6 +156,7 @@
         <div class="row-ctl"><div id="midi-clock-out"></div></div>
         <span class="ctl-lbl">note · channel per lane, gate</span>
         <div id="midi-lanes" class="gauges midi-gauges"></div>
+        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, +1 for the second, +2 for the third. A conga lane on C3 (60): open 60, mute 61, slap 62; a hat on 42: closed 42, open 43. Live out and the MIDI export alike.</p>
         <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
         <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
       </div>
@@ -186,6 +187,7 @@
         <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
         <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
+        <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
         <tr><th>Hold Layout</th><td>fill</td></tr>
         <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
         <tr><th>Delete</th><td>clear the lane</td></tr>
@@ -232,6 +234,7 @@
       <div id="lockpanel" class="lockpanel" hidden>
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>
+        <div class="row-ctl" id="artic-wrap" hidden><div class="ctl" title="Which stroke this step plays: open, mute or slap on a conga, bass, tone or slap on a djembe, closed or open on a hat"><span class="ctl-lbl">stroke</span><div id="lock-artic"></div></div></div>
         <div class="row-ctl trig-row">
           <div class="cond-pick" title="Play only on some loops, or only with/without Fill">
             <div class="ctl"><span class="ctl-lbl">plays</span><div id="cond-every"></div></div>

@@ -12,7 +12,7 @@ import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
-import { VOICES, VOICE_KEYS, velShape } from './voices.js';
+import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -152,7 +152,7 @@ function rebuildVoices(k = kit) { m.lanes.forEach((_, i) => { buildVoice(i, k); 
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
-  const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color }, c.voice);
+  const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: articAt(c.voice, lock) ?? undefined }, c.voice);   // L3: undefined = the lane's own stroke
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
   // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
@@ -219,7 +219,7 @@ function onTick(t, time, cyc, ts) {
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
+  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000, articAt(lane.voice, h.lock)); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
   liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
@@ -282,7 +282,7 @@ const INFO = {
   tempo: 'Master tempo in bpm, shared by every page. Global, not per lane.',
   humanize: 'Random timing jitter on every hit (up to ~15 ms), to make the machine feel less like a machine. Velocity humanize is per lane, in the lane drawer.',
   'lock nudge': 'Moves this step early (−) or late (+) by up to half a step. On the Move: hold the step and turn the jog wheel.',
-  'step locks': 'Long-press, right-click or Alt+click a step to override tune, probability, velocity, decay, tone, snap, color or nudge on that step only. Locked hits glow cyan and get a small moon.',
+  'step locks': 'Long-press, right-click or Alt+click a step to override tune, probability, velocity, decay, tone, snap, color or nudge on that step only, and pick its stroke on a conga, bongo, djembe, hat, agogo or shekere (Move: hold the step and push the jog wheel). Locked hits glow cyan and get a small moon.',
   'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
   'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
   'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
@@ -399,7 +399,7 @@ function renderSteps() {
 }
 
 // ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
-let lockStep = -1;   // visible step the lock panel edits (-1 = closed)
+let lockStep = -1, articFor = null;   // visible step the lock panel edits (-1 = closed); the voice the stroke chooser shows
 const LOCK_UI = {
   tune: { label: 'tune', min: -100, max: 100, fmt: v => (v > 0 ? '+' : '') + v, say: tuneSay, base: l => l.tune },
   prob: { label: 'probability', fmt: v => v + '%', base: l => l.prob },
@@ -429,13 +429,19 @@ function buildLockGauges() {
   ui.ratchet = mount('trig-ratchet', segmented({ options: [1, 2, 3, 4].map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
   $('lock-close').onclick = () => editLocks(lockStep);
+  // L3 stroke: 'lane' = no artic lock (the lane's own sound); the options follow the lane's voice (renderLocks)
+  ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => { if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v === 'lane') lane.unlock(i, 'artic'); else lane.setLock(i, 'artic', v); auditionLock(); stepEdited(); } }));
 }
+/** "slap" for an artic lock, the key name for the rest (the lock panel title). */
+const lockName = (lane, k, lk) => k === 'artic' ? ARTICS[lane.voice]?.[articAt(lane.voice, lk)] ?? 'stroke' : k;
 function renderLocks() {   // always after renderSteps, which closes a step a shorter loop left out
   const lane = m.lane, panel = $('lockpanel');
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
   renderTrig(lane.trigAt(lockStep));
-  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.join(', ') : 'no locks yet (dim = lane value)'}`;
+  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dim = lane value)'}`;
+  const arts = ARTICS[lane.voice]; $('artic-wrap').hidden = !arts;   // a sample lane has none
+  if (arts) { if (articFor !== lane.voice) { articFor = lane.voice; ui.artic.setOptions([['lane', 'lane sound', 'no stroke lock: the lane\'s own sound'], ...arts.map((n, a) => [a, n])]); } ui.artic.set(articAt(lane.voice, lk) ?? 'lane'); }   // rebuilt only for a new voice: a click never lands on a detached button
   for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); g.setColor(lk[k] != null ? 'var(--signal-cyan)' : 'rgba(236,233,247,.3)'); }
 }
 /** Condition picker state from a step's trig: 'a:b' → "1 in b" + dot a lit; specials light their chip. */
@@ -1049,6 +1055,12 @@ move.addEventListener('wheel', (e) => {
     stepEdited(); return;
   }
   m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
+// L3: hold step(s) + push the jog wheel = the next stroke (open → mute → slap → lane sound) on voices that have them
+move.addEventListener('wheelPush', (e) => {
+  if (!e.detail.pressed || !held.size || !ARTICS[m.lane.voice]) return; const lane = m.lane;
+  for (const h of held.values()) { h.used = true; lane.cycleArtic(lane.stepIndex(h.step)); lockStep = h.step; }
+  auditionLock(); stepEdited();
+});
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
