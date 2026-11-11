@@ -98,12 +98,12 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## R · Clock resolution & meter (phase 06)
 
 - **R1 finer master clock** (e.g. 840 PPQ internal; MIDI clock out every 35th tick, clock in scaled) so 5- and
-  7-tuplets are exact. Keep tick-derived positions. (Ines)
-- **R2 more ratios**: ×6 (16th triplets), ×4/3 (hemiola), ×5/4, ×5, ×7/4, ×3/2 kept. (Tomi, Ines)
+  7-tuplets are exact. Keep tick-derived positions. (Ines) ✅ ORBIT2-06
+- **R2 more ratios**: ×6 (16th triplets), ×4/3 (hemiola), ×5/4, ×5, ×7/4, ×3/2 kept. (Tomi, Ines) ✅ ORBIT2-06
 - **R3 time signature**: bar length setting (4/4, 3/4, 6/8, 7/8, 5/4, 12/8) used by bar-quantized switching, chains,
-  evolve-every, jam, exports, ACID beats. (Tomi)
+  evolve-every, jam, exports, ACID beats. (Tomi) ✅ ORBIT2-06
 - **R4 stable loop counter**: conditions count loops per lane as they happen (length changes don't jump the phase), or
-  offer global-bar conditions; add PRE / NEI (previous condition passed / failed). (Ines)
+  offer global-bar conditions; add PRE / NEI (previous condition passed / failed). (Ines) ✅ ORBIT2-06
 
 ## L · Longer patterns, more parts, new voices (phases 07, 08)
 
