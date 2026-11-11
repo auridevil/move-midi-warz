@@ -1,6 +1,6 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
-import { Machine, BAR_TICKS, PPQ } from './lanes.js';
+import { Machine, PPQ, meterParts } from './lanes.js';
 import { KITS } from './kits.js';
 import { writeMidi } from '../punch/smf.js';
 
@@ -90,28 +90,32 @@ export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false 
   return out.sort((a, b) => a.time - b.time);
 }
 
-/** A chain of slot states, `bars` each, on one continuous master clock (as it plays live). */
+/** A chain of slot states, `bars` each (in each slot's own time signature), on one continuous master clock (as it plays
+ *  live). */
 export function collectChain(slotStates, { bars, tempo, dice = null }) {
-  const out = []; const span = bars * BAR_TICKS;
-  slotStates.forEach((json, k) => { const m = Machine.from(json); out.push(...collectHits(m, { from: k * span, to: (k + 1) * span, tempo, dice })); });
+  const out = []; let from = 0;
+  slotStates.forEach((json) => { const m = Machine.from(json), to = from + bars * m.barTicks(); out.push(...collectHits(m, { from, to, tempo, dice })); from = to; });
   return out;
 }
+/** Sixteenths in a chain of slot states, `bars` each (the MIDI clip length). */
+export const chainSixteenths = (slotStates, bars) => slotStates.reduce((n, json) => { const { num, den } = meterParts(json?.meter); return n + bars * 16 * num / den; }, 0);
 
 /**
- * Hits → Standard MIDI File (one track per lane, notes/channels from the MIDI I/O settings), `bars` long. loop (the
+ * Hits → Standard MIDI File (one track per lane, notes/channels from the MIDI I/O settings), `bars` long in `meter`
+ * (its time-signature event goes in the file; a 7/8 bar is 14 sixteenths), or `sixteenths` long (a chain). loop (the
  * export's "render as loop"): a hit nudged or pushed out of the clip, before the downbeat or past the end, wraps
  * around like the loop WAV's audio, and no note rings past the end, so the clip stays N bars. Off (one-shot): a hit
  * before the downbeat starts on it, as in the one-shot WAV.
  */
-export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true }) {
-  const toSteps = (sec) => sec / (60 / tempo / 4), len = bars * 16, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
+export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', sixteenths = null }) {
+  const { num, den } = meterParts(meter), toSteps = (sec) => sec / (60 / tempo / 4), len = sixteenths ?? bars * 16 * num / den, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
   const place = (sec) => {
     if (!loop || !len) return { s: Math.max(0, toSteps(sec)), d: gate };
     let s = ((toSteps(sec) % len) + len) % len; if (Math.round(s * 24) >= len * 24) s = 0;   // rounds onto the end: the downbeat
     return { s, d: Math.min(gate, len - s) };
   };
   const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: l.note, ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
-  return writeMidi({ bpm: tempo, name, parts, endStep: len });   // the clip is the full N bars, not up to the last note
+  return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den] });   // the clip is the full N bars, not up to the last note
 }
 
 // ---- share links: the machine (+ tempo) as deflated JSON in the URL hash ----

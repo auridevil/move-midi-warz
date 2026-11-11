@@ -59,17 +59,19 @@ export function trimChunks(lanes, frames) {
   return lanes.map(lane => lane.map(chunks => { const out = []; let left = frames; for (const c of chunks) { if (left <= 0) break; out.push(c.length > left ? c.slice(0, left) : c); left -= Math.min(left, c.length); } return out; }));
 }
 /**
- * Tempo for DAWs: an ACID 'acid' chunk (tempo, number of beats, 4/4) inserted before 'data' of a 44-byte-header WAV.
+ * Tempo for DAWs: an ACID 'acid' chunk (tempo, number of beats, meter) inserted before 'data' of a 44-byte-header WAV.
+ * beats count the meter's beat (its denominator): a 7/8 bar is 7, a 4/4 bar 4, so beats / num = bars; tempo stays
+ * quarter-note bpm.
  * Readers that don't know it skip it (RIFF rule). Every Orbits file is whole bars at a known tempo, so all are tagged
  * stretchable (loop: true); the ACID one-shot flag means "don't follow tempo". Layout: u32 flags (1 = one-shot, 4 = stretch),
  * u16 root note, u16 0x8000, f32 0, u32 beats, u16 meter denominator, u16 numerator, f32 tempo.
  */
-export function withAcid(wav, { bpm, beats, loop = true }) {
+export function withAcid(wav, { bpm, beats, loop = true, num = 4, den = 4 }) {
   const out = new Uint8Array(wav.length + 32), v = new DataView(out.buffer);
   out.set(wav.subarray(0, 36)); out.set(wav.subarray(36), 68);
   v.setUint32(4, out.length - 8, true); out.set([0x61, 0x63, 0x69, 0x64], 36); v.setUint32(40, 24, true);
   v.setUint32(44, loop ? 4 : 1, true); v.setUint16(48, 60, true); v.setUint16(50, 0x8000, true); v.setFloat32(52, 0, true);
-  v.setUint32(56, Math.round(beats), true); v.setUint16(60, 4, true); v.setUint16(62, 4, true); v.setFloat32(64, bpm, true);
+  v.setUint32(56, Math.round(beats), true); v.setUint16(60, den, true); v.setUint16(62, num, true); v.setFloat32(64, bpm, true);
   return out;
 }
 /** Float stems (one [L, R] per lane, same length) → Int16 chunks, scaled together so the loudest never clips. */

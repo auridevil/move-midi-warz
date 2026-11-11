@@ -1,15 +1,15 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { hitVel, liveTick, liveQuiet, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
-import { SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
+import { onBar, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape } from './voices.js';
 import { DSP_VOICES } from './dsp-voices.js';
@@ -177,6 +177,15 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
+/** R3 bar lines: at + k × len. A new time signature (the meter control, a slot, undo, a link) starts on the next bar
+ *  line of the old one, so a bar is never cut short; a restart counts from tick 0 in the pattern's meter. */
+let bars = { at: 0, len: BAR_TICKS, next: null };
+const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; };
+function trackMeter(t) {
+  const len = m.barTicks(); if (len === bars.len) { bars.next = null; return; }
+  if (bars.next?.len !== len) bars.next = { at: bars.at + Math.ceil((t - bars.at) / bars.len) * bars.len, len };
+  if (t >= bars.next.at) bars = { at: bars.next.at, len, next: null };
+}
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
@@ -185,7 +194,7 @@ const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.c
 const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
-  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; }   // both are keyed on the old ticks
+  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); }   // both are keyed on the old ticks
   const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clock(perfAt(time));   // 24 per quarter, whatever PPQ is
@@ -193,11 +202,11 @@ function onBlock(time) {
   for (let t = t0; t < t0 + MIDI_DIV; t++) cyc = onTick(t, time + (t - t0) * ts, cyc, ts);
 }
 function onTick(t, time, cyc, ts) {
-  jamTick(t, time);
-  const si = bank.due(t, cyc); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); }
+  trackMeter(t); jamTick(t, time);
+  const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars here
   if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) { evolveNow(t / BAR_TICKS, true); cyc = m.cycleTicks(cycleOpts()); }
-  const cut = bank.nextSwitch(t, cyc);
+  if (evo.on && t > bars.at && (t - bars.at) % (bars.len * evo.every) === 0) { evolveNow(Math.round(t / bars.len), true); cyc = m.cycleTicks(cycleOpts()); }
+  const cut = bank.nextSwitch(t, cyc, bars);
   if (liveQuiet(m, t, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
   const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
@@ -216,7 +225,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -241,6 +250,8 @@ const INFO = {
   length: 'How many steps the lane loops over (1–16). Different lengths at the same speed = polymeter: 3 against 4 lines up every 12 steps.',
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
+  pre: 'PRE / NEI: play only if the last step with a condition on this lane passed (or failed). Pair it with a 1:2 step for an either-or: one plays, the other answers.',
+  meter: 'Time signature of this pattern: how long a bar is. Next-bar slot switching, chains, evolve, jam takes and exports count in these bars; 7/8 = 3½ beats. A change starts on the next bar line.',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm; 5/4 and 7/4 play fives and sevens across four beats, 4/3 the hemiola, ×6 sixteenth triplets.',
   swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. With the MPC template, at ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
   'swing template': 'Which steps the swing moves, and how far: it shapes the swing amount, so at 0% swing every template plays straight. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
@@ -272,7 +283,7 @@ const INFO = {
   'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
   'clock out': 'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
-  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, or only/never on the first loop after Play.',
+  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed (PRE / NEI).',
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
@@ -320,7 +331,7 @@ function sync() {
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
   ui.swingTpl.set(m.lane.swingTpl);
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
-  sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100));
+  sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100)); ui.meter?.set(m.meter);
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
   laneTabs.forEach((b, i) => { b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
@@ -399,7 +410,7 @@ function buildLockGauges() {
   const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); stepEdited(); };
   // condition = "every N loops" + which loop (dots), or one of the fill / first specials
   ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
-  ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st']], value: null, chips: true,
+  ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st'], ['pre', 'if last passed', INFO.pre], ['nei', 'if last failed', INFO.pre]], value: null, chips: true,
     onChange: (c) => setTrig({ cond: m.lane.trigAt(lockStep)?.cond === c ? 'always' : c }) }));
   ui.ratchet = mount('trig-ratchet', segmented({ options: [1, 2, 3, 4].map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
@@ -419,7 +430,7 @@ function renderTrig(tg) {
   ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade);
   const dots = $('cond-dots'); dots.innerHTML = ''; $('cond-dots-wrap').hidden = !(b > 1);
   for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); stepEdited(); }; dots.appendChild(d); }
-  $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays' }[cond];
+  $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays', pre: 'plays when the last step with a condition on this lane played (PRE)', nei: 'plays when the last step with a condition on this lane did not (NEI)' }[cond];
 }
 function auditionLock() {
   if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
@@ -484,6 +495,7 @@ function buildSlotsUI() {
   };
   $('slot-menu').addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeSlotMenu(true); } });
 
+  ui.meter = mount('meter', segmented({ options: METERS.map(k => [k, k, INFO.meter]), value: m.meter, onChange: (v) => { m.setMeter(v); sync(); } }));
   ui.slotSwitch = mount('slot-switch', segmented({ options: [['now', 'at once'], ['bar', 'next bar'], ['cycle', 'full cycle', 'when every lane lines up again']], value: bank.switchAt, onChange: (v) => { bank.switchAt = v; bank.persist(); renderSlots(); } }));
   sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
   $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
@@ -701,7 +713,9 @@ const pad2 = (n) => String(n).padStart(2, '0');
 /** Local time to the second, so two exports in the same minute don't overwrite each other. */
 const stamp = (d = new Date()) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
 /** Length of a render in master ticks: N bars, or whole bars holding whole polyrhythm cycles (capped at 64 bars). */
-function renderTicks() { const v = ui.expLen.value; return v === 'cycle' ? wholeBarCycle(m.cycleTicks(cycleOpts()), BAR_TICKS, 64) : { ticks: +v * BAR_TICKS, capped: false }; }
+function renderTicks() { const v = ui.expLen.value, bar = m.barTicks(); return v === 'cycle' ? wholeBarCycle(m.cycleTicks(cycleOpts()), bar, 64) : { ticks: +v * bar, capped: false }; }
+/** ACID tag of a render N bars long: beats in the meter's beat unit (a 7/8 bar = 7), plus the meter. */
+const acidOf = (bpm, nBarsLong, meter = m.meter, loop = true) => { const { num, den } = meterParts(meter); return { bpm, beats: nBarsLong * num, num, den, loop }; };
 // Every audio export is whole bars at the current tempo, so a DAW lines it up. Renders start PRE_ROLL before the
 // earliest hit (renderLead, jam.js: the master needs it to settle) and ring out for a tail long enough for the delay to
 // die away; then either
@@ -722,7 +736,7 @@ async function masterLatency() {
 }
 /** The current pattern rendered offline: { chans, sr, bars, hits, capped, loop }. stems: raw kit, a pair per lane. */
 async function renderPattern({ stems = false } = {}) {
-  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = BAR_TICKS * tickSec(), loop = ui.expLoop.value;
+  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value;
   const hits = collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
   const lead = renderLead(hits);
@@ -741,7 +755,7 @@ async function renderPattern({ stems = false } = {}) {
   }, lead + sec + tailSec(), stems ? 8 : 2, 44100);
   const b = out.get(), sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
   const chans = loop ? raw.map(d => foldLoop(d, sr, sec, pre)) : oneShot(raw, sr, sec, pre, barSec);
-  return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / BAR_TICKS, hits, capped, loop };
+  return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / m.barTicks(), hits, capped, loop };
 }
 const nBars = (n) => `${n} bar${n === 1 ? '' : 's'}`;
 /** File names carry tempo and length; a one-shot names the pattern and its ring-out ("4bars+2tail-oneshot"). */
@@ -762,15 +776,16 @@ async function shareLink() {
 }
 async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
-  const r = await renderPattern(), acid = { bpm: tempo, beats: r.bars * 4 };
+  const r = await renderPattern(), acid = acidOf(tempo, r.bars);
   download(withAcid(encodeWav(r.chans, r.sr), acid), `${fileBase('', r)}.wav`, 'audio/wav');
   $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}`;
 }
 function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
-  const bars = chain ? bank.chainBars * bank.chain.length : ticks / BAR_TICKS;
-  const hits = chain ? collectChain(bank.chain.map(i => bank.get(i)), { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value });   // early notes wrap like the loop WAV
+  const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
+  const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
+  // a chain is as long as its slots' bars in their own meters; the file's time signature is the first slot's
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: chain ? states[0]?.meter : m.meter, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
@@ -801,7 +816,7 @@ function buildEditUI() {
 // ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as 4 lane tracks, up to 256 beats ----
 // The recorder taps each lane bus (pre-master), starts on a bar line and ends on one (stop rounds up to the next
 // bar), so the four files are sample-aligned, the same length and whole bars long: a DAW lines them up at this tempo.
-const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, sr: 44100 };   // idle → armed → rec → finishing → done
+const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, sr: 44100, bar: BAR_TICKS, meter: '4/4' };   // idle → armed → rec → finishing → done; bar / meter: the take's, from its first bar line
 async function ensureJamNode() {
   // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
   if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
@@ -832,8 +847,8 @@ function stopJam() {
     // scheduled one (the clock runs ahead). The end is posted now (the transport may be stopping) and re-posted from
     // the clock when it gets there, which stays exact even if the tempo moves meanwhile.
     const now = jam.lastTick - Math.max(0, jam.lastTime - T.getContext().rawContext.currentTime) / tickSec(), el = Math.max(0, now - jam.startTick);
-    const bars = Math.max(1, el % BAR_TICKS < BAR_TICKS / 16 ? Math.floor(el / BAR_TICKS) : Math.ceil(el / BAR_TICKS));
-    jam.stopTick = jam.startTick + bars * BAR_TICKS; jam.beats = bars * 4; jam.state = 'finishing';
+    const B = jam.bar, n = Math.max(1, el % B < PPQ / 4 ? Math.floor(el / B) : Math.ceil(el / B));   // within a 16th note of the bar line, any meter
+    jam.stopTick = jam.startTick + n * B; jam.beats = n * B / PPQ; jam.state = 'finishing';
     jam.node.port.postMessage({ end: jam.lastTime + (jam.stopTick - jam.lastTick) * tickSec() });
   }
   renderJam(); paintLeds();
@@ -843,10 +858,11 @@ function jamTick(t, time) {
   if (jam.state === 'finishing' && t === jam.stopTick) jam.node.port.postMessage({ end: time });
   if (jam.state === 'finishing' && t % PPQ === 0) T.getDraw().schedule(renderJam, time);
   if (jam.state === 'finishing' && t < jam.stopTick && tempo !== jam.tempo) jam.tempoMoved = true;   // still inside the take
-  if (jam.state === 'armed' && t % BAR_TICKS === 0) { jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
+  if (jam.state === 'armed' && onBar(t, bars)) { jam.bar = bars.len; jam.meter = m.meter; jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
   if (jam.state !== 'rec') return;
   jam.lastTick = t; jam.lastTime = time; if (tempo !== jam.tempo) jam.tempoMoved = true; const el = t - jam.startTick; jam.beats = el / PPQ;
-  if (el >= JAM_BEATS * PPQ) { jam.stopTick = t; jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
+  // the cap: the last whole bar within 256 beats (a 7/8 bar is 3.5)
+  if (el >= Math.floor(JAM_BEATS * PPQ / jam.bar) * jam.bar) { jam.stopTick = t; jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
   else if (el % PPQ === 0) T.getDraw().schedule(renderJam, time);
 }
 function renderJam() {
@@ -854,12 +870,12 @@ function renderJam() {
   btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next bar…' : st === 'finishing' ? '◌ jam: closing…' : '● jam';
   panel.hidden = st === 'idle'; $('jam-fill').style.width = `${Math.min(100, (jam.beats / JAM_BEATS) * 100)}%`;
   const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
-  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(b / 4) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats / 4))} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · 4 lanes + raw mix${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
+  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(jam.beats * PPQ / jam.bar) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · 4 lanes + raw mix${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
 function downloadJam() {
-  if (jam.state !== 'done') return; const bars = Math.round(jam.beats / 4), base = fileBase('jam', { loop: true, bars }, jam.tempo);
-  download(stemsZip(jam.chunks, m.lanes.map(voiceLabel), jam.sr, base, { bpm: jam.tempo, beats: bars * 4, loop: true }), `${base}.zip`, 'application/zip');
+  if (jam.state !== 'done') return; const n = Math.round(jam.beats * PPQ / jam.bar), base = fileBase('jam', { loop: true, bars: n }, jam.tempo);
+  download(stemsZip(jam.chunks, m.lanes.map(voiceLabel), jam.sr, base, acidOf(jam.tempo, n, jam.meter)), `${base}.zip`, 'application/zip');
 }
 function buildJamUI() {
   $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = downloadJam; $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = null; renderJam(); paintLeds(); };
@@ -870,7 +886,7 @@ function buildJamUI() {
 async function exportStems() {
   await wake(); $('exp-status').textContent = 'rendering 4 stems…';
   const r = await renderPattern({ stems: true }), { lanes, gain } = floatStemsToInt16(m.lanes.map((_, i) => [r.chans[2 * i], r.chans[2 * i + 1]])), base = fileBase('stems', r);
-  download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, { bpm: tempo, beats: r.bars * 4 }), `${base}.zip`, 'application/zip');
+  download(stemsZip(lanes, m.lanes.map(voiceLabel), r.sr, base, acidOf(tempo, r.bars)), `${base}.zip`, 'application/zip');
   $('exp-status').textContent = `stems: 4 lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 // ---- welcome back, toasts ----
@@ -1099,7 +1115,7 @@ if (midi.supported) { $('move-status').hidden = false; paintConnect(); }
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: BAR_TICKS, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
@@ -1122,7 +1138,7 @@ function readout() {
   $('readout').textContent = [`${tempo} bpm`, playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
     ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
-    const sd = m.lane.sound, lines = [`engine ${engine}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
+    const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
       ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}%${l.swingTpl !== 'mpc' ? ` ${SWING_TEMPLATES[l.swingTpl].name}` : ''}${l.offsetMs ? ` ${l.offsetMs > 0 ? '+' : ''}${l.offsetMs}ms` : ''} prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
       `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
       `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];

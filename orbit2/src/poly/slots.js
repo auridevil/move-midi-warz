@@ -4,6 +4,9 @@ import { BAR_TICKS } from './lanes.js';
 
 export const SLOT_COUNT = 16;
 export const SWITCH_MODES = ['now', 'bar', 'cycle'];
+const BARS = { at: 0, len: BAR_TICKS };   // 4/4 from tick 0
+/** Is master tick `tick` a bar line of `bars` ({ at, len })? */
+export const onBar = (tick, { at, len }) => (((tick - at) % len) + len) % len === 0;
 
 export class SlotBank {
   /** @param {{ getItem(k): string|null, setItem(k, v): void }} [store] */
@@ -25,10 +28,11 @@ export class SlotBank {
   setChain(list) { this.chain = list.filter(i => this.filled(i)); this.chainPos = 0; this.barsInSlot = 0; if (this.chain.length) this.pending = this.chain[0]; this.persist(); }
   /**
    * Called on every master tick (before the tick's events are computed). Returns the slot index to load
-   * now, or -1. `cycleTicks` = ticks until all lanes line up (for switchAt 'cycle').
+   * now, or -1. `cycleTicks` = ticks until all lanes line up (for switchAt 'cycle'). `bars` = { at, len }: bar lines
+   * fall on `at + k × len` (the app moves the anchor when the time signature changes).
    */
-  due(tick, cycleTicks) {
-    const bar = tick % BAR_TICKS === 0;
+  due(tick, cycleTicks, bars = BARS) {
+    const bar = onBar(tick, bars);
     if (bar && tick > 0 && this.current >= 0) this.barsInSlot++;
     // a running chain moves on after `chainBars` bars, always on a bar line, so the song keeps its length
     if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; return this.take(this.chain[this.chainPos]); }
@@ -39,10 +43,10 @@ export class SlotBank {
   take(i) { this.pending = -1; this.current = i; this.barsInSlot = 0; return this.filled(i) ? i : -1; }
   /** The next master tick after `tick` where due() loads a slot (a queued one, or the chain moving on), else Infinity.
    *  Pure: live play leaves the steps from there on to the incoming slot (liveTick's cut). */
-  nextSwitch(tick, cycleTicks) {
-    const next = (n) => (Math.floor(tick / n) + 1) * n;
-    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : next(this.switchAt === 'bar' ? BAR_TICKS : Math.max(1, cycleTicks));
-    if (this.chain.length > 1 && this.current >= 0) return next(BAR_TICKS) + Math.max(0, this.chainBars - this.barsInSlot - 1) * BAR_TICKS;
+  nextSwitch(tick, cycleTicks, bars = BARS) {
+    const next = (n, at = 0) => at + (Math.floor((tick - at) / n) + 1) * n;
+    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : this.switchAt === 'bar' ? next(bars.len, bars.at) : next(Math.max(1, cycleTicks));
+    if (this.chain.length > 1 && this.current >= 0) return next(bars.len, bars.at) + Math.max(0, this.chainBars - this.barsInSlot - 1) * bars.len;
     return Infinity;
   }
   get(i) { return this.slots[i]; }

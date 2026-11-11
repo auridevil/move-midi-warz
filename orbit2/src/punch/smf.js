@@ -23,10 +23,13 @@ function track(events, name, end = 0) {
 /** parts: [{ name, ch (1–16), notes: [{p, s, d, v}] }] → Uint8Array of a .mid file. markers: [{ s (step), text }] become
  *  marker meta events on the tempo track (Live shows them as locators). endStep: every track lasts at least this many
  *  steps, so a DAW makes the clip the full pattern length even when the last note comes early. */
-export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, markers = [], endStep = 0 }) {
+export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, markers = [], endStep = 0, meter = [4, 4] }) {
   const end = stepTicks(endStep, 50);
-  const usq = Math.round(60000000 / bpm);
-  const head = [0x00, ...meta(0x03, str(name)), 0x00, ...meta(0x51, [(usq >> 16) & 255, (usq >> 8) & 255, usq & 255]), 0x00, ...meta(0x58, [4, 2, 24, 8])];
+  const usq = Math.round(60000000 / bpm), [num, den] = meter;
+  // time signature: num, log2(den), MIDI clocks per metronome click (a quarter; a dotted quarter in 6/8 and 12/8, an
+  // eighth in 7/8), 8 thirty-seconds per quarter
+  const click = den === 8 ? (num % 3 ? 12 : 36) : 24;
+  const head = [0x00, ...meta(0x03, str(name)), 0x00, ...meta(0x51, [(usq >> 16) & 255, (usq >> 8) & 255, usq & 255]), 0x00, ...meta(0x58, [num, Math.log2(den), click, 8])];
   let last = 0; for (const m of [...markers].sort((a, b) => a.s - b.s)) { const t = stepTicks(m.s, 50); head.push(...vlq(t - last), ...meta(0x06, str(m.text))); last = t; }
   const tempo = [...head, ...vlq(Math.max(0, end - last)), ...meta(0x2F, [])];
   const tracks = [chunk('MTrk', tempo)];
