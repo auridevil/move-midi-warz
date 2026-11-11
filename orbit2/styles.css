@@ -254,6 +254,9 @@ body.chaos::before { display: none; }
 .stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
 .stepsui { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 8px 0; }   /* 8 in a row: a target 32 px wide too (16 in a row were 22 px) */
+/* L1: a lane of up to 16 steps keeps the strip above (steps 17–32 hidden); a longer one is two rows of 16, a bar each */
+.stepsui.short .st:nth-child(n+17) { display: none; }
+.stepsui:not(.short) { grid-template-columns: repeat(16, 1fr); column-gap: 3px; }
 .stepsui .st { height: 32px; min-width: 0; padding: 0; border: 1px solid transparent; border-radius: 4px; background: rgba(236,233,247,.14); box-shadow: none; cursor: pointer; transition: none; }
 .stepsui .st:hover { background: rgba(236,233,247,.26); border-color: transparent; box-shadow: none; } .stepsui .st.on, .stepsui .st.on:hover { background: var(--signal-cyan); } .stepsui .st.acc, .stepsui .st.acc:hover { background: #fff; }
 .stepsui .st.off, .stepsui .st.off:disabled:hover { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; opacity: 1; }
@@ -577,6 +580,8 @@ body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-l
   .slot-menu [data-act=close] { min-width: 44px; }
 }
 @media (pointer: coarse) and (max-width: 440px) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(4, 1fr); } }
+/* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */
+@media (pointer: coarse) { body:has(#hud-left) .stepsui:not(.short) { grid-template-columns: repeat(8, 1fr); } }
 /* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
    (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
 body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }

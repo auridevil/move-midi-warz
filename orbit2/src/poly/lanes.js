@@ -2,7 +2,8 @@
 // swing, probability and accents. Pure logic (no audio), unit-tested.
 import { KITS } from './kits.js';
 import { VOICES } from './voices.js';
-export const MAX_STEPS = 16;
+/** L1: a lane loops over up to 32 steps (two bars of sixteenths). Saves from before hold 16 per lane: the rest load empty. */
+export const MAX_STEPS = 32;
 /** Speed ratios, slowest first (the speed knob's order). Saved as the value (`ratio`); older saves only have an index
  *  into OLD_RATIOS. ×5/4 and ×7/4 are quintuplet / septuplet feels, ×4/3 the hemiola, ×5 and ×6 fives and 16th triplets. */
 export const RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 5 / 4, 4 / 3, 3 / 2, 7 / 4, 2, 3, 4, 5, 6];
@@ -319,7 +320,8 @@ export class Machine {
         if (l.euclidK) l.setEuclid(clamp(l.euclidK + dir, 1, l.length));
         else { const i = Math.floor(rng() * l.length); if (!(l.hits[i] && l.hits.filter(Boolean).length <= 1)) l.toggle(i); }
       }
-      if (kind === 'length') { l.setLength(clamp(l.length + dir, 2, MAX_STEPS)); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); l.rotation %= l.length; }
+      // evolve keeps its old reach (2–16 steps): a 16-step lane never drifts to 17; a longer lane (L1) can only shrink back
+      if (kind === 'length') { l.setLength(clamp(l.length + dir, 2, Math.max(16, l.length))); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); l.rotation %= l.length; }
       if (kind === 'ratio') l.setRatio(ratioIndexOf(evolveRatio(l.ratio, dir)));
       changes.push({ lane: li, kind, dir });
     });

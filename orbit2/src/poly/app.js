@@ -249,7 +249,7 @@ const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) app
 
 // ---- lane params (UI + Move) ----
 const INFO = {
-  length: 'How many steps the lane loops over (1–16). Different lengths at the same speed = polymeter: 3 against 4 lines up every 12 steps.',
+  length: 'How many steps the lane loops over (1–32; past 16 the step strip shows a second row). Different lengths at the same speed = polymeter: 3 against 4 lines up every 12 steps.',
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
   pre: 'PRE / not PRE: play only if the last step with a condition on this lane passed its condition (or failed it). It reads the condition, not whether that step sounded: a mute or its probability roll don\'t count. Pair it with a 1:2 step for an either-or: one plays, the other answers.',
@@ -372,7 +372,7 @@ function paintPlayhead() {
   stepBtns[playheadAt]?.classList.remove('ph'); stepBtns[i]?.classList.add('ph'); playheadAt = i;
 }
 function renderSteps() {
-  const lane = m.lane; playheadAt = -1;
+  const lane = m.lane; playheadAt = -1; $('stepsui').classList.toggle('short', lane.length <= 16);   // L1: steps 17–32 only for a lane that reaches them
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost';
@@ -970,16 +970,32 @@ const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34];
 const REC_LED = nearestPaletteIndex('#ef4444'), CYAN_LED = nearestPaletteIndex('#67e8f9'), MAGENTA_LED = nearestPaletteIndex('#f0abfc');
 const held = new Map();   // step buttons held down: index → { used } (used = a knob turned, so release won't toggle)
 let loopHeld = false, dupHeld = false, chainPick = [];
+// L5 pages: a pad row shows 8 steps of its lane, the 16 step buttons 16 steps of the selected lane. Following (the
+// default) each row shows the page its own lane's playhead is on (page 1 while stopped), so every step's playhead is
+// seen; Back + ◀ ▶ (or Back + a step button) pins one page for every row, Back alone goes back to following.
+const PAD_COLS = 8, STEP_BTNS = 16;
+const pg = { follow: true, pad: 0, back: false, backUsed: false };
+const padPages = () => Math.max(1, ...m.lanes.map(l => Math.ceil(l.length / PAD_COLS)));
+/** The first step a pad row of `lane` shows. */
+const padFirst = (lane) => PAD_COLS * (pg.follow ? (playing && lane.shown != null ? Math.floor(lane.shown / PAD_COLS) : 0) : pg.pad);
+/** The first step the step buttons show (the selected lane). */
+const stepFirst = () => { const l = m.lane; return pg.follow ? (playing && l.shown != null ? STEP_BTNS * Math.floor(l.shown / STEP_BTNS) : 0) : STEP_BTNS * Math.floor(pg.pad * PAD_COLS / STEP_BTNS); };
+/** Pin pad page p (clamped to the longest lane); the step buttons go to the 16 holding it. */
+function pinPage(p) { pg.follow = false; pg.pad = Math.max(0, Math.min(padPages() - 1, p)); paintLeds(); }
 function paintLeds() {
   if (!move.inControl) return;
   const anySolo = m.lanes.some(l => l.solo);
   m.lanes.forEach((lane, r) => {
-    for (let c = 0; c < 8; c++) { const i = c; const pad = r * 8 + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[r]) : LANE_DIM[r]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted || (anySolo && !lane.solo) ? (col ? LANE_DIM[r] : 0) : col); }
+    const f = padFirst(lane);
+    for (let c = 0; c < PAD_COLS; c++) { const i = f + c; const pad = r * PAD_COLS + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[r]) : LANE_DIM[r]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted || (anySolo && !lane.solo) ? (col ? LANE_DIM[r] : 0) : col); }
   });
-  const lane = m.lane;
+  const lane = m.lane, s0 = stepFirst(), cur = pg.follow ? Math.floor(padFirst(lane) / PAD_COLS) : pg.pad;
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
-    for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
-  } else for (let i = 0; i < MAX_STEPS; i++) move.setStepColor(i, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]);
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
+  } else if (pg.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= padPages() ? 0 : i === cur ? (pg.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
+  } else for (let b = 0; b < STEP_BTNS; b++) { const i = s0 + b; move.setStepColor(b, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]); }
+  move.setButtonColor('back', pg.follow ? (padPages() > 1 ? 16 : 0) : CYAN_LED);   // lit = there are pages; cyan = one is pinned
   for (let t = 1; t <= 4; t++) { const li = 4 - t; move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
@@ -988,11 +1004,13 @@ function paintLeds() {
 move.addEventListener('pad', (e) => {
   if (!e.detail.on) return; const { row, col, velocity } = e.detail;
   if (rec.armed) return liveHit(row, col, velocity);
-  const lane = m.lanes[row]; if (col >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(row); sync();
+  const lane = m.lanes[row], i = padFirst(lane) + col; if (i >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(row); sync();
 });
 move.addEventListener('step', (e) => {
-  const { index, on } = e.detail;
-  if (loopHeld || dupHeld) { if (!on) return; if (dupHeld) saveSlot(index); else if (bank.filled(index) && !chainPick.includes(index)) chainPick.push(index); paintLeds(); return; }
+  const { on } = e.detail;
+  if (loopHeld || dupHeld) { const index = e.detail.index; if (!on) return; if (dupHeld) saveSlot(index); else if (bank.filled(index) && !chainPick.includes(index)) chainPick.push(index); paintLeds(); return; }
+  if (pg.back) { if (on) { pg.backUsed = true; pinPage(e.detail.index); } return; }   // Back + step button = that pad page
+  const index = stepFirst() + e.detail.index;   // held steps and locks use the step's own number (17–32 on page 2)
   const lane = m.lane; if (index >= lane.length) return;
   if (on) { if (shift) { lane.toggleAccent(lane.stepIndex(index)); sync(); } else held.set(index, { used: false }); return; }
   const h = held.get(index); held.delete(index); if (h && !h.used) { lane.toggle(lane.stepIndex(index)); sync(); }   // a tap toggles; a hold + knob locked something instead
@@ -1023,6 +1041,8 @@ move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; return; }
   if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
+  if (name === 'back') { if (pressed) { pg.back = true; pg.backUsed = false; } else { pg.back = false; if (!pg.backUsed) pg.follow = true; } paintLeds(); return; }   // L5 pages
+  if ((name === 'left' || name === 'right') && pg.back) { if (pressed) { pg.backUsed = true; pinPage((pg.follow ? Math.floor(padFirst(m.lane) / PAD_COLS) : pg.pad) + (name === 'right' ? 1 : -1)); } return; }
   if (name === 'layout') { setFill(pressed); return; }   // hold = fill
   if (name === 'sampling' && pressed) { toggleJam(); return; }
   if (!pressed) return;
@@ -1084,8 +1104,8 @@ window.addEventListener('keydown', (e) => {
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
   e.preventDefault();   // a select the mouse left focused would also jump to the voice starting with that letter
   const row = 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, null, e.shiftKey);   // keys have no velocity: Shift = accent
-  const lane = m.lanes[row]; if (col >= lane.length) return;
-  if (e.shiftKey) lane.toggleAccent(lane.stepIndex(col)); else lane.toggle(lane.stepIndex(col)); m.select(row); sync();
+  const lane = m.lanes[row], i = padFirst(lane) + col; if (i >= lane.length) return;   // the keys mirror the pads, page included
+  if (e.shiftKey) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); m.select(row); sync();
 });
 
 // ---- Move connection ----

@@ -17,7 +17,7 @@ test('lane length, rotation, toggles, accents', () => {
   l.rotation = 1; assert.equal(l.hitAt(0), false); assert.equal(l.hitAt(1), true);
   assert.equal(l.toggle(3), true); assert.equal(l.toggle(9), false, 'beyond length is ignored');
   l.toggleAccent(0); assert.equal(l.accentAt(1), true, 'accents rotate with the hits');
-  l.setLength(20); assert.equal(l.length, 16); l.setLength(0); assert.equal(l.length, 1);
+  l.setLength(20); assert.equal(l.length, 20, 'L1: up to 32'); l.setLength(40); assert.equal(l.length, 32); l.setLength(0); assert.equal(l.length, 1);
 });
 test('a lane walks its loop from the master tick, respects mute and probability', () => {
   const l = new Lane('hat', { length: 3 }); l.setEuclid(3);
