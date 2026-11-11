@@ -3,6 +3,7 @@
 // everything else (comet playheads, shockwaves, particles, beams, the core, the cycle bloom).
 
 import { frameLoop } from '../frames.js';
+import { MAX_LANES } from './lanes.js';
 
 const TAU = Math.PI * 2;
 const MUTED = '#8b84a8';
@@ -64,7 +65,7 @@ export function createScene(cv, o) {
   const sprites = new Map(); const sprite = (hex) => { if (!sprites.has(hex)) sprites.set(hex, glowSprite(hex)); return sprites.get(hex); };
   const white = glowSprite('#ece9f7');
   const last = [];        // per lane: { index, t } of the latest step, for the smooth playhead
-  const energy = [0, 0, 0, 0, 0, 0], flash = new Map();   // energy per lane (up to 6) (decays), flash per "lane:index"
+  const energy = new Array(MAX_LANES).fill(0), flash = new Map();   // energy per lane (decays), flash per "lane:index"
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 
@@ -99,6 +100,7 @@ export function createScene(cv, o) {
 
   /** Called by the app for every lane step, at the moment it sounds. */
   function onStep(ev) {
+    if (!o.machine().lanes[ev.lane]) return;   // a step drawn after its lane went (6 → 4 lanes while playing)
     const now = performance.now(); last[ev.lane] = { index: ev.index, t: now };
     recent.push({ lane: ev.lane, index: ev.index, t: now }); while (recent.length > 16) recent.shift();
     if (ev.hit) burst(ev.lane, ev.index, ev.accent, now);
@@ -107,7 +109,8 @@ export function createScene(cv, o) {
   function flashHit(li, index, accent) { burst(li, index, accent, performance.now()); }
   function burst(li, index, accent, now) {
     const ev = { lane: li, index, accent };
-    const m = o.machine(), lane = m.lanes[ev.lane], g = geo(), [x, y, a] = nodeXY(g, ev.lane, ev.index, lane.length), hex = o.laneHex[ev.lane];
+    const m = o.machine(), lane = m.lanes[ev.lane]; if (!lane) return;
+    const g = geo(), [x, y, a] = nodeXY(g, ev.lane, ev.index, lane.length), hex = o.laneHex[ev.lane];
     energy[ev.lane] = Math.min(1.6, energy[ev.lane] + (ev.accent ? 1 : 0.65)); flash.set(`${ev.lane}:${ev.index}`, now);
     waves.push({ x, y, hex, t: now, big: ev.accent });
     const n = Math.round((ev.accent ? 18 : 9) * quality * (reduced ? 0.4 : 1));

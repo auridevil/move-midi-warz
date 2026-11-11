@@ -487,6 +487,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
   body:has(#hud-left) .chaos-bar { z-index: 8; }
   body:has(#hud-left) .toast { bottom: 108px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
+  body:has(#hud-left) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
   body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }

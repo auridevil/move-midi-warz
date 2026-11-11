@@ -354,3 +354,25 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Tie order of rendered hits** (ORBIT2-06 round 2, verifier): `collectHits` sorts by time only, so two hits at the same
   instant (a ratchet repeat and another lane's hit) can come out in another order than at 24 PPQ; the same hits, but a
   digest that compares lists in order changes. Ties by lane would make it stable.
+- **Smaller saves** (ORBIT2-07 round 1, architect): `Lane.toJSON` writes 32 entries per step array, so an old pattern's
+  share link grows 642 → 667 characters and slots and undo steps grow alike; writing steps 17–32 only when one is used
+  would keep old saves byte for byte. Mind that `toJSON` hands out the live arrays: `evoSnap = m.toJSON()` shares `hits`
+  with the lanes, so evolve's hit toggles (and hand edits) also change the home snapshot until the first way home
+  (pre-existing; phase 12 owns hand edits against home), and a copying `toJSON` changes that too.
+- **The pad window and the track buttons** (ORBIT2-07 round 1, kai): with lanes 3–6 on the pads, Track 1–4 still mean
+  lanes 4–1, so the rows and the track buttons no longer line up, and no LED says which window is showing.
+- **Page LEDs** (ORBIT2-07 round 1, kai): Back + ◀ ▶ steps the pad page by 8 while the step buttons show 16 (pad pages 1
+  and 2 give the same step page); the Back LED says "pinned", not which page; in follow mode the pads repaint under the
+  fingers at a page turn (a tap hits what is lit; the step buttons keep their page while one is held).
+- **Lanes 5–6 in the musical families** (ORBIT2-07 round 1, tomi): randomize gives lanes 5–6 the same part in every
+  family (an offbeat open sound, a cymbal every two bars); Afro, Amapiano and Latin want a shaker, bell or conga line
+  there (phase 12, or with phase 08's voices).
+- **A "bar 2" mark** (ORBIT2-07 round 1, tomi): nothing marks the second row of 16 on the strip as the second bar.
+- **Hidden hits past a shortened length** (ORBIT2-07 round 1, tomi; pre-existing): 32 → 24 steps keeps the hits on
+  25–32 out of sight, and they come back when the length grows.
+- **Six lanes on a phone** (ORBIT2-07 round 1, sound): headless headroom 72–74 ms with six busy lanes (76.5 with four);
+  check the stress meter on a real phone.
+- **The jam's six inputs** (ORBIT2-07 round 1, architect): the recorder always copies six stereo inputs, two of them
+  silent on a four-lane take (cheap).
+- **The Latin shaker** (ORBIT2-07 round 1, sound): even at level 0.85 the lane-5 shaker is the Latin kit's quietest lane
+  (stems RMS about −59 dB against −32…−45): the voice itself is quiet (phase 08 voices).

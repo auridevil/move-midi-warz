@@ -1139,3 +1139,39 @@ test('ORBIT2-07: old 4-lane / 16-step saves load unchanged; MIDI lanes 5–6 def
   p.fromJSON({ lanes: [{ note: 40, ch: 2 }, { note: 41, ch: 3 }, { note: 42, ch: 10 }, { note: 43, ch: 10 }] }); assert.deepEqual(p.lanes.slice(4), [{ note: 46, ch: 10 }, { note: 49, ch: 10 }], 'old settings: lanes 5–6 get the defaults'); assert.equal(p.lanes[0].note, 40);
   const g4 = ringGeo(800, 800), g6 = ringGeo(800, 800, null, 6); assert.equal(g4.outer, g4.R * 0.85); assert.ok(Math.abs(g6.outer - g6.R * 0.85) < 1e-9, 'six rings fit where four did'); assert.ok(g6.ring(1) - g6.ring(0) > 0.1 * g6.R);
 });
+test('ORBIT2-07 r1: Move pages — a held step button keeps its step across a page turn, the pad window stays while it is played, track buttons, a pinned page per lane', async () => {
+  const { MovePages, padPages, trackLane, PAD_COLS, STEP_BTNS } = await import('../src/poly/pages.js');
+  const long = new Lane('hat', { length: 32 }), short = new Lane('kick', { length: 8 }), mid = new Lane('snare', { length: 20 });
+  const p = new MovePages(); assert.equal(padPages([long, short]), 4); assert.equal(padPages([short]), 1); assert.equal(PAD_COLS * 2, STEP_BTNS);
+  // following: each row its own playhead's page (page 1 while stopped), the step buttons the 16 holding it
+  long.shown = 13; assert.equal(p.padFirst(long, true), 8); assert.equal(p.stepFirst(long, true), 0); assert.equal(p.padFirst(long, false), 0);
+  long.shown = 21; assert.equal(p.padFirst(long, true), 16); assert.equal(p.stepFirst(long, true), 16);
+  // a hold across a page turn: the release returns the step it went down on; the buttons stay on its page meanwhile
+  long.shown = 3; const first = p.stepFirst(long, true); p.press(3, first + 3, first); long.shown = 18;
+  assert.equal(p.stepFirst(long, true), 0, 'held: the step buttons stay on the page the finger went down on');
+  p.press(5, p.stepFirst(long, true) + 5, p.stepFirst(long, true)); assert.deepEqual([...p.held.values()].map(h => h.step), [3, 5]);
+  assert.deepEqual(p.release(3), { step: 3, used: false }); assert.equal(p.stepFirst(long, true), 0, 'one still held');
+  p.back = true; assert.deepEqual(p.release(5), { step: 5, used: false }, 'a release while Back is held ends its press too'); p.back = false;
+  assert.equal(p.held.size, 0); assert.equal(p.stepFirst(long, true), 16, 'all up: the buttons follow again'); assert.equal(p.release(5), undefined);
+  // a pinned page: for every row, a shorter lane shows its last page; ◀ ▶ stay within the longest lane
+  p.pin(3, [long, short, mid]); assert.equal(p.padFirst(long, true), 24); assert.equal(p.padFirst(short, true), 0); assert.equal(p.padFirst(mid, true), 16); assert.equal(p.stepFirst(long, true), 16);
+  p.pin(9, [long, short]); assert.equal(p.pad, 3); p.pin(-2, [long]); assert.equal(p.pad, 0); assert.equal(p.current(long, true), 0);
+  p.follow = true; mid.shown = 25; assert.equal(p.padFirst(mid, true), 16, 'a playhead left past a shortened lane: its last page');
+  // the pad window: lanes 1–4, or 3–6 once lane 5 / 6 is selected; selecting a lane inside it keeps it
+  const w = new MovePages();
+  for (const [sel, base] of [[5, 2], [2, 2], [3, 2], [5, 2], [0, 0], [2, 0], [3, 0], [4, 2], [1, 0]]) assert.equal(w.window(sel, 6), base, `selected lane ${sel + 1}`);
+  w.window(5, 6); assert.equal(w.window(3, 4), 0, 'four lanes: always lanes 1–4');
+  // track buttons: 4 − t; Shift + track 4 / 3 = lanes 5 / 6 on six lanes, otherwise as without Shift (as before L2)
+  assert.deepEqual([1, 2, 3, 4].map(t => trackLane(t, false, 6)), [3, 2, 1, 0]); assert.deepEqual([1, 2, 3, 4].map(t => trackLane(t, true, 6)), [3, 2, 5, 4]);
+  assert.deepEqual([1, 2, 3, 4].map(t => trackLane(t, true, 4)), [3, 2, 1, 0]);
+});
+test('ORBIT2-07 r1: a state with fewer lanes keeps the selection inside it (slot, undo, evolve home); a link cut short gets its kit\'s lanes', () => {
+  const m = new Machine(6); m.select(5); const four = new Machine(4).toJSON();
+  m.assign(four, { selected: m.selected }); assert.equal(m.lanes.length, 4); assert.equal(m.selected, 3); assert.ok(m.lane, 'the selected lane exists');
+  const six = new Machine(6); six.select(4); m.assign(six.toJSON()); assert.equal(m.selected, 4, 'not given: the state\'s own');
+  m.assign(four, { keep: true, selected: 5 }); assert.equal(m.selected, 3); m.assign(six.toJSON(), { selected: 1 }); assert.equal(m.selected, 1);
+  // Machine.from fills a link cut to 5 lanes with lane 6 of the kit it plays, as setLaneCount adds it
+  const t = new Machine(6); t.applyKit(KITS.trap, DEFAULT_SOUND); const j = t.toJSON(); j.lanes = j.lanes.slice(0, 5);
+  const back = Machine.from(j); assert.equal(back.lanes.length, 6); assert.equal(back.lanes[5].voice, KITS.trap.lanes[5].voice);
+  assert.deepEqual(back.lanes[5].sound, { ...DEFAULT_SOUND, ...KITS.trap.lanes[5].sound }); assert.equal(back.kitKey(), 'trap'); assert.ok(!back.lanes[5].hits.some(Boolean));
+});

@@ -28,6 +28,8 @@ export const LANE_COUNTS = [4, 6], MAX_LANES = 6;
 /** A fresh lane i: lengths and speeds of the classic four, then an open hat in eighths and a two-bar cymbal lane. */
 const LANE_DEFAULTS = [[4, 1], [4, 1], [8, 2], [5, 2], [8, 2], [8, 1]];
 const freshLane = (i) => new Lane(LANE_NAMES[i], { length: LANE_DEFAULTS[i][0], ratioIndex: ratioIndexOf(LANE_DEFAULTS[i][1]) });
+/** A fresh lane i with kit lane i's voice and sound: lanes 5–6 coming in (setLaneCount), or a link cut short. */
+const kitLane = (i, kit) => { const l = freshLane(i), k = kit.lanes[i]; l.setVoice(k.voice); l.sound = { ...DEFAULT_SOUND, ...(k.sound || {}) }; return l; };
 /** The lane count a pattern with `n` lanes keeps: 4 (old saves, or fewer), else 6. */
 export const laneCountOf = (n) => (n > 4 ? MAX_LANES : 4);
 /** Per-lane sound sculpting, all 0..1: Shift + knobs on the Move. */
@@ -283,10 +285,8 @@ export class Machine {
    */
   setLaneCount(n) {
     n = laneCountOf(n); const had = this.lanes.length; if (n === had) return n;
-    if (n > had) {
-      const kit = KITS[this.kitKey()] || KITS.common;
-      for (let i = had; i < n; i++) { const l = freshLane(i), k = kit.lanes[i]; l.setVoice(k.voice); l.sound = { ...DEFAULT_SOUND, ...(k.sound || {}) }; this.lanes.push(l); }
-    } else { this.lanes.length = n; for (const l of this.lanes) if (l.choke >= n) l.choke = -1; this.selected = Math.min(this.selected, n - 1); }
+    if (n > had) { const kit = KITS[this.kitKey()] || KITS.common; while (this.lanes.length < n) this.lanes.push(kitLane(this.lanes.length, kit)); }
+    else { this.lanes.length = n; for (const l of this.lanes) if (l.choke >= n) l.choke = -1; this.selected = Math.min(this.selected, n - 1); }
     return n;
   }
   /**
@@ -319,10 +319,12 @@ export class Machine {
    * Replace the whole state in place (pattern slots, undo), keeping the object other code holds. A slot or a link
    * starts its lanes fresh, from the absolute loop count, as the chain render does; keep (undo / redo, evolve's way
    * home) lets each new lane go on counting loops where the one it replaces was (R4: no jump in a 1:2 or PRE).
+   * selected: the lane to keep selected (the state's own if not given), within the new lane count (L2: a 4-lane state
+   * replacing 6 lanes moves a selected lane 5 / 6 to lane 4).
    */
-  assign(o, { keep = false } = {}) {
+  assign(o, { keep = false, selected = null } = {}) {
     const n = Machine.from(o); if (keep) n.lanes.forEach((l, i) => { const p = this.lanes[i]; if (p) Object.assign(l, { loopN: p.loopN, lastTick: p.lastTick, lastCond: p.lastCond }); });
-    this.lanes = n.lanes; this.selected = n.selected; this.humanize = n.humanize; this.kit = n.kit; this.meter = n.meter; return this;
+    this.lanes = n.lanes; this.selected = clamp(selected ?? n.selected, 0, n.lanes.length - 1); this.humanize = n.humanize; this.kit = n.kit; this.meter = n.meter; return this;
   }
   /**
    * Evolve: nudge some lanes a little. scope 'rotate' = rotation only, 'hits' = + euclid fill, 'all' = + length
@@ -379,8 +381,9 @@ export class Machine {
   }
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit, meter: this.meter }; }
   static from(o) {
-    // L2: the data keeps its lane count (4, or 6); a link edited to some other count is filled up / cut to the nearest
-    const m = new Machine(o?.lanes?.length); if (o?.lanes) { const n = m.lanes.length; m.lanes = o.lanes.slice(0, n).map(Lane.from); while (m.lanes.length < n) m.lanes.push(freshLane(m.lanes.length)); m.kit = o.kit; }
+    // L2: the data keeps its lane count (4, or 6); a link edited to some other count is cut, or filled up with the lanes
+    // of the kit it plays (as setLaneCount would add them)
+    const m = new Machine(o?.lanes?.length); if (o?.lanes) { const n = m.lanes.length; m.lanes = o.lanes.slice(0, n).map(Lane.from); m.kit = o.kit; if (m.lanes.length < n) { const kit = KITS[m.kitKey()] || KITS.common; while (m.lanes.length < n) m.lanes.push(kitLane(m.lanes.length, kit)); } }
     m.selected = Math.max(0, Math.min(m.lanes.length - 1, o?.selected | 0)); m.humanize = o?.humanize ?? 0; m.setMeter(o?.meter);
     // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample lane
     // without its sample record: give that lane the Common kit's voice instead of a silent fallback to the kick.

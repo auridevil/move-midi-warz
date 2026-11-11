@@ -3,6 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from './pages.js';
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
@@ -74,7 +75,7 @@ function addChain(k) {
 }
 function makeKit({ raw = false } = {}) {
   const master = raw ? new T.Gain(1).toDestination() : makeMaster(vol);
-  const kit = { master, chains: [], tc: T.getContext() }; m.lanes.forEach((_, i) => { buildVoice(i, kit); applySound(i, kit); }); return kit;
+  const kit = { master, chains: [], tc: T.getContext() }; rebuildVoices(kit); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
 function buildVoice(li, k = kit) {
@@ -146,6 +147,8 @@ function applySound(li, k = kit) {
   c.tone.frequency.value = 200 * Math.pow(60, s.tone);              // 200 Hz .. 12 kHz
   c.pan.pan.value = s.pan * 2 - 1; c.level.gain.value = s.level * s.level * 1.2; c.send.gain.value = s.send * 0.8;
 }
+/** Every lane's voice and sound on kit k: after a load, an undo, a kit or a lane-count change. */
+function rebuildVoices(k = kit) { m.lanes.forEach((_, i) => { buildVoice(i, k); applySound(i, k); }); }
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
@@ -162,9 +165,11 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
 }
 const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
+/** File / track names for n lanes (stems, jam takes, MIDI tracks): a lane the pattern no longer has is "lane N". */
+const laneNames = (n) => Array.from({ length: n }, (_, i) => (m.lanes[i] ? voiceLabel(m.lanes[i]) : `lane ${i + 1}`));
 function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awake && !playing) hitSound(m.lanes[li], T.now(), false); sync(); }
 function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
-function applyKit(key) { if (!KITS[key]) return; m.applyKit(KITS[key], DEFAULT_SOUND); m.lanes.forEach((_, i) => { buildVoice(i); applySound(i); }); sync(); }
+function applyKit(key) { if (!KITS[key]) return; m.applyKit(KITS[key], DEFAULT_SOUND); rebuildVoices(); sync(); }
 /** The kit select shows the truth: the kit every lane still matches, else "custom" (so picking any kit, even the one
  *  you started from, is a change and re-applies it). */
 function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelector('option[value=custom]').hidden = !!k; ks.value = k || 'custom'; }
@@ -221,7 +226,8 @@ function onTick(t, time, cyc, ts) {
     const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
     if (!ev) return;
     for (const h of hits) play(li, lane, h);
-    T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
+    // drawn at its time: by then the lane may be gone (6 → 4 lanes, an undo, a slot with fewer lanes)
+    T.getDraw().schedule(() => { if (li >= m.lanes.length) return; scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
   return cyc;
 }
@@ -450,14 +456,13 @@ function auditionLock() {
 // What the machine changes on its own is not announced to screen readers (hush): only what you touch is.
 const offClock = (fromClock, fn) => fromClock ? queueMicrotask(() => { hush = true; try { fn(); } finally { hush = false; } }) : fn();
 function loadSlot(i, fromClock = false) {
-  const sel = m.selected; m.assign(bank.get(i)); m.selected = sel;
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); });
+  m.assign(bank.get(i), { selected: m.selected }); rebuildVoices();
   evoSnap = bank.get(i); evoCount = 0; lockStep = -1; offClock(fromClock, () => { loadNext = true; sync(); renderSlots(); renderLanesEvolve(); });
 }
 /** L2: 4 or 6 lanes, an edit of this pattern (undo brings dropped lanes back); a slot, a setup or a link keeps its own count. */
 function setLaneCount(n) {
   const was = m.lanes.length; m.setLaneCount(n); if (m.lanes.length === was) return;
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve();
+  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve();
 }
 function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
@@ -545,8 +550,8 @@ function clearLane() { if (evo.on) setEvolve(false); m.lane.clear(); sync(); }
  */
 function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
   if (evo.on) setEvolve(false); const was = tempo;
-  m.assign(json); m.selected = Math.min(selected, m.lanes.length - 1); if (bpm) applyTempo(bpm, true, { exact });
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; hideWelcome();
+  m.assign(json, { selected }); if (bpm) applyTempo(bpm, true, { exact });
+  rebuildVoices(); lockStep = -1; hideWelcome();
   loadNext = bpm ? { tempo, was } : true; sync(); renderLanesEvolve();
 }
 /** Init: every lane empty (as many lanes as now), length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
@@ -579,17 +584,17 @@ function rollPattern(wild, seeded = dice.locked) {
 /** Put back an undo / redo step. Live mutes and solos stay as they are (keepPerf), unless the step crosses a load;
  *  a load that set the tempo takes its tempo with it. */
 function applyState(step) {
-  if (!step) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
-  m.assign(JSON.parse(step.json), { keep: true }); m.selected = Math.min(sel, m.lanes.length - 1);   // keep: loops go on counting (R4)
+  if (!step) return; restoring = true; const live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
+  m.assign(JSON.parse(step.json), { keep: true, selected: m.selected });   // keep: loops go on counting (R4)
   if (step.keepPerf) m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
   if (step.tempo != null) applyTempo(step.tempo, true, { exact: true });
-  m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
+  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
 }
 const undo = () => applyState(hist.undo({ tempo })), redo = () => applyState(hist.redo());
 function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
-  if (evo.home && evoCount >= evo.home) { const sel = m.selected; m.assign(evoSnap, { keep: true }); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); evoCount = 0; lastEvolve = 'back home'; }
+  if (evo.home && evoCount >= evo.home) { m.assign(evoSnap, { keep: true, selected: m.selected }); rebuildVoices(); evoCount = 0; lastEvolve = 'back home'; }
   else { const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100 }, dice.stream(1000 + bar)); evoCount++; lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still'; }
   offClock(fromClock, sync);
 }
@@ -797,8 +802,8 @@ function exportMidi() {
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
   const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   // a chain is as long as its slots' bars in their own meters, with a time signature wherever a slot changes it
-  const nl = Math.max(m.lanes.length, ...(states || []).map(s => s?.lanes?.length || 0)), names = Array.from({ length: nl }, (_, i) => m.lanes[i] ? voiceLabel(m.lanes[i]) : `lane ${i + 1}`);   // a track per lane: 4 or 6
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), names, gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: chain ? chainMeters(states, bank.chainBars) : null, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
+  const nl = Math.max(m.lanes.length, ...(states || []).map(s => s?.lanes?.length || 0));   // a track per lane: 4 or 6
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), names: laneNames(nl), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: chain ? chainMeters(states, bank.chainBars) : null, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
@@ -889,7 +894,7 @@ function renderJam() {
 }
 function downloadJam() {
   if (jam.state !== 'done') return; const n = Math.round(jam.beats * PPQ / jam.bar), base = fileBase('jam', { loop: true, bars: n }, jam.tempo);
-  download(stemsZip(jam.chunks.slice(0, jam.lanes), Array.from({ length: jam.lanes }, (_, i) => m.lanes[i] ? voiceLabel(m.lanes[i]) : `lane ${i + 1}`), jam.sr, base, acidOf(jam.tempo, n, jam.meter)), `${base}.zip`, 'application/zip');
+  download(stemsZip(jam.chunks.slice(0, jam.lanes), laneNames(jam.lanes), jam.sr, base, acidOf(jam.tempo, n, jam.meter)), `${base}.zip`, 'application/zip');
 }
 function buildJamUI() {
   $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = downloadJam; $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = null; renderJam(); paintLeds(); };
@@ -900,7 +905,7 @@ function buildJamUI() {
 async function exportStems() {
   await wake(); $('exp-status').textContent = `rendering ${m.lanes.length} stems…`;
   const r = await renderPattern({ stems: true }), n = r.chans.length / 2, { lanes, gain } = floatStemsToInt16(Array.from({ length: n }, (_, i) => [r.chans[2 * i], r.chans[2 * i + 1]])), base = fileBase('stems', r);
-  download(stemsZip(lanes, Array.from({ length: n }, (_, i) => m.lanes[i] ? voiceLabel(m.lanes[i]) : `lane ${i + 1}`), r.sr, base, acidOf(tempo, r.bars)), `${base}.zip`, 'application/zip');
+  download(stemsZip(lanes, laneNames(n), r.sr, base, acidOf(tempo, r.bars)), `${base}.zip`, 'application/zip');
   $('exp-status').textContent = `stems: ${n} lanes + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 // ---- welcome back, toasts ----
@@ -979,69 +984,59 @@ renderLib();
 
 // ---- Move ----
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34, nearestPaletteIndex('#2f7a45'), nearestPaletteIndex('#8a5a20')];
-/** L2: the 4 pad rows show lanes 1–4, or lanes 3–6 while lane 5 or 6 is selected: the first lane of the window. */
-const padBase = () => (m.selected >= 4 ? m.lanes.length - 4 : 0);
-/** The lane track button t (1 = top) selects: 4 − t (track 1 = lane 4, the top pad row); with Shift, track 4 / 3 =
- *  lane 5 / 6 on a 6-lane pattern (the bottom buttons, like lanes 1 / 2), else none (−1). */
-const trackLane = (t) => (shift ? (m.lanes.length > 4 && t >= 3 ? 8 - t : -1) : 4 - t);
 const REC_LED = nearestPaletteIndex('#ef4444'), CYAN_LED = nearestPaletteIndex('#67e8f9'), MAGENTA_LED = nearestPaletteIndex('#f0abfc');
-const held = new Map();   // step buttons held down: index → { used } (used = a knob turned, so release won't toggle)
 let loopHeld = false, dupHeld = false, chainPick = [];
-// L5 pages: a pad row shows 8 steps of its lane, the 16 step buttons 16 steps of the selected lane. Following (the
-// default) each row shows the page its own lane's playhead is on (page 1 while stopped), so every step's playhead is
-// seen; Back + ◀ ▶ (or Back + a step button) pins one page for every row, Back alone goes back to following.
-const PAD_COLS = 8, STEP_BTNS = 16;
-const pg = { follow: true, pad: 0, back: false, backUsed: false };
-const padPages = () => Math.max(1, ...m.lanes.map(l => Math.ceil(l.length / PAD_COLS)));
-/** The first step a pad row of `lane` shows. */
-const padFirst = (lane) => PAD_COLS * (pg.follow ? (playing && lane.shown != null ? Math.floor(lane.shown / PAD_COLS) : 0) : pg.pad);
-/** The first step the step buttons show (the selected lane). */
-const stepFirst = () => { const l = m.lane; return pg.follow ? (playing && l.shown != null ? STEP_BTNS * Math.floor(l.shown / STEP_BTNS) : 0) : STEP_BTNS * Math.floor(pg.pad * PAD_COLS / STEP_BTNS); };
-/** Pin pad page p (clamped to the longest lane); the step buttons go to the 16 holding it. */
-function pinPage(p) { pg.follow = false; pg.pad = Math.max(0, Math.min(padPages() - 1, p)); paintLeds(); }
+// L5 pages and the L2 pad window (pages.js): a pad row shows 8 steps of its lane, the 16 step buttons 16 steps of the
+// selected lane. Following (the default) each row shows the page its own lane's playhead is on, so every step's
+// playhead is seen; Back + ◀ ▶ (or Back + a step button) pins one page for every row, Back alone follows again. The 4
+// rows are lanes 1–4, or 3–6 once lane 5 or 6 is selected.
+const pages = new MovePages();
+const padBase = () => pages.window(m.selected, m.lanes.length);
+const held = pages.held;   // step buttons held down: button → { step, used } (used = a knob turned, so release won't toggle)
 function paintLeds() {
   if (!move.inControl) return;
-  const anySolo = m.lanes.some(l => l.solo), base = padBase();
-  for (let r = 0; r < 4; r++) {
-    const li = base + r, lane = m.lanes[li], f = padFirst(lane);
+  const anySolo = m.lanes.some(l => l.solo), base = padBase(), np = padPages(m.lanes);
+  for (let r = 0; r < PAD_ROWS; r++) {
+    const li = base + r, lane = m.lanes[li], f = pages.padFirst(lane, playing);
     for (let c = 0; c < PAD_COLS; c++) { const i = f + c; const pad = r * PAD_COLS + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[li]) : LANE_DIM[li]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted || (anySolo && !lane.solo) ? (col ? LANE_DIM[li] : 0) : col); }
   }
-  const lane = m.lane, s0 = stepFirst(), cur = pg.follow ? Math.floor(padFirst(lane) / PAD_COLS) : pg.pad;
+  const lane = m.lane, s0 = pages.stepFirst(lane, playing), cur = pages.current(lane, playing);
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
-  } else if (pg.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
-    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= padPages() ? 0 : i === cur ? (pg.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
+  } else if (pages.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
   } else for (let b = 0; b < STEP_BTNS; b++) { const i = s0 + b; move.setStepColor(b, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]); }
-  move.setButtonColor('back', pg.follow ? (padPages() > 1 ? 16 : 0) : CYAN_LED);   // lit = there are pages; cyan = one is pinned
-  for (let t = 1; t <= 4; t++) { const li = trackLane(t); move.setButtonColor(`track${t}`, li < 0 ? 0 : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }   // Shift held: track 4 / 3 = lanes 5 / 6
+  move.setButtonColor('back', pages.follow ? (np > 1 ? 16 : 0) : CYAN_LED);   // lit = there are pages; cyan = one is pinned
+  for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }   // Shift held: track 4 / 3 = lanes 5 / 6
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
   move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
 move.addEventListener('pad', (e) => {
-  if (!e.detail.on) return; const { col, velocity } = e.detail, li = padBase() + e.detail.row;   // the row's lane in the window
+  if (!e.detail.on) return; const { col, velocity } = e.detail, li = padBase() + e.detail.row;   // the row's lane in the window (selecting it keeps the window)
   if (rec.armed) return liveHit(li, col, velocity);
-  const lane = m.lanes[li], i = padFirst(lane) + col; if (i >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(li); sync();
+  const lane = m.lanes[li], i = pages.padFirst(lane, playing) + col; if (i >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false); m.select(li); sync();
 });
 move.addEventListener('step', (e) => {
-  const { on } = e.detail;
-  if (loopHeld || dupHeld) { const index = e.detail.index; if (!on) return; if (dupHeld) saveSlot(index); else if (bank.filled(index) && !chainPick.includes(index)) chainPick.push(index); paintLeds(); return; }
-  if (pg.back) { if (on) { pg.backUsed = true; pinPage(e.detail.index); } return; }   // Back + step button = that pad page
-  const index = stepFirst() + e.detail.index;   // held steps and locks use the step's own number (17–32 on page 2)
-  const lane = m.lane; if (index >= lane.length) return;
-  if (on) { if (shift) { lane.toggleAccent(lane.stepIndex(index)); sync(); } else held.set(index, { used: false }); return; }
-  const h = held.get(index); held.delete(index); if (h && !h.used) { lane.toggle(lane.stepIndex(index)); sync(); }   // a tap toggles; a hold + knob locked something instead
+  const { index: btn, on } = e.detail;
+  // a release ends its own press, whatever happened since (the page turned, Back went down, the lane got shorter):
+  // a tap toggles the step it went down on; a hold + knob locked something instead
+  if (!on) { const h = pages.release(btn), lane = m.lane; if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else paintLeds(); return; }
+  if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
+  if (pages.back) { pages.backUsed = true; pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
+  const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
+  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else pages.press(btn, step, first);
 });
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
-    for (const [i, h] of held) { h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
+    for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
     auditionLock(); stepEdited(); return;
   }
   if (held.size && index < LOCK_KEYS.length) {   // hold step(s) + knob 1–7 = lock tune · prob · vel · decay · tone · snap · color on those steps
     const k = LOCK_KEYS[index], lane = m.lane, span = k === 'tune' ? 0.02 : 0.02;
-    for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); lockStep = i; }
+    for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); lockStep = i; }
     auditionLock(); stepEdited(); return;
   }
   if (shift) { const k = SOUND_KEYS[index]; m.lane.setSound(k, m.lane.sound[k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
@@ -1049,7 +1044,7 @@ move.addEventListener('encoder', (e) => {
 });
 move.addEventListener('wheel', (e) => {
   if (held.size) {   // G1: hold step(s) + jog wheel = nudge those steps early / late, 5 % of a step per click
-    const lane = m.lane; for (const [i, h] of held) { h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); lockStep = i; }
+    const lane = m.lane; for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); lockStep = i; }
     stepEdited(); return;
   }
   m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
@@ -1058,13 +1053,13 @@ move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
   if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
-  if (name === 'back') { if (pressed) { pg.back = true; pg.backUsed = false; } else { pg.back = false; if (!pg.backUsed) pg.follow = true; } paintLeds(); return; }   // L5 pages
-  if ((name === 'left' || name === 'right') && pg.back) { if (pressed) { pg.backUsed = true; pinPage((pg.follow ? Math.floor(padFirst(m.lane) / PAD_COLS) : pg.pad) + (name === 'right' ? 1 : -1)); } return; }
+  if (name === 'back') { if (pressed) { pages.back = true; pages.backUsed = false; } else { pages.back = false; if (!pages.backUsed) pages.follow = true; } paintLeds(); return; }   // L5 pages
+  if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.backUsed = true; pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
   if (name === 'layout') { setFill(pressed); return; }   // hold = fill
   if (name === 'sampling' && pressed) { toggleJam(); return; }
   if (!pressed) return;
-  const tr = /^track(\d)$/.exec(name); if (tr) { const li = trackLane(+tr[1]); if (li >= 0) { m.select(li); lockStep = -1; sync(); } return; }   // track 1 is the top button = lane 4; Shift + track 4 / 3 = lane 5 / 6
-  if (name === 'delete' && held.size) { for (const [i, h] of held) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(i)); m.lane.trigs[m.lane.stepIndex(i)] = null; } stepEdited(); return; }
+  const tr = /^track(\d)$/.exec(name); if (tr) { m.select(trackLane(+tr[1], shift, m.lanes.length)); lockStep = -1; sync(); return; }   // track 1 is the top button = lane 4; Shift + track 4 / 3 = lane 5 / 6
+  if (name === 'delete' && held.size) { for (const h of held.values()) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(h.step)); m.lane.trigs[m.lane.stepIndex(h.step)] = null; } stepEdited(); return; }
   if (name === 'delete') { clearLane(); return; }   // Delete alone = clear the lane (undoable)
   if (name === 'play') togglePlay(); if (name === 'mute') { if (shift) toggleSolo(); else { m.lane.muted = !m.lane.muted; sync(); } } if (name === 'undo') { if (shift) redo(); else undo(); }
   if (name === 'capture') { if (shift) setEvolve(!evo.on); else randomizeAll(); }
@@ -1121,7 +1116,7 @@ window.addEventListener('keydown', (e) => {
   const r = KEYS.findIndex(k => k.includes(e.key.toLowerCase())); if (r < 0 || e.metaKey || e.ctrlKey) return;
   e.preventDefault();   // a select the mouse left focused would also jump to the voice starting with that letter
   const row = padBase() + 3 - r, col = KEYS[r].indexOf(e.key.toLowerCase()); if (rec.armed) return liveHit(row, col, null, e.shiftKey);   // keys have no velocity: Shift = accent; the rows are the pads' lanes
-  const lane = m.lanes[row], i = padFirst(lane) + col; if (i >= lane.length) return;   // the keys mirror the pads, page included
+  const lane = m.lanes[row], i = pages.padFirst(lane, playing) + col; if (i >= lane.length) return;   // the keys mirror the pads, page included
   if (e.shiftKey) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); m.select(row); sync();
 });
 
