@@ -243,8 +243,11 @@ test('dsp engine: every voice renders finite audio that decays, without allocati
   const { DSP_VOICES, DSP_KEYS } = await import('../src/poly/dsp-voices.js');
   assert.deepEqual(DSP_KEYS.sort(), [...VOICE_KEYS].sort(), 'the dsp engine covers the whole voice library');
   const sr = 44100, p = { vel: 1, tune: 0, dec: 0.04 + 0.5 * 0.5 * 1.2, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  const { ARTICS } = await import('../src/poly/voices.js');
   for (const k of DSP_KEYS) {
-    for (const q of [p, { ...p, tune: 1, snap: 1, color: 1, dec: 1.24 }, { ...p, tune: -1, snap: 0, color: 0, dec: 0.04 }]) {
+    // ORBIT2-08: every stroke of a voice that has them (L3), at the knob extremes too
+    const strokes = (ARTICS[k] || []).flatMap((_, a) => [{ ...p, artic: a }, { ...p, artic: a, tune: 1, snap: 1, color: 1, dec: 1.24 }, { ...p, artic: a, tune: -1, snap: 0, color: 0, dec: 0.04 }]);
+    for (const q of [p, { ...p, tune: 1, snap: 1, color: 1, dec: 1.24 }, { ...p, tune: -1, snap: 0, color: 0, dec: 0.04 }, ...strokes]) {
       const eng = makeEngine(sr); const layers = DSP_VOICES[k](q);
       for (const L of layers) for (const [key, v] of Object.entries(L)) assert.ok(Number.isFinite(v), `${k}.${key} is ${v}`);
       eng.hit(layers, 5); const out = new Float32Array(sr * 6); let peak = 0, head = 0;
@@ -259,6 +262,15 @@ test('dsp engine: every voice renders finite audio that decays, without allocati
   const eng = makeEngine(sr); eng.hit(DSP_VOICES.kick(p), 100); const out = new Float32Array(128); eng.render(out, 0, 128);
   assert.ok(out.slice(0, 100).every(v => v === 0) && out.slice(100).some(v => v !== 0));
   eng.hit(DSP_VOICES.clap(p), 0); assert.ok(eng.active() >= 3);
+  // ORBIT2-08: the new voices allocate nothing while they render — no slot grows a field, and no garbage collection runs
+  // during 20 s of them hit twice a second (allocating per sample would be ~900k objects: several scavenges)
+  const { setFlagsFromString } = await import('node:v8'); const { runInNewContext } = await import('node:vm'); const { PerformanceObserver } = await import('node:perf_hooks');
+  setFlagsFromString('--expose_gc'); const gc = runInNewContext('gc'); const fresh = Object.keys(makeEngine(sr).slots[0]).length;
+  const e2 = makeEngine(sr), buf = new Float32Array(128), voices = ['djembe', 'logdrum', 'agogo', 'shekere'], hits = voices.flatMap(v => [p, { ...p, artic: 1 }, { ...p, artic: 2 }].map(q => DSP_VOICES[v](q)));
+  gc(); await new Promise(r => setTimeout(r, 20)); let gcs = 0; const obs = new PerformanceObserver(l => { gcs += l.getEntries().length; }); obs.observe({ entryTypes: ['gc'] });
+  for (let b = 0, n = 0; b < sr * 20 / 128; b++) { if (b % 172 === 0) e2.hit(hits[n++ % hits.length], 0); buf.fill(0); e2.render(buf, 0, 128); }
+  await new Promise(r => setTimeout(r, 50)); obs.disconnect();
+  assert.equal(gcs, 0, 'garbage collections while rendering'); assert.ok(e2.slots.every(s => Object.keys(s).length === fresh), 'slot shape');
 });
 
 test('dsp worklet is generated from dsp-core.js (tools/build-worklet.mjs) and self-contained', async () => {
