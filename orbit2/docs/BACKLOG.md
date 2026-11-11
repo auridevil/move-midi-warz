@@ -116,9 +116,9 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 
 ## S · Samples & breaks (phase 09)
 
-- **S1 slice per step**: a lane can hold a slice set; `slice` step lock; tap = slice N; Move: hold step + knob. (Dex)
-- **S2 Unassembler sends 16 slices** (not hard-coded 8) and can send all to ONE lane as a slice set. (Dex)
-- **S3 sample start/end/reverse** per lane (and per step via locks). (Dex)
+- **S1 slice per step**: a lane can hold a slice set; `slice` step lock; tap = slice N; Move: hold step + knob. (Dex) ✅ ORBIT2-09
+- **S2 Unassembler sends 16 slices** (not hard-coded 8) and can send all to ONE lane as a slice set. (Dex) ✅ ORBIT2-09
+- **S3 sample start/end/reverse** per lane (and per step via locks). (Dex) ✅ ORBIT2-09
 
 ## E · Export for producers (phase 10)
 
