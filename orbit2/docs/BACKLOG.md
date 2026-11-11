@@ -87,13 +87,13 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 
 ## G · Groove & dynamics (phase 05)
 
-- **G1 per-step nudge lock** (−50…+50 % of a step) in `LOCK_KEYS`, applied in `expandHits`; hold step + knob. (Tomi, Ines)
-- **G2 lane push/pull offset** in ms (−30…+30), per lane. (Tomi)
-- **G3 velocity humanize** amount (global or per lane), seeded by dice when locked. (Tomi, Dex)
+- **G1 per-step nudge lock** (−50…+50 % of a step) in `LOCK_KEYS`, applied in `expandHits`; hold step + knob. (Tomi, Ines) ✅ ORBIT2-05
+- **G2 lane push/pull offset** in ms (−30…+30), per lane. (Tomi) ✅ ORBIT2-05
+- **G3 velocity humanize** amount (global or per lane), seeded by dice when locked. (Tomi, Dex) ✅ ORBIT2-05
 - **G4 ghost / normal / accent tiers**: step tap cycles through three velocities on a lane; Move pad velocity maps to
-  tier when recording. (Tomi, Dex)
-- **G5 velocity shapes timbre**: lower velocity = darker/shorter (tone, snap, decay) per voice, in both engines. (Dex, Ines)
-- **G6 swing templates**: straight, MPC 16th, triplet (33 %), 3-3-2, Amapiano shaker (e/a different), aksak. (Ines, Tomi)
+  tier when recording. (Tomi, Dex) ✅ ORBIT2-05
+- **G5 velocity shapes timbre**: lower velocity = darker/shorter (tone, snap, decay) per voice, in both engines. (Dex, Ines) ✅ ORBIT2-05
+- **G6 swing templates**: straight, MPC 16th, triplet (33 %), 3-3-2, Amapiano shaker (e/a different), aksak. (Ines, Tomi) ✅ ORBIT2-05
 
 ## R · Clock resolution & meter (phase 06)
 
