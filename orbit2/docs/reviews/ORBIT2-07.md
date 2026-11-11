@@ -3,15 +3,15 @@ type: review
 phase: ORBIT2-07
 title: ORBIT2-07 longer patterns and more lanes (L1, L2, L5), review panel
 date: 2026-11-11
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
   tomi: HAPPY
-  kai: NOT HAPPY
+  kai: HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -134,3 +134,59 @@ swing over 32; steps 17–32 on the sample grid; two rows of 16, back to 8 + 8 a
   lane 3 (was nothing), a pinned page 4 lights the 8-step lane's row (was dark), 6-lane stems 6 + mix all 352800
   frames, 0 page errors; screenshots looked at (desktop: six rings, a 32-step lane in two rows of 16; phone: the six
   lane tabs in two rows of three). `app.js` 1262 → 1257 lines, `pages.js` 53.
+
+## Round 2 (re-check): 4 of 4 HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound on the default model; kai on sonnet), fresh
+sub-agents in one message, own ports 5401 / 5402 / 5403 / 5404 (+ 940x; the phase start `dd9af9c` on +100, the code
+before the round-1 fixes `97a5e25` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, L1 /
+L2 / L5, the phase spec, the "where" table and the round-1 note on `pages.js`, the must-fix rule with the later ids and
+the round-1 Later items), `git diff --stat dd9af9c..39f72d6` (13 files, +504/−131) and the round-1 fixes alone
+(`97a5e25..39f72d6`, 10 files, +329/−80), the fake-Move transport stub, each one's own round-1 MUST-FIX and "Changes
+after round 1", with the instruction to confirm their items first with the same repro, then check nearby, anything new
+only in scope and marked NEW. Pre-checks on `39f72d6`: `npm run check` clean, `npm test` 149 + 9. `stalled: 0`: every
+round-1 MUST-FIX is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. (1) FIXED: lane 1 32 steps ×4 at 240 bpm, button 3 pressed at step 13, released at 18: step 3 toggles on; during the hold the step buttons stay on page 1, after it they follow page 2; knob 1 takes the length 32 → 31 with no lock; Delete clears the lane (`97a5e25`, same script: no toggle, a tune lock, 32 stays, Delete leaves 6 hits). (2) FIXED: lane 6 selected, two taps on pad row 0 col 1: lane 3 step 2 on then off, pad 0 stays 30; record armed, lane 5 selected, rows 0 then 2: [0,0,1,0,1,0] (`97a5e25`: lane 1, [0,0,2,0,0,0]). Nearby: holds on a pinned page with knob 2, the jog wheel and Delete; two buttons held across a turn with knob 4; a hold, then a pin; Back + step / Back alone; Shift + Track on 4 lanes = `dd9af9c`, on 6 = 4 3 6 5; the keys with a Move; a 4-lane ≤ 16-step pattern on the Move identical to `dd9af9c` (every pad, step and track LED, taps, Track, Shift + Track, hold + knob + jog, Shift + step, hold + Delete); slot recall / undo / redo / evolve home / 6 → 4 while playing keep a lane selected; stems 6 + mix 352800 frames, MIDI 7 tracks; check, 149 + 9, smoke 10/10, 0 page errors. |
+| architect | HAPPY | none. (1) FIXED: a 4-lane slot recalled with lane 6 selected → 4 lanes, lane 4, `sync()` works, 0 page errors; a 6 → 4 chain at 240 bpm for 7 s re-selecting lane 6, evolve home into a 4-lane snapshot three times: selection in range, 0 page errors (`97a5e25`: `TypeError` in `sync`); `Machine.assign` with `{ selected: 5 }` on a 4-lane state → 3, without it the state's own. (2) FIXED: the held step (step 4 toggled, no lock, knob 1 → 31, Delete clears the lane; `97a5e25`: no toggle, `{"tune":-0.02}`, 32, hits kept). Nearby: kit lanes 1–4 identical to `dd9af9c` in every kit; 150 old patterns: same `kitKey` and 2-bar hits, `toJSON` the same but for the padding to 32; 60 old links decode to the same hits; `Machine.from` filling a cut link (3-lane Common → wood, 5-lane Latin → tom, `kitKey` kept); stems and MIDI names through `laneNames`; every `held` use reads `{ step, used }`; check, 149 + 9. |
+| sound | HAPPY | none. (1) FIXED: busy lanes 5–6 at 126 bpm, three drops 6 → 4 while playing: 0 page errors, lane 1's playhead on 13–14 different steps in the 1.5 s after each drop, the Draw queue at most 4–6 and back to 0–3; undo / redo of the lane count while playing: 0 errors, lanes 5–6 back with their hits (`97a5e25`: `TypeError … at burst` on drop 2, the playhead stuck, the Draw queue 42 → 679). Nearby: 6-lane stems 6 + raw mix of 352800 frames each, the raw mix the exact sum; a 6-lane jam take 6 + mix of 264600 frames (3 bars), peak −5.0 dBFS; a 6-lane master render peak −8.7 dBFS, no clipping; a 4-lane pattern differs from `dd9af9c` only by unseeded noise (the same as two HEAD renders); the retuned kits: no clipping, worst stacked mix peak −1.8 dBFS; headroom 72.3 ms with six busy lanes, 71.7 with four, stress 0. |
+| kai | HAPPY | none. (1) FIXED: 200 bpm, 6 lanes, lane 1 32 steps: button 3 pressed at step 13, released at 19: step 3 toggles, the hold is cleared, knob 1 then takes the length 32 → 31. Nearby: two steps held across a turn + knob 3 (the vel lock on step 7, nothing on step 23, clean releases); a tap down at 15, up at 16 toggles step 9 only; hold + Delete; Shift + Track 4 / 3 / 1 = lanes 5 / 6 / 4 and a plain Track 4 lane 1; with lane 5 selected two taps on row 0 stay on lane 3, Track 4 brings lane 1 back; Back + ▶, Back + step, Back alone; 4 lanes at 16 steps as before; 0 page errors. |
+
+SHOULD items recorded (never block): NEW (verifier, architect): without a Move the pad window moved only when a key
+was pressed (`MovePages.window()` changes state when read, and `paintLeds` returns early without a Move), so after
+"lane 6, then lane 4" on screen the keys played lanes 1–4, with a Move lanes 3–6; app.js still wrote `pages.back`,
+`backUsed`, `follow` itself (architect); a held step edits the lane selected at knob / release time, not the lane it
+went down on (architect; so at `dd9af9c` too); NEW (sound): the Common crash sits 4.7 dB under its closed hat
+(momentary), the Breakbeat crash 17.6 dB under its snare; the Brushes hat went ~2 dB past the ride, the Minimal hat
+is still 9–15 dB under its kit; noise voices make one render's level good to a few dB only (the Later item
+"Bit-identical exports"); a check script should wait for the playhead, not a fixed time (kai); hold + Delete clears a
+step's locks and keeps the hit, as the Move help says (kai).
+
+GOOD: `pages.js`: the hold, page and window rules in a small pure module with tests, a release always ends its own
+press (also through a pin, two buttons across a turn, Loop) (verifier, architect, kai); the selection rule in the model,
+`Machine.assign(o, { selected })` (architect, verifier); a step drawn after its lane went is skipped, and six lanes
+export sample-exact while a 4-lane pattern is unchanged (sound).
+
+### Changes after round 2
+
+- **The pad window follows every selection, Move or not** (verifier, architect, NEW SHOULD): `sync()` moves the window
+  (`pages.window`), so the computer keys play the same lanes as the pads would. Reproduced on `39f72d6` first (page,
+  no Move: lane tab 6, lane tab 4, key z → lane 1 step 1); now lane 3 step 1, as with a Move and as the help says.
+  `pages` is made before the first `sync()` (no TDZ: 0 errors on load).
+- **Back's rule lives in `pages.js`** (architect): `backDown()` / `backUp()`, and `pin()` marks Back as used; app.js
+  calls them. Page: Back + ▶ then Back up → the Back LED cyan (pinned); Back alone → 16 (following), as on `39f72d6`.
+- **Lanes 5–6 levels** (sound, NEW SHOULD): Common crash level 0.55 → 0.7 (+4.2 dB), Breakbeat crash 0.5 → 0.65
+  (+4.6 dB), Brushes hat 0.6 → 0.53 (−2.2 dB), Minimal hat 0.75 → 0.89 (+3.0 dB) (level gain = level² × 1.2).
+- Not changed, → [[BACKLOG]] Later: a held step and the selected lane. Hold + Delete keeping the hit is the documented
+  rule. `h.used` is still written by app.js on the held entries (the knobs, jog wheel and Delete mark a hold used).
+- Tests: the pages test also covers Back (Back alone follows again; a page pinned while Back was down stays). `npm run
+  check` clean, `npm test` 149 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless
+  Chrome 9222, both stopped). Browser (5400/9400 against `39f72d6` on 5500/9500, `/tmp/orbit2-impl/`, deleted): the
+  keys repro and the Back LEDs above, 0 page errors. `app.js` 1258 lines, `pages.js` 56.
+
+## Result: HAPPY
+
+All five reviewers HAPPY after round 2 (tomi in round 1; verifier, architect, sound and kai on the re-check). Nothing
+deferred. Next: the close task marks L1, L2, L5 done.

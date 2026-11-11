@@ -376,3 +376,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   silent on a four-lane take (cheap).
 - **The Latin shaker** (ORBIT2-07 round 1, sound): even at level 0.85 the lane-5 shaker is the Latin kit's quietest lane
   (stems RMS about −59 dB against −32…−45): the voice itself is quiet (phase 08 voices).
+- **A held step and the selected lane** (ORBIT2-07 round 2, architect; so at the phase start too): a Move step button
+  held while another lane gets selected (a pad, a track button) edits the newly selected lane's step on the knobs and
+  on release, while the step buttons keep the old lane's page; keeping the lane in the held entry (`pages.js`) would
+  pin the hold to the lane it went down on.

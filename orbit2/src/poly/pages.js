@@ -34,8 +34,11 @@ export class MovePages {
   stepFirst(lane, playing) { return this.hold >= 0 ? this.hold : STEP_BTNS * Math.floor(this.padFirst(lane, playing) / STEP_BTNS); }
   /** The pad page Back + ◀ ▶ moves from: the pinned one, or the page `lane` shows now. */
   current(lane, playing) { return this.follow ? this.padPage(lane, playing) : this.pad; }
-  /** Pin pad page p for every row (clamped to the longest lane). */
-  pin(p, lanes) { this.follow = false; this.pad = Math.max(0, Math.min(padPages(lanes) - 1, p)); }
+  /** Pin pad page p for every row (clamped to the longest lane): Back + ◀ ▶, or Back + a step button. */
+  pin(p, lanes) { this.follow = false; this.pad = Math.max(0, Math.min(padPages(lanes) - 1, p)); this.backUsed = true; }
+  /** Back goes down / comes up: alone (nothing pinned while it was held) it goes back to following the playheads. */
+  backDown() { this.back = true; this.backUsed = false; }
+  backUp() { this.back = false; if (!this.backUsed) this.follow = true; }
   /**
    * The first lane of the pad window for the selected lane `sel` of `n`: lanes 1–4, or 3–6 on six. It moves only when
    * the selection leaves it, so playing a row (a pad selects its lane) never moves the rows under the fingers.

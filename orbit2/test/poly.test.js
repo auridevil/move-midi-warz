@@ -1156,6 +1156,9 @@ test('ORBIT2-07 r1: Move pages — a held step button keeps its step across a pa
   // a pinned page: for every row, a shorter lane shows its last page; ◀ ▶ stay within the longest lane
   p.pin(3, [long, short, mid]); assert.equal(p.padFirst(long, true), 24); assert.equal(p.padFirst(short, true), 0); assert.equal(p.padFirst(mid, true), 16); assert.equal(p.stepFirst(long, true), 16);
   p.pin(9, [long, short]); assert.equal(p.pad, 3); p.pin(-2, [long]); assert.equal(p.pad, 0); assert.equal(p.current(long, true), 0);
+  // Back: pressed and let go alone = follow again; with a page pinned while it was down = stay pinned
+  p.backDown(); p.pin(2, [long]); p.backUp(); assert.equal(p.follow, false); assert.equal(p.pad, 2); assert.equal(p.back, false);
+  p.backDown(); assert.equal(p.back, true); p.backUp(); assert.equal(p.follow, true, 'Back alone follows again');
   p.follow = true; mid.shown = 25; assert.equal(p.padFirst(mid, true), 16, 'a playhead left past a shortened lane: its last page');
   // the pad window: lanes 1–4, or 3–6 once lane 5 / 6 is selected; selecting a lane inside it keeps it
   const w = new MovePages();

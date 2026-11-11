@@ -339,7 +339,9 @@ function buildSliders() {
   const panSay = (v) => v === 50 ? 'centre' : `${Math.abs(v - 50) * 2}% ${v < 50 ? 'left' : 'right'}`;   // spoken: the knob shows 0–100
   for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { m.lane.setSound(k, v / 100); applySound(m.selected); sync(); } }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
+const pages = new MovePages();   // the Move's pages and pad window (pages.js, used by the Move section below)
 function sync() {
+  pages.window(m.selected, m.lanes.length);   // the pad window follows every selection, Move or not: the computer keys mirror the pads
   for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
   ui.swingTpl.set(m.lane.swingTpl);
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
@@ -989,8 +991,7 @@ let loopHeld = false, dupHeld = false, chainPick = [];
 // L5 pages and the L2 pad window (pages.js): a pad row shows 8 steps of its lane, the 16 step buttons 16 steps of the
 // selected lane. Following (the default) each row shows the page its own lane's playhead is on, so every step's
 // playhead is seen; Back + ◀ ▶ (or Back + a step button) pins one page for every row, Back alone follows again. The 4
-// rows are lanes 1–4, or 3–6 once lane 5 or 6 is selected.
-const pages = new MovePages();
+// rows are lanes 1–4, or 3–6 once lane 5 or 6 is selected (`pages` is made before sync(), which moves the window).
 const padBase = () => pages.window(m.selected, m.lanes.length);
 const held = pages.held;   // step buttons held down: button → { step, used } (used = a knob turned, so release won't toggle)
 function paintLeds() {
@@ -1023,7 +1024,7 @@ move.addEventListener('step', (e) => {
   // a tap toggles the step it went down on; a hold + knob locked something instead
   if (!on) { const h = pages.release(btn), lane = m.lane; if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else paintLeds(); return; }
   if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
-  if (pages.back) { pages.backUsed = true; pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
+  if (pages.back) { pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
   const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
   if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else pages.press(btn, step, first);
 });
@@ -1053,8 +1054,8 @@ move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
   if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
-  if (name === 'back') { if (pressed) { pages.back = true; pages.backUsed = false; } else { pages.back = false; if (!pages.backUsed) pages.follow = true; } paintLeds(); return; }   // L5 pages
-  if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.backUsed = true; pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
+  if (name === 'back') { if (pressed) pages.backDown(); else pages.backUp(); paintLeds(); return; }   // L5 pages
+  if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
   if (name === 'layout') { setFill(pressed); return; }   // hold = fill
   if (name === 'sampling' && pressed) { toggleJam(); return; }
   if (!pressed) return;
