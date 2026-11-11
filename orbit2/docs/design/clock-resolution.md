@@ -101,6 +101,19 @@ Sorted for the speed knob: `¼ ⅓ ½ ⅔ ¾ 1 5/4 4/3 3/2 7/4 2 3 4 5 6`. Inser
   conditional step on this lane passed, `nei` when it failed. Runtime `lastCond` (false at reset); updated by every
   active step with a condition other than always / pre / nei. UI: two more chips, "if last passed" / "if last failed".
 
+## Notes from the build (for the review)
+
+- **×5/4 against ×1** meets every 4 beats (= 5 quintuplet steps); "aligns after 5" is 5 steps, not 5 beats (no
+  lengths make ×5/4 and ×1 line up in exactly 5 beats). The tests pin 4 beats / 5 steps.
+- **Lane positions stay on the absolute clock** (the R1 rule), the bar anchor only moves bar lines. So in a chain
+  that mixes meters, after a 7/8 bar a 4/4 slot's ×1 kick lands half a beat after its bar line (it counts from tick 0,
+  as every lane always has). A per-slot lane origin would fix it, at the cost of renumbering the early decisions of
+  ORBIT2-05; left for the review to weigh.
+- **Loop counter on a fresh lane** (slot load, undo, a link) is the absolute count, like the chain render, so live
+  play and the render keep agreeing; only an in-place length change keeps its own count.
+- Headless e2e: the page's very first touch never lands as a click (any control, pre-existing), and several pages
+  in one headless browser drop touch taps; the e2e uses a warm-up tap and its own browser for the mobile page.
+
 ## Call sites (grep `PPQ`, `BAR_TICKS`, `stepTicks`, `cycleTicks`, `% PPQ`)
 
 | File | Change |

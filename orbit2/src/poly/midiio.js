@@ -3,6 +3,8 @@
 // by name so the choice survives reloads. The Move's own port is never used as an output while it's in
 // control mode: notes there would repaint its pads instead of playing anything.
 
+import { MIDI_DIV } from './lanes.js';
+
 export const DEFAULT_NOTES = [36, 38, 42, 39];   // GM drums: kick, snare, closed hat, clap
 export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
 /**
@@ -133,6 +135,8 @@ export class PolyMidi {
     this.send([st, note & 127, v], at); this.send([0x80 | ((ch - 1) & 15), note & 127, 0], at + this.gateMs);
   }
   clock(at) { if (this.out && this.clockOut) this.send([0xF8], at); }
+  /** Master tick `tick` (any PPQ): a MIDI clock on every MIDI_DIV-th, so 24 per quarter. */
+  clockAt(tick, at) { if (tick % MIDI_DIV === 0) this.clock(at); }
   start(at) { if (this.out && this.clockOut) this.send([0xFA], at); }
   stop() { if (this.out && this.clockOut) this.send([0xFC]); }
   /** Follow mode change: the ticks heard before (or while 'off') say nothing about now. */

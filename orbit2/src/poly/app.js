@@ -197,7 +197,7 @@ function onBlock(time) {
   if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); }   // both are keyed on the old ticks
   const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
-  pmidi.clock(perfAt(time));   // 24 per quarter, whatever PPQ is
+  pmidi.clockAt(t0, perfAt(time));   // a block starts on the 24-PPQ grid: one clock, 24 per quarter
   let cyc = m.cycleTicks(cycleOpts());   // once per block (and again when a slot or evolve changes the pattern)
   for (let t = t0; t < t0 + MIDI_DIV; t++) cyc = onTick(t, time + (t - t0) * ts, cyc, ts);
 }
@@ -1135,7 +1135,7 @@ if (DEBUG) setInterval(() => {
 function readout() {
   poke();
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
-  $('readout').textContent = [`${tempo} bpm`, playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
+  $('readout').textContent = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
     ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
     const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
@@ -1218,5 +1218,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, exportWav, exportMidi, shareLink, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();
