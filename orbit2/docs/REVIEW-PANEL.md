@@ -39,6 +39,11 @@ verifier 5401/9401, architect 5402/9402, sound 5403/9403, kai 5404/9404, maya 54
 ines 5407/9407, tomi 5408/9408, greta 5409/9409, rio 5410/9410. The implementing agent itself uses 5400/9400.
 Scratch files go to `/tmp/orbit2-<id>/`, deleted at the end. Always `await b.close()`.
 
+**Silence.** Every browser is muted: start it only through `cdp.mjs` `launch()` or `tools/headless-chrome.sh <port>`
+(`--mute-audio --disable-audio-output`: audio is still processed, exports and timing still work, nothing reaches the
+speakers). Never launch Chrome by hand and never play audio through the speakers (afplay, open, say, a media player):
+the conductor may be in a call. Say this in every reviewer brief.
+
 ## Who reviews which phase
 
 At most **five reviewers per phase**: the three core reviewers (verifier, architect, sound) plus the **two personas**

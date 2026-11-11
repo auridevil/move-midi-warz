@@ -26,7 +26,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   const server = spawn('python3', ['serve.py', String(port)], { cwd: root, stdio: 'ignore' });
   // --disable-audio-output: a fake output stream clocks the AudioContext, so the transport runs (silently) even when the
   // Mac's own output device stalls (then currentTime freezes and nothing plays, on any commit)
-  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--disable-audio-output', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
+  const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-audio-output', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
   for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${debugPort}/json/version`); break; } catch { await sleep(250); } }
   const base = `http://localhost:${port}`;
   return {

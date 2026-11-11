@@ -17,6 +17,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
 - Tests: `orbit2/test/*.test.js` (run by `npm test` from the root). `npm run check` syntax-checks `orbit2/src/**`.
   `node tools/smoke.mjs` loads `orbit2/index.html` with the other pages.
 - After editing `orbit2/src/poly/dsp-core.js`, regenerate the worklet: `node orbit2/tools/build-worklet.mjs`.
+- Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
 - Browser checks: `orbit2/tools/cdp.mjs` (headless Chrome helper: open, eval, click/tap/key, screenshot, capture
   downloads, `parseWav`, `unzipStored`).
 
