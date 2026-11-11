@@ -3,13 +3,13 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
-import { onBar, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
+import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape } from './voices.js';
 import { DSP_VOICES } from './dsp-voices.js';
@@ -177,15 +177,12 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
-/** R3 bar lines: at + k × len. A new time signature (the meter control, a slot, undo, a link) starts on the next bar
- *  line of the old one, so a bar is never cut short; a restart counts from tick 0 in the pattern's meter. */
-let bars = { at: 0, len: BAR_TICKS, next: null };
-const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; };
-function trackMeter(t) {
-  const len = m.barTicks(); if (len === bars.len) { bars.next = null; return; }
-  if (bars.next?.len !== len) bars.next = { at: bars.at + Math.ceil((t - bars.at) / bars.len) * bars.len, len };
-  if (t >= bars.next.at) bars = { at: bars.next.at, len, next: null };
-}
+/** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
+ *  starts on the next bar line of the old one, so a bar is never cut short, and the lanes start there on step 1
+ *  (m.setOrigin); a restart counts from tick 0 in the pattern's meter. barN: bar lines since Play, in any meter. */
+let bars = { at: 0, len: BAR_TICKS, next: null }, barN = 0;
+const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; barN = 0; m.setOrigin(0); };
+function trackMeter(t) { const b = trackBars(bars, t, m.barTicks()); if (b !== bars) { bars = b; m.setOrigin(bars.at); } }
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
@@ -194,7 +191,7 @@ const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.c
 const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
-  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); }   // both are keyed on the old ticks
+  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); }   // both are keyed on the old ticks; loops count from 0 again
   const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clockAt(t0, perfAt(time));   // a block starts on the 24-PPQ grid: one clock, 24 per quarter
@@ -203,11 +200,13 @@ function onBlock(time) {
 }
 function onTick(t, time, cyc, ts) {
   trackMeter(t); jamTick(t, time);
-  const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars here
-  if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  if (evo.on && t > bars.at && (t - bars.at) % (bars.len * evo.every) === 0) { evolveNow(Math.round(t / bars.len), true); cyc = m.cycleTicks(cycleOpts()); }
-  const cut = bank.nextSwitch(t, cyc, bars);
-  if (liveQuiet(m, t, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
+  const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars (and lanes) here
+  if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
+  // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included)
+  if (t > 0 && onBar(t, bars) && ++barN % evo.every === 0 && evo.on) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); }
+  // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
+  const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
+  if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
   const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
@@ -250,8 +249,8 @@ const INFO = {
   length: 'How many steps the lane loops over (1–16). Different lengths at the same speed = polymeter: 3 against 4 lines up every 12 steps.',
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
-  pre: 'PRE / NEI: play only if the last step with a condition on this lane passed (or failed). Pair it with a 1:2 step for an either-or: one plays, the other answers.',
-  meter: 'Time signature of this pattern: how long a bar is. Next-bar slot switching, chains, evolve, jam takes and exports count in these bars; 7/8 = 3½ beats. A change starts on the next bar line.',
+  pre: 'PRE / not PRE: play only if the last step with a condition on this lane passed its condition (or failed it). It reads the condition, not whether that step sounded: a mute or its probability roll don\'t count. Pair it with a 1:2 step for an either-or: one plays, the other answers.',
+  meter: 'Time signature of this pattern: how long a bar is. Next-bar slot switching, chains, evolve, jam takes and exports count in these bars; 7/8 = 3½ beats. A change starts on the next bar line, where the pattern starts again on step 1 (so does a slot or a chain step in another meter).',
   ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm; 5/4 and 7/4 play fives and sevens across four beats, 4/3 the hemiola, ×6 sixteenth triplets.',
   swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. With the MPC template, at ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
   'swing template': 'Which steps the swing moves, and how far: it shapes the swing amount, so at 0% swing every template plays straight. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
@@ -283,7 +282,7 @@ const INFO = {
   'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
   'clock out': 'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
-  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed (PRE / NEI).',
+  condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
@@ -410,7 +409,7 @@ function buildLockGauges() {
   const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); stepEdited(); };
   // condition = "every N loops" + which loop (dots), or one of the fill / first specials
   ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
-  ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st'], ['pre', 'if last passed', INFO.pre], ['nei', 'if last failed', INFO.pre]], value: null, chips: true,
+  ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st'], ['pre', 'if last passed', INFO.pre], ['not pre', 'if last failed', INFO.pre]], value: null, chips: true,
     onChange: (c) => setTrig({ cond: m.lane.trigAt(lockStep)?.cond === c ? 'always' : c }) }));
   ui.ratchet = mount('trig-ratchet', segmented({ options: [1, 2, 3, 4].map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
@@ -430,7 +429,7 @@ function renderTrig(tg) {
   ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade);
   const dots = $('cond-dots'); dots.innerHTML = ''; $('cond-dots-wrap').hidden = !(b > 1);
   for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); stepEdited(); }; dots.appendChild(d); }
-  $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays', pre: 'plays when the last step with a condition on this lane played (PRE)', nei: 'plays when the last step with a condition on this lane did not (NEI)' }[cond];
+  $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays', pre: 'plays when the last step with a condition on this lane passed it (PRE)', 'not pre': 'plays when the last step with a condition on this lane failed it (not PRE)' }[cond];
 }
 function auditionLock() {
   if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
@@ -509,9 +508,9 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = velocity == null ? null : Math.max(0.25, Math.min(1, velocity / 127));
   hitSound(lane, T.immediate(), accent, tune != null ? { tune } : null, accent ? 1 : v); pmidi.note(li, accent ? 1 : v ?? hitVel(false, null), performance.now());
   if (!rec.armed || !playing) { m.select(li); sync(); return; }
-  const q = lane.quantize(heardTick(), rec.quant), idx = lane.stepIndex(q.index);
+  const q = lane.quantize(heardTick() - m.origin, rec.quant), idx = lane.stepIndex(q.index);   // steps count from the pattern's bar 1
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
-  const qTick = q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
+  const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
 function setRec(on) { rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
@@ -568,7 +567,7 @@ function rollPattern(wild, seeded = dice.locked) {
  *  a load that set the tempo takes its tempo with it. */
 function applyState(step) {
   if (!step) return; restoring = true; const sel = m.selected, live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
-  m.assign(JSON.parse(step.json)); m.selected = Math.min(sel, m.lanes.length - 1);
+  m.assign(JSON.parse(step.json), { keep: true }); m.selected = Math.min(sel, m.lanes.length - 1);   // keep: loops go on counting (R4)
   if (step.keepPerf) m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
   if (step.tempo != null) applyTempo(step.tempo, true, { exact: true });
   m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
@@ -577,7 +576,7 @@ const undo = () => applyState(hist.undo({ tempo })), redo = () => applyState(his
 function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
-  if (evo.home && evoCount >= evo.home) { const sel = m.selected; m.assign(evoSnap); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); evoCount = 0; lastEvolve = 'back home'; }
+  if (evo.home && evoCount >= evo.home) { const sel = m.selected; m.assign(evoSnap, { keep: true }); m.selected = sel; m.lanes.forEach((_, li) => { buildVoice(li); applySound(li); }); evoCount = 0; lastEvolve = 'back home'; }
   else { const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100 }, dice.stream(1000 + bar)); evoCount++; lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still'; }
   offClock(fromClock, sync);
 }
@@ -784,8 +783,8 @@ function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
   const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
-  // a chain is as long as its slots' bars in their own meters; the file's time signature is the first slot's
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: chain ? states[0]?.meter : m.meter, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
+  // a chain is as long as its slots' bars in their own meters, with a time signature wherever a slot changes it
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes, names: m.lanes.map(voiceLabel), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: chain ? chainMeters(states, bank.chainBars) : null, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
@@ -1115,7 +1114,7 @@ if (midi.supported) { $('move-status').hidden = false; paintConnect(); }
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick()), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 $('cv').addEventListener('click', (e) => { const ring = scene.pick(e.clientX, e.clientY); if (ring >= 0) { m.select(ring); sync(); } });
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----

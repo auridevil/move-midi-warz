@@ -1,0 +1,141 @@
+---
+type: review
+phase: ORBIT2-06
+title: ORBIT2-06 clock resolution and meter (R1–R4), review panel
+date: 2026-11-11
+round: 1
+stalled: 0
+result: IN PROGRESS
+reviewers:
+  verifier: NOT HAPPY
+  architect: NOT HAPPY
+  sound: NOT HAPPY
+  ines: HAPPY
+  kai: HAPPY
+tags: [orbit2, review]
+related:
+  - '[[REVIEW-PANEL]]'
+  - '[[BACKLOG]]'
+  - '[[ORBIT2-05]]'
+  - '[[clock-resolution]]'
+---
+
+# ORBIT2-06 · Clock resolution and meter: review panel
+
+Reviewers: verifier (Vera), architect (Arjun), sound (Sofia), ines, kai. Process: [[REVIEW-PANEL]].
+
+Phase start: `9f436da` (ORBIT2-05 closed at `c6bd5e9`; `9f436da` only made the test browsers silent). Implementation
+commits: `1f0a5ad` (design note [[clock-resolution]]), `1a5a7f2` (R1, R2), `ee0036d` (R3, R4), `a91e5e1` (tests and
+browser check).
+
+## For the brief: where the new things are
+
+| item | model / audio | on screen | Move |
+| --- | --- | --- | --- |
+| R1 840 PPQ | `PPQ = 840`, `MIDI_DIV = 35`, `Lane.stepTicks()` (`lanes.js`); the master clock in `app.js` (`onBlock` → `onTick`): the Tone.Loop still fires 24 times per beat, each call is a block of 35 ticks, `liveQuiet()` (`export.js`) skips ticks where nothing can happen; `collectHits` renders a copy of the machine at `PPQ`; MIDI clock out `PolyMidi.clockAt` (one per block), clock in (phase lock) compared in MIDI ticks (`app.js` `pmidi.handlers.tick`) | stress meter with `?debug` | — |
+| R2 ratios | `RATIOS` / `RATIO_LABEL` = `¼ ⅓ ½ ⅔ ¾ 1 5/4 4/3 3/2 7/4 2 3 4 5 6`, `OLD_RATIOS` (the pre-R2 table), `ratioIndexOf`; a lane saves `ratio` (the value) next to `ratioIndex`, `Lane.from` maps a save without `ratio` through `OLD_RATIOS`; evolve moves on `EVOLVE_RATIOS`; `Machine.cycleTicks` in integer ticks | lane drawer "speed ×" gauge (15 positions); a line in the help dialog | the speed knob, as before |
+| R3 meter | `METERS`, `meterParts`, `barTicks`, `Machine.meter` / `setMeter` / `barTicks()`, saved with the pattern (missing = 4/4); `app.js` bar anchor `bars = { at, len }` + `trackMeter()` (a new meter starts on the next bar line of the old one); `SlotBank.due/nextSwitch(…, bars)` + `onBar` (`slots.js`); chains (`collectChain`, `chainSixteenths`, `export.js`); evolve every N bars; jam start / stop / cap by the take's bar (`jam.bar`); exports `renderTicks()` / `acidOf()`; `withAcid({ num, den })` (`jam.js`); MIDI FF 58 (`punch/smf.js` `writeMidi({ meter })`, `hitsToMidi({ meter, sixteenths })`) | Patterns drawer: "meter" control; the readout shows the meter when it is not 4/4; nerd stats "meter" | — |
+| R4 loop counter, PRE / NEI | `Lane.loopAt(step)` (runtime `loopN` / `lastStep`, reset on Play and `reset()`; a fresh lane counts from the absolute step), `peek()` restores it; `CONDS` + `pre`, `nei`; `condPasses(cond, loop, fill, prev)`; `lastCond` set by every active step with a real condition (muted too) | step lock panel (long-press, right-click or Alt+click a step): two more chips, "if last passed" / "if last failed" | — |
+
+## Pre-checks
+
+`npm run check` clean, `npm test` 138 + 9 green on `a91e5e1` before the panel started.
+
+## Round 1: 2 of 5 HAPPY
+
+Fresh sub-agents in one message (verifier, architect, sound on the default model; ines, kai on sonnet), own ports
+5401 / 5402 / 5403 / 5407 / 5404 (+ 940x, phase-start copies `git archive 9f436da` on +100), the verifier also ran the
+smoke on 9222. Brief: the phase goal, R1–R4 verbatim from [[BACKLOG]], the phase spec (the three build tasks), the
+"where the new things are" table above, `git diff --stat 9f436da..a91e5e1` (10 files, +535/−182), `git status --short`
+(only this file), the must-fix rule with the later phases' ids, how to drive `orbit2/index.html` with
+`orbit2/tools/cdp.mjs` (`__poly`, MIDI out / clock in without a device, Move through `move.emit`, the model in Node)
+and how to run the phase start. `stalled: 0`: nothing was open before round 1.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | (1) R3: next-bar switching and chains between meters start the incoming pattern off its bar line. `Lane.at` counts steps from tick 0 (`lanes.js:198`); a slot load only moves the bar anchor (`app.js:206` → `trackMeter`), `collectChain` the same (`export.js:95`). Chain [7/8 (×2, 7 steps, kick on 1), 4/4 (×1, 4 steps, kick on 1)], 1 bar each, 240 bpm, MIDI captured live: kicks at beats 0, 4, 10.5, 12 (expected 0, 3.5, 7.5, 11, the bar lines); `collectChain` the same. (2) R3: evolve every N bars skips the bar line where a new meter starts: `trackMeter` sets `bars.at = t`, then `t > bars.at` is false (`app.js:208`). Every 1 bar, 4/4 → 3/4 at tick 7490 (anchor 10080): evolves at 3360, 6720, 12600… (expected 10080 too). (3) R4: undo mid-play resets the loop counter to the absolute count (`Machine.assign` makes fresh lanes): ×1, 4 steps, 1:2 on step 1, length 3 at beat 10.3, undo at beat 18.5: loop 5 twice across a wrap, the 1:2 step rests two loops running. |
+| architect | NOT HAPPY | (1) R3, the same root cause as the verifier's (1): after a meter change (the control during play, a next-bar slot, a chain) a pattern doesn't start on its own bar lines. `collectChain([7/8, 4/4, 7/8, 4/4], { bars: 2 })`, each lane one bar of its meter with a kick on step 1: bar lines 0 · 1.75 · 3.5 · 5.5 · 7.5 · 9.25 · 11 · 13 s, kicks 0 · 1.75 · 4 · 6 · 8.75 · 10.5 · 12 · 14 s. Live (5402): 4/4 → 7/8 at tick 3780, anchor 6720, kicks 2100 ticks (5 eighths) after every 7/8 bar line until Stop / Play. (2) R4: undo, redo and evolve's way home (`applyState` `app.js:571`, `evolveNow` `app.js:580`, both `m.assign()`) build fresh lanes: the count jumps and the PRE / NEI memory goes. L4 lane, 1:2 on step 1, length 5 at step 22: in place s25 plays, s30 rests, s35 plays; after `m.assign(m.toJSON())` step 40 plays right after 35. |
+| sound | NOT HAPPY | (1) R3, the same root cause: `collectChain([A 7/8, B 4/4, A, B], { bars: 1 })` (A ×2, 7 steps, kick on 1; B ×1, 4 steps, kick 1, snare 2 and 4): measured from each bar line, B's first pass kick +0.5, snares +1.5 / +3.5 beats; A's second pass kick +3 (last eighth); B's second pass snare on the downbeat. Live 4/4 → 7/8 → 4/4: `bars = { at: 6300, len: 3360 }`, every later bar line half a beat before step 1 until Play. |
+| ines | HAPPY | none (60 random old patterns: identical hits; length change mid-play keeps 1:2; PRE / NEI table; clock out 24 per quarter at 160 bpm; 7/8 → 3/4 anchor on the old bar line; 7/8 WAV 4 bars = 5.250 s) |
+| kai | HAPPY | none (old data identical; ×5/4 L5 hit every 2000 ms; a next-bar switch 7/8 → 4/4 lands on a 7/8 bar line; 5/4 during play moves the anchor to the next 4/4 bar line; 1:2 across 4 → 5 alternates; PRE / NEI table; an unknown meter → 4/4) |
+
+The implementer reproduced each MUST-FIX on `a91e5e1` before fixing (Node, the model + the app's `trackMeter` rule):
+chain [7/8 ×2 L7, 4/4 ×1 L4] → kicks at beats 0, 4, 10.5, 12; a 1-step ×1 lane in the chain [4/4, 7/8, 4/4] has its
+third slot's downbeat at 4 s, not on the bar line at 3.75 s; evolve with the anchor rule skips the tick the anchor
+lands on; `m.assign(m.toJSON())` after a length change replays loop 8 (step 40 after step 35).
+
+SHOULD items recorded (never block): PRE / NEI read whether the last condition *passed* (probability and mutes don't
+count, as on Elektron boxes where only a condition counts) but the step text says "played" / "did not" (verifier);
+the key `nei` says "previous failed", which is Elektron's /PRE (NEI is the neighbour track there): saved keys are hard
+to rename later, `not pre` matches `not fill` / `not first` (architect, ines); PRE / NEI look past other PRE / NEI steps
+(kai: Elektron's PRE reads them too — it doesn't: PRE skips earlier PRE / !PRE trigs there as well, so this stays); a
+speed change mid-play still jumps the loop counter (×1 → ×2: loop 2 → 5; evolve "everything" changes speed on its own)
+(verifier, sound, ines, kai), and after a long → short length change a slower speed can take the count below 0, where
+`a:b` and "after 1st" never pass (ines); the chain MIDI file has only the first slot's time signature (verifier,
+architect, sound, kai); `trackMeter` parses the meter string on every one of 840 ticks per beat (architect); the bar
+anchor, the jam stop rounding and `acidOf` are logic in `app.js` without tests (architect); evolve's speed moves differ
+for lanes outside ⅔…×3 (from ¼ up now ¾, was ⅔; from ×4 down now ×2, was ×3), so a locked-dice evolve of such an old
+pattern changes (architect); with early-pushed or nudged lanes `liveQuiet` runs the full lane update on 749–840 ticks
+per beat (307–327 µs per beat vs 46–55 before; stress level 0, headroom 76 ms) — ticks whose early step is already
+decided could be skipped too (verifier); `collectHits` walks every fine tick (a 64-bar busy render 3.6 → 27 ms)
+(architect); the ACID tag for /8 meters counts beats in eighths with a quarter-note tempo (a 1-bar 7/8 file at 120 bpm
+is 1.75 s, 7 beats at 120 would be 3.5 s): check in Live and Reaper (verifier, architect, sound); the MIDI file's 96
+PPQ rounds the new tuplets (×5/4 note-ons 0 / 77 / 154 / 230 / 307, exact 76.8·k, ≤ 2.1 ms at 120 bpm) (sound,
+phase 10); the phone's floating play covers half of the 12/8 chip (verifier; the Later item "Floating play over
+content"); the clock-in phase-lock trim seemed to outlive Follow lock (sound, unchecked against the phase start).
+
+GOOD: old data plays exactly as before (verifier: 300 random phase-start patterns, 68,059 hits, and 60 old links
+identical, cycles exactly ×35; architect, ines, kai: 60 patterns each; sound: an old link's 2-bar render, same frames
+and ACID, lag 0–1 sample); the clock is exact and cheap (MIDI clock out 24 per quarter at 120, 160 and 240 bpm; WAV
+onsets of ×5/4, ×7/4, ×4/3 and ×6 on the sample grid; `liveQuiet` vs `liveTick` 0 violations in 53,760 ticks;
+headroom and script time as at the phase start); meter exports and jam takes are sample-exact (7/8 bar 77175 frames,
+FF 58 7/3/12/8, jam 7/8 185220 frames).
+
+### Changes after round 1
+
+- **A pattern in a new meter starts on its own bar line** (verifier 1, architect 1, sound 1): the lanes count their
+  steps from the bar anchor, `Machine.origin` (runtime; `setOrigin`). The app moves it with the anchor (`trackMeter` →
+  `trackBars`, now pure in `slots.js`), so the meter control during play, a next-bar slot and a chain step in another
+  meter all start the pattern on step 1 at the new bar line. With one bar length since Play the origin stays 0, so old
+  data and every ORBIT2-05 test are unchanged; a switch within the same bar length goes on counting (polymeter lanes
+  run through it, as before). `collectChain` moves the origin by the same rule (`collectHits({ origin })`), so the render
+  is what plays live. `liveTick` / `liveQuiet` / live record count from the origin while `ahead`, `skip` and `cut` stay
+  on the master tick; the cut also stops at a pending anchor (`bars.next.at`), so no early decision spans a move. The
+  "full cycle" switch, the bloom and the "aligns in" text count from the origin too. The repros: chain [7/8, 4/4, 7/8,
+  4/4] kicks at beats 0 / 3.5 / 7.5 / 11 (were 0 / 4 / 10.5 / 12); the sound engineer's snares at +1 / +3 of each 4/4
+  bar; page (5400/9400, 240 bpm, ×2 7-step kick, 7/8 clicked mid-bar): kicks at 6720 (the anchor), 9660, 12600, 15540,
+  18480 on the MIDI-clock grid (before the change 0, 2940, 5880).
+- **Evolve counts every bar line** (verifier 2): `barN` counts the bar lines since Play as they come, in whatever
+  meter, and evolve runs on every N-th (its dice stream is `1000 + barN`, as before in 4/4). Page: evolve calls at
+  3360, 6720 (the anchor), 9660, 12600, 15540, 18480 (the anchor was skipped).
+- **Undo, redo and evolve's way home keep the loop count** (verifier 3, architect 2): `Machine.assign(json, { keep })`
+  carries `loopN`, `lastTick` and `lastCond` lane by lane; `applyState` and `evolveNow`'s home branch pass it. A slot
+  load or a link still starts fresh (the absolute count, as the chain render). The architect's repro: step 40 is loop 9
+  after loop 8 (was 8 twice). Page: an undo during play keeps `[loopN, lastTick]` on the new lane.
+- **Quick SHOULDs done.** The R4 counter keeps the tick it last stepped on (`lastTick`, not `lastStep`): a speed change
+  counts only the wraps it crosses (×1 → ×2 at beat 10: loop 2 → 3, was 2 → 5) and the count never goes back, so it
+  can't fall below 0 (ines' long → short length then slower speed: was −4) (verifier, sound, ines, kai). PRE / not PRE:
+  the saved key `nei` is now `not pre` (architect, ines: Elektron's NEI is the neighbour track; "previous failed" is its
+  /PRE), and the texts say "passed / failed its condition" and that probability and mutes don't count (verifier). A
+  chain's MIDI file has a time signature wherever a slot changes it (`chainMeters`, `writeMidi({ meters })`; page: 7/8
+  at 0, 4/4 at 1344) (verifier, architect, sound, kai). `barTicks` is a table lookup (no string parsing on 840 ticks
+  per beat) (architect). The bar anchor rule is pure and tested (`trackBars`) (architect). Evolve's speed moves are the
+  pre-R2 ones for the old speeds (¼ → ⅔ either way, ×4 → ×3 either way; 5/4, 4/3, 7/4 step to a classic neighbour)
+  (architect). `liveQuiet` also skips ticks whose early step is decided already: on a pushed, nudged, humanized 4-lane
+  machine the lanes run on 72 of 6720 ticks (the rule before: 1262), with the same hits (verifier). The meter tooltip
+  says a change restarts the pattern on step 1.
+- Not changed: PRE looking past other PRE steps (kai) is what Elektron boxes do too (PRE skips earlier PRE / !PRE
+  trigs there). Later → [[BACKLOG]]: ACID beats in /8 meters (check in Live and Reaper), the MIDI file's 96 PPQ,
+  renders walking every fine tick, jam / ACID maths in `app.js` without tests, the clock-in trim after lock, the
+  floating play over the 12/8 chip (added to "Floating play over content"), a new meter's early step 1 (added to "The
+  next slot's early first step").
+- Tests (144 orbit2: 6 new, 3 updated; all 6 new and the 3 updated fail on `a91e5e1`). New: chains on the bar lines +
+  live clock = render over 7/8 → 4/4 → 6/8 → 4/4 with nudges, a push and humanize (`trackBars` + `setOrigin` + slots +
+  `liveTick` vs `collectChain`); `trackBars` (wait, cancel, change again, at once on a bar line, every bar line counts);
+  R4 through `assign` keep / fresh, a speed change, never below 0, an origin move = one wrap; chain MIDI meters; evolve
+  speed moves; the clock's skip plays the same hits. Updated: the R3 chain times (third slot on its bar line at 3.75
+  s), `peek` restores `lastTick` (the old check compared two undefined), `not pre`. `npm run check` clean, `npm test`
+  144 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped).
+  Browser (5400/9400, one browser per viewport, `/tmp/orbit2-impl/`, deleted): 11/11, the page checks above plus the
+  "if last failed" chip storing `not pre`, 390×844 tap on 12/8 (44 × 44, readout "12/8", no overflow), 0 page errors;
+  screenshots looked at. `app.js` 1222 → 1221 lines.

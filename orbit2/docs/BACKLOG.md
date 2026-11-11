@@ -265,7 +265,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Jam raw-mix headroom** (ORBIT2-04, sound; pre-existing, phase 10): the jam download's raw mix (four lane buses
   summed) peaked at −0.19 dBFS on the demo groove with dsp; a −1 dBFS ceiling or a limiter on that sum.
 - **Floating play over content** (ORBIT2-04, greta): at the top of a 390 phone the 76 px play sits over the welcome
-  bar's "×" and the "wild" button until you scroll; move the welcome bar, or a ~64 px button.
+  bar's "×" and the "wild" button until you scroll; move the welcome bar, or a ~64 px button. Also (ORBIT2-06, verifier)
+  over the right half of the "12/8" meter chip when the Patterns drawer sits near the bottom edge.
 - **F on screen** (ORBIT2-04, greta): nothing visible names the F key; "focus mode (F)" on the Settings button would.
 - **Status line emphasis** (ORBIT2-04, kai, greta): 11 px Major Mono with wide tracking and the chromatic shadow; the
   live states (queued slot, FILL, rec ●, jam) don't stand out from stage distance: an accent colour or a pill for them,
@@ -313,7 +314,9 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   way round (round 3, architect): a switch queued after the outgoing lane already sounded an early downbeat (inside its
   early window, up to ½ step + 30 ms + 15 ms before the bar line) keeps that downbeat, and the incoming slot starts
   from its next step, since a moment is started once (both slots with the same nudged step would flam). Starting the
-  incoming step anyway when the outgoing early part sounded well before it would keep its downbeat.
+  incoming step anyway when the outgoing early part sounded well before it would keep its downbeat. The same holds for
+  the first bar line of a new meter (ORBIT2-06 round 1): the lanes restart on step 1 there, and a step 1 nudged earlier
+  than the look-ahead sounds late.
 - **One-shot MIDI past the clip end** (ORBIT2-05 round 2, verifier; the old clamp did the same): a note nudged or pushed
   past the end makes that track a little longer than N bars, and not a whole bar.
 - **dsp click / glitch peaks** (ORBIT2-05 round 2, sound): a soft click or glitch peaks 1.3–2.3 dB over an unshaped
@@ -335,3 +338,16 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   step it overlaps (live and in the WAV alike).
 - **Smoke on any debug port** (ORBIT2-05 round 3, sound; a root tool, outside `orbit2/`): `tools/smoke.mjs` connects to
   Chrome on 9222 only, so a reviewer on their own ports can't run it.
+- **ACID beats in /8 meters** (ORBIT2-06 round 1, verifier, architect, sound): the tag counts beats in the meter's unit
+  (a 7/8 bar = 7) with a quarter-note tempo, so a 1-bar 7/8 file at 120 bpm is 1.75 s while 7 beats at 120 would be
+  3.5 s. A DAW that reads the tempo field is fine; one that derives the tempo from beats ÷ length reads 240 bpm. Check in
+  Live and Reaper, then keep it, or write the pair in one unit (`withAcid`, `acidOf`).
+- **MIDI file resolution** (ORBIT2-06 round 1, sound; phase 10): the SMF writer's 96 PPQ rounds the new tuplets (×5/4
+  note-ons at 0 / 77 / 154 / 230 / 307 ticks, exact 76.8·k: up to 2.1 ms at 120 bpm); 840 or 1680 PPQ would carry R1's
+  exact timing into the DAW.
+- **Renders walk every fine tick** (ORBIT2-06 round 1, architect): `collectHits` steps through all 840 ticks per beat,
+  a busy 64-bar render 3.6 → 27 ms; it could jump from one lane step to the next.
+- **Pure jam and ACID maths** (ORBIT2-06 round 1, architect): the jam stop rounding and cap and `acidOf` are logic in
+  `app.js` without unit tests (the bar anchor moved to `slots.js` `trackBars`, tested).
+- **The clock-in trim after lock** (ORBIT2-06 round 1, sound; not checked against the phase start, the trim is
+  ORBIT2-01's): after a phase-lock test, `setFollow('off')` left the tempo trimmed (clock out 119.751 bpm).

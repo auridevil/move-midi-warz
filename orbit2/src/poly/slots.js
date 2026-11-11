@@ -7,6 +7,17 @@ export const SWITCH_MODES = ['now', 'bar', 'cycle'];
 const BARS = { at: 0, len: BAR_TICKS };   // 4/4 from tick 0
 /** Is master tick `tick` a bar line of `bars` ({ at, len })? */
 export const onBar = (tick, { at, len }) => (((tick - at) % len) + len) % len === 0;
+/**
+ * R3 bar lines at master tick `t` when the pattern's bar is `len` ticks long: a new length starts on the next bar line
+ * of the old one (a bar is never cut short) and waits in `next` until then; going back to the old length before that
+ * cancels it. Pure, and it runs on every tick: returns `bars` itself when nothing changes, else a new { at, len, next }.
+ * The app also starts the lanes from `at` (Machine.setOrigin), so the pattern's step 1 is on its bar line.
+ */
+export function trackBars(bars, t, len) {
+  if (len === bars.len) return bars.next ? { ...bars, next: null } : bars;
+  const next = bars.next?.len === len ? bars.next : { at: bars.at + Math.ceil((t - bars.at) / bars.len) * bars.len, len };
+  return t >= next.at ? { at: next.at, len, next: null } : next === bars.next ? bars : { ...bars, next };
+}
 
 export class SlotBank {
   /** @param {{ getItem(k): string|null, setItem(k, v): void }} [store] */
@@ -29,7 +40,8 @@ export class SlotBank {
   /**
    * Called on every master tick (before the tick's events are computed). Returns the slot index to load
    * now, or -1. `cycleTicks` = ticks until all lanes line up (for switchAt 'cycle'). `bars` = { at, len }: bar lines
-   * fall on `at + k × len` (the app moves the anchor when the time signature changes).
+   * fall on `at + k × len` (the app moves the anchor when the time signature changes); the lanes count from `at` too,
+   * so they line up again at `at + k × cycleTicks`.
    */
   due(tick, cycleTicks, bars = BARS) {
     const bar = onBar(tick, bars);
@@ -37,7 +49,7 @@ export class SlotBank {
     // a running chain moves on after `chainBars` bars, always on a bar line, so the song keeps its length
     if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; return this.take(this.chain[this.chainPos]); }
     if (this.pending < 0) return -1;
-    const ok = this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : tick % Math.max(1, cycleTicks) === 0);
+    const ok = this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : onBar(tick, { at: bars.at, len: Math.max(1, cycleTicks) }));
     return ok ? this.take(this.pending) : -1;
   }
   take(i) { this.pending = -1; this.current = i; this.barsInSlot = 0; return this.filled(i) ? i : -1; }
@@ -45,7 +57,7 @@ export class SlotBank {
    *  Pure: live play leaves the steps from there on to the incoming slot (liveTick's cut). */
   nextSwitch(tick, cycleTicks, bars = BARS) {
     const next = (n, at = 0) => at + (Math.floor((tick - at) / n) + 1) * n;
-    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : this.switchAt === 'bar' ? next(bars.len, bars.at) : next(Math.max(1, cycleTicks));
+    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : next(this.switchAt === 'bar' ? bars.len : Math.max(1, cycleTicks), bars.at);
     if (this.chain.length > 1 && this.current >= 0) return next(bars.len, bars.at) + Math.max(0, this.chainBars - this.barsInSlot - 1) * bars.len;
     return Infinity;
   }

@@ -52,9 +52,11 @@ const decided = (pre, lane, step, tick) => pre?.tick === tick && (pre.played || 
  * each used at its own tick only. A restart from tick 0 (the reset button) starts a fresh `ahead`: its keys are old ticks.
  * skip: 'lane:tick' keys of moments a pad just played (live record), on the master tick like `ahead`: neither the
  * early part nor the own hits of what steps there sound; a key goes at its tick.
+ * The lanes count their steps from `m.origin` (bar 1 of the pattern's meter); `ahead`, `skip` and `cut` stay on the
+ * master tick. The origin only moves on a cut (a new meter's first bar line), so no decision spans a move.
  */
 export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null }) {
-  const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec };
+  const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec }, o0 = m.origin;
   return m.tick(t, rng, { fill, dice }).map((ev, li) => {
     const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] }, due = (ahead[li] ??= new Map());
     const pre = due.get(t), padded = !!skip?.size && skip.delete(`${li}:${t}`);
@@ -64,9 +66,9 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
       else if (!decided(pre, lane, ev.step, t)) out.hits = expandHits(ev, lane, li, o);
       else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }
     }
-    const step = earlyStep(lane, t, { ...o, cut }), at = step * lane.stepTicks();
+    const step = earlyStep(lane, t - o0, { ...o, cut: cut - o0 }), at = o0 + step * lane.stepTicks();
     if (step >= 0 && !decided(due.get(at), lane, step, at)) {
-      const pev = lane.peek(at, rng, { fill, dice, li, silenced }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
+      const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
       if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt }));
       due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
     }
@@ -75,39 +77,49 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
 }
 
 /**
- * Live play: true when liveTick at master tick `t` would do nothing (no lane steps there, no lane has an early step to
- * decide), so the clock can skip it. Most of the 840 ticks per beat are quiet.
+ * Live play: true when liveTick at master tick `t` would do nothing (no lane steps there, no lane has an early step
+ * still to decide: none, or already in `ahead`), so the clock can skip it. Most of the 840 ticks per beat are quiet.
  */
-export function liveQuiet(m, t, { humanize = 0, tickSec, cut = Infinity }) {
-  return !m.steps(t) && m.lanes.every(l => earlyStep(l, t, { humanize, tickSec, cut }) < 0);
+export function liveQuiet(m, t, ahead, { humanize = 0, tickSec, cut = Infinity }) {
+  if (m.steps(t)) return false; const o0 = m.origin;
+  return m.lanes.every((l, li) => { const s = earlyStep(l, t - o0, { humanize, tickSec, cut: cut - o0 }), at = o0 + s * l.stepTicks(); return s < 0 || decided(ahead[li]?.get(at), l, s, at); });
 }
 
-/** Every hit between master ticks [from, to): [{ li, time (s from tick 0), vel, accent, lock }]. Renders a copy of the
- *  machine, so its runtime counters (playhead, loop count) are the render's own and the live ones are left alone. */
-export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false }) {
-  const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON());
+/** Every hit between master ticks [from, to): [{ li, time (s from tick 0), vel, accent, lock }], the lanes counting from
+ *  `origin` (bar 1 of the pattern). Renders a copy of the machine, so its runtime counters (playhead, loop count) are
+ *  the render's own and the live ones are left alone. */
+export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false, origin = 0 }) {
+  const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON()); m.origin = origin;
   for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock }); });
   return out.sort((a, b) => a.time - b.time);
 }
 
-/** A chain of slot states, `bars` each (in each slot's own time signature), on one continuous master clock (as it plays
- *  live). */
+/** A chain of slot states, `bars` each (in each slot's own time signature), on one continuous master clock, as it plays
+ *  live: a slot whose bar is another length starts its lanes on its own first bar line (the app's bar anchor), a slot
+ *  in the same bar length goes on counting from where the last anchor was. */
 export function collectChain(slotStates, { bars, tempo, dice = null }) {
-  const out = []; let from = 0;
-  slotStates.forEach((json) => { const m = Machine.from(json), to = from + bars * m.barTicks(); out.push(...collectHits(m, { from, to, tempo, dice })); from = to; });
+  const out = []; let from = 0, origin = 0, bar = 0;
+  slotStates.forEach((json, k) => {
+    const m = Machine.from(json), b = m.barTicks(), to = from + bars * b; if (k && b !== bar) origin = from; bar = b;
+    out.push(...collectHits(m, { from, to, tempo, dice, origin })); from = to;
+  });
   return out;
 }
+/** The time signatures of a chain, `bars` each: [{ s (sixteenth it starts on), meter }], one per change (the MIDI
+ *  file's FF 58 events). */
+export const chainMeters = (slotStates, bars) => { const out = []; let s = 0; for (const json of slotStates) { const { num, den } = meterParts(json?.meter), meter = `${num}/${den}`; if (out.at(-1)?.meter !== meter) out.push({ s, meter }); s += bars * 16 * num / den; } return out; };
 /** Sixteenths in a chain of slot states, `bars` each (the MIDI clip length). */
 export const chainSixteenths = (slotStates, bars) => slotStates.reduce((n, json) => { const { num, den } = meterParts(json?.meter); return n + bars * 16 * num / den; }, 0);
 
 /**
  * Hits → Standard MIDI File (one track per lane, notes/channels from the MIDI I/O settings), `bars` long in `meter`
- * (its time-signature event goes in the file; a 7/8 bar is 14 sixteenths), or `sixteenths` long (a chain). loop (the
- * export's "render as loop"): a hit nudged or pushed out of the clip, before the downbeat or past the end, wraps
- * around like the loop WAV's audio, and no note rings past the end, so the clip stays N bars. Off (one-shot): a hit
- * before the downbeat starts on it, as in the one-shot WAV.
+ * (its time-signature event goes in the file; a 7/8 bar is 14 sixteenths), or `sixteenths` long with a time signature
+ * wherever `meters` ([{ s, meter }], chainMeters) changes it (a chain). loop (the export's "render as loop"): a hit
+ * nudged or pushed out of the clip, before the downbeat or past the end, wraps around like the loop WAV's audio, and no
+ * note rings past the end, so the clip stays N bars. Off (one-shot): a hit before the downbeat starts on it, as in the
+ * one-shot WAV.
  */
-export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', sixteenths = null }) {
+export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null }) {
   const { num, den } = meterParts(meter), toSteps = (sec) => sec / (60 / tempo / 4), len = sixteenths ?? bars * 16 * num / den, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
   const place = (sec) => {
     if (!loop || !len) return { s: Math.max(0, toSteps(sec)), d: gate };
@@ -115,7 +127,8 @@ export function hitsToMidi(hits, { tempo, lanes, names, gateSec = 0.06, name = '
     return { s, d: Math.min(gate, len - s) };
   };
   const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: l.note, ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
-  return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den] });   // the clip is the full N bars, not up to the last note
+  const sigs = meters?.map(({ s, meter: k }) => { const p = meterParts(k); return { s, num: p.num, den: p.den }; });
+  return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den], meters: sigs });   // the clip is the full N bars, not up to the last note
 }
 
 // ---- share links: the machine (+ tempo) as deflated JSON in the URL hash ----

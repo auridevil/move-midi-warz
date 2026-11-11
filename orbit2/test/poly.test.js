@@ -964,7 +964,8 @@ test('R3 bar lines follow an anchor: slots switch, chains count and the chain re
   assert.equal(bank.nextSwitch(100, 1, b78), 2940, 'next bar line of 7/8'); assert.equal(bank.due(2939, 1, b78), -1); assert.equal(bank.due(2940, 1, b78), 1);
   const k = (meter) => { const m = new Machine(); m.lanes.forEach(l => l.clear()); m.lanes[0].setLength(1); m.lanes[0].hits[0] = true; m.setMeter(meter); return m.toJSON(); };
   const times = collectChain([k('4/4'), k('7/8'), k('4/4')], { bars: 1, tempo: 120 }).map(h => Math.round(h.time * 1e9) / 1e9);
-  assert.deepEqual(times, [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5], 'the 7/8 slot spans 3½ beats: the next slot starts at 3.75 s on the master clock');
+  // round 1: the third slot's beats used to stay on the old grid (4, 4.5…), half a beat after its bar line
+  assert.deepEqual(times, [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5, 3.75, 4.25, 4.75, 5.25], 'the 7/8 slot spans 3½ beats: the next slot starts on its bar line at 3.75 s');
   assert.equal(chainSixteenths([k('4/4'), k('7/8')], 2), 2 * 16 + 2 * 14);
 });
 test('R4 the loop counter advances as the lane wraps: a length change mid-play keeps 1:2 on the same loops', () => {
@@ -975,23 +976,24 @@ test('R4 the loop counter advances as the lane wraps: a length change mid-play k
   l.setLength(3); const after = run(8, 14);
   assert.deepEqual(after, ['2@1', '0x@2', '1@2', '2@2', '0.@3', '1@3'], 'the next wrap is loop 2: step 1 plays (1:2 on loops 0, 2, 4…)');
   const p = new Lane('kick', { length: 4 }); p.setEuclid(4); for (let s = 0; s < 6; s++) p.at(s * P, () => 0);
-  const before = [p.loopN, p.lastStep]; p.peek(6 * P, () => 0); assert.deepEqual([p.loopN, p.lastStep], before, 'peek leaves the counter');
+  const before = [p.loopN, p.lastTick, p.lastCond]; assert.deepEqual(before, [1, 5 * P, false]); p.peek(6 * P, () => 0); assert.deepEqual([p.loopN, p.lastTick, p.lastCond], before, 'peek leaves the counter');
   p.reset(); assert.equal(p.at(9 * P, () => 0).loop, 2, 'a fresh count (Play, a slot) is the absolute one');
   const m = new Machine(); m.lanes[0].setLength(3); m.lanes[0].setEuclid(3); m.lanes[0].setTrig(0, { cond: '2:2' }); const hits = []; for (let t = 0; t < 12 * P; t++) { const e = m.tick(t, () => 0)[0]; if (e?.hit && e.index === 0) hits.push(e.loop); }
   assert.deepEqual(hits, [1, 3], 'a constant length: the same loops as before R4');
 });
-test('R4 PRE / NEI truth table: play if the previous conditional step on this lane passed / failed', async () => {
+test('R4 PRE / not PRE truth table: play if the previous conditional step on this lane passed / failed', async () => {
   const { condPasses, CONDS } = await import('../src/poly/lanes.js');
-  assert.deepEqual(CONDS.slice(-2), ['pre', 'nei'], 'appended: saved conditions keep their index');
-  assert.deepEqual([true, false].map(prev => [condPasses('pre', 0, false, prev), condPasses('nei', 0, false, prev)]), [[true, false], [false, true]]);
-  assert.equal(condPasses('pre', 0), false, 'nothing before it: PRE rests'); assert.equal(condPasses('nei', 0), true);
-  const l = new Lane('snare', { length: 3 }); l.setEuclid(3); l.setTrig(0, { cond: '1:2' }); l.setTrig(1, { cond: 'pre' }); l.setTrig(2, { cond: 'nei' });
+  // round 1: the backlog's NEI ("previous failed") is stored as 'not pre' (Elektron's /PRE; its NEI is the neighbour track)
+  assert.deepEqual(CONDS.slice(-2), ['pre', 'not pre'], 'appended: saved conditions keep their index');
+  assert.deepEqual([true, false].map(prev => [condPasses('pre', 0, false, prev), condPasses('not pre', 0, false, prev)]), [[true, false], [false, true]]);
+  assert.equal(condPasses('pre', 0), false, 'nothing before it: PRE rests'); assert.equal(condPasses('not pre', 0), true);
+  const l = new Lane('snare', { length: 3 }); l.setEuclid(3); l.setTrig(0, { cond: '1:2' }); l.setTrig(1, { cond: 'pre' }); l.setTrig(2, { cond: 'not pre' });
   const row = () => [0, 1, 2].map(() => 0).map((_, k, a) => a); const seq = []; for (let s = 0; s < 12; s++) seq.push(l.at(s * P, () => 0).hit ? 'x' : '.'); row();
-  assert.equal(seq.join(''), 'xx...xxx...x', 'loop 0: 1:2 passes → PRE plays, NEI rests; loop 1: 1:2 fails → PRE rests, NEI plays');
-  // a muted conditional step still sets what PRE reads; PRE / NEI never set it themselves; always doesn't count
+  assert.equal(seq.join(''), 'xx...xxx...x', 'loop 0: 1:2 passes → PRE plays, not PRE rests; loop 1: 1:2 fails → PRE rests, not PRE plays');
+  // a muted conditional step still sets what PRE reads; PRE / not PRE never set it themselves; always doesn't count
   const q = new Lane('hat', { length: 2 }); q.setEuclid(2); q.setTrig(0, { cond: 'first' }); q.setTrig(1, { cond: 'pre' }); q.muted = true; q.at(0, () => 0); q.muted = false;
   assert.equal(q.at(P, () => 0).hit, true, 'the muted first-loop step passed'); assert.equal(q.at(2 * P, () => 0).hit, false); assert.equal(q.at(3 * P, () => 0).hit, false, 'after the first loop "first" fails');
-  const c = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(c.trigs.slice(0, 3).map(t => t.cond), ['1:2', 'pre', 'nei'], 'saved');
+  const c = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(c.trigs.slice(0, 3).map(t => t.cond), ['1:2', 'pre', 'not pre'], 'saved');
 });
 test('ORBIT2-06: an old save and an old share link (24 PPQ, old ratio indices, no meter) play the very same hits', async () => {
   const { collectHits, encodeShare, decodeShare } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
@@ -1005,4 +1007,86 @@ test('ORBIT2-06: an old save and an old share link (24 PPQ, old ratio indices, n
   assert.deepEqual(digest(m), want, 'an old save');
   assert.deepEqual(digest(Machine.from((await decodeShare(await encodeShare(OLD, 120))).m)), want, 'an old share link');
   assert.deepEqual(digest(Machine.from(JSON.parse(JSON.stringify(m.toJSON())))), want, 'saved again in the new format');
+});
+
+// ---- ORBIT2-06 review round 1 ----
+const slotOf = (meter, lanes) => { const m = new Machine(); m.lanes.forEach(l => l.clear()); lanes.forEach(([ratio, len, steps, edit], i) => { const l = m.lanes[i]; l.setRatio(ratioIndexOf(ratio)); l.setLength(len); for (const s of steps) l.hits[s] = true; edit?.(l); }); m.setMeter(meter); return m.toJSON(); };
+test('ORBIT2-06 r1: a pattern in a new meter starts on its own bar line: chains render it, the live clock plays the same', async () => {
+  const { collectChain, liveTick } = await import('../src/poly/export.js'); const { SlotBank, trackBars } = await import('../src/poly/slots.js'); const { Dice } = await import('../src/poly/dice.js');
+  // verifier: [7/8: ×2, 7 steps, kick on 1] [4/4: ×1, 4 steps, kick on 1], 1 bar each, at 60 bpm (a beat = 1 s)
+  const A = slotOf('7/8', [[2, 7, [0]]]), B = slotOf('4/4', [[1, 4, [0]]]), at = (hs, li = 0) => hs.filter(h => h.li === li).map(h => +h.time.toFixed(6));
+  assert.deepEqual(at(collectChain([A, B, A, B], { bars: 1, tempo: 60 })), [0, 3.5, 7.5, 11], 'kicks on the bar lines (were 0, 4, 10.5, 12)');
+  // sound: the 4/4 slot's snares on 2 and 4 of its own bar (bar lines 3.5 and 11; they were on +1.5 / +3.5 and the downbeat)
+  const S = slotOf('4/4', [[1, 4, [0]], [1, 4, [1, 3]]]); assert.deepEqual(at(collectChain([A, S, A, S], { bars: 1, tempo: 60 }), 1), [4.5, 6.5, 12, 14]);
+  // the same bar length goes on counting from the last bar 1, as before the phase: a 3-step lane runs through the switch
+  const C = slotOf('4/4', [[1, 3, [0]]]); assert.deepEqual(at(collectChain([C, C], { bars: 1, tempo: 60 })), [0, 3, 6]);
+  // live: the clock's rules (trackBars + setOrigin, the slot bank, the cut) through liveTick hold exactly the chain
+  // render's hits, early ones too (a nudge before the beat, a push, humanize), over two meter changes and back
+  const D = slotOf('7/8', [[2, 7, [0, 3], l => l.setLock(3, 'nudge', -0.4)], [7 / 4, 7, [1, 2, 5], l => l.setOffset(-12)]]), E = slotOf('4/4', [[1, 4, [0, 2]], [5 / 4, 5, [0, 1, 3], l => l.setLock(1, 'nudge', -0.3)]]), F = slotOf('6/8', [[3, 6, [0, 4]], [6, 12, [2, 7]]]);
+  const states = [D, E, F, E].map(s => ({ ...s, humanize: 0.6 })), nb = 2, tempo = 120, ts = 60 / tempo / P, dice = Dice.take(5), r6 = (x) => x.toFixed(6);
+  const bank = new SlotBank(); states.forEach((s, i) => bank.save(i, s)); bank.chainBars = nb; bank.setChain([0, 1, 2, 3]);
+  const m = new Machine(), ahead = [], live = []; let bars = { at: 0, len: m.barTicks(), next: null };
+  const track = (t) => { const b = trackBars(bars, t, m.barTicks()); if (b !== bars) { bars = b; m.setOrigin(bars.at); } };
+  const span = states.reduce((n, s) => n + nb * Machine.from(s).barTicks(), 0); assert.equal(span, 29 * P, '2 bars each of 7/8, 4/4, 6/8, 4/4');
+  for (let t = 0; t < span; t++) {
+    track(t); const si = bank.due(t, m.cycleTicks(), bars); if (si >= 0) { m.assign(bank.get(si)); track(t); }
+    const cut = Math.min(bank.nextSwitch(t, m.cycleTicks(), bars), bars.next ? bars.next.at : Infinity);
+    liveTick(m, t, ahead, { dice, tickSec: ts, cut }).forEach(({ hits, early }, li) => { for (const h of [...early, ...hits]) live.push(`${li} ${r6(t * ts + h.dt)}`); });
+  }
+  const want = collectChain(states, { bars: nb, tempo, dice }).map(h => `${h.li} ${r6(h.time)}`);
+  assert.deepEqual(live.sort(), want.sort()); assert.ok(want.length > 40, `${want.length} hits`);
+});
+test('ORBIT2-06 r1: trackBars waits for the old bar line, cancels on a change back, moves at once on a bar line; every bar line counts', async () => {
+  const { trackBars, onBar } = await import('../src/poly/slots.js'); const { barTicks } = await import('../src/poly/lanes.js');
+  const b0 = { at: 0, len: barTicks('4/4'), next: null };
+  assert.equal(trackBars(b0, 100, b0.len), b0, 'nothing changes: the same object (it runs on every tick)');
+  const p = trackBars(b0, 7490, barTicks('3/4')); assert.deepEqual(p, { at: 0, len: 3360, next: { at: 10080, len: 2520 } }, 'mid-bar: waits for the next 4/4 bar line');
+  assert.equal(trackBars(p, 7491, barTicks('3/4')), p, 'still waiting: the same object');
+  assert.deepEqual(trackBars(p, 7500, b0.len), { at: 0, len: 3360, next: null }, 'back to 4/4 before it: cancelled');
+  assert.deepEqual(trackBars(p, 7500, barTicks('7/8')).next, { at: 10080, len: 2940 }, 'another meter meanwhile: the same bar line');
+  assert.deepEqual(trackBars(p, 10080, barTicks('3/4')), { at: 10080, len: 2520, next: null }, 'there: 3/4 bars from 10080');
+  assert.deepEqual(trackBars(b0, 6720, barTicks('7/8')), { at: 6720, len: 2940, next: null }, 'on a bar line (a slot switch): at once');
+  // the verifier's evolve case (every 1 bar; 4/4 → 3/4 at tick 7490): the bar line where 3/4 starts is one of them
+  let bars = b0; const lines = []; for (let t = 1; t < 21000; t++) { bars = trackBars(bars, t, t >= 7490 ? barTicks('3/4') : b0.len); if (onBar(t, bars)) lines.push(t); }
+  assert.deepEqual(lines, [3360, 6720, 10080, 12600, 15120, 17640, 20160]);
+});
+test('ORBIT2-06 r1: R4 keeps counting through undo / redo / evolve home, a speed change and a new meter, and never goes below 0', () => {
+  const mk = () => { const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(ratioIndexOf(1)); l.setEuclid(4); l.setTrig(0, { cond: '1:2' }); return m; };
+  const run = (m, to, at = {}) => { const out = []; for (let s = 0; s <= to; s++) { at[s]?.(m); const e = m.tick(s * P, () => 0)[0]; if (e?.index === 0) out.push(`${s}:${e.loop}${e.hit ? 'x' : '.'}`); } return out; };
+  // the architect's repro: length 5 at step 22, the same state put back at step 38 (undo / redo, evolve's way home)
+  assert.deepEqual(run(mk(), 45, { 22: m => m.lanes[0].setLength(5), 38: m => m.assign(m.toJSON(), { keep: true }) }).slice(-4), ['30:7.', '35:8x', '40:9.', '45:10x'], 'loop 9 after 8 (was 35:8x 40:8x)');
+  assert.deepEqual(run(mk(), 45, { 22: m => m.lanes[0].setLength(5), 38: m => m.assign(m.toJSON()) }).slice(-2), ['40:8x', '45:9.'], 'a slot or a link starts fresh: the absolute count, as the chain render');
+  const k = mk(); for (let s = 0; s < 3; s++) k.tick(s * P, () => 0); k.assign(k.toJSON(), { keep: true });   // step 0's 1:2 passed
+  assert.deepEqual([k.lanes[0].loopN, k.lanes[0].lastTick, k.lanes[0].lastCond], [0, 2 * P, true], 'undo carries the count and the PRE memory');
+  k.assign(k.toJSON()); assert.deepEqual([k.lanes[0].lastTick, k.lanes[0].lastCond], [null, false], 'a slot: fresh');
+  // a speed change counts only the wraps it crosses (×1 → ×2 at beat 10: loop 2 → 3, it was 2 → 5)
+  const sp = mk(), seen = []; for (let t = 0; t <= 20 * P; t += 420) { if (t === 10 * P) sp.lanes[0].setRatio(ratioIndexOf(2)); const e = sp.tick(t, () => 0)[0]; if (e) seen.push(e.loop); }
+  assert.ok(seen.every((x, i) => !i || (x >= seen[i - 1] && x - seen[i - 1] <= 1)), seen.join(' ')); assert.equal(seen[seen.indexOf(2) + 2], 3);
+  // ines: a long → short length change, then a slower speed, took the count below 0 (a:b and "after 1st" went silent)
+  const n = mk(); n.lanes[0].setLength(16); let low = Infinity; for (let t = 0; t <= 200 * P; t += 210) { if (t === 32 * P) n.lanes[0].setLength(2); if (t === 40 * P) n.lanes[0].setRatio(ratioIndexOf(1 / 2)); const e = n.tick(t, () => 0)[0]; if (e) low = Math.min(low, e.loop); }
+  assert.ok(low >= 0, `lowest loop ${low}`);
+  // a new meter's first bar line restarts the lanes on step 1: one more wrap
+  const o = mk(); for (let s = 0; s < 6; s++) o.tick(s * P, () => 0); o.setOrigin(6 * P + 420);
+  assert.equal(o.tick(6 * P, () => 0)[0], null, 'nothing before the new bar 1'); const e = o.tick(6 * P + 420, () => 0)[0]; assert.deepEqual([e.index, e.loop], [0, 2]);
+});
+test('ORBIT2-06 r1: a chain\'s MIDI file carries a time signature wherever a slot changes it', async () => {
+  const { chainMeters, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
+  const k = (meter) => { const m = new Machine(); m.setMeter(meter); return m.toJSON(); }, ms = chainMeters([k('4/4'), k('7/8'), k('7/8'), k('4/4')], 1);
+  assert.deepEqual(ms, [{ s: 0, meter: '4/4' }, { s: 16, meter: '7/8' }, { s: 44, meter: '4/4' }]);
+  const lanes = [{ note: 36, ch: 10 }], bytes = hitsToMidi([{ li: 0, time: 0, vel: 1 }], { tempo: 120, lanes, names: ['kick'], meters: ms, sixteenths: 60 });
+  assert.deepEqual(readMidi(bytes).tracks[0].meters, [{ t: 0, num: 4, den: 4 }, { t: 384, num: 7, den: 8 }, { t: 1056, num: 4, den: 4 }]);
+  assert.deepEqual(readMidi(hitsToMidi([], { tempo: 120, lanes, names: ['k'], bars: 1, meter: '7/8' })).tracks[0].meters, [{ t: 0, num: 7, den: 8 }], 'one pattern: one, as before');
+});
+test('ORBIT2-06 r1: evolve\'s speed moves are the pre-R2 ones for the old speeds; 5/4 · 4/3 · 7/4 step to a classic neighbour', () => {
+  const move = (r, dir) => { const m = new Machine(); m.lanes.forEach((l, i) => { l.evolve = i === 0; }); m.lanes[0].setRatio(ratioIndexOf(r)); const seq = [0, 0.8, dir < 0 ? 0.2 : 0.7]; let k = 0; m.evolve({ scope: 'all', amount: 1 }, () => seq[k++]); return m.lanes[0].ratio; };
+  // the pre-R2 rule was clamp(index ± 1) on ⅔…×3 of the old table: outside it a lane lands on the nearest end either way
+  for (const [r, up, down] of [[1 / 4, 2 / 3, 2 / 3], [1 / 3, 2 / 3, 2 / 3], [1 / 2, 2 / 3, 2 / 3], [2 / 3, 3 / 4, 2 / 3], [3 / 4, 1, 2 / 3], [1, 3 / 2, 3 / 4], [3 / 2, 2, 1], [2, 3, 3 / 2], [3, 3, 2], [4, 3, 3]]) assert.deepEqual([move(r, 1), move(r, -1)], [up, down], `×${r}`);
+  for (const [r, up, down] of [[5 / 4, 3 / 2, 1], [4 / 3, 3 / 2, 1], [7 / 4, 2, 3 / 2], [5, 3, 3], [6, 3, 3]]) assert.deepEqual([move(r, 1), move(r, -1)], [up, down], `×${r}`);
+});
+test('ORBIT2-06 r1: the clock also skips ticks whose early steps are decided, and plays exactly the same', async () => {
+  const { liveTick, liveQuiet } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
+  const busy = () => { const m = Machine.from(slotOf('4/4', [[4, 16, [0, 3, 6, 9, 12], l => l.setOffset(-30)], [3, 12, [0, 4, 8], l => l.setLock(4, 'nudge', -0.5)], [2, 8, [1, 5]], [5 / 4, 10, [0, 2, 5, 7], l => l.setOffset(-20)]])); m.humanize = 1; return m; };
+  const play = (skipQuiet) => { const m = busy(), ahead = [], out = [], dice = Dice.take(11), o = { dice, tickSec: TICK }; let ran = 0; for (let t = 0; t < 8 * P; t++) { if (skipQuiet && liveQuiet(m, t, ahead, { humanize: m.humanize, tickSec: TICK })) continue; ran++; liveTick(m, t, ahead, o).forEach(({ hits, early }, li) => { for (const h of [...early, ...hits]) out.push(`${li} ${(t * TICK + h.dt).toFixed(9)} ${h.vel.toFixed(6)}`); }); } return { out: out.sort(), ran }; };
+  const all = play(false), skipped = play(true); assert.deepEqual(skipped.out, all.out); assert.ok(all.out.length > 20, `${all.out.length} hits`);
+  assert.ok(skipped.ran < 8 * P * 0.02, `the lanes ran on ${skipped.ran} of ${8 * P} ticks (72; the rule before round 1: 1262)`);
 });

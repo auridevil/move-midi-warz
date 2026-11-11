@@ -13,6 +13,14 @@ export const OLD_RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 3 / 2, 2, 3, 4]
 export const ratioIndexOf = (r) => RATIOS.findIndex(x => Math.abs(x - r) < 1e-9);
 /** Evolve's speed moves stay on the classic set (the range it always used), never onto ×7/4 by surprise. */
 const EVOLVE_RATIOS = [2 / 3, 3 / 4, 1, 3 / 2, 2, 3];
+/** Evolve's next speed: one step along the classic set; a lane outside it lands on the nearest end whatever the
+ *  direction (as before R2, so a locked-dice evolve of an old pattern is the same); 5/4, 4/3, 7/4 go to the classic
+ *  neighbour on that side. */
+const evolveRatio = (r, dir) => {
+  const e = EVOLVE_RATIOS, k = e.findIndex(x => Math.abs(x - r) < 1e-9);
+  if (r < e[0] || r > e[e.length - 1]) return r < e[0] ? e[0] : e[e.length - 1];
+  return k >= 0 ? e[clamp(k + dir, 0, e.length - 1)] : dir > 0 ? e.find(x => x > r) : e.findLast(x => x < r);
+};
 export const LANE_NAMES = ['kick', 'snare', 'hat', 'perc'];
 /** Per-lane sound sculpting, all 0..1: Shift + knobs on the Move. */
 export const SOUND_KEYS = ['decay', 'tone', 'drive', 'snap', 'color', 'send', 'pan', 'level'];
@@ -24,8 +32,10 @@ export const PPQ = 840, MIDI_DIV = PPQ / 24, BAR_TICKS = PPQ * 4;
 /** Time signatures (R3), stored with the pattern (`meter`, missing = 4/4). A bar is num × (4 / den) quarter notes. */
 export const METERS = ['4/4', '3/4', '5/4', '6/8', '7/8', '12/8'];
 export const meterParts = (meter) => { const [num, den] = (METERS.includes(meter) ? meter : '4/4').split('/').map(Number); return { num, den }; };
-/** Master ticks in one bar of `meter`: 4/4 = 3360, 7/8 = 2940 (3.5 beats), 6/8 = 2520. */
-export const barTicks = (meter) => { const { num, den } = meterParts(meter); return PPQ * 4 * num / den; };
+/** Master ticks in one bar of `meter`: 4/4 = 3360, 7/8 = 2940 (3.5 beats), 6/8 = 2520. A table: the clock asks on
+ *  every tick, so no string parsing there. */
+const BAR_OF = Object.fromEntries(METERS.map(k => { const { num, den } = meterParts(k); return [k, PPQ * 4 * num / den]; }));
+export const barTicks = (meter) => BAR_OF[meter] ?? BAR_TICKS;
 /** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, nudge −½..½ of a step (early/late), the rest 0..1. */
 export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
 export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5] };
@@ -59,20 +69,22 @@ export const GHOST_VEL = 0.35, VEL_TIERS = ['ghost', 'normal', 'accent'];
 /** The tier a non-accent velocity is nearest to: ghost (0.35) or normal (0.7). */
 export const tierOfVel = (v) => v < (GHOST_VEL + 0.7) / 2 ? 'ghost' : 'normal';
 /** Trig conditions per step. 'a:b' = play on loop a of every b; fill = only while Fill is held; first = first loop after
- *  Play; pre / nei = only if the previous conditional step on this lane passed / failed (R4; appended, so saved
- *  conditions keep their meaning). */
-export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4', '3:4', '4:4', 'fill', 'not fill', 'first', 'not first', 'pre', 'nei'];
-/** Conditions that set what pre / nei read: every real condition except always and pre / nei themselves. */
-const setsPrev = (cond) => !!cond && cond !== 'always' && cond !== 'pre' && cond !== 'nei';
+ *  Play; pre / not pre = only if the previous conditional step on this lane passed / failed its condition (R4's PRE /
+ *  NEI; Elektron calls the second /PRE, its NEI reads the neighbour track; appended, so saved conditions keep their
+ *  meaning). */
+export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4', '3:4', '4:4', 'fill', 'not fill', 'first', 'not first', 'pre', 'not pre'];
+/** Conditions that set what pre / not pre read: every real condition except always and pre / not pre themselves (as on
+ *  Elektron boxes, PRE looks past other PRE trigs). The probability roll and mutes don't count: only the condition. */
+const setsPrev = (cond) => !!cond && cond !== 'always' && cond !== 'pre' && cond !== 'not pre';
 export const MAX_RATCHET = 4;
 /** A sample plays whole, from its first sample: decay at the top, no skip-in (snap) and no pitch swoop (color). */
 const SAMPLE_KEYS = ['decay', 'snap', 'color'], SAMPLE_SOUND = { decay: 1, snap: 0.5, color: 0.5 };
 const pick = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
 /** Does a condition pass on loop `loop` (0 = first loop since Play)? prev: did the previous conditional step on the
- *  lane pass (for pre / nei; false before any has played)? */
+ *  lane pass (for pre / not pre; false before any has played)? */
 export function condPasses(cond, loop, fill = false, prev = false) {
   if (!cond || cond === 'always') return true;
-  if (cond === 'pre') return prev; if (cond === 'nei') return !prev;
+  if (cond === 'pre') return prev; if (cond === 'not pre') return !prev;
   if (cond === 'fill') return fill; if (cond === 'not fill') return !fill;
   if (cond === 'first') return loop === 0; if (cond === 'not first') return loop > 0;
   const [a, b] = cond.split(':').map(Number); return loop % b === a - 1;
@@ -197,25 +209,26 @@ export class Lane {
     const st = this.stepTicks(); if (tick % st) return null;
     const step = tick / st, i = step % this.length, lock = this.lockAt(i), trig = this.trigAt(i), loop = this.loopAt(step);
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
-    // the condition is judged on every active step, muted or not, so a mute doesn't change what pre / nei read later
+    // the condition is judged on every active step, muted or not, so a mute doesn't change what pre / not pre read later
     const on = this.hitAt(i), pass = on && condPasses(trig?.cond, loop, ctx.fill, this.lastCond);
     const hit = pass && !this.muted && !ctx.silenced && r < (lock?.prob ?? this.prob);
     if (on && setsPrev(trig?.cond)) this.lastCond = pass;
-    this.pos = (i + 1) % this.length; this.loopN = loop; this.lastStep = step;
+    this.pos = (i + 1) % this.length; this.loopN = loop; this.lastTick = tick;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
     return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
   }
   /** at() without moving the playhead (pos) or the loop counter: live play looks ahead with it. */
-  peek(tick, rng, ctx) { const { pos, loopN, lastStep, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastStep, lastCond }); return ev; }
+  peek(tick, rng, ctx) { const { pos, loopN, lastTick, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastTick, lastCond }); return ev; }
   /**
-   * R4 loop counter (runtime, not saved): the loop absolute step `step` is in, counted as the lane wraps. It goes up by
-   * one each time the lane passes its index 0 (with the length it has then), so a length change mid-play keeps the
-   * count and a 1:2 step stays on its loops. A fresh lane (Play, a slot, undo) starts from the absolute count
-   * floor(step / length), as the renders do; with one length all along that is what it always is.
+   * R4 loop counter (runtime, not saved): the loop of step `step`, counted as the lane wraps. It goes up by one for each
+   * index 0 the lane passes after the tick it last stepped on (`lastTick`), in the length and speed it has now, so a
+   * length or a speed change mid-play keeps the count (a 1:2 step stays on its loops) and it never goes back. A fresh
+   * lane (Play, a slot, a link) starts from the absolute count floor(step / length), as the renders do; with one length
+   * and speed all along that is what it always is.
    */
-  loopAt(step) { const L = this.length; return this.loopN + Math.floor(step / L) - Math.floor(this.lastStep / L); }
-  resetLoops() { this.loopN = -1; this.lastStep = -1; this.lastCond = false; }
+  loopAt(step) { const L = this.length; return this.lastTick == null ? Math.floor(step / L) : Math.max(0, this.loopN + Math.floor(step / L) - Math.floor(Math.floor(this.lastTick / this.stepTicks()) / L)); }
+  resetLoops() { this.loopN = 0; this.lastTick = null; this.lastCond = false; }
   /**
    * Live record: the step a hit at fractional master tick `tickF` belongs to, by where the steps are heard (a swung
    * step sounds late, so a hit played with it is filed under it). 'nearest' takes the closest (on a tie the coming
@@ -254,8 +267,15 @@ export class Lane {
 
 export class Machine {
   // a new machine plays the Common kit: lane names are ids, not voices ('perc' is not a voice)
-  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: ratioIndexOf([1, 1, 2, 2][i]) })); this.selected = 0; this.humanize = 0; this.meter = '4/4'; this.applyKit(KITS.common, DEFAULT_SOUND); }
+  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: ratioIndexOf([1, 1, 2, 2][i]) })); this.selected = 0; this.humanize = 0; this.meter = '4/4'; this.origin = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
   setMeter(meter) { if (METERS.includes(meter)) this.meter = meter; return this.meter; }
+  /**
+   * Runtime, not saved: the master tick this pattern's bar 1 starts on (the app's bar anchor, which moves when the time
+   * signature changes: the meter control, or a slot or chain step in another meter). Lanes count their steps from
+   * here, so a pattern in a new meter starts on its own downbeat; with one meter since Play it is 0, as it always was.
+   * A move keeps each lane's loop count going: the restart on step 1 is one more wrap (R4).
+   */
+  setOrigin(t) { const d = t - this.origin; if (!d) return; for (const l of this.lanes) if (l.lastTick != null) l.lastTick -= d; this.origin = t; }
   /** Master ticks in one bar of this pattern's time signature. */
   barTicks() { return barTicks(this.meter); }
   get lane() { return this.lanes[this.selected]; }
@@ -270,13 +290,20 @@ export class Machine {
   resetAll() { for (const l of this.lanes) l.reset(); }
   /** Master ticks until every lane lines up again: in whole ticks (a ×5/4 loop is not a whole number of 12ths of a beat). */
   cycleTicks({ repeat = 1 } = {}) { return Math.max(1, this.lanes.reduce((acc, l) => lcm(acc, l.length * l.stepTicks() * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1)); }
-  /** Every lane's event at master tick `tick` (null where a lane doesn't step). */
+  /** Every lane's event at master tick `tick` (null where a lane doesn't step), its steps counted from `origin`. */
   /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
-  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo); return this.lanes.map((l, li) => tick % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo })); }   // most ticks step no lane: nothing allocated
+  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo), r = tick - this.origin; return this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(r, rng, { ...ctx, li, silenced: solo && !l.solo })); }   // most ticks step no lane: nothing allocated
   /** Does any lane step at master tick `tick`? */
-  steps(tick) { return this.lanes.some(l => tick % l.stepTicks() === 0); }
-  /** Replace the whole state in place (pattern slots), keeping the object other code holds. */
-  assign(o) { const n = Machine.from(o); this.lanes = n.lanes; this.selected = n.selected; this.humanize = n.humanize; this.kit = n.kit; this.meter = n.meter; return this; }
+  steps(tick) { const r = tick - this.origin; return r >= 0 && this.lanes.some(l => r % l.stepTicks() === 0); }
+  /**
+   * Replace the whole state in place (pattern slots, undo), keeping the object other code holds. A slot or a link
+   * starts its lanes fresh, from the absolute loop count, as the chain render does; keep (undo / redo, evolve's way
+   * home) lets each new lane go on counting loops where the one it replaces was (R4: no jump in a 1:2 or PRE).
+   */
+  assign(o, { keep = false } = {}) {
+    const n = Machine.from(o); if (keep) n.lanes.forEach((l, i) => { const p = this.lanes[i]; if (p) Object.assign(l, { loopN: p.loopN, lastTick: p.lastTick, lastCond: p.lastCond }); });
+    this.lanes = n.lanes; this.selected = n.selected; this.humanize = n.humanize; this.kit = n.kit; this.meter = n.meter; return this;
+  }
   /**
    * Evolve: nudge some lanes a little. scope 'rotate' = rotation only, 'hits' = + euclid fill, 'all' = + length
    * and speed. amount 0..1 = chance per lane. Lanes with evolve=false or muted are left alone. Returns what changed.
@@ -293,7 +320,7 @@ export class Machine {
         else { const i = Math.floor(rng() * l.length); if (!(l.hits[i] && l.hits.filter(Boolean).length <= 1)) l.toggle(i); }
       }
       if (kind === 'length') { l.setLength(clamp(l.length + dir, 2, MAX_STEPS)); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); l.rotation %= l.length; }
-      if (kind === 'ratio') { const e = EVOLVE_RATIOS, k = e.reduce((b, r, j) => Math.abs(r - l.ratio) < Math.abs(e[b] - l.ratio) ? j : b, 0); l.setRatio(ratioIndexOf(e[clamp(k + dir, 0, e.length - 1)])); }
+      if (kind === 'ratio') l.setRatio(ratioIndexOf(evolveRatio(l.ratio, dir)));
       changes.push({ lane: li, kind, dir });
     });
     return changes;
