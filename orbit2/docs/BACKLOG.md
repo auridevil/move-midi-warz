@@ -109,9 +109,9 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 
 - **L1 32 steps per lane** (pages on screen and on the Move pads/step buttons). (Tomi, Kai) ✅ ORBIT2-07
 - **L2 more lanes**: 6 (or 8) lanes, Move mapping and scene adapted. (Tomi) ✅ ORBIT2-07
-- **L3 per-step alt voice** / articulation lock (open/mute/slap for conga etc.). (Tomi)
+- **L3 per-step alt voice** / articulation lock (open/mute/slap for conga etc.). (Tomi) ✅ ORBIT2-08
 - **L4 new voices** (both engines where possible): shekere, agogo / gankogui bell, djembe, log drum (sub with pitch
-  glide), plus a "Jungle" kit and an "Afro" kit. (Tomi, Dex)
+  glide), plus a "Jungle" kit and an "Afro" kit. (Tomi, Dex) ✅ ORBIT2-08
 - **L5 pads cover all 16 steps**: page toggle or fold, playhead visible on pads for steps 9–16. (Kai) ✅ ORBIT2-07
 
 ## S · Samples & breaks (phase 09)
