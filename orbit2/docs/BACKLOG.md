@@ -412,5 +412,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **The synth slap crack at the default lane tone** (ORBIT2-08 round 2, sound): the high-passed white-noise crack sits
   partly above the lane's 4.3 kHz low-pass at the default tone, so the synth bongo / djembe slaps carry 5.2 / 3.4 % of
   their energy above 2 kHz against the dsp twins' 10.5 / 5.3 %; a band-passed crack around 2.5–3.5 kHz would survive it.
+- **A live-out test that plays** (ORBIT2-08 round 3, verifier): "ORBIT2-08 r2" checks `app.js`'s text (one `pmidi.note`
+  call, `liveHit` through `midiHit`), so a harmless refactor breaks it and it never runs `liveHit`; a browser-level test
+  driving `liveHit` with a fake MIDI out (or `liveHit`'s note logic moved somewhere pure) would be sturdier.
 - **The synth agogo's clang** (ORBIT2-08 round 2, sound): it has its dsp twin's level but almost no metal (0.1 % above
   2 kHz, centroid 643 / 965 Hz, against 44 % and 1.7 / 2.3 kHz); an inharmonic partial or a higher modulation index.

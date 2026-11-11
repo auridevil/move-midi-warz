@@ -3,11 +3,11 @@ type: review
 phase: ORBIT2-08
 title: ORBIT2-08 new voices and articulations (L3, L4), review panel
 date: 2026-11-11
-round: 2
+round: 3
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
+  verifier: HAPPY
   architect: HAPPY
   sound: HAPPY
   tomi: HAPPY
@@ -209,3 +209,29 @@ firing only on slaps (sound).
   deleted): the `liveHit` repro above (46 / 39 on `ba46a18`), the stroke measurements of round 1 again (slaps, shekere,
   agogo unchanged but for the two trims; Afro and Jungle stems in both engines unchanged, raw mix peaks −4.0 / −1.7 /
   −6.6 / −5.5 dBFS), 0 page errors.
+
+## Round 3 (re-check): verifier HAPPY, the whole panel HAPPY
+
+Only the verifier was NOT HAPPY after round 2: a fresh sub-agent on the default model, ports 5401 / 9401 (the phase start
+`abb88c0` on 5501, the code before the round-2 fixes `ba46a18` on 5601), the smoke on 9222. Brief as in round 2, with
+`git diff --stat abb88c0..5d7055a` (11 files, +552/−36), the round-2 fixes alone (`ba46a18..5d7055a`, 7 files,
++111/−15), its open round-2 item and "Changes after round 2", the instruction to confirm the item first with the same
+repro, then check nearby, anything new only in scope and marked NEW. Pre-checks on `5d7055a`: `npm run check` clean,
+`npm test` 153 + 9. `stalled: 0`: the round-2 MUST-FIX is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. (1) FIXED, same repro on `5d7055a` and `ba46a18`: Afro, djembe lane 5 at color 0.5, agogo lane 4 at 0.7, `setRec(true)`: stopped, `liveHit(4, 0, 90)` plays the tone (220 Hz) and sends 50 (`ba46a18`: 46), `liveHit(3, 0, 90)` rings high (960 Hz) and sends 47 (39); the dsp engine the same; armed and playing the pads send 50 / 47 and the recorded steps play back on 50 / 47, heard = sent every time, no doubled note. Nearby: pitch pads (`{ tune }`) send the color's stroke (tone 145 Hz → 50, high 1455 Hz → 47), computer keys and fake Move pads send their lanes' strokes, note-offs match note-ons; a pad hit on every lane sends the same notes at `abb88c0` and HEAD in all 18 kits; `strokeNotes` identical to `ba46a18` for 50,000 random maps below the top of the range, and at the top (50,000 maps with notes 0–27 and 100–127, six lanes on 127) every stroke in range, on no lane's note, all different; agogo on 126 and djembe on 127: pads, drawer and `.mid` agree (125, 123); check, 153 + 9, smoke 10/10, 0 page errors. |
+
+SHOULD (never blocks): the "ORBIT2-08 r2" test reads `app.js` with a regex (one `pmidi.note` call, `liveHit` sending
+through `midiHit` with its lock), so a harmless refactor would break it and it never runs `liveHit`; a test driving
+`liveHit` with a fake MIDI out would be sturdier → [[BACKLOG]] Later.
+
+GOOD: `midiHit` is the one path to `pmidi.note` with the same lock as `hitSound`, so the clock, the pads, the computer
+keys, the Move and the pitch pads all send the stroke they play, in both engines; the top-of-range `strokeNotes` only
+adds behaviour (byte-identical below the top); the phase-start kits and pad notes unchanged across all 18 kits.
+
+## Result: HAPPY
+
+All five reviewers HAPPY after round 3 (tomi and dex in round 1; architect and sound on the round-2 re-check; the
+verifier on round 3). Nothing deferred. Next: the close task marks L3, L4 done.
