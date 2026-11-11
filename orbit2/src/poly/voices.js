@@ -70,6 +70,32 @@ V.tabla = { label: 'tabla', make: (T, out) => ({ o: new T.Synth({ oscillator: { 
   hit: (T, n, p, t) => { const f = mf(T, 50 + p.tune * 12), d = 0.1 + p.dec * 0.6; n.o.set({ envelope: { decay: d } }); n.o.oscillator.frequency.setValueAtTime(f, t); n.o.oscillator.frequency.linearRampToValueAtTime(f * (1 + 0.2 + p.color * 0.6), t + d * (0.3 + p.snap * 0.5)); n.o.triggerAttackRelease(f, d, t, p.vel); } };
 V.cuica = { label: 'cuíca', make: (T, out) => ({ o: new T.Synth({ oscillator: { type: 'triangle' }, envelope: { attack: 0.01, decay: 0.25, sustain: 0 }, volume: -8 }).connect(out) }),
   hit: (T, n, p, t) => { const f = mf(T, 70 + p.tune * 12), d = 0.08 + p.dec * 0.3; n.o.set({ envelope: { decay: d } }); n.o.oscillator.frequency.setValueAtTime(f * (p.color > 0.5 ? 0.7 : 1.3), t); n.o.oscillator.frequency.exponentialRampToValueAtTime(f, t + d * 0.7); n.o.triggerAttackRelease(f, d, t, p.vel); } };
+// ---- L4 Afro / Amapiano (dsp-voices.js has the same four) ----
+// djembe: bass / tone / slap from color (thirds) or an artic lock (0 / 1 / 2)
+V.djembe = { label: 'djembe', make: (T, out) => { const bp = new T.Filter({ type: 'bandpass', frequency: 2800, Q: 0.9 }).connect(out); return { bp, m: new T.MembraneSynth({ pitchDecay: 0.01, octaves: 1.2, envelope: { attack: 0.001, decay: 0.3, sustain: 0 }, volume: -3 }).connect(out), n: new T.NoiseSynth({ envelope: { attack: 0.0005, decay: 0.04, sustain: 0 }, volume: -6 }).connect(bp) }; },
+  hit: (T, n, p, t) => {
+    const z = p.artic ?? (p.color < 1 / 3 ? 0 : p.color < 2 / 3 ? 1 : 2), d = [0.12 + p.dec * 0.5, 0.06 + p.dec * 0.3, 0.03 + p.dec * 0.12][z];
+    n.m.set({ octaves: [1.6, 1, 1.4][z], pitchDecay: [0.02, 0.008, 0.005][z], envelope: { decay: d } }); n.m.triggerAttackRelease(mf(T, [41, 57, 64][z] + p.tune * 12), d, t, p.vel * [1, 0.85, 0.6][z]);
+    const nd = z === 2 ? 0.03 + p.dec * 0.06 : 0.012; n.bp.frequency.setValueAtTime(z === 0 ? 900 : 2800, t); n.n.set({ envelope: { decay: nd } }); n.n.triggerAttackRelease(nd, t, p.vel * (z === 2 ? 0.6 + p.snap * 0.4 : p.snap * 0.4));
+  } };
+// log drum (Amapiano): a sub with a woody knock, gliding down by color over most of its length
+V.logdrum = { label: 'log drum', make: (T, out) => { const lp = new T.Filter({ type: 'lowpass', frequency: 2000 }).connect(out); return { lp, o: new T.FMSynth({ harmonicity: 2, modulationIndex: 2, envelope: { attack: 0.002, decay: 0.6, sustain: 0, release: 0.05 }, modulationEnvelope: { attack: 0.001, decay: 0.04, sustain: 0 }, volume: 9 }).connect(lp), k: new T.NoiseSynth({ envelope: { attack: 0.0005, decay: 0.008, sustain: 0 }, volume: -16 }).connect(lp) }; },
+  hit: (T, n, p, t) => {
+    const f = mf(T, 40 + p.tune * 12), d = 0.15 + p.dec * 0.9; n.o.set({ modulationIndex: 0.8 + p.snap * 1.2, envelope: { decay: d } }); n.o.triggerAttackRelease(f, d, t, p.vel);
+    // after the trigger (it sets the note at t): punch down onto the note, then the glide
+    n.o.frequency.cancelScheduledValues(t); n.o.frequency.setValueAtTime(f * (1.8 + p.snap * 1.5), t); n.o.frequency.exponentialRampToValueAtTime(f, t + 0.03); n.o.frequency.linearRampToValueAtTime(f * (1 - p.color * 0.35), t + 0.03 + d * 0.6);
+    n.k.triggerAttackRelease(0.008, t, p.vel * (0.3 + p.snap * 0.5));
+  } };
+// agogo / gankogui: two bells a fifth apart — low below color 0.5, high above, or an artic lock (0 low, 1 high)
+V.agogo = { label: 'agogo', make: (T, out) => ({ f: new T.FMSynth({ harmonicity: 2.76, modulationIndex: 2, envelope: { attack: 0.0005, decay: 0.4, sustain: 0 }, modulationEnvelope: { attack: 0.0005, decay: 0.05, sustain: 0 }, volume: -3 }).connect(out) }),
+  hit: (T, n, p, t) => { const hi = p.artic != null ? p.artic === 1 : p.color >= 0.5, d = 0.1 + p.dec * 0.6; n.f.set({ modulationIndex: 1 + p.snap * 2, envelope: { decay: d } }); n.f.triggerAttackRelease(640 * Math.pow(2, p.tune) * (hi ? 1.5 : 1), d, t, p.vel); } };
+// shekere: a gourd of beads — shake (rolled noise bursts) or slap (artic 1: a palm on the gourd, then the beads)
+V.shekere = { label: 'shekere', make: (T, out) => { const bp = new T.Filter({ type: 'bandpass', frequency: 6000, Q: 0.9 }).connect(out); return { bp, n: new T.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 0.004, decay: 0.1, sustain: 0 }, volume: -8 }).connect(bp), m: new T.MembraneSynth({ pitchDecay: 0.006, octaves: 0.6, envelope: { attack: 0.0005, decay: 0.08, sustain: 0 }, volume: -18 }).connect(out) }; },
+  hit: (T, n, p, t) => {
+    const slap = p.artic === 1, d = 0.05 + p.dec * 0.2; n.bp.frequency.setValueAtTime(4500 + p.color * 3500, t); n.n.set({ envelope: { attack: slap ? 0.001 : 0.004 + (1 - p.snap) * 0.02, decay: d } });
+    for (let i = 0; i < 3; i++) n.n.triggerAttackRelease(i === 2 ? d : 0.014, t + i * 0.009, p.vel * (slap ? 0.8 : 1) * Math.pow(0.85, i));
+    if (slap) { n.m.set({ envelope: { decay: 0.05 + p.dec * 0.1 } }); n.m.triggerAttackRelease(mf(T, 50 + p.tune * 12), 0.05 + p.dec * 0.1, t, p.vel); }
+  } };
 // ---- mallets, tonal ----
 V.marimba = { label: 'marimba', make: (T, out) => ({ f: new T.FMSynth({ harmonicity: 4, modulationIndex: 2, envelope: { attack: 0.001, decay: 0.5, sustain: 0 }, modulationEnvelope: { attack: 0.001, decay: 0.1, sustain: 0 }, volume: -1 }).connect(out) }),
   hit: (T, n, p, t) => { n.f.set({ modulationIndex: 1 + p.snap * 5, envelope: { decay: 0.2 + p.dec } }); n.f.triggerAttackRelease(mf(T, 60 + p.tune * 24 + Math.round(p.color * 12)), 0.2 + p.dec, t, p.vel); } };
@@ -106,6 +132,7 @@ export const VEL_TIMBRE = {
   snare: { tone: 2.2, snap: 0.7, dec: 0.3 }, snare808: { tone: 2.2, snap: 0.7, dec: 0.3 }, clap: { tone: 1.4, snap: 0, dec: 0.25 }, rim: { tone: 1.6, snap: 0.6, dec: 0.2 },
   snap2: { tone: 1.4, snap: 0.6, dec: 0.3 }, glitch: { tone: 1.4, snap: 0.6, dec: 0.3 }, clave: { tone: 0.8, snap: 0.5, dec: 0.2 }, click: { tone: 1, snap: 0.5, dec: 0.2 },
   hat: { tone: 0.5, snap: 0.6, dec: 0.4 }, ophat: { tone: 0.5, snap: 0.6, dec: 0.35 }, shaker: { tone: 0.5, snap: 0.5, dec: 0.35 }, tamb: { tone: 0.5, snap: 0.5, dec: 0.35 },
+  djembe: { tone: 1.2, snap: 0.5, dec: 0.15 }, logdrum: { tone: 0.4, snap: 0.3, dec: 0.05 }, agogo: { tone: 0.8, snap: 0.5, dec: 0.2 }, shekere: { tone: 0.5, snap: 0.5, dec: 0.35 },
   ride: { tone: 0.6, snap: 0.5, dec: 0.3 }, crash: { tone: 0.6, snap: 0.5, dec: 0.3 }, vinyl: { tone: 1.2, snap: 0.5, dec: 0.3 },
   sample: { tone: 0.6, snap: 0, dec: 0 },
 };

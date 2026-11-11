@@ -1178,3 +1178,25 @@ test('ORBIT2-07 r1: a state with fewer lanes keeps the selection inside it (slot
   const back = Machine.from(j); assert.equal(back.lanes.length, 6); assert.equal(back.lanes[5].voice, KITS.trap.lanes[5].voice);
   assert.deepEqual(back.lanes[5].sound, { ...DEFAULT_SOUND, ...KITS.trap.lanes[5].sound }); assert.equal(back.kitKey(), 'trap'); assert.ok(!back.lanes[5].hits.some(Boolean));
 });
+
+// ---- ORBIT2-08 ----
+test('ORBIT2-08 L4: djembe, log drum, agogo, shekere in both engines; Afro and Jungle kits; the old Afro set is "Hand drums"', async () => {
+  const { VOICES, VEL_TIMBRE } = await import('../src/poly/voices.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js'); const { makeEngine } = await import('../src/poly/dsp-core.js');
+  for (const k of ['djembe', 'logdrum', 'agogo', 'shekere']) { assert.ok(VOICES[k]?.make && VOICES[k].hit && DSP_VOICES[k] && VEL_TIMBRE[k], k); }
+  assert.deepEqual(KITS.afro.lanes.slice(0, 4).map(l => l.voice), ['kick', 'logdrum', 'shekere', 'agogo']); assert.ok(KITS.afro.lanes.some(l => l.voice === 'djembe'));
+  assert.equal(KITS.jungle.name, 'Jungle'); assert.ok(KITS.jungle.lanes[2].sound.decay <= 0.15, 'short hats'); assert.deepEqual(KITS.hands.lanes.map(l => l.voice), ['conga', 'shaker', 'tabla', 'cuica', 'cowbell', 'bongo']);
+  const sr = 44100, p = { vel: 0.7, tune: 0, dec: 0.34, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  const render = (layers) => { const e = makeEngine(sr); e.hit(layers, 0); const o = new Float32Array(sr); for (let i = 0; i < o.length; i += 128) e.render(o, i, i + 128); let pk = 0, dc = 0, ms = 0, W = sr * 0.05, acc = 0; for (let i = 0; i < o.length; i++) { pk = Math.max(pk, Math.abs(o[i])); dc += o[i]; acc += o[i] ** 2; if (i >= W) acc -= o[i - W] ** 2; ms = Math.max(ms, acc / W); } return { pk, dc: dc / o.length, rms: Math.sqrt(ms), head: Math.abs(o[0]) }; };
+  const db = (x) => 20 * Math.log10(x), ref = (k) => render(DSP_VOICES[k](p));
+  // levels: near their neighbours in the library (peak and 50 ms loudness within 6 dB), no DC, starts from silence
+  for (const [k, r] of [['djembe', 'conga'], ['logdrum', 'kick808'], ['agogo', 'cowbell'], ['shekere', 'shaker']]) for (const q of [{}, { color: 0 }, { color: 1 }, { artic: 1 }]) {
+    const a = render(DSP_VOICES[k]({ ...p, ...q })), b = ref(r);
+    assert.ok(Math.abs(db(a.pk) - db(b.pk)) < 6, `${k} ${JSON.stringify(q)} peak ${db(a.pk).toFixed(1)} vs ${r} ${db(b.pk).toFixed(1)}`);
+    assert.ok(Math.abs(db(a.rms) - db(b.rms)) < 6, `${k} ${JSON.stringify(q)} rms ${db(a.rms).toFixed(1)} vs ${r} ${db(b.rms).toFixed(1)}`);
+    assert.ok(Math.abs(a.dc) < 2e-3 && a.head < 0.02, `${k}: dc ${a.dc}, first sample ${a.head}`);
+  }
+  // djembe: three strokes from color; agogo: two pitches; log drum: color glides it down
+  const f0 = (layers) => layers[0].f; assert.ok(f0(DSP_VOICES.djembe({ ...p, color: 0 })) < f0(DSP_VOICES.djembe(p)) && f0(DSP_VOICES.djembe(p)) < f0(DSP_VOICES.djembe({ ...p, color: 1 })));
+  assert.ok(Math.abs(f0(DSP_VOICES.agogo({ ...p, color: 1 })) / f0(DSP_VOICES.agogo({ ...p, color: 0 })) - 1.5) < 1e-9);
+  assert.equal(DSP_VOICES.logdrum({ ...p, color: 0 })[0].glide, 1); assert.ok(DSP_VOICES.logdrum({ ...p, color: 1 })[0].glide < 0.7);
+});

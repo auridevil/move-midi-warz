@@ -275,7 +275,7 @@ const INFO = {
   tone: 'Low-pass filter after the voice: left = dark and muffled, right = open and bright.',
   drive: 'Distortion before the filter. A little adds body, a lot shreds.',
   snap: 'The transient: click on the kick, body on the snare, bursts on the clap, stutters on glitch, sweep height on zap.',
-  color: 'The character knob: pitch-drop on kick/tom, noise-vs-body on snare, metal harmonics on hat/gong, FM ratio on bell/perc, bit depth on glitch.',
+  color: 'The character knob: pitch-drop on kick/tom, noise-vs-body on snare, metal harmonics on hat/gong, FM ratio on bell/perc, bit depth on glitch, bass / tone / slap on djembe (thirds), low / high bell on agogo, how far the log drum glides down.',
   send: 'How much of the lane goes to the tempo-synced delay (dotted eighth).',
   pan: 'Stereo position, left to right.',
   level: 'Lane volume.',

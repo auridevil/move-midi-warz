@@ -61,6 +61,39 @@ D.wood = (p) => [
   { kind: 1, dec: 0.008, bp: 2000 + p.color * 3000, bq: 1.5, vel: p.vel * (0.2 + p.snap * 0.8), gain: 0.7 },
 ];
 D.cowbell = (p) => { const f = 560 * Math.pow(2, p.tune); return [{ kind: 0, wave: 3, f, f2: 1.45 + p.color * 0.2, g2: 0.8, dec: p.dec * 0.5, att: 0.0005, drive: 0.25, bp: f * 1.3, bq: 1.4, vel: p.vel, gain: 0.4 }]; };
+// ---- L4 Afro / Amapiano ----
+// djembe: bass / tone / slap — from color (thirds) or an artic lock (0 / 1 / 2)
+D.djembe = (p) => {
+  const z = p.artic ?? (p.color < 1 / 3 ? 0 : p.color < 2 / 3 ? 1 : 2);
+  if (z === 0) return [
+    { kind: 0, wave: 0, f: mf(41 + p.tune * 12), sweep: 1.7, pd: 0.02, dec: 0.12 + p.dec * 0.5, att: 0.0008, drive: 0.25, lp: 900, vel: p.vel, gain: 0.9 },
+    { kind: 1, pink: 1, dec: 0.015, lp: 1500, vel: p.vel * (0.3 + p.snap * 0.5), gain: 0.4 },
+  ];
+  if (z === 1) return [
+    { kind: 0, wave: 0, f: mf(57 + p.tune * 12), sweep: 1.3, pd: 0.008, dec: 0.06 + p.dec * 0.3, att: 0.0005, f2: 1.52, g2: 0.3, drive: 0.2, vel: p.vel, gain: 0.75 },
+    { kind: 1, dec: 0.012, hp: 1500, vel: p.vel * p.snap, gain: 0.3 },
+  ];
+  return [
+    { kind: 0, wave: 0, f: mf(64 + p.tune * 12), sweep: 1.5, pd: 0.005, dec: 0.03 + p.dec * 0.12, att: 0.0008, f2: 1.7, g2: 0.4, drive: 0.4, vel: p.vel, gain: 0.9 },
+    { kind: 1, bp: 2800, bq: 0.9, att: 0.001, dec: 0.03 + p.dec * 0.06, vel: p.vel * (0.6 + p.snap * 0.4), gain: 0.6 },
+  ];
+};
+// log drum (Amapiano): a sub with a woody knock, gliding down by color over most of its length
+D.logdrum = (p) => { const d = 0.15 + p.dec * 0.9; return [
+  { kind: 0, wave: 0, f: mf(40 + p.tune * 12), sweep: 1.8 + p.snap * 1.5, pd: 0.012, glide: 1 - p.color * 0.35, gd: d * 0.6, pm: 0.8 + p.snap * 1.2, pmr: 2, pmd: 0.04, dec: d, att: 0.002, drive: 0.3, lp: 2000, vel: p.vel, gain: 0.85 },
+  { kind: 1, bp: 1200, bq: 1.2, dec: 0.008, vel: p.vel * (0.3 + p.snap * 0.5), gain: 0.5 },
+]; };
+// agogo / gankogui: two bells a fifth apart — low below color 0.5, high above, or an artic lock (0 low, 1 high)
+D.agogo = (p) => { const hi = p.artic != null ? p.artic === 1 : p.color >= 0.5, f = 640 * Math.pow(2, p.tune) * (hi ? 1.5 : 1); return [
+  { kind: 0, wave: 0, f, pm: 1 + p.snap * 2, pmr: 2.76, pmd: 0.05, f2: 2.02, g2: 0.15, dec: 0.1 + p.dec * 0.6, att: 0.0004, drive: 0.1, vel: p.vel, gain: 0.42 },
+  { kind: 1, bp: f * 3, bq: 2, dec: 0.006, vel: p.vel * p.snap, gain: 0.4 },
+]; };
+// shekere: a gourd of beads — shake (rolled noise bursts) or slap (artic 1: a palm on the gourd, then the beads)
+D.shekere = (p) => {
+  const beads = { kind: 1, pink: 0.4, bp: 4500 + p.color * 3500, bq: 0.9, hp: 1800, att: 0.004 + (1 - p.snap) * 0.02, dec: 0.05 + p.dec * 0.2, bursts: 3, bsp: 0.009, bsd: 0.014, bgain: 0.85, vel: p.vel, gain: 1.3 };
+  if (p.artic !== 1) return [beads];
+  return [{ ...beads, att: 0.001, vel: p.vel * 0.8 }, { kind: 0, wave: 0, f: mf(50 + p.tune * 12), sweep: 1.4, pd: 0.006, dec: 0.05 + p.dec * 0.1, att: 0.0005, drive: 0.2, vel: p.vel, gain: 0.6 }];
+};
 // ---- cymbals ----
 D.hat = (p) => [
   { kind: 2, f: 205 * Math.pow(2, p.tune + (p.color - 0.5) * 0.6), dec: p.dec * 0.5, att: 0.0005, hp: 5000 + p.snap * 3000, bp: 9000, bq: 0.9, noise: p.color > 0.6 ? (p.color - 0.6) * 1.2 : 0, vel: p.vel, gain: 4.5 },
