@@ -1384,12 +1384,34 @@ test('ORBIT2-09 r1: slices join without a hole, a break lies across its lane at 
   l.clear(); assert.equal(l.loadBreak({ name: 'third', slices: ids, sec: 2, bpm: 120 }), true);
   // S3: the app makes reversed copies early when something plays backwards (a rev lock of 0 is forwards)
   assert.equal(l.usesRev(), false); l.setLock(2, 'rev', 0); assert.equal(l.usesRev(), false); l.setLock(2, 'rev', 1); assert.equal(l.usesRev(), true); l.unlock(2, 'rev'); l.setTrim('rev', true); assert.equal(l.usesRev(), true);
-  // app.js has no unit seam for these two (checked in the page, see the review file): a pad hit plays the slice of the
-  // step it lands on (architect 1), and every buildVoice of a sample lane loads its set, even on a chain that already
-  // plays a sample, as after a slot recall (dex 1)
+  // app.js has no unit seam for the wiring (checked in the page, see the review file; what a pad plays is Lane.padHit,
+  // tested in "ORBIT2-09 r2"): a pad hit plays what the step it lands on plays (architect 1), and every buildVoice of a
+  // sample lane loads its set, even on a chain that already plays a sample, as after a slot recall (dex 1)
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
   const live = app.slice(app.indexOf('function liveHit('), app.indexOf('function setRec('));
-  assert.match(live, /hitSound\([^;]*lane\.sliceAt\(idx, lane\.locks\[idx\]\)\)/, 'liveHit plays its step\'s slice'); assert.ok(live.indexOf('lane.quantize(') < live.indexOf('hitSound('), 'the step is known before the hit sounds');
+  assert.match(live, /ph = lane\.padHit\(idx, lock\)/); assert.match(live, /hitSound\([^;]*ph\.lock[^;]*ph\.slice\)/, 'liveHit plays its step\'s slice'); assert.ok(live.indexOf('lane.quantize(') < live.indexOf('hitSound('), 'the step is known before the hit sounds');
   const bv = app.slice(app.indexOf('function buildVoice('), app.indexOf('// ---- engines')), at = bv.indexOf('ensureSample(lane)');
   assert.ok(at > 0 && at < bv.indexOf('&& c.v) return'), 'ensureSample runs before the early return');
+});
+test('ORBIT2-09 r2: what a pad hit plays, the padded slice audio, a new break keeps a chopping lane\'s knobs', async () => {
+  const { padChannels } = await import('../src/samples.js');
+  // Lane.padHit: the step's slice and, on a sample lane, its start / end / direction under the pad's own lock
+  const m = new Machine(), l = m.lanes[0]; l.loadBreak({ name: 'b', slices: ['a', 'b', 'c', 'd'], sec: 2, bpm: 120 });
+  l.setLock(1, 'slice', 3); l.setLock(1, 'rev', 1); l.setLock(1, 'vel', 0.2); l.setLock(2, 'start', 0.5);
+  assert.deepEqual(l.padHit(0), { lock: null, slice: 0 }, 'an unlocked step: its own slice, no lock');
+  assert.deepEqual(l.padHit(1), { lock: { rev: 1 }, slice: 3 }, 'the slice lock and the direction, not the step\'s other locks');
+  assert.deepEqual(l.padHit(2, { tune: 0.3 }), { lock: { start: 0.5, tune: 0.3 }, slice: 2 }, 'a pitch pad\'s tune on top');
+  assert.deepEqual(l.padHit(5), { lock: null, slice: 1 }, 'step 6 of a 4-slice set: slice 2');
+  const d = m.lanes[1]; d.setLock(0, 'start', 0.5); assert.deepEqual(d.padHit(0, { tune: 0.1 }), { lock: { tune: 0.1 }, slice: null }, 'a drum lane: the pad\'s lock only');
+  // padChannels: the slice, then the next one's start; backwards the slice reversed, then the reversed end of the one before
+  const x = [Float32Array.of(1, 2, 3), Float32Array.of(-1, -2, -3)], y = [Float32Array.of(4, 5, 6, 7), Float32Array.of(-4, -5, -6, -7)];
+  assert.deepEqual(padChannels(x, y, 2).map(c => [...c]), [[1, 2, 3, 4, 5], [-1, -2, -3, -4, -5]]);
+  assert.deepEqual(padChannels(x, y, 2, true).map(c => [...c]), [[3, 2, 1, 7, 6], [-3, -2, -1, -7, -6]]);
+  assert.deepEqual(padChannels(x, y, 9).map(c => c.length), [7, 7], 'never more than the neighbour holds');
+  assert.deepEqual([...padChannels(x, [y[0]], 1)[1]], [-1, -2, -3, 4], 'a mono neighbour pads both channels');
+  // sound (r2): a new break on a lane already chopping a set keeps its chops and its decay / snap / color
+  l.setSound('decay', 0.4); l.setSound('snap', 0.7); l.setSound('color', 0.6);
+  assert.equal(l.loadBreak({ name: 'b2', slices: ['e', 'f'], sec: 1, bpm: 120 }), false);
+  assert.deepEqual([l.sound.decay, l.sound.snap, l.sound.color, l.sample.slices.join()], [0.4, 0.7, 0.6, 'e,f']);
+  l.clear(); l.loadBreak({ name: 'b3', slices: ['g', 'h'], sec: 1, bpm: 120 }); assert.deepEqual([l.sound.decay, l.sound.snap, l.sound.color], [1, 0.5, 0.5], 'laid out: the sample defaults');
 });

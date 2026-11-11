@@ -33,6 +33,18 @@ export function sampleWindow({ dur, pad = 0, start = 0, end = 1, rev = false, sn
   if (play >= avail && after > 1e-4) return { ...w, hold: avail, play: avail + Math.min(attack, after), follow: 'same' };
   return { ...w, hold: Math.max(attack, play - (slice || rev ? 0.002 : 0.01)), play };
 }
+/** S1: a slice's channels with the `p` samples that follow it in the break appended (the start of the next slice's
+ *  channels `b`); backwards (`rev`) the slice reversed, then the reversed end of the slice before it (`b`), so either
+ *  way one source plays straight through the cut (sampleWindow's `pad`). */
+export function padChannels(a, b, p, rev = false) {
+  p = Math.max(0, Math.min(p, b[0]?.length || 0));
+  return a.map((x, c) => {
+    const y = b[c] || b[0], o = new Float32Array(x.length + p);
+    if (rev) { for (let i = 0; i < x.length; i++) o[i] = x[x.length - 1 - i]; for (let i = 0; i < p; i++) o[x.length + i] = y[y.length - 1 - i]; }
+    else { o.set(x); o.set(y.subarray(0, p), x.length); }
+    return o;
+  });
+}
 /** Unassembler → Orbits hand-off: key of the slices, and a localStorage ping other tabs listen to. */
 export const SLICES_KEY = 'unasm-slices', SLICES_PING = 'midi-warz.samples.slices';
 /** S2: the most slices a hand-off (or an auto-sliced break) brings: a bar of 16ths. */

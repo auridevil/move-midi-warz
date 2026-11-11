@@ -5,7 +5,7 @@ import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from './pages.js';
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
-import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
+import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
@@ -158,18 +158,15 @@ function playSample(c, lane, p, time, lock = null, slice = null) {
 /** The longest fade-out a slice makes over what follows it: snap 0's 31 ms attack at twice the speed (tune +1). */
 const PAD_SEC = 0.07;
 /** S1: slice k of the lane's set with the start of the slice after it in the set appended (backwards: reversed, with
- *  the reversed end of the slice before it), made once per pair. One source then plays straight through the cut, where
- *  two sources meeting at a buffer's edge leave a one-sample seam when Chrome resamples. null until both are loaded. */
+ *  the reversed end of the slice before it; samples.js padChannels), made once per pair. One source then plays straight
+ *  through the cut, where two sources meeting at a buffer's edge leave a one-sample seam when Chrome resamples. null
+ *  until both are loaded. */
 function padBuf(lane, k, rev) {
   const n = lane.sliceCount(), id = lane.sampleId(k), nid = lane.sampleId(rev ? (k + n - 1) % n : (k + 1) % n), key = `${id}${rev ? '<' : '>'}${nid}`;
   if (sampleBufs.has(key)) return sampleBufs.get(key);
-  const a = sampleBufs.get(id), b = sampleBufs.get(nid); if (!a || !b || a.numberOfChannels !== b.numberOfChannels || a.sampleRate !== b.sampleRate) return null;
-  const p = Math.min(b.length, Math.round(PAD_SEC * a.sampleRate)), r = new AudioBuffer({ numberOfChannels: a.numberOfChannels, length: a.length + p, sampleRate: a.sampleRate });
-  for (let c = 0; c < a.numberOfChannels; c++) {
-    const x = a.getChannelData(c), y = b.getChannelData(c), o = r.getChannelData(c);
-    if (rev) { for (let i = 0; i < a.length; i++) o[i] = x[a.length - 1 - i]; for (let i = 0; i < p; i++) o[a.length + i] = y[b.length - 1 - i]; }
-    else { o.set(x); o.set(y.subarray(0, p), a.length); }
-  }
+  const a = sampleBufs.get(id), b = sampleBufs.get(nid); if (!a || !b || a.sampleRate !== b.sampleRate) return null;
+  const ch = (x) => Array.from({ length: x.numberOfChannels }, (_, c) => x.getChannelData(c));
+  const r = toAudioBuffer({ sampleRate: a.sampleRate, channels: padChannels(ch(a), ch(b), Math.round(PAD_SEC * a.sampleRate), rev) }, T.getContext().rawContext);
   sampleBufs.set(key, r); return r;
 }
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
@@ -623,8 +620,8 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   const lock = tune != null ? { tune } : null, recd = rec.armed && playing;
   // a pad plays what its step will play (S1 its slice, S3 its start / end / direction): recording, the step the hit
   // lands on (steps count from the pattern's bar 1); otherwise the step under the pad
-  const q = recd ? lane.quantize(heardTick() - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), sl = lane.voice === 'sample' && lane.locks[idx];
-  hitSound(lane, T.immediate(), accent, sl ? { start: sl.start, end: sl.end, rev: sl.rev, ...lock } : lock, accent ? 1 : v, kit, lane.sliceAt(idx, lane.locks[idx])); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
+  const q = recd ? lane.quantize(heardTick() - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), ph = lane.padHit(idx, lock);
+  hitSound(lane, T.immediate(), accent, ph.lock, accent ? 1 : v, kit, ph.slice); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
   if (!recd) { m.select(li); sync(); return; }
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
   const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice

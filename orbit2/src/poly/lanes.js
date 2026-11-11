@@ -169,12 +169,18 @@ export class Lane {
    *  only knows one sample still finds audio). */
   loadSlices({ name, slices }) { const ids = slices.slice(0, MAX_SLICES); if (!ids.length) return; this.loadSample({ id: ids[0], name }); this.sample.slices = ids; }
   /** S1 / S2: a whole break (`sec` long) as the lane's slice set. A lane already playing a slice set with steps on keeps
-   *  its chops (a new break in the same pattern); any other lane gets the break laid across it at the speed that makes
-   *  its steps last the break (breakSpeed at `bpm`). True when it was laid out. */
+   *  its chops (a new break in the same pattern, its decay / snap / color too); any other lane gets the break laid across
+   *  it at the speed that makes its steps last the break (breakSpeed at `bpm`). True when it was laid out. */
   loadBreak({ name, slices, sec, bpm }) {
     const keep = this.sliceCount() > 0 && this.hits.some((h, i) => h && i < this.length); if (!slices?.length) return false;
-    this.loadSlices({ name, slices }); if (keep) return false;
+    const own = pick(this.sound, SAMPLE_KEYS); this.loadSlices({ name, slices }); if (keep) { Object.assign(this.sound, own); return false; }
     const n = this.sliceCount(); this.layBreak(n, breakSpeed(n, sec, bpm)); return true;
+  }
+  /** S1 / S3: what a pad hit on stored step i plays: the step's slice and, on a sample lane, its start / end / direction
+   *  under the hit's own `lock` (a pitch pad's tune), so a pad sounds as the step will. */
+  padHit(i, lock = null) {
+    const sl = this.voice === 'sample' ? this.locks[i] : null, part = sl ? Object.fromEntries(['start', 'end', 'rev'].filter(k => sl[k] != null).map(k => [k, sl[k]])) : {};
+    return { lock: Object.keys(part).length ? { ...part, ...lock } : lock, slice: this.sliceAt(i, this.locks[i]) };
   }
   /** n slices across the lane, played straight as recorded: n steps, all on, from step 1, at speed ri, without swing,
    *  push, humanize, tune or chance, the filter open and no delay. The old pattern (hits, accents, locks, conditions)

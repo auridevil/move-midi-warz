@@ -460,3 +460,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **One limit for slices** (ORBIT2-09 round 1, architect): 16 is `MAX_SLICES` in `lanes.js` and `MAX_HANDOFF` in
   `samples.js` (and the 16 s break cap sits in `app.js`); one constant means one module importing the other for a
   number.
+- **Humanize on a laid-out break** (ORBIT2-09 round 2, sound): `layBreak` zeroes the lane's own push and velocity
+  humanize, but the global humanize still moves every slice, which brings the holes back between slices (a tone in
+  order at 30 %: joins down to silence, up to 8.5 ms under −6 dB); exempt slice lanes from timing humanize, or say so.
+- **Uneven slices laid out on their own 16ths** (ORBIT2-09 round 2, sound): a v2 hand-off cut at onsets gets one equal
+  step a slice (9 slices of a 2 s bar → 9 steps at ×2: gaps after short slices, overlaps after long ones); each slice
+  could go on the 16th where it starts. Nothing sends one yet (the sender sends v1, a break file is cut equal).
+- **One buffer a slice set** (ORBIT2-09 round 2, architect): a 16-slice set keeps 32 buffers in the page (its slices and
+  their padded copies), 48 when something plays backwards (~18 MB for a 16 s stereo 48 kHz break); one break buffer plus
+  cut offsets would need no padded copies (one source plays through any cut) and one reversed copy.

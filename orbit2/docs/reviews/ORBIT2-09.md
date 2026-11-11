@@ -3,14 +3,14 @@ type: review
 phase: ORBIT2-09
 title: ORBIT2-09 samples and breaks (S1, S2, S3), review panel
 date: 2026-11-11
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
   verifier: HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
-  dex: NOT HAPPY
+  architect: HAPPY
+  sound: HAPPY
+  dex: HAPPY
   maya: HAPPY
 tags: [orbit2, review]
 related:
@@ -154,3 +154,67 @@ on the same lane, reload, `recallSlot(2)`: 8 slices, 0 buffers loaded, 0 of 8 hi
   the default lane, a 2 s break-like bar (kicks, snares, a ghost, 16th hats, a ride, room) as 16 slices against the same
   audio as one sample (SNR 36.8 dB over 4 bars; the rest is the one-sample lane's own end guard at each bar line), 0 page
   errors on desktop and phone; screenshots looked at. `app.js` 1368 → 1398 lines.
+
+## Round 2 (re-check): 3 of 3 HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (architect, sound on the default model; dex on sonnet), fresh sub-agents in
+one message, own ports 5402 / 5403 / 5406 (+ 940x; the phase start `d81c0b4` on +100, the code before the round-1 fixes
+`0c683a8` on +200). Brief as in round 1 (goal, S1–S3, the phase spec, the "where" table, the must-fix rule with the
+later ids and the Later items), `git diff --stat d81c0b4..9956de4` (11 files, +665/−54; `ee07751` in between is docs for
+phase 18 only) and the round-1 fixes alone (`0c683a8..9956de4`, 10 files, +378/−45), each one's own round-1 MUST-FIX and
+"Changes after round 1", with the instruction to confirm their items first with the same repro, then check nearby,
+anything new only in scope and marked NEW. Pre-checks on `9956de4`: `npm run check` clean, `npm test` 156 + 9, smoke
+10/10. `stalled: 0`: every round-1 MUST-FIX is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| architect | HAPPY | none. (1) FIXED: same repro on HEAD (5402) and `0c683a8` (5602): three `liveHit(0, 3, 100)` while recording on a laid-out 16-slice break land on steps 4, 8, 11 and start the padded copies of `s4`, `s8`, `s11`, the buffers the next loop plays at the same offsets (`0c683a8`: `s0` every time, also for every pad while stopped). Nearby: armed and stopped, pad columns 0–7 play `s0`…`s7`; with slice locks (step i → 15 − i) taps through `liveHit`, a Move pad and the key `v` play the locked slices, as the loop does; rev locks set through the lock panel make the reversed copies at once (`lockHere` → `ensureSample`, 32 → 48 buffers) and taps play them; start 0.5 locks play from half the slice; a drum lane still records; undo after a laid-out break brings back the rim lane (voice, length 5, ×4, hits, tone, send), redo the break; a fresh tab loads the saved set from IndexedDB; knob 7 (3 clicks no lock, the 4th slice 4, every 4 either way, stops at 0, +40 = 10 slices, release doesn't toggle); check clean, 156 + 9. |
+| sound | HAPPY | none. (1) FIXED, the same repro on `0c683a8` and HEAD: the 1 kHz tone at 44.1 kHz, 16 slices on a ×4 lane, 63 joins: `0c683a8` −26.1 dB mean, −26.9 worst, 5.5 ms under −6 dB (backwards −25.0 / −26.4, 5.4 ms); HEAD −0.14 / −0.22 dB, 0 ms (backwards −0.22 / −1.6, 0 ms); 48 kHz slices in order, backwards and shuffled: worst −0.01 dB, 0 ms, no clicks (2nd difference 0.0–0.1 dB over mid-slice); a synthetic 48 kHz break (kick, snare, hats, open hat, ride, room) against the same audio played whole: the 60 joins inside the bars identical (−294 dB), SNR 108.5 dB (1-LSB differences; round 1: 19.4 dB), reversed in reverse order = the whole break reversed (0 differing samples). (2) FIXED: a fresh page's lane 1 (kick, 4 steps ×4) given a 2 s break at 8 → a sample lane of 8 steps at ×2, all on, tone 1, send 0, its stem identical to the audio played once a bar (0 differing samples); a ×1 rim lane given 16 → 16 at ×4; `breakSpeed` ×4 / ×2 / ×2 / ×3 for 16 of 2 s, 8, 16 of 4 s, 12; a lane already chopping keeps its hits, lock and speed. Nearby: whole samples render identical to `d81c0b4` (0 differing samples, also at decay 0.5, snap 0.2, color 0.7, tune +0.25); tune +7 semitones exact (1498.31 Hz); an end-trim lock fades over 1 ms after the cut, no click; start = end ~6 ms; stress 0 %, headroom 68–74 ms with 4 lanes of 16-slice sets (one backwards, one with ratchets); 0 page errors. |
+| dex | HAPPY | none. (1) FIXED: the same repro on HEAD (slot 2 with 8 slices, a 4-slice set on lane 2, reload, `recallSlot(2)`): `sliceCount()` 8, all 8 `liveHit` hits start a source with a loaded buffer (round 1: none); a 16-slice break from `breakFromFile`: every one of 127 starts while playing had a buffer, undo / redo and a WAV export without page errors. (A light re-check: 6 tool calls; the onset order of the export not re-measured.) |
+
+SHOULD items recorded (never block): NEW (sound): the global humanize brings the holes back on a laid-out break (a
+48 kHz tone in order at humanize 30 %: joins down to silence, up to 8.5 ms under −6 dB; `layBreak` zeroes the lane's
+own timing and velocity humanize but `m.humanize` still moves each slice); NEW (sound): a new break on a lane already
+chopping a set resets the lane's decay / snap / color to the sample defaults (`loadBreak` → `loadSlices` → `loadSample`
+applies `SAMPLE_SOUND` before keeping the pattern); NEW (sound): a v2 hand-off cut at onsets (uneven slices) gets one
+equal step a slice (9 slices of a 2 s bar → 9 steps at ×2, gaps after the short slices, overlaps after the long one);
+nothing sends one today (the sender sends v1, a break file is cut equal); (architect) `liveHit` builds the pad hit's
+sample lock and slice by hand, a third copy of "which locks shape a sample hit", which is why the round-1 test checks
+`app.js`'s text; a `Lane` method would make it a unit test; (architect) `padBuf` is pure sample maths kept in `app.js`
+without a test; (architect) memory: a 16-slice set keeps 32 buffers (48 with something backwards), ~18 MB in the page
+for a 16 s stereo 48 kHz break; one break buffer plus cut offsets would need no padded copies; (sound, already Later)
+gain staging (−6 dBFS in → −17.8 dBFS raw stem) and tempo from the break (at 90 bpm a 42 ms gap after each slice);
+(dex) a second tab in one Chrome can take ~20 s to get `__poly` (harness).
+
+GOOD: one source plays straight through each cut, so a break cut into 16 and played in order is the break, forwards and
+backwards (sound); the window maths (`sampleWindow`) and the layout (`breakSpeed`, `loadBreak` / `layBreak`) are pure,
+tested and on the model's side of the boundary, whole samples render identical to the phase start (architect, sound);
+the padded and reversed copies are made once in `ensureSample`, never per hit, and one pad rule ("a pad plays what its
+step will play") covers record, armed-and-stopped, the Move pads and the computer keys (architect).
+
+### Changes after round 2 (quick SHOULDs; the panel was already HAPPY)
+
+- **A new break keeps a chopping lane's knobs** (sound, NEW): `loadBreak` puts the lane's decay / snap / color back when
+  it keeps the chops (a laid-out break still starts from the sample defaults). Page: a lane chopping a 16-slice set at
+  decay 0.4, snap 0.7, with a slice lock, given an 8-slice break: decay 0.4, snap 0.7, hits and lock kept.
+- **What a pad plays is in the model** (architect): `Lane.padHit(i, lock)` → `{ lock, slice }` (the step's slice, and on
+  a sample lane its start / end / direction under the pad's own lock); `liveHit` calls it, so the round-1 test now only
+  checks the wiring and the rule has a unit test. Page: the round-1 repro's three taps play `s4`, `s8`, `s11`, the slices
+  of the steps they land on.
+- **The padded slice audio is pure** (architect): `samples.js padChannels(a, b, p, rev)` builds a slice's channels with
+  what follows it (forwards: the next slice's start; backwards: reversed, then the reversed end of the slice before);
+  `padBuf` only wraps it in an AudioBuffer (a mono neighbour now pads both channels instead of giving up). Page: against
+  the same audio played whole the joins inside the bar are still bit-identical (−240 dB), forwards and backwards, for 97
+  Hz + 1.3 kHz + noise.
+- → [[BACKLOG]] Later: humanize on a laid-out break, uneven slices on their own 16ths, one buffer a slice set (the
+  harness note is not a defect).
+- Tests (157 + 9; 1 new): "ORBIT2-09 r2" (`padHit` on unlocked, locked, pitch-pad and drum steps; `padChannels` forwards,
+  backwards, clamped, mono neighbour; a new break keeps a chopping lane's knobs, a laid-out one starts from the
+  defaults); "ORBIT2-09 r1" checks the `liveHit` wiring through `padHit`. `npm run check` clean, `npm test` 157 + 9,
+  `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both stopped). Browser
+  (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks above, 0 page errors.
+
+## Result: HAPPY
+
+All five reviewers HAPPY after round 2 (verifier and maya in round 1; architect, sound and dex on the round-2
+re-check). Nothing deferred. Next: the close task marks S1–S3 done.
