@@ -183,7 +183,7 @@
         <tr><th>Pads row</th><td>8 of the lane's steps (toggle) · Shift+pad = accent · record armed: play + record</td></tr>
         <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle</td></tr>
         <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
-        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color</td></tr>
+        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
         <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
         <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
@@ -234,6 +234,10 @@
       <div id="lockpanel" class="lockpanel" hidden>
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>
+        <div id="lock-sample" class="lock-sample" hidden>
+          <div id="lock-slices" class="slice-grid" role="group" aria-label="slice this step plays"></div>
+          <div class="row-ctl"><div id="lock-trim" class="gauges"></div><div class="ctl" title="Play this step backwards or forwards, or as the lane does"><span class="ctl-lbl">direction</span><div id="lock-rev"></div></div></div>
+        </div>
         <div class="row-ctl" id="artic-wrap" hidden><div class="ctl" title="Which stroke this step plays: open, mute or slap on a conga, bass, tone or slap on a djembe, closed or open on a hat"><span class="ctl-lbl">stroke</span><div id="lock-artic"></div></div></div>
         <div class="row-ctl trig-row">
           <div class="cond-pick" title="Play only on some loops, or only with/without Fill">
@@ -262,6 +266,7 @@
       </div>
       <div id="slice-select" class="slice-grid" title="Slices sent from Unassembler (→ orbits): tap one to put it on this lane"></div>
       <p class="hint tight">sample: <span id="sample-name"></span></p>
+      <div id="sample-trim" class="row-ctl" hidden><div id="sample-trim-gauges" class="gauges"></div><div id="sample-rev"></div></div>
       <div id="sound-sliders" class="gauges"></div>
     </details>
   </div>

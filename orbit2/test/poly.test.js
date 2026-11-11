@@ -1304,3 +1304,23 @@ test('ORBIT2-08 r2: every live MIDI note (the clock and a pad played while recor
   const out = [], pm = new PolyMidi({ getAccess: () => null }); pm.out = { send: (b) => out.push(b) }; pm.note(4, 0.7, 0, dj.strokeAt({ tune: 0.3 }));
   assert.equal(out[0][1], strokeNotes(pm.lanes)[4][1]); assert.equal(out[0][1], 50);
 });
+test('S1 / S3 slice sets: a slice per step, slice / start / end / rev locks, kept through save/load', async () => {
+  const { collectHits } = await import('../src/poly/export.js');
+  const m = new Machine(), l = m.lanes[0]; l.setLength(8); l.setEuclid(8);
+  l.loadSlices({ name: 'break', slices: ['a', 'b', 'c', 'd'] }); assert.equal(l.voice, 'sample'); assert.equal(l.sample.id, 'a', 'id = first slice'); assert.equal(l.sliceCount(), 4);
+  assert.deepEqual([0, 1, 2, 3, 4, 5].map(i => l.sliceAt(i, null)), [0, 1, 2, 3, 0, 1], 'default: step i plays slice i mod N');
+  l.setLock(5, 'slice', 3.4); assert.equal(l.locks[5].slice, 3, 'a whole number'); assert.equal(l.sliceAt(5, l.locks[5]), 3, 'the lock wins');
+  assert.equal(l.sliceAt(0, { slice: 9 }), 3, 'a lock past a smaller set plays its last slice'); assert.equal(l.setLock(0, 'slice', 40), 15, 'at most 16 slices');
+  assert.equal(l.sampleId(2), 'c'); l.unlock(0, 'slice');
+  const hits = collectHits(m, { to: P * 8, tempo: 120 }).filter(h => h.li === 0); assert.deepEqual(hits.map(h => h.slice), [0, 1, 2, 3, 0, 3, 2, 3], 'renders carry the slice');
+  l.rotation = 1; assert.equal(l.at(P * 1).slice, 0, 'the slice follows the stored step through the rotation'); l.rotation = 0;
+  assert.deepEqual(l.trimAt(null), { start: 0, end: 1, rev: false }, 'whole and forwards by default');
+  l.setTrim('start', 0.25); l.setTrim('rev', true); l.setLock(2, 'end', 0.5); l.setLock(3, 'rev', 0);
+  assert.deepEqual(l.trimAt(l.locks[2]), { start: 0.25, end: 0.5, rev: true }); assert.equal(l.trimAt(l.locks[3]).rev, false, 'rev 0 = forwards on a reversed lane');
+  l.setTrim('start', 0); assert.equal('start' in l.sample, false, 'a default is not stored');
+  const back = Machine.from(JSON.parse(JSON.stringify(m))).lanes[0];
+  assert.deepEqual(back.sample.slices, ['a', 'b', 'c', 'd']); assert.equal(back.sample.rev, true); assert.equal(back.locks[5].slice, 3); assert.equal(back.locks[2].end, 0.5); assert.equal(back.locks[3].rev, 0);
+  const old = m.toJSON(); old.lanes[1].voice = 'sample'; old.lanes[1].sample = { id: 'x', name: 'one.wav' }; old.lanes[2].voice = 'sample'; old.lanes[2].sample = { id: 'y', name: 'z', slices: [1, 'q'], start: 7 };
+  const mm = Machine.from(old); assert.equal(mm.lanes[1].sliceCount(), 0, 'an old single sample stays one'); assert.equal(mm.lanes[1].sliceAt(3, null), null); assert.equal(mm.lanes[1].sampleId(null), 'x');
+  assert.deepEqual(mm.lanes[2].sample.slices, ['q'], 'bad ids dropped'); assert.equal(mm.lanes[2].sample.id, 'q'); assert.equal(mm.lanes[2].sample.start, 1, 'clamped');
+});

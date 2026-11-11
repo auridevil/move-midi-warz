@@ -48,10 +48,17 @@ const BAR_OF = Object.fromEntries(METERS.map(k => { const { num, den } = meterPa
 export const barTicks = (meter) => BAR_OF[meter] ?? BAR_TICKS;
 /** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, nudge −½..½ of a step (early/late), the rest 0..1. */
 export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
-export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5], artic: [0, ARTIC_MAX] };
+/** S1: a slice set holds up to 16 slices (a bar of 16ths). */
+export const MAX_SLICES = 16;
+export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5], artic: [0, ARTIC_MAX], slice: [0, MAX_SLICES - 1] };
 /** Every step lock: the knob locks plus L3 `artic` (a whole number, the voice's articulation: voices.js ARTICS). It has
- *  no knob or gauge of its own (lock panel: a chooser; Move: hold the step and push the jog wheel). */
-export const STEP_LOCKS = [...LOCK_KEYS, 'artic'];
+ *  no knob or gauge of its own (lock panel: a chooser; Move: hold the step and push the jog wheel). S1 / S3 on a sample
+ *  lane: `slice` (which slice of the set), `start` / `end` (0..1 of the slice) and `rev` (1 = backwards, 0 = forwards
+ *  even on a reversed lane). */
+export const STEP_LOCKS = [...LOCK_KEYS, 'artic', 'slice', 'start', 'end', 'rev'];
+/** Locks that are whole numbers. */
+const INT_LOCKS = new Set(['artic', 'slice', 'rev']);
+const lockVal = (k, v) => { const [lo, hi] = LOCK_RANGE[k] || [0, 1]; return clamp(INT_LOCKS.has(k) ? Math.round(+v || 0) : +v || 0, lo, hi); };
 /** Lane push / pull: the whole lane early (−) or late (+), in ms. */
 export const OFFSET_MS = 30;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
@@ -59,7 +66,7 @@ const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
  *  only one step ahead, so a nudge must stay within half a step). A nudge of 0 is no lock. */
 const lockFrom = (lk) => {
   if (!lk) return null; const o = { ...lk };
-  for (const k of STEP_LOCKS) if (o[k] != null) { const [lo, hi] = LOCK_RANGE[k] || [0, 1]; o[k] = clamp(k === 'artic' ? Math.round(+o[k] || 0) : +o[k] || 0, lo, hi); }
+  for (const k of STEP_LOCKS) if (o[k] != null) o[k] = lockVal(k, o[k]);
   if (o.nudge === 0) delete o.nudge; return Object.keys(o).length ? o : null;
 };
 /**
@@ -113,6 +120,15 @@ export function euclid(k, n) {
 /** The ratio index of a saved lane: by its `ratio` value, else (older saves, links) its index into the pre-R2 table. */
 const ratioFrom = (o) => { const i = ratioIndexOf(typeof o.ratio === 'number' ? o.ratio : OLD_RATIOS[o.ratioIndex] ?? 1); return i < 0 ? ratioIndexOf(1) : i; };
 
+/** A loaded sample record, copied: a slice set keeps up to 16 string ids (an empty one is a single sample again, its
+ *  id the first), start / end / rev are put back in range. Old records ({ id, name }) load as they are. */
+const sampleFrom = (o) => {
+  if (!o) return null; const s = JSON.parse(JSON.stringify(o));
+  if (Array.isArray(s.slices)) { s.slices = s.slices.filter(x => typeof x === 'string').slice(0, MAX_SLICES); if (s.slices.length) s.id = s.slices[0]; else delete s.slices; } else delete s.slices;
+  for (const k of ['start', 'end']) if (s[k] != null) s[k] = clamp(+s[k] || 0, 0, 1); if (s.rev != null) s.rev = !!s.rev;
+  return s;
+};
+
 export class Lane {
   constructor(name, { length = 8, ratioIndex = ratioIndexOf(1) } = {}) {
     this.name = name; this.length = length; this.ratioIndex = ratioIndex;
@@ -139,6 +155,24 @@ export class Lane {
   loadSample({ id, name }) {
     const drum = this.voice === 'sample' ? this.sample?.drum : { voice: this.voice, ...pick(this.sound, SAMPLE_KEYS) };
     this.sample = { id, name, ...(drum ? { drum } : {}) }; this.voice = 'sample'; Object.assign(this.sound, SAMPLE_SOUND);
+  }
+  /** S1: put a slice set { name, slices: [id…] } on the lane (as loadSample; `id` is its first slice, so everything that
+   *  only knows one sample still finds audio). */
+  loadSlices({ name, slices }) { const ids = slices.slice(0, MAX_SLICES); if (!ids.length) return; this.loadSample({ id: ids[0], name }); this.sample.slices = ids; }
+  /** Slices in the lane's set, 0 for a single sample or none. */
+  sliceCount() { return this.sample?.slices?.length || 0; }
+  /** S1: the slice stored step `i` plays: its `slice` lock (kept in the set), else step i of the set (i mod N); null
+   *  without a set. */
+  sliceAt(i, lock) { const n = this.sliceCount(); if (!n) return null; const s = lock?.slice; return s != null ? Math.min(s, n - 1) : ((i % n) + n) % n; }
+  /** The IndexedDB id of the audio slice `slice` plays (the single sample when the lane has no set). */
+  sampleId(slice) { const s = this.sample; return s?.slices?.length ? s.slices[Math.max(0, Math.min(s.slices.length - 1, slice ?? 0))] : s?.id ?? null; }
+  /** S3: the part of the sample a hit plays, from its locks over the lane's own: start / end 0..1 (start past end plays
+   *  the gap between them), rev true = backwards. */
+  trimAt(lock) { const s = this.sample || {}; return { start: lock?.start ?? s.start ?? 0, end: lock?.end ?? s.end ?? 1, rev: !!(lock?.rev ?? s.rev ?? 0) }; }
+  /** S3: the lane's start / end (0..1) or rev (bool), saved on its sample record; the defaults are not stored. */
+  setTrim(k, v) {
+    const s = this.sample; if (!s || !['start', 'end', 'rev'].includes(k)) return null;
+    const x = k === 'rev' ? !!v : clamp(+v || 0, 0, 1); if (x === (k === 'end' ? 1 : k === 'rev' ? false : 0)) delete s[k]; else s[k] = x; return x;
   }
   setSound(k, v) { if (!(k in this.sound)) return; this.sound[k] = Math.max(0, Math.min(1, v)); return this.sound[k]; }
   get ratio() { return RATIOS[this.ratioIndex]; }
@@ -178,7 +212,7 @@ export class Lane {
   trigAt(i) { return this.trigs[this.stepIndex(i)]; }
   /** Lock a parameter on one stored step (use stepIndex() for a visible position). */
   setLock(i, k, v) {
-    if (!STEP_LOCKS.includes(k) || i < 0 || i >= MAX_STEPS) return; const [lo, hi] = LOCK_RANGE[k] || [0, 1], x = clamp(k === 'artic' ? Math.round(+v || 0) : +v || 0, lo, hi);
+    if (!STEP_LOCKS.includes(k) || i < 0 || i >= MAX_STEPS) return; const x = lockVal(k, v);
     if (k === 'nudge' && !x) { this.unlock(i, k); return 0; }   // back on the grid is no lock at all
     (this.locks[i] ||= {})[k] = x; return x;
   }
@@ -233,7 +267,7 @@ export class Lane {
     this.pos = (i + 1) % this.length; this.loopN = loop; this.lastTick = tick;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop };
+    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop, slice: this.sliceAt(this.stepIndex(i), lock) };
   }
   /** at() without moving the playhead (pos) or the loop counter: live play looks ahead with it. */
   peek(tick, rng, ctx) { const { pos, loopN, lastTick, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastTick, lastCond }); return ev; }
@@ -279,7 +313,7 @@ export class Lane {
   }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {

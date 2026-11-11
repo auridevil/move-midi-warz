@@ -21,7 +21,7 @@ export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec })
   // G3 velocity humanize: symmetric, up to ±20 % of the hit's own velocity at 100 % (a ghost wobbles as much in dB as an
   // accent), its own dice salt (locked dice repeat it); never over 1
   const vh = lane.velHuman || 0, v0 = hitVel(ev.accent, ev.lock), v = vh ? Math.min(1, v0 * (1 + ((dice ? dice.at(li, ev.step, lane.length, 3) : Math.random()) - 0.5) * 0.4 * vh)) : v0;
-  return Array.from({ length: n }, (_, k) => ({ dt: base + (k * stepSec) / n, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: ev.lock }));
+  return Array.from({ length: n }, (_, k) => ({ dt: base + (k * stepSec) / n, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: ev.lock, slice: ev.slice }));
 }
 
 /**
@@ -92,7 +92,7 @@ export function liveQuiet(m, t, ahead, { humanize = 0, tickSec, cut = Infinity }
  *  the render's own and the live ones are left alone. */
 export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false, origin = 0 }) {
   const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON()); m.origin = origin;
-  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, artic: m.lanes[li].strokeAt(h.lock) }); });
+  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, slice: h.slice, artic: m.lanes[li].strokeAt(h.lock) }); });
   return out.sort((a, b) => a.time - b.time);
 }
 
