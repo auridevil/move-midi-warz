@@ -29,7 +29,7 @@
       <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">undo</button>
       <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z)">redo</button>
       <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill (hold)</button>
-      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as 4 lane tracks, up to 256 beats">● jam</button>
+      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
       <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
     <div class="status" id="move-status" hidden>
@@ -51,9 +51,9 @@
       <tr><th>Space</th><td>play / stop</td></tr>
       <tr><th>F</th><td>focus mode: only the orbits (F or Esc to come back; while record is armed F plays its pad)</td></tr>
       <tr><th>?</th><td>this help</td></tr>
-      <tr><th>z–, · a–k · q–i · 1–8</th><td>steps 1–8 of lanes 1 · 2 · 3 · 4 (one row per lane, like the Move's pads) · Shift = accent · F is focus mode until record is armed · record armed: play and record</td></tr>
+      <tr><th>z–, · a–k · q–i · 1–8</th><td>8 steps of lanes 1 · 2 · 3 · 4 (one row per lane, like the Move's pads, on the page the pads show; with lane 5 or 6 selected, lanes 3–6) · Shift = accent · F is focus mode until record is armed · record armed: play and record</td></tr>
       <tr><th>hold 0</th><td>fill</td></tr>
-      <tr><th>Alt+1–4</th><td>select a lane</td></tr>
+      <tr><th>Alt+1–6</th><td>select a lane</td></tr>
       <tr><th>Cmd/Ctrl+Z</th><td>undo · with Shift: redo</td></tr>
       <tr><th>Esc</th><td>close a popup, give the keys back to the page</td></tr>
       <tr><th>knobs</th><td>drag up / down (Shift = fine), scroll, or arrow keys · double-click = back to the start value</td></tr>
@@ -81,6 +81,7 @@
     <details class="drawer">
       <summary>Patterns</summary>
       <div class="ctl meter-ctl" title="Time signature of this pattern"><span class="ctl-lbl">meter</span><div id="meter"></div></div>
+      <div class="ctl meter-ctl" title="How many lanes this pattern has"><span class="ctl-lbl">lanes</span><div id="lane-count"></div></div>
       <div id="slots" class="slots" role="group" aria-label="pattern slots"></div>
       <div id="slot-menu" class="slot-menu" role="group" aria-labelledby="slot-menu-title" hidden>
         <span id="slot-menu-title" class="slot-menu-title"></span>
@@ -186,11 +187,11 @@
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
         <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
         <tr><th>Hold Layout</th><td>fill</td></tr>
-        <tr><th>Sampling</th><td>jam: record 4 lane tracks (up to 256 beats) · again = stop</td></tr>
+        <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
         <tr><th>Delete</th><td>clear the lane</td></tr>
         <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
         <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
-        <tr><th>Track 1–4</th><td>select lane</td></tr>
+        <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6)</td></tr>
         <tr><th>Play</th><td>start / stop</td></tr>
         <tr><th>Knobs 1–4</th><td>length · euclid hits · rotation · speed ratio</td></tr>
         <tr><th>Knobs 5–7</th><td>swing · probability · tune</td></tr>
@@ -212,10 +213,10 @@
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
     <div id="jam-panel" class="jam-panel" hidden>
       <div class="jam-bar"><i id="jam-fill"></i></div>
-      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ 4 tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
+      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
     </div>
     <div class="hud-row">
-      <button id="btn-init" title="Empty pattern: 4 lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
+      <button id="btn-init" title="Empty pattern: the same number of lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
       <button id="btn-save" title="Save this setup under a name (library)">save</button>
       <button id="btn-load" title="Open the library of saved setups">load</button>
       <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>

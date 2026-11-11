@@ -5,7 +5,7 @@
 
 import { MIDI_DIV } from './lanes.js';
 
-export const DEFAULT_NOTES = [36, 38, 42, 39];   // GM drums: kick, snare, closed hat, clap
+export const DEFAULT_NOTES = [36, 38, 42, 39, 46, 49];   // GM drums: kick, snare, closed hat, clap, open hat, crash (L2 lanes 5–6)
 export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
 /**
  * Phase lock: `drift` = our master tick − the incoming clock's tick at the same moment (positive = we're ahead).

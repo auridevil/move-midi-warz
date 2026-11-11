@@ -26,10 +26,11 @@ export function alignText(tick, cycle, bar = 96, beat = 24) {
  * by the app ({ x, y, w, h }: the free box between the panels on a wide window) wins: the outer ring and its glow fit
  * inside it with a margin (0.1 R), so no panel covers them.
  */
-export function ringGeo(W, H, stage = null) {
-  const ring = (R) => (li) => R * (0.25 + li * 0.2);
-  if (stage) { const R = Math.min(stage.w, stage.h) / 2 / 0.95; return { cx: stage.x + stage.w / 2, cy: stage.y + stage.h / 2, R, ring: ring(R) }; }
-  const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return { cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R, ring: ring(R) };
+export function ringGeo(W, H, stage = null, lanes = 4) {
+  // L2: the rings always span 0.25–0.85 R; 6 lanes sit closer (0.12 R apart instead of 0.2), so the system keeps its size
+  const gap = 0.6 / Math.max(1, lanes - 1), ring = (R) => (li) => R * (0.25 + li * gap), out = (o) => ({ ...o, gap, lanes, ring: ring(o.R), outer: ring(o.R)(lanes - 1) });
+  if (stage) { const R = Math.min(stage.w, stage.h) / 2 / 0.95; return out({ cx: stage.x + stage.w / 2, cy: stage.y + stage.h / 2, R }); }
+  const narrow = W < 700, R = Math.min(W, H) * (narrow ? 0.44 : 0.42); return out({ cx: W * 0.5, cy: H * (narrow ? 0.5 : 0.56), R });
 }
 
 /**
@@ -63,12 +64,12 @@ export function createScene(cv, o) {
   const sprites = new Map(); const sprite = (hex) => { if (!sprites.has(hex)) sprites.set(hex, glowSprite(hex)); return sprites.get(hex); };
   const white = glowSprite('#ece9f7');
   const last = [];        // per lane: { index, t } of the latest step, for the smooth playhead
-  const energy = [0, 0, 0, 0], flash = new Map();   // energy per lane (decays), flash per "lane:index"
+  const energy = [0, 0, 0, 0, 0, 0], flash = new Map();   // one per lane, up to 6   // energy per lane (decays), flash per "lane:index"
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 
   let stage = null;
-  const geo = () => ringGeo(W, H, stage);
+  const geo = () => ringGeo(W, H, stage, o.machine().lanes.length);
   /** s: { x, y, w, h } in client px, or null for the whole canvas. */
   function setStage(s) {
     const b = cv.getBoundingClientRect(), n = s && { x: Math.round(s.x - b.left), y: Math.round(s.y - b.top), w: Math.round(s.w), h: Math.round(s.h) };
@@ -124,7 +125,7 @@ export function createScene(cv, o) {
 
   /** Which ring is under (x, y)? -1 if none. */
   /** x, y are client coordinates. */
-  function pick(x, y) { const b = cv.getBoundingClientRect(); x -= b.left; y -= b.top; const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / 0.2); return r >= 0 && r < 4 ? r : -1; }
+  function pick(x, y) { const b = cv.getBoundingClientRect(); x -= b.left; y -= b.top; const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / g.gap); return r >= 0 && r < g.lanes ? r : -1; }
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
@@ -132,7 +133,7 @@ export function createScene(cv, o) {
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
-    for (let i = 0; i < 4; i++) energy[i] *= Math.pow(0.04, dt / 1000);   // ~0.6 s fall-off
+    for (let i = 0; i < energy.length; i++) energy[i] *= Math.pow(0.04, dt / 1000);   // ~0.6 s fall-off
     shake *= Math.pow(0.002, dt / 1000);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
     ctx.drawImage(bg, 0, 0, W, H);
@@ -223,7 +224,7 @@ export function createScene(cv, o) {
 
     // live record armed: the outer orbit breathes red
     if (o.isRecording?.()) {
-      const pulse = 0.5 + 0.5 * Math.sin(now * 0.006), r = g.ring(3) + 26;
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.006), r = g.outer + 26;
       ctx.strokeStyle = `rgba(239,68,68,${0.25 + pulse * 0.35})`; ctx.lineWidth = 1.5 + pulse * 2; ctx.setLineDash([6, 10]); ctx.lineDashOffset = -now * 0.02;
       ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     }
@@ -246,7 +247,7 @@ export function createScene(cv, o) {
     // jam: a red arc around everything fills up over the 256 beats, with a ticking head
     const jp = o.jamProgress?.();
     if (jp != null) {
-      const r = g.ring(3) + 40, a0 = -Math.PI / 2, a1 = a0 + TAU * Math.max(0.002, jp), pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+      const r = g.outer + 40, a0 = -Math.PI / 2, a1 = a0 + TAU * Math.max(0.002, jp), pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
       ctx.strokeStyle = 'rgba(239,68,68,.18)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
       ctx.strokeStyle = `rgba(239,68,68,${0.7 + pulse * 0.3})`; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, a1); ctx.stroke(); ctx.lineCap = 'butt';
       ctx.drawImage(sprite('#ef4444'), g.cx + Math.cos(a1) * r - 16, g.cy + Math.sin(a1) * r - 16, 32, 32);

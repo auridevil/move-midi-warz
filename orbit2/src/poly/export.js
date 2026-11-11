@@ -141,7 +141,7 @@ async function pipe(bytes, stream) { const out = new Response(new Blob([bytes]).
 export async function encodeShare(machineJSON, tempo) {
   const o = JSON.parse(JSON.stringify(machineJSON));
   (o.lanes || []).forEach((l, i) => {
-    if (l.voice === 'sample') { const d = l.sample?.drum; l.voice = d?.voice || KITS.common.lanes[i % 4].voice; if (d) for (const k of ['decay', 'snap', 'color']) if (d[k] != null) l.sound[k] = d[k]; }
+    if (l.voice === 'sample') { const d = l.sample?.drum; l.voice = d?.voice || KITS.common.lanes[i].voice; if (d) for (const k of ['decay', 'snap', 'color']) if (d[k] != null) l.sound[k] = d[k]; }
     l.sample = null;
   });
   return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o })), new CompressionStream('deflate-raw')));

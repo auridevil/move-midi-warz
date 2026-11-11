@@ -22,7 +22,14 @@ const evolveRatio = (r, dir) => {
   if (r < e[0] || r > e[e.length - 1]) return r < e[0] ? e[0] : e[e.length - 1];
   return k >= 0 ? e[clamp(k + dir, 0, e.length - 1)] : dir > 0 ? e.find(x => x > r) : e.findLast(x => x < r);
 };
-export const LANE_NAMES = ['kick', 'snare', 'hat', 'perc'];
+/** Lane ids (not voices). L2: a pattern has 4 or 6 lanes; lanes 5–6 default to an open hat and a cymbal (the kit's). */
+export const LANE_NAMES = ['kick', 'snare', 'hat', 'perc', 'open', 'cymbal'];
+export const LANE_COUNTS = [4, 6], MAX_LANES = 6;
+/** A fresh lane i: lengths and speeds of the classic four, then an open hat in eighths and a two-bar cymbal lane. */
+const LANE_DEFAULTS = [[4, 1], [4, 1], [8, 2], [5, 2], [8, 2], [8, 1]];
+const freshLane = (i) => new Lane(LANE_NAMES[i], { length: LANE_DEFAULTS[i][0], ratioIndex: ratioIndexOf(LANE_DEFAULTS[i][1]) });
+/** The lane count a pattern with `n` lanes keeps: 4 (old saves, or fewer), else 6. */
+export const laneCountOf = (n) => (n > 4 ? MAX_LANES : 4);
 /** Per-lane sound sculpting, all 0..1: Shift + knobs on the Move. */
 export const SOUND_KEYS = ['decay', 'tone', 'drive', 'snap', 'color', 'send', 'pan', 'level'];
 export const DEFAULT_SOUND = { decay: 0.5, tone: 0.75, drive: 0, snap: 0.5, color: 0.5, send: 0.15, pan: 0.5, level: 0.8 };
@@ -268,8 +275,20 @@ export class Lane {
 
 export class Machine {
   // a new machine plays the Common kit: lane names are ids, not voices ('perc' is not a voice)
-  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: ratioIndexOf([1, 1, 2, 2][i]) })); this.selected = 0; this.humanize = 0; this.meter = '4/4'; this.origin = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
+  constructor(n = 4) { this.lanes = Array.from({ length: laneCountOf(n) }, (_, i) => freshLane(i)); this.selected = 0; this.humanize = 0; this.meter = '4/4'; this.origin = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
   setMeter(meter) { if (METERS.includes(meter)) this.meter = meter; return this.meter; }
+  /**
+   * L2: 4 or 6 lanes. Lanes 5–6 come in empty, with the voices and sounds of the kit the pattern still plays (else
+   * Common's); going back to 4 drops them (undo brings them back), and a choke aimed at a dropped lane goes.
+   */
+  setLaneCount(n) {
+    n = laneCountOf(n); const had = this.lanes.length; if (n === had) return n;
+    if (n > had) {
+      const kit = KITS[this.kitKey()] || KITS.common;
+      for (let i = had; i < n; i++) { const l = freshLane(i), k = kit.lanes[i]; l.setVoice(k.voice); l.sound = { ...DEFAULT_SOUND, ...(k.sound || {}) }; this.lanes.push(l); }
+    } else { this.lanes.length = n; for (const l of this.lanes) if (l.choke >= n) l.choke = -1; this.selected = Math.min(this.selected, n - 1); }
+    return n;
+  }
   /**
    * Runtime, not saved: the master tick this pattern's bar 1 starts on (the app's bar anchor, which moves when the time
    * signature changes: the meter control, or a slot or chain step in another meter). Lanes count their steps from
@@ -337,6 +356,9 @@ export class Machine {
   randomizeMusical(rng = Math.random, family) {
     const f = MUSICAL_FAMILIES.find(x => x.key === family) || MUSICAL_FAMILIES[Math.floor(rng() * MUSICAL_FAMILIES.length)];
     const specs = f.build(rng);
+    // L2 lanes 5–6 (after the family's own rolls, so a 4-lane pattern rolls what it always did): an open sound on some
+    // offbeat eighths, a cymbal on the first beat every two bars (a 1- and a 2-bar loop keep the cycle short)
+    if (this.lanes.length > 4) specs.push({ len: 8, ratio: 2, hits: one(rng, [[3, 7], [7], [1, 3, 5, 7]]) }, { len: 8, ratio: 1, hits: [0], acc: [0] });
     this.lanes.forEach((l, i) => {
       const s = specs[i]; if (!s) return; l.clear(); l.setLength(s.len); l.setRatio(RATIOS.indexOf(s.ratio)); l.prob = 1; l.swing = s.swing || 0;
       if (s.k != null) l.setEuclid(s.k); else for (const h of s.hits) l.hits[h % s.len] = true;
@@ -352,15 +374,18 @@ export class Machine {
   /** The kit key whose voices and sounds every lane still has exactly, or null (= custom). */
   kitKey() {
     const same = (a, b) => Math.abs(a - b) < 1e-9;
-    return Object.keys(KITS).find(key => KITS[key].lanes.every((k, i) => { const l = this.lanes[i]; if (!l || l.voice !== k.voice) return false; const s = { ...DEFAULT_SOUND, ...(k.sound || {}) }; return SOUND_KEYS.every(sk => same(l.sound[sk], s[sk])); })) ?? null;
+    // a 4-lane pattern matches the kit's first four lanes
+    return Object.keys(KITS).find(key => this.lanes.every((l, i) => { const k = KITS[key].lanes[i]; if (!k || l.voice !== k.voice) return false; const s = { ...DEFAULT_SOUND, ...(k.sound || {}) }; return SOUND_KEYS.every(sk => same(l.sound[sk], s[sk])); })) ?? null;
   }
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit, meter: this.meter }; }
   static from(o) {
-    const m = new Machine(); if (o?.lanes) { m.lanes = o.lanes.map(Lane.from); m.kit = o.kit; } m.selected = o?.selected ?? 0; m.humanize = o?.humanize ?? 0; m.setMeter(o?.meter);
+    // L2: the data keeps its lane count (4, or 6); a link edited to some other count is filled up / cut to the nearest
+    const m = new Machine(o?.lanes?.length); if (o?.lanes) { const n = m.lanes.length; m.lanes = o.lanes.slice(0, n).map(Lane.from); while (m.lanes.length < n) m.lanes.push(freshLane(m.lanes.length)); m.kit = o.kit; }
+    m.selected = Math.max(0, Math.min(m.lanes.length - 1, o?.selected | 0)); m.humanize = o?.humanize ?? 0; m.setMeter(o?.meter);
     // old saves and links can name a voice that doesn't exist (lane 4 used to default to 'perc'), or a sample lane
     // without its sample record: give that lane the Common kit's voice instead of a silent fallback to the kick.
     // (A record whose audio is no longer in IndexedDB can't be seen from here: that lane stays silent.)
-    m.lanes.forEach((l, i) => { if (l.voice === 'sample' ? !l.sample : !VOICES[l.voice]) l.voice = KITS.common.lanes[i % 4].voice; });
+    m.lanes.forEach((l, i) => { if (l.voice === 'sample' ? !l.sample : !VOICES[l.voice]) l.voice = KITS.common.lanes[i].voice; if (l.choke >= m.lanes.length) l.choke = -1; });
     return m;
   }
 }

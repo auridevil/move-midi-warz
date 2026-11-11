@@ -39,7 +39,7 @@ test('per-lane sound params clamp and survive save/load', () => {
 });
 
 test('kits reference real voices and apply without touching patterns', () => {
-  for (const [k, kit] of Object.entries(KITS)) { assert.equal(kit.lanes.length, 4, k); for (const l of kit.lanes) { assert.ok(VOICE_KEYS.includes(l.voice), `${k}: ${l.voice}`); for (const sk of Object.keys(l.sound || {})) assert.ok(SOUND_KEYS.includes(sk), `${k}: sound.${sk}`); } }
+  for (const [k, kit] of Object.entries(KITS)) { assert.equal(kit.lanes.length, 6, `${k}: L2 voices for lanes 5–6 too`); for (const l of kit.lanes) { assert.ok(VOICE_KEYS.includes(l.voice), `${k}: ${l.voice}`); for (const sk of Object.keys(l.sound || {})) assert.ok(SOUND_KEYS.includes(sk), `${k}: sound.${sk}`); } }
   const m = new Machine(); m.lanes[0].setEuclid(3); const hits = [...m.lanes[0].hits];
   m.applyKit(KITS.space, DEFAULT_SOUND); assert.equal(m.lanes[1].voice, 'bell'); assert.equal(m.lanes[0].sound.send, 0.4); assert.deepEqual(m.lanes[0].hits, hits); assert.equal(m.kit, 'Space');
   const copy = Machine.from(JSON.parse(JSON.stringify(m))); assert.equal(copy.lanes[2].voice, 'blip'); assert.equal(copy.kit, 'Space');
@@ -48,7 +48,7 @@ test('kits reference real voices and apply without touching patterns', () => {
 
 test('kits: every lane uses an existing voice and only known sound keys', async () => {
   const { VOICES } = await import('../src/poly/voices.js'); const { KITS } = await import('../src/poly/kits.js'); const { SOUND_KEYS } = await import('../src/poly/lanes.js');
-  for (const [id, kit] of Object.entries(KITS)) { assert.equal(kit.lanes.length, 4, id); for (const l of kit.lanes) { assert.ok(VOICES[l.voice], `${id}: ${l.voice}`); for (const k of Object.keys(l.sound || {})) assert.ok(SOUND_KEYS.includes(k), `${id}: sound key ${k}`); } }
+  for (const [id, kit] of Object.entries(KITS)) { assert.equal(kit.lanes.length, 6, id); for (const l of kit.lanes) { assert.ok(VOICES[l.voice], `${id}: ${l.voice}`); for (const k of Object.keys(l.sound || {})) assert.ok(SOUND_KEYS.includes(k), `${id}: sound key ${k}`); } }
 });
 
 test('master clock: lanes derive their step from the tick and stay phase-locked', async () => {
