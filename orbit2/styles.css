@@ -534,7 +534,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .slice.on { background: rgba(103,232,249,.3); border-color: var(--signal-cyan); }
 .slice.on span { color: var(--fg); }
 .slice.dflt { border-style: dashed; border-color: var(--signal-cyan); }
-.lock-sample .slice-grid { margin-top: 6px; }
+.lock-sample .slice-grid { margin-top: 6px; grid-template-columns: repeat(9, 1fr); }   /* "step" + 8 slices a row: 16 fit in two */
 /* a display rule above beats the hidden attribute: the stroke row, the trim row and the slice picker hide for real */
 .row-ctl[hidden], .slice-grid[hidden] { display: none; }
 .evo-lanes { gap: 6px; }
