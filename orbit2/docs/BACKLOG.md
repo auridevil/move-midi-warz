@@ -380,3 +380,28 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   held while another lane gets selected (a pad, a track button) edits the newly selected lane's step on the knobs and
   on release, while the step buttons keep the old lane's page; keeping the lane in the held entry (`pages.js`) would
   pin the hold to the lane it went down on.
+- **A stroke lock across voices** (ORBIT2-08 round 1, architect, verifier): an `artic` lock is an index, so when the lane
+  changes voice or kit a conga mute becomes a hat's open stroke, an agogo high or a shekere slap (Afro → Jungle turns
+  lane 3's shekere slaps into open hats); on a voice without that stroke it plays the lane sound, the lock panel says
+  "stroke (not on kick)" and only "clear" (all the step's locks) removes it. Storing the stroke's name, or honouring it
+  only on a voice with the same stroke, would keep its meaning.
+- **One stroke table** (ORBIT2-08 round 1, architect): the conga / bongo strokes (pitch step, decay, velocity) are
+  written in both engines, like every voice; a shared per-voice table would hold them once.
+- **Strokes that cut each other on the dsp engine** (ORBIT2-08 round 1, architect): dsp lanes are polyphonic, so a closed
+  hat after an open one (or a mute after an open conga) leaves the earlier stroke ringing (tail −67.7 / −90.5 dB at the
+  default decay), where Tone's mono voices cut it. A lane choking its own previous stroke would match a real drum.
+- **GM notes for strokes** (ORBIT2-08 round 1, architect, dex; phase 10, E3): strokes go on the next free notes (a hat
+  on lane 3 opens on 44, GM's pedal hat), and an open hat doesn't choke the closed one in Live without a choke group; a
+  Drum-Rack map could put strokes on GM notes (open hat 46, mute / open hi conga 62 / 63) and say so.
+- **Synth levels in the new kits** (ORBIT2-08 round 1, sound, verifier; the ORBIT2-02 "dsp engine voice levels" gap): in
+  the synth engine the Afro open hat sits ~22 LU under the kick (dsp ~10), the Jungle snare ~11 LU under the kick909
+  (dsp ~1) and its ride / open hat / crash 20–24 LU under; Jungle is the quietest kit at the master. A kit level can't
+  fix one engine without the other; the per-voice trim can.
+- **Synth shekere retrigger** (ORBIT2-08 round 1, sound): a second synth shekere 90 ms into the first peaked 3.6 dB over
+  it (Tone's mono NoiseSynth restarts mid-burst; measured before round 1 made it white noise), the dsp's two hits alike.
+- **Log drum pitch** (ORBIT2-08 round 1, sound): it sits on E2 (82.4 Hz) at tune 0; an Amapiano log drum often sits
+  lower (round 1 made the glide deeper: an octave at color 1).
+- **A closed hat on a long lane** (ORBIT2-08 round 1, tomi): "closed" is the lane's own hat, so a hat lane with a long
+  decay isn't closed; a closed stroke that caps the decay would change every unlocked hat.
+- **The djembe in a 4-lane Afro pattern** (ORBIT2-08 round 1, tomi): the Afro kit's djembe and open hat are lanes 5–6, so
+  a 4-lane pattern has kick, log drum, shekere and agogo only.

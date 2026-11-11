@@ -1235,8 +1235,58 @@ test('ORBIT2-08 L3: artic step lock — whole numbers in range, cycles per voice
   assert.ok(DSP_VOICES.conga({ ...p, artic: 2 })[0].f > DSP_VOICES.conga(p)[0].f * 1.4, 'slap higher');
   assert.ok(len(DSP_VOICES.hat({ ...p, artic: 1 })) > len(DSP_VOICES.hat(p)) * 1.5, 'open hat');
   assert.deepEqual(DSP_VOICES.conga({ ...p, artic: 0 }), DSP_VOICES.conga(p), 'open = the unlocked conga');
-  // MIDI: the lane's note + the stroke; no stroke (or one the voice lacks) = the lane's note
-  const hits = collectHits(m, { from: 0, to: 4 * c.stepTicks(), tempo: 120 }).filter(x => x.li === 3); assert.deepEqual(hits.map(x => x.artic), [null, 1, 2, 0]);
+  // MIDI: every stroke on its own note (midiio.js strokeNotes); an unlocked conga plays open, on the lane's note
+  const hits = collectHits(m, { from: 0, to: 4 * c.stepTicks(), tempo: 120 }).filter(x => x.li === 3); assert.deepEqual(hits.map(x => x.artic), [0, 1, 2, 0], 'the stroke each hit plays (round 1: an unlocked conga plays open, 0)');
   const lanes = [36, 38, 42, 60, 46, 49].map(note => ({ note, ch: 10 })), notes = readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: [], bars: 1 })).tracks.flatMap(t => t.notes);
   assert.deepEqual(notes.map(n => n.p ?? n.note).sort(), [60, 60, 61, 62]);
+});
+test('ORBIT2-08 r1: the note sent is the stroke heard, stroke notes never land on another lane, synth slaps crack, the synth shekere is white noise', async () => {
+  const { strokeOf, VOICES } = await import('../src/poly/voices.js'); const { DSP_VOICES } = await import('../src/poly/dsp-voices.js');
+  const { collectHits, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js'); const { strokeNotes, DEFAULT_NOTES, PolyMidi } = await import('../src/poly/midiio.js');
+  // one stroke rule: a lock wins, else djembe by color thirds and agogo high from ½, else the first stroke; null without strokes
+  assert.deepEqual([0, 0.32, 0.34, 0.66, 0.67, 1].map(c => strokeOf('djembe', null, c)), [0, 0, 1, 1, 2, 2]);
+  assert.deepEqual([0.49, 0.5].map(c => strokeOf('agogo', null, c)), [0, 1]);
+  assert.equal(strokeOf('djembe', { artic: 0 }, 1), 0, 'a lock wins over color'); assert.equal(strokeOf('conga', null, 0.9), 0); assert.equal(strokeOf('hat', { artic: 2 }, 0.5), 0, 'a stroke the voice lacks: its first');
+  assert.equal(strokeOf('kick', { artic: 1 }, 0.5), null); assert.equal(strokeOf('sample', null, 0.5), null);
+  // the dsp voices called without a stroke play what strokeOf says, so the engines and MIDI share one rule
+  const p = { vel: 0.7, tune: 0, dec: 0.34, decayRaw: 0.5, snap: 0.5, color: 0.5 };
+  for (const k of ['djembe', 'agogo']) for (const c of [0, 0.2, 0.4, 0.5, 0.6, 0.9, 1]) assert.deepEqual(DSP_VOICES[k]({ ...p, color: c }), DSP_VOICES[k]({ ...p, color: c, artic: strokeOf(k, null, c) }), `${k} at color ${c}`);
+  // repro (verifier 1, architect 1): Afro kit, the djembe (lane 5, color 0.5) [no lock, bass, tone, color lock 0.9] plays
+  // tone, bass, tone, slap and must send those strokes' notes; the agogo at color 0.7 rings high without a lock
+  const map = DEFAULT_NOTES.map(note => ({ note, ch: 10 })), rows = strokeNotes(map);
+  const sent = (m, li, locks) => {
+    const l = m.lanes[li]; m.lanes.forEach(x => x.clear()); l.setLength(4); l.setRatio(5); locks.forEach((lk, i) => { l.hits[i] = true; l.locks[i] = lk && { ...lk }; });
+    const hits = collectHits(m, { from: 0, to: 4 * l.stepTicks(), tempo: 120 }).filter(h => h.li === li);
+    return readMidi(hitsToMidi(hits, { tempo: 120, lanes: map, names: [], bars: 1 })).tracks.flatMap(t => t.notes).map(n => n.p ?? n.note);
+  };
+  const afro = () => { const m = new Machine(6); m.applyKit(KITS.afro, DEFAULT_SOUND); return m; };
+  assert.deepEqual(sent(afro(), 4, [null, { artic: 0 }, { artic: 1 }, { color: 0.9 }]), [1, 0, 1, 2].map(a => rows[4][a]));
+  const ma = afro(); ma.lanes[3].sound.color = 0.7; assert.deepEqual(sent(ma, 3, [null, { artic: 0 }, { artic: 1 }, null]), [1, 0, 1, 1].map(a => rows[3][a]));
+  // repro (verifier 2): with the default notes every stroke of every lane has a note of its own (none on another lane's)
+  const all = rows.flat(); assert.equal(new Set(all).size, all.length); assert.deepEqual(rows[0], [36, 37, 40], 'lane 1: 36, 37, 40 (38, 39 = lanes 2, 4)');
+  const mh = new Machine(6); mh.applyKit(KITS.hands, DEFAULT_SOUND); const ns = sent(mh, 0, [{ artic: 0 }, { artic: 1 }, { artic: 2 }, null]);
+  assert.ok(!ns.slice(1, 3).some(n => DEFAULT_NOTES.includes(n)), `Hand drums conga mute / slap on ${ns.slice(1, 3)}`);
+  // another channel is another instrument (no clash there); past 127 a stroke stays on 127
+  assert.deepEqual(strokeNotes([{ note: 36, ch: 10 }, { note: 37, ch: 1 }, { note: 38, ch: 10 }]).map(r => r.join()), ['36,37,39', '37,38,39', '38,40,41']);
+  assert.deepEqual(strokeNotes([{ note: 126, ch: 10 }])[0], [126, 127, 127]);
+  // live out sends the notes the file has
+  const out = [], pm = new PolyMidi({ getAccess: () => null }); pm.out = { send: (b) => out.push(b) }; pm.note(0, 0.8, 0, 2); pm.note(4, 0.8, 0, 1); pm.note(2, 0.8, 0, null);
+  assert.deepEqual(out.filter(b => (b[0] & 0xf0) === 0x90).map(b => b[1]), [rows[0][2], rows[4][1], 42]);
+  // synth (Tone) voices, structure only (their levels are measured in the browser): a slap fires a crack through a
+  // high-pass, 12 dB or more over the open stroke's noise, with the body at (nearly) full velocity; the shekere's beads
+  // are white noise (pink lost ~16 dB in their band)
+  const fakeT = () => {
+    const calls = []; class N { constructor(o = {}) { this.o = o; this.frequency = { setValueAtTime() {}, cancelScheduledValues() {}, exponentialRampToValueAtTime() {}, linearRampToValueAtTime() {} }; } connect(x) { this.to = x; return this; } set(o) { Object.assign(this.o, o); } triggerAttackRelease(...a) { calls.push({ n: this, vel: a[a.length - 1] }); } }
+    return { calls, T: { Filter: class extends N {}, MembraneSynth: class extends N {}, NoiseSynth: class extends N {}, FMSynth: class extends N {}, Frequency: (x) => ({ toFrequency: () => 440 * 2 ** ((x - 69) / 12) }) } };
+  };
+  const strike = (k, artic) => {
+    const { T, calls } = fakeT(), n = VOICES[k].make(T, {}); VOICES[k].hit(T, n, { ...p, artic }, 0);
+    const noise = calls.filter(c => c.n instanceof T.NoiseSynth), body = calls.find(c => c.n instanceof T.MembraneSynth);
+    return { noise: Math.max(0, ...noise.map(c => 10 ** ((c.n.o.volume ?? 0) / 20) * c.vel)), hp: noise.some(c => c.n.to?.o?.type === 'highpass' && c.n.to.o.frequency >= 1000), body: body?.vel ?? 0 };
+  };
+  for (const k of ['conga', 'bongo', 'djembe']) {
+    const s = strike(k, 2), o = strike(k, 0);
+    assert.ok(s.hp && s.noise >= 4 * o.noise && s.noise >= 0.25, `${k} slap crack ${s.noise.toFixed(3)} vs open ${o.noise.toFixed(3)}`); assert.ok(s.body >= 0.85 * p.vel, `${k} slap body ${s.body}`);
+  }
+  const { T: fT } = fakeT(), sk = VOICES.shekere.make(fT, {}); assert.equal(sk.n.o.noise?.type, 'white'); assert.ok(sk.n.o.volume >= -6);
 });

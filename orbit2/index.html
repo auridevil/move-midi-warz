@@ -156,7 +156,7 @@
         <div class="row-ctl"><div id="midi-clock-out"></div></div>
         <span class="ctl-lbl">note · channel per lane, gate</span>
         <div id="midi-lanes" class="gauges midi-gauges"></div>
-        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, +1 for the second, +2 for the third. A conga lane on C3 (60): open 60, mute 61, slap 62; a hat on 42: closed 42, open 43. Live out and the MIDI export alike.</p>
+        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
         <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
         <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
       </div>

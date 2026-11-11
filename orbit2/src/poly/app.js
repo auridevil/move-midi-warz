@@ -11,7 +11,7 @@ import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, 
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
-import { PolyMidi, FOLLOW_MODES } from './midiio.js';
+import { PolyMidi, FOLLOW_MODES, strokeNotes } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
@@ -152,7 +152,7 @@ function rebuildVoices(k = kit) { m.lanes.forEach((_, i) => { buildVoice(i, k); 
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
-  const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: articAt(c.voice, lock) ?? undefined }, c.voice);   // L3: undefined = the lane's own stroke
+  const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
   // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
@@ -219,7 +219,7 @@ function onTick(t, time, cyc, ts) {
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000, articAt(lane.voice, h.lock)); };
+  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000, lane.strokeAt(h.lock)); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
   liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
@@ -350,7 +350,12 @@ function sync() {
   ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
-  renderSteps(); renderLocks(); paintLeds(); save(); readout();
+  renderSteps(); renderLocks(); paintLeds(); save(); readout(); renderStrokeNotes();
+}
+/** The MIDI drawer names the note of every stroke the lanes can play now (strokeNotes; it follows voices and notes). */
+function renderStrokeNotes() {
+  const rows = strokeNotes(pmidi.lanes), now = m.lanes.flatMap((l, i) => ARTICS[l.voice] ? [`lane ${i + 1} ${voiceLabel(l)}: ${ARTICS[l.voice].map((s, a) => `${s} ${rows[i][a]}`).join(' · ')}`] : []);
+  $('midi-artic-map').textContent = now.length ? `Now: ${now.join('; ')}.` : '';
 }
 function renderVoiceOptions() {
   const vs = $('voice-select'), want = m.lane.sample ? `sample:${m.lane.sample.id}` : 'none';
@@ -433,7 +438,7 @@ function buildLockGauges() {
   ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => { if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v === 'lane') lane.unlock(i, 'artic'); else lane.setLock(i, 'artic', v); auditionLock(); stepEdited(); } }));
 }
 /** "slap" for an artic lock, the key name for the rest (the lock panel title). */
-const lockName = (lane, k, lk) => k === 'artic' ? ARTICS[lane.voice]?.[articAt(lane.voice, lk)] ?? 'stroke' : k;
+const lockName = (lane, k, lk) => k === 'artic' ? ARTICS[lane.voice]?.[articAt(lane.voice, lk)] ?? `stroke (not on ${voiceLabel(lane)})` : k;   // kept from another voice: plays the lane sound here
 function renderLocks() {   // always after renderSteps, which closes a step a shorter loop left out
   const lane = m.lane, panel = $('lockpanel');
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
@@ -643,8 +648,8 @@ function buildMidiUI() {
   // note + channel per lane as gauges (note names in Live's convention, C3 = 60), then the gate
   const NOTE = (p) => ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'][p % 12] + (Math.floor(p / 12) - 2), g = $('midi-lanes');
   pmidi.lanes.forEach((_, i) => {   // all six: lanes 5–6 keep their notes for a 6-lane pattern
-    g.appendChild(makeGauge({ label: `lane ${i + 1} note`, min: 0, max: 127, value: pmidi.lanes[i].note, fmt: (v) => `${NOTE(v)} · ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].note = v; saveSettings(); } }).el);
-    g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, say: (v) => `channel ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); } }).el);
+    g.appendChild(makeGauge({ label: `lane ${i + 1} note`, min: 0, max: 127, value: pmidi.lanes[i].note, fmt: (v) => `${NOTE(v)} · ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].note = v; saveSettings(); renderStrokeNotes(); } }).el);
+    g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, say: (v) => `channel ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); renderStrokeNotes(); } }).el);
   });
   g.appendChild(makeGauge({ label: 'gate', min: 5, max: 500, value: pmidi.gateMs, fmt: (v) => `${v} ms`, color: 'var(--star-white)', title: 'how long each MIDI note is held', onChange: (v) => { pmidi.gateMs = v; saveSettings(); } }).el);
   pmidi.handlers = { tempo: (bpm) => { followClockTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
@@ -811,7 +816,7 @@ function exportMidi() {
   const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice() }) : collectHits(m, { from: 0, to: ticks, tempo, dice: exportDice() });
   // a chain is as long as its slots' bars in their own meters, with a time signature wherever a slot changes it
   const nl = Math.max(m.lanes.length, ...(states || []).map(s => s?.lanes?.length || 0));   // a track per lane: 4 or 6
-  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), names: laneNames(nl), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: chain ? chainMeters(states, bank.chainBars) : null, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
+  const bytes = hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), map: pmidi.lanes, names: laneNames(nl), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: chain ? chainMeters(states, bank.chainBars) : null, sixteenths: chain ? chainSixteenths(states, bank.chainBars) : null });   // early notes wrap like the loop WAV
   download(bytes, `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so

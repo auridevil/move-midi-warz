@@ -4,9 +4,23 @@
 // control mode: notes there would repaint its pads instead of playing anything.
 
 import { MIDI_DIV } from './lanes.js';
-import { articNote } from './export.js';
+import { ARTIC_MAX } from './voices.js';
 
 export const DEFAULT_NOTES = [36, 38, 42, 39, 46, 49];   // GM drums: kick, snare, closed hat, clap, open hat, crash (L2 lanes 5–6)
+/**
+ * L3 strokes on MIDI: a lane's first stroke plays its own note, the others the next notes up that no lane's note and no
+ * earlier stroke takes on the same channel, so a conga slap never plays another lane's drum (with the default notes a
+ * conga on 36 is 36 / 37 / 40: 38 and 39 are lanes 2 and 4). Worked out over the whole note map, whatever the voices,
+ * so live out, the export and every slot agree. lanes: [{ note, ch }] → per lane [note of stroke 0, 1, 2].
+ */
+export function strokeNotes(lanes) {
+  const at = (ch, n) => ch * 128 + n, taken = new Set(lanes.map(l => at(l.ch, l.note)));
+  return lanes.map((l) => {
+    const row = [l.note];
+    for (let n = l.note; row.length <= ARTIC_MAX;) { do n++; while (n < 127 && taken.has(at(l.ch, n))); n = Math.min(127, n); taken.add(at(l.ch, n)); row.push(n); }
+    return row;
+  });
+}
 export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
 /**
  * Phase lock: `drift` = our master tick − the incoming clock's tick at the same moment (positive = we're ahead).
@@ -131,8 +145,8 @@ export class PolyMidi {
   /** Re-resolve ports after the device list changes (plug / unplug). */
   refresh() { this.setOutput(this.outName); if (this.inName && !this.input) this.setInput(this.inName); }
   send(bytes, at) { try { this.out?.send(bytes, at); } catch {} }
-  note(li, vel01, at, artic = null) {   // artic: L3, the lane's note + the articulation (export.js articNote)
-    if (!this.out) return; const { ch } = this.lanes[li], note = articNote(this.lanes[li].note, artic), st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
+  note(li, vel01, at, artic = null) {   // artic: L3, the stroke (Lane.strokeAt) → its note (strokeNotes)
+    if (!this.out) return; const { ch } = this.lanes[li], note = strokeNotes(this.lanes)[li][artic || 0], st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
     this.send([st, note & 127, v], at); this.send([0x80 | ((ch - 1) & 15), note & 127, 0], at + this.gateMs);
   }
   clock(at) { if (this.out && this.clockOut) this.send([0xF8], at); }

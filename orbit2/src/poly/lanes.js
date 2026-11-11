@@ -1,7 +1,7 @@
 // Polyrhythm drum machine model: 4 lanes, each with its own length, speed ratio, euclidean fill, rotation,
 // swing, probability and accents. Pure logic (no audio), unit-tested.
 import { KITS } from './kits.js';
-import { VOICES, ARTICS, ARTIC_MAX, articAt } from './voices.js';
+import { VOICES, ARTICS, ARTIC_MAX, articAt, strokeOf } from './voices.js';
 /** L1: a lane loops over up to 32 steps (two bars of sixteenths). Saves from before hold 16 per lane: the rest load empty. */
 export const MAX_STEPS = 32;
 /** Speed ratios, slowest first (the speed knob's order). Saved as the value (`ratio`); older saves only have an index
@@ -186,6 +186,8 @@ export class Lane {
   setSwingTpl(key) { if (SWING_TEMPLATES[key]) this.swingTpl = key; return this.swingTpl; }
   /** L3: the next articulation of stored step i for this lane's voice: lane sound → first → … → last → lane sound. */
   cycleArtic(i) { const n = ARTICS[this.voice]?.length || 0; if (!n) return null; const a = articAt(this.voice, this.locks[i]); if (a == null || a < n - 1) return this.setLock(i, 'artic', a == null ? 0 : a + 1); this.unlock(i, 'artic'); return null; }
+  /** L3: the stroke a hit with this step lock plays (voices.js strokeOf, with the hit's color), null without strokes. */
+  strokeAt(lock) { return strokeOf(this.voice, lock, lock?.color ?? this.sound.color); }
   clearLocks(i) { this.locks[i] = null; }
   unlock(i, k) { const lk = this.locks[i]; if (!lk) return; delete lk[k]; if (!Object.keys(lk).length) this.locks[i] = null; }
   /**
