@@ -1,6 +1,6 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
-import { Machine, BAR_TICKS } from './lanes.js';
+import { Machine, BAR_TICKS, PPQ } from './lanes.js';
 import { KITS } from './kits.js';
 import { writeMidi } from '../punch/smf.js';
 
@@ -74,9 +74,18 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
   });
 }
 
-/** Every hit between master ticks [from, to): [{ li, time (s from tick 0), vel, accent, lock }]. */
+/**
+ * Live play: true when liveTick at master tick `t` would do nothing (no lane steps there, no lane has an early step to
+ * decide), so the clock can skip it. Most of the 840 ticks per beat are quiet.
+ */
+export function liveQuiet(m, t, { humanize = 0, tickSec, cut = Infinity }) {
+  return !m.steps(t) && m.lanes.every(l => earlyStep(l, t, { humanize, tickSec, cut }) < 0);
+}
+
+/** Every hit between master ticks [from, to): [{ li, time (s from tick 0), vel, accent, lock }]. Renders a copy of the
+ *  machine, so its runtime counters (playhead, loop count) are the render's own and the live ones are left alone. */
 export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false }) {
-  const tickSec = 60 / tempo / 24, out = [];
+  const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON());
   for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock }); });
   return out.sort((a, b) => a.time - b.time);
 }

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { euclid, Lane, Machine, RATIOS, SOUND_KEYS, DEFAULT_SOUND } from '../src/poly/lanes.js';
+import { euclid, Lane, Machine, RATIOS, OLD_RATIOS, ratioIndexOf, SOUND_KEYS, DEFAULT_SOUND, PPQ as P, MIDI_DIV } from '../src/poly/lanes.js';
+/** Old 24-PPQ tick → master tick (every pre-R1 test is written in 24-PPQ ticks). */
+const T = (n) => n * MIDI_DIV, TICK = 60 / 120 / P;   // TICK: one master tick at 120 bpm
 import { KITS } from '../src/poly/kits.js';
 import { VOICE_KEYS } from '../src/poly/voices.js';
 
@@ -19,15 +21,15 @@ test('lane length, rotation, toggles, accents', () => {
 });
 test('a lane walks its loop from the master tick, respects mute and probability', () => {
   const l = new Lane('hat', { length: 3 }); l.setEuclid(3);
-  const out = [0, 1, 2, 3].map(s => l.at(s * 24, () => 0.5)); assert.deepEqual(out.map(o => o.index), [0, 1, 2, 0]); assert.ok(out.every(o => o.hit));
+  const out = [0, 1, 2, 3].map(s => l.at(s * P, () => 0.5)); assert.deepEqual(out.map(o => o.index), [0, 1, 2, 0]); assert.ok(out.every(o => o.hit));
   l.prob = 0.3; assert.equal(l.at(0, () => 0.9).hit, false); l.prob = 1; l.muted = true; assert.equal(l.at(0).hit, false);
-  l.swing = 0.25; l.muted = false; assert.equal(l.at(24).swung, 0.25); assert.equal(l.at(48).swung, 0);
+  l.swing = 0.25; l.muted = false; assert.equal(l.at(P).swung, 0.25); assert.equal(l.at(2 * P).swung, 0);
 });
 test('machine: step seconds follow ratio and tempo; cycle length; (de)serialisation', () => {
-  const m = new Machine(); const [k, s] = m.lanes; k.setRatio(5); s.setRatio(7); // 1 and 2
+  const m = new Machine(); const [k, s] = m.lanes; k.setRatio(5); s.setRatio(ratioIndexOf(2)); // 1 and 2
   assert.equal(m.stepSeconds(k, 120), 0.5, 'ratio 1 = a quarter note'); assert.equal(m.stepSeconds(s, 120), 0.25, 'ratio 2 = an eighth');
   m.lanes.forEach(l => l.setRatio(5)); m.lanes[0].setLength(4); m.lanes[1].setLength(3); m.lanes[2].setLength(4); m.lanes[3].setLength(4); assert.equal(m.cycleSteps(), 12);
-  m.randomize(() => 0.42); const copy = Machine.from(JSON.parse(JSON.stringify(m))); assert.deepEqual(copy.toJSON(), m.toJSON()); assert.equal(RATIOS.length, 10);
+  m.randomize(() => 0.42); const copy = Machine.from(JSON.parse(JSON.stringify(m))); assert.deepEqual(copy.toJSON(), m.toJSON()); assert.equal(RATIOS.length, 15);
 });
 
 test('per-lane sound params clamp and survive save/load', () => {
@@ -51,53 +53,53 @@ test('kits: every lane uses an existing voice and only known sound keys', async 
 
 test('master clock: lanes derive their step from the tick and stay phase-locked', async () => {
   const { PPQ, BAR_TICKS } = await import('../src/poly/lanes.js');
-  const m = new Machine(); const [k, , h] = m.lanes; k.setRatio(5); k.setLength(4); k.setEuclid(4); h.setRatio(9); h.setLength(8); h.setEuclid(8); // ×1 and ×4
-  assert.equal(PPQ, 24); assert.equal(BAR_TICKS, 96); assert.equal(k.stepTicks(), 24); assert.equal(h.stepTicks(), 6);
+  const m = new Machine(); const [k, , h] = m.lanes; k.setRatio(5); k.setLength(4); k.setEuclid(4); h.setRatio(ratioIndexOf(4)); h.setLength(8); h.setEuclid(8); // ×1 and ×4
+  assert.equal(PPQ, 840); assert.equal(BAR_TICKS, 3360); assert.equal(k.stepTicks(), 840); assert.equal(h.stepTicks(), 210);
   const evs = []; for (let t = 0; t < BAR_TICKS; t++) { const e = m.tick(t, () => 0); if (e[0]) evs.push(['k', t, e[0].index]); if (e[2]) evs.push(['h', t, e[2].index]); }
   assert.equal(evs.filter(e => e[0] === 'k').length, 4); assert.equal(evs.filter(e => e[0] === 'h').length, 16);
-  assert.deepEqual(evs.filter(e => e[0] === 'k').map(e => e[1]), [0, 24, 48, 72]);
+  assert.deepEqual(evs.filter(e => e[0] === 'k').map(e => e[1]), [0, 840, 1680, 2520]);
   // change speed mid-play: the position comes from the tick, so ×2 at tick 96 is step 8 → index 0 of a 4-step lane, on the beat
-  k.setRatio(7); const e = k.at(96, () => 0); assert.equal(e.step, 8); assert.equal(e.index, 0); assert.equal(k.at(100), null);
+  k.setRatio(ratioIndexOf(2)); const e = k.at(BAR_TICKS, () => 0); assert.equal(e.step, 8); assert.equal(e.index, 0); assert.equal(k.at(BAR_TICKS + 4), null);
   for (const r of RATIOS) assert.ok(Number.isInteger(PPQ / r), `ratio ${r} is a whole number of ticks`);
-  assert.equal(m.cycleTicks(), Math.round(m.cycleSteps() * 24));
+  assert.equal(m.cycleTicks(), m.cycleSteps() * PPQ);
 });
 test('step locks: clamp, read through rotation, override prob, survive save/load', () => {
   const l = new Lane('snare', { length: 4 }); l.setEuclid(4);
   assert.equal(l.setLock(1, 'tune', 3), 1); assert.equal(l.setLock(1, 'vel', -1), 0); assert.equal(l.setLock(1, 'nope', 1), undefined);
-  l.setLock(2, 'prob', 0); assert.equal(l.at(48, () => 0.5).hit, false, 'prob lock 0 silences the step'); assert.equal(l.at(24, () => 0.5).hit, true);
+  l.setLock(2, 'prob', 0); assert.equal(l.at(2 * P, () => 0.5).hit, false, 'prob lock 0 silences the step'); assert.equal(l.at(P, () => 0.5).hit, true);
   l.rotation = 1; assert.deepEqual(l.lockAt(2), { tune: 1, vel: 0 }, 'locks move with the rotation');
   const c = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(c.locks[1], { tune: 1, vel: 0 }); assert.equal(c.locks[0], null);
   c.clearLocks(1); assert.equal(c.locks[1], null); l.clear(); assert.ok(l.locks.every(x => x === null));
 });
 test('live record quantize: nearest rounds forward, previous files under the last step', () => {
-  const l = new Lane('kick', { length: 4 }); // ×1: 24 ticks per step
-  assert.deepEqual(l.quantize(23), { step: 1, index: 1, ahead: true }); assert.deepEqual(l.quantize(23, 'previous'), { step: 0, index: 0, ahead: false });
-  assert.equal(l.quantize(24 * 5 + 2).index, 1); assert.equal(l.quantize(-3).index, 0);
-  assert.equal(l.quantize(12).step, 1, 'half way: the coming step');
+  const l = new Lane('kick', { length: 4 }); // ×1: 24 old ticks (840) per step
+  assert.deepEqual(l.quantize(T(23)), { step: 1, index: 1, ahead: true }); assert.deepEqual(l.quantize(T(23), 'previous'), { step: 0, index: 0, ahead: false });
+  assert.equal(l.quantize(T(24 * 5 + 2)).index, 1); assert.equal(l.quantize(T(-3)).index, 0);
+  assert.equal(l.quantize(T(12)).step, 1, 'half way: the coming step');
   // swung lanes: a hit played with a swung step is filed under it (round 2: at 50 % it went to the next step)
   const h = new Lane('hat', { length: 8, ratioIndex: RATIOS.indexOf(4) }); h.swing = 0.5;   // 6 ticks per step, odd steps 3 ticks late
-  for (const s of [1, 3, 5]) { assert.equal(h.quantize(s * 6 + 3).step, s, `on swung step ${s}`); assert.equal(h.quantize(s * 6 + 4, 'previous').step, s, `just after swung step ${s}`); }
-  assert.equal(h.quantize(6 + 2, 'previous').step, 0, 'swung step 1 has not sounded yet'); assert.equal(h.quantize(6 * 2 - 1).step, 2, 'just before the beat: the beat');
+  for (const s of [1, 3, 5]) { assert.equal(h.quantize(T(s * 6 + 3)).step, s, `on swung step ${s}`); assert.equal(h.quantize(T(s * 6 + 4), 'previous').step, s, `just after swung step ${s}`); }
+  assert.equal(h.quantize(T(6 + 2), 'previous').step, 0, 'swung step 1 has not sounded yet'); assert.equal(h.quantize(T(6 * 2 - 1)).step, 2, 'just before the beat: the beat');
   const t = new Lane('hat', { length: 4, ratioIndex: RATIOS.indexOf(3) }); t.swing = 0.5;   // ×3: 8 ticks, only the middle of each three swings
-  assert.equal(t.quantize(8 + 4).step, 1); assert.equal(t.quantize(16 + 1).step, 2, 'the last of three is straight');
+  assert.equal(t.quantize(T(8 + 4)).step, 1); assert.equal(t.quantize(T(16 + 1)).step, 2, 'the last of three is straight');
 });
 test('evolve nudges only lanes that allow it and stays in range', () => {
   const m = new Machine(); m.lanes.forEach(l => { l.setLength(8); l.setEuclid(3); }); m.lanes[0].evolve = false; m.lanes[1].muted = true;
   let seed = 7; const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   for (let n = 0; n < 200; n++) { const ch = m.evolve({ scope: 'all', amount: 1 }, rng); assert.ok(ch.every(c => c.lane >= 2)); }
   assert.equal(m.lanes[0].euclidK, 3); assert.equal(m.lanes[0].rotation, 0);
-  for (const l of m.lanes.slice(2)) { assert.ok(l.length >= 2 && l.length <= 16); assert.ok(l.rotation < l.length); assert.ok(l.ratioIndex >= 3 && l.ratioIndex <= 8); assert.ok(l.hits.slice(0, l.length).some(Boolean)); }
+  for (const l of m.lanes.slice(2)) { assert.ok(l.length >= 2 && l.length <= 16); assert.ok(l.rotation < l.length); assert.ok(l.ratio >= 2 / 3 && l.ratio <= 3 && [2 / 3, 3 / 4, 1, 3 / 2, 2, 3].includes(l.ratio), `classic speeds only: ${l.ratio}`); assert.ok(l.hits.slice(0, l.length).some(Boolean)); }
   const r = new Machine(); r.lanes.forEach(l => l.setEuclid(2)); const before = JSON.stringify(r.lanes.map(l => l.hits)); r.evolve({ scope: 'rotate', amount: 1 }, rng); assert.equal(JSON.stringify(r.lanes.map(l => l.hits)), before, 'rotate scope never rewrites hits');
   const a = new Machine(); a.lanes[0].setEuclid(1); const b = new Machine(); b.assign(JSON.parse(JSON.stringify(a))); assert.deepEqual(b.toJSON(), a.toJSON());
 });
 test('slot bank: save, queue on bar / cycle, chains advance every N bars, persistence', async () => {
   const { SlotBank } = await import('../src/poly/slots.js'); const mem = new Map(); const store = { getItem: k => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
   const b = new SlotBank(store); b.save(0, { a: 1 }); b.save(3, { a: 2 }); assert.equal(b.current, 3);
-  assert.equal(b.recall(5), false, 'empty slot'); b.recall(0); assert.equal(b.due(10, 192), -1); assert.equal(b.due(96, 192), 0); assert.equal(b.current, 0);
-  b.switchAt = 'cycle'; b.recall(3); assert.equal(b.due(96, 192), -1); assert.equal(b.due(192, 192), 3);
-  b.switchAt = 'now'; b.recall(0); assert.equal(b.due(5, 192), 0);
+  assert.equal(b.recall(5), false, 'empty slot'); b.recall(0); assert.equal(b.due(T(10), T(192)), -1); assert.equal(b.due(T(96), T(192)), 0); assert.equal(b.current, 0);
+  b.switchAt = 'cycle'; b.recall(3); assert.equal(b.due(T(96), T(192)), -1); assert.equal(b.due(T(192), T(192)), 3);
+  b.switchAt = 'now'; b.recall(0); assert.equal(b.due(T(5), T(192)), 0);
   b.switchAt = 'bar'; b.chainBars = 2; b.setChain([0, 7, 3]); assert.deepEqual(b.chain, [0, 3], 'empty slots are skipped');
-  const loads = []; for (let t = 0; t <= 96 * 6; t++) { const i = b.due(t, 192); if (i >= 0) loads.push([t / 96, i]); }
+  const loads = []; for (let t = 0; t <= T(96 * 6); t++) { const i = b.due(t, T(192)); if (i >= 0) loads.push([t / T(96), i]); }
   assert.deepEqual(loads, [[0, 0], [2, 3], [4, 0], [6, 3]]);
   const c = new SlotBank(store); assert.deepEqual(c.get(3), { a: 2 }); assert.deepEqual(c.chain, [0, 3]); assert.equal(c.chainBars, 2);
   c.erase(0); assert.deepEqual(c.chain, [3]); assert.equal(c.filled(0), false);
@@ -121,7 +123,7 @@ test('trig conditions and ratchets: loop counting, fill, first, repeats', async 
   assert.equal(condPasses('fill', 0, true), true); assert.equal(condPasses('not fill', 0, true), false); assert.equal(condPasses('first', 1), false); assert.equal(condPasses('not first', 1), true);
   assert.ok(CONDS.includes('always'));
   const l = new Lane('kick', { length: 2 }); l.setEuclid(2); l.setTrig(0, { cond: '1:2' }); l.setTrig(1, { ratchet: 9, fade: true });
-  const hits = []; for (let t = 0; t < 24 * 8; t += 24) { const e = l.at(t, () => 0); hits.push(e.hit ? (e.ratchet > 1 ? 'R' : 'x') : '.'); }
+  const hits = []; for (let t = 0; t < P * 8; t += P) { const e = l.at(t, () => 0); hits.push(e.hit ? (e.ratchet > 1 ? 'R' : 'x') : '.'); }
   assert.equal(hits.join(''), 'xR.RxR.R', 'step 0 every other loop, step 1 always as a 4× ratchet'); assert.equal(l.trigs[1].ratchet, 4, 'clamped');
   assert.equal(l.setTrig(1, { ratchet: 1, fade: false }), null, 'back to a plain step');
   const c = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(c.trigs[0], { cond: '1:2', ratchet: 1, fade: false });
@@ -136,7 +138,7 @@ test('dice: locked rolls repeat (per loop period), free rolls do not; streams ar
   assert.equal(d.at(0, 3, 4), d.at(0, 3 + 8, 4), 'same after length × repeat steps'); assert.notEqual(d.at(0, 3, 4), d.at(0, 7, 4)); assert.notEqual(d.at(0, 3, 4), d.at(1, 3, 4));
   const a = d.stream(5), b = d.stream(5); assert.equal(a(), b()); assert.ok(hash01(1, 2) >= 0 && hash01(1, 2) < 1);
   const m1 = new Machine(), m2 = new Machine(); m1.randomize(d.stream(0)); m2.randomize(d.stream(0)); assert.deepEqual(m1.toJSON(), m2.toJSON(), 'randomize from a seed is reproducible');
-  const l = new Lane('hat', { length: 4 }); l.setEuclid(4); l.prob = 0.5; const run = () => [...Array(16)].map((_, s) => l.at(s * 24, Math.random, { dice: d, li: 0 }).hit).join(); assert.equal(run(), run());
+  const l = new Lane('hat', { length: 4 }); l.setEuclid(4); l.prob = 0.5; const run = () => [...Array(16)].map((_, s) => l.at(s * P, Math.random, { dice: d, li: 0 }).hit).join(); assert.equal(run(), run());
 });
 test('history: undo/redo, coalescing, redo cleared by a new edit', async () => {
   const { History } = await import('../src/poly/history.js'); const h = new History({ coalesceMs: 500 });
@@ -148,9 +150,9 @@ test('history: undo/redo, coalescing, redo cleared by a new edit', async () => {
 test('export: hits with swing, ratchets and fade; MIDI file; share link round-trip', async () => {
   const { collectHits, collectChain, hitsToMidi, encodeShare, decodeShare, expandHits } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setEuclid(4); k.setTrig(2, { ratchet: 3, fade: true });
-  const hits = collectHits(m, { from: 0, to: 96, tempo: 120 }); assert.equal(hits.length, 6, '3 single hits + one ×3');
+  const hits = collectHits(m, { from: 0, to: T(96), tempo: 120 }); assert.equal(hits.length, 6, '3 single hits + one ×3');
   assert.deepEqual(hits.map(h => +h.time.toFixed(3)), [0, 0.5, 1, 1.167, 1.333, 1.5]); assert.ok(hits[3].vel < hits[2].vel, 'fade');
-  const sw = new Lane('hat', { length: 2 }); sw.setEuclid(2); sw.swing = 0.5; const e = sw.at(24, () => 0); assert.equal(expandHits(e, sw, 0, { tickSec: 1 / 48 })[0].dt, 0.25, 'half a step late');
+  const sw = new Lane('hat', { length: 2 }); sw.setEuclid(2); sw.swing = 0.5; const e = sw.at(P, () => 0); assert.ok(Math.abs(expandHits(e, sw, 0, { tickSec: 1 / 48 / MIDI_DIV })[0].dt - 0.25) < 1e-12, 'half a step late');
   const mid = readMidi(hitsToMidi(hits, { tempo: 120, lanes: [{ note: 36, ch: 10 }, { note: 38, ch: 10 }, { note: 42, ch: 10 }, { note: 39, ch: 10 }], names: ['kick', 's', 'h', 'p'] }));
   assert.equal(mid.tracks.find(t => t.name === 'kick').notes.length, 6); assert.equal(mid.tracks.find(t => t.name === 'kick').notes[0].p, 36);
   assert.equal(collectChain([m.toJSON(), m.toJSON()], { bars: 1, tempo: 120 }).length, 12);
@@ -270,11 +272,11 @@ test('dsp worklet is generated from dsp-core.js (tools/build-worklet.mjs) and se
 test('B1 swing follows the absolute step: a length-5 lane never swings a downbeat, live and in exports', async () => {
   const { collectHits } = await import('../src/poly/export.js');
   const l = new Lane('hat', { length: 5 }); l.setEuclid(5); l.swing = 0.3;
-  const evs = []; for (let t = 0; t < 24 * 5 * 10; t += 24) evs.push(l.at(t, () => 0));   // 10 loops at ×1
+  const evs = []; for (let t = 0; t < P * 5 * 10; t += P) evs.push(l.at(t, () => 0));   // 10 loops at ×1
   assert.equal(evs.length, 50); assert.ok(evs.every(e => e.swung === (e.step % 2 ? 0.3 : 0)), 'odd absolute steps only');
   assert.ok(evs.some(e => e.index === 0 && e.step % 2), 'index 0 lands on odd steps too (and is swung there, it is an off-step)');
   const m = new Machine(); m.lanes.forEach(x => x.clear()); Object.assign(m.lanes[0], Lane.from({ ...l.toJSON(), name: 'kick' }));
-  const hits = collectHits(m, { from: 0, to: 24 * 50, tempo: 120 }), beat = 0.5;
+  const hits = collectHits(m, { from: 0, to: P * 50, tempo: 120 }), beat = 0.5;
   for (const h of hits) { const step = Math.round(h.time / beat - (Math.abs(h.time / beat - Math.round(h.time / beat)) > 1e-6 ? 0.3 : 0)); assert.ok(Math.abs(h.time - (step + (step % 2 ? 0.3 : 0)) * beat) < 1e-9, `hit at ${h.time}`); }
   assert.equal(hits.filter(h => Math.abs(h.time / beat % 2) < 1e-9).length, 25, 'every even step (downbeat) on the grid');
 });
@@ -291,20 +293,20 @@ test('B2 / B3 default voices exist, unknown voices migrate to the Common kit, ki
 });
 test('B4 the cycle includes trig conditions and the locked dice repeat', () => {
   const m = new Machine(); m.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); l.setEuclid(2); }); m.humanize = 0;
-  assert.equal(m.cycleSteps(), 4); assert.equal(m.cycleTicks(), 96);
-  m.lanes[1].setTrig(0, { cond: '1:3' }); assert.equal(m.cycleSteps(), 12, 'a 1:3 step triples the cycle'); assert.equal(m.cycleTicks(), 288);
+  assert.equal(m.cycleSteps(), 4); assert.equal(m.cycleTicks(), T(96));
+  m.lanes[1].setTrig(0, { cond: '1:3' }); assert.equal(m.cycleSteps(), 12, 'a 1:3 step triples the cycle'); assert.equal(m.cycleTicks(), T(288));
   m.lanes[1].setTrig(1, { cond: '1:3' }); assert.equal(m.cycleSteps(), 12, 'only active steps count'); m.lanes[2].setTrig(0, { cond: '2:4' }); assert.equal(m.cycleSteps(), 48, 'lcm(3, 4) loops');
   m.lanes[2].setTrig(0, { cond: 'first' }); assert.equal(m.cycleSteps(), 12, 'first / fill are not periodic');
   assert.equal(m.cycleSteps({ repeat: 4 }), 12, 'dice repeat only matters when a roll can change something');
   m.lanes[0].prob = 0.5; assert.equal(m.cycleSteps({ repeat: 4 }), 48, 'lane 1 rolls: 4 loops = 16 beats, with lane 2 at 12 → 48'); assert.equal(m.cycleSteps({ repeat: 5 }), 60);
   m.lanes[0].prob = 1; m.lanes[0].setLock(0, 'prob', 0.5); assert.equal(m.cycleSteps({ repeat: 4 }), 48, 'a prob lock on an active step rolls too');
-  m.lanes[0].clearLocks(0); m.humanize = 0.2; assert.equal(m.cycleTicks({ repeat: 2 }), 24 * 24, 'humanize: every lane rolls; lane 2 = lcm(3, 2) = 6 loops = 24 beats');
+  m.lanes[0].clearLocks(0); m.humanize = 0.2; assert.equal(m.cycleTicks({ repeat: 2 }), 24 * P, 'humanize: every lane rolls; lane 2 = lcm(3, 2) = 6 loops = 24 beats');
   m.lanes[1].setTrig(0, { cond: 'always' }); assert.equal(m.cycleSteps({ repeat: 2 }), 8, 'repeat 2 on 4-step lanes');
 });
 test('B5 one roll, one hit list: WAV hits and MIDI notes of the same take are identical; a new roll differs', async () => {
   const { collectHits, hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js'); const { Dice } = await import('../src/poly/dice.js');
-  const m = new Machine(); m.lanes.forEach(l => { l.setLength(8); l.setRatio(7); l.setEuclid(6); l.prob = 0.5; }); m.humanize = 0.6;
-  const take = (seed) => collectHits(m, { from: 0, to: 96 * 4, tempo: 120, dice: Dice.take(seed) });
+  const m = new Machine(); m.lanes.forEach(l => { l.setLength(8); l.setRatio(ratioIndexOf(2)); l.setEuclid(6); l.prob = 0.5; }); m.humanize = 0.6;
+  const take = (seed) => collectHits(m, { from: 0, to: T(96 * 4), tempo: 120, dice: Dice.take(seed) });
   const wav = take(48213), again = take(48213), midiHits = take(48213);
   assert.deepEqual(again, wav, 'the same roll gives the same hits'); assert.ok(wav.length > 20 && wav.length < 96, `probability thinned the pattern (${wav.length})`);
   const lanes = [36, 38, 42, 39].map(note => ({ note, ch: 10 })), mid = readMidi(hitsToMidi(midiHits, { tempo: 120, lanes, names: ['a', 'b', 'c', 'd'], bars: 4 }));
@@ -314,7 +316,7 @@ test('B5 one roll, one hit list: WAV hits and MIDI notes of the same take are id
   const ons = notes.map(n => n.on).sort((a, b) => a - b), want = wav.map(h => tickOf(h.time)).sort((a, b) => a - b);
   assert.deepEqual(ons, want, 'same times (MIDI ticks)');
   assert.notDeepEqual(take(7), wav, 'another roll is another take');
-  const free = [0, 1].map(() => collectHits(m, { from: 0, to: 96 * 4, tempo: 120 })); assert.notDeepEqual(free[0], free[1], 'without a roll every render differs (the old bug)');
+  const free = [0, 1].map(() => collectHits(m, { from: 0, to: T(96 * 4), tempo: 120 })); assert.notDeepEqual(free[0], free[1], 'without a roll every render differs (the old bug)');
 });
 test('B9 clock-in follower: pure, smooth, no flapping at 127.5 bpm with jitter, follows a real change', async () => {
   const { makeBpmFollower, PolyMidi } = await import('../src/poly/midiio.js'); const { mulberry32 } = await import('../src/poly/dice.js');
@@ -362,14 +364,14 @@ test('B1 swing on 3-step speeds: the count restarts on every step that falls on 
   const at = (ratio, length) => { const l = new Lane('hat', { length, ratioIndex: RATIOS.indexOf(ratio) }); l.setEuclid(length); l.swing = 0.5; return l; };
   for (const [ratio, length] of [[3, 3], [3, 4], [3, 5], [3 / 2, 3], [3 / 2, 4], [3 / 4, 3], [3 / 4, 5]]) {
     const l = at(ratio, length), st = l.stepTicks();
-    for (let s = 0; s < 120; s++) { const ev = l.at(s * st, () => 0); if ((s * st) % 24 === 0) assert.equal(ev.swung, 0, `×${ratio} length ${length}: step ${s} is on a beat`); }
+    for (let s = 0; s < 120; s++) { const ev = l.at(s * st, () => 0); if ((s * st) % P === 0) assert.equal(ev.swung, 0, `×${ratio} length ${length}: step ${s} is on a beat`); }
     assert.ok([...Array(120)].some((_, s) => l.at(s * st, () => 0).swung), `×${ratio}: something still swings`);
   }
   // the binary speeds keep plain step parity (×2: every second eighth, also on odd lengths)
-  const e = at(2, 3); assert.deepEqual([0, 1, 2, 3, 4, 5].map(s => e.at(s * 12, () => 0).swung > 0), [false, true, false, true, false, true]);
+  const e = at(2, 3); assert.deepEqual([0, 1, 2, 3, 4, 5].map(s => e.at(s * P / 2, () => 0).swung > 0), [false, true, false, true, false, true]);
   // in the export too: a ×3 lane of 3 at 120 bpm, every beat on the grid, the middle triplet late
   const m = new Machine(); m.lanes.forEach(x => x.clear()); Object.assign(m.lanes[0], Lane.from({ ...at(3, 3).toJSON(), name: 'kick' }));
-  const hits = collectHits(m, { from: 0, to: 96 * 2, tempo: 120 }).map(h => +(h.time * 1000).toFixed(1));
+  const hits = collectHits(m, { from: 0, to: T(96 * 2), tempo: 120 }).map(h => +(h.time * 1000).toFixed(1));
   assert.deepEqual(hits.slice(0, 6), [0, 250, 333.3, 500, 750, 833.3], 'beats 1 and 2 on the grid');
 });
 test('B4 the cycle covers the swing period, and is a true period of what plays (brute force)', async () => {
@@ -382,9 +384,9 @@ test('B4 the cycle covers the swing period, and is a true period of what plays (
   const rng = mulberry32(7), conds = ['always', 'always', '1:2', '2:3', '3:4'];
   let checked = 0;
   for (let k = 0; k < 400 && checked < 120; k++) {
-    const r = new Machine(); r.lanes.forEach(l => { l.clear(); l.setLength(1 + Math.floor(rng() * 7)); l.setRatio(3 + Math.floor(rng() * 6)); for (let i = 0; i < l.length; i++) if (rng() < 0.6) l.hits[i] = true; l.swing = rng() < 0.5 ? 0.3 : 0; l.rotation = Math.floor(rng() * l.length); if (rng() < 0.3) l.setTrig(0, { cond: conds[Math.floor(rng() * conds.length)] }); });
-    const C = r.cycleTicks(); if (C > 24 * 96) continue; checked++;
-    const tickSec = 60 / 120 / 24, hits = collectHits(r, { from: 0, to: 2 * C, tempo: 120 }), half = hits.filter(h => h.time < C * tickSec - 1e-9), rest = hits.slice(half.length);
+    const r = new Machine(); r.lanes.forEach(l => { l.clear(); l.setLength(1 + Math.floor(rng() * 7)); l.setRatio(ratioIndexOf(OLD_RATIOS[3 + Math.floor(rng() * 6)])); for (let i = 0; i < l.length; i++) if (rng() < 0.6) l.hits[i] = true; l.swing = rng() < 0.5 ? 0.3 : 0; l.rotation = Math.floor(rng() * l.length); if (rng() < 0.3) l.setTrig(0, { cond: conds[Math.floor(rng() * conds.length)] }); });
+    const C = r.cycleTicks(); if (C > P * 96) continue; checked++;
+    const tickSec = TICK, hits = collectHits(r, { from: 0, to: 2 * C, tempo: 120 }), half = hits.filter(h => h.time < C * tickSec - 1e-9), rest = hits.slice(half.length);
     assert.equal(rest.length, half.length, `machine ${k}: same number of hits in both cycles`);
     half.forEach((h, i) => { assert.equal(rest[i].li, h.li); assert.ok(Math.abs(rest[i].time - h.time - C * tickSec) < 1e-9, `machine ${k}: hit ${i}`); assert.equal(rest[i].vel, h.vel); });
   }
@@ -597,31 +599,31 @@ test('G1 nudge lock: ±½ step, clamped, moves the hit in collectHits by the exp
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setEuclid(4);   // quarters: 0.5 s at 120
   assert.equal(k.setLock(1, 'nudge', 0.9), 0.5, 'clamped to half a step'); assert.equal(k.setLock(1, 'nudge', -0.9), -0.5);
   k.setLock(1, 'nudge', 0.2); k.setLock(2, 'nudge', -0.3);
-  const t = collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6));
+  const t = collectHits(m, { from: 0, to: T(96), tempo: 120 }).map(h => +h.time.toFixed(6));
   assert.deepEqual(t, [0, 0.6, 0.85, 1.5], '+20 % of 0.5 s = +0.1 s, −30 % = −0.15 s');
-  k.setLock(0, 'nudge', -0.5); assert.equal(collectHits(m, { from: 0, to: 96, tempo: 120 })[0].time, -0.25, 'the first step can land before tick 0');
+  k.setLock(0, 'nudge', -0.5); assert.equal(collectHits(m, { from: 0, to: T(96), tempo: 120 })[0].time, -0.25, 'the first step can land before tick 0');
 });
 test('G2 lane offset: ±30 ms on every hit of the lane, rounded and clamped; old saves default to 0', async () => {
   const { collectHits } = await import('../src/poly/export.js');
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const s = m.lanes[1]; s.setRatio(5); s.setLength(4); s.setEuclid(2);
   assert.equal(s.setOffset(-45), -30); assert.equal(s.setOffset(12.4), 12);
-  assert.deepEqual(collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6)), [0.012, 1.012]);
-  s.setOffset(-20); assert.deepEqual(collectHits(m, { from: 0, to: 96, tempo: 120 }).map(h => +h.time.toFixed(6)), [-0.02, 0.98]);
+  assert.deepEqual(collectHits(m, { from: 0, to: T(96), tempo: 120 }).map(h => +h.time.toFixed(6)), [0.012, 1.012]);
+  s.setOffset(-20); assert.deepEqual(collectHits(m, { from: 0, to: T(96), tempo: 120 }).map(h => +h.time.toFixed(6)), [-0.02, 0.98]);
   const back = Machine.from(JSON.parse(JSON.stringify(m))); assert.equal(back.lanes[1].offsetMs, -20, 'saved and loaded');
 });
 test('G6 swing templates: data, MPC = the old rule, triplet at 50 % = exactly ⅓ step, straight ignores the amount', async () => {
   const { SWING_TEMPLATES, SWING_KEYS } = await import('../src/poly/lanes.js'); const { collectHits } = await import('../src/poly/export.js');
   assert.deepEqual(SWING_KEYS, ['straight', 'mpc', 'triplet', '3-3-2', 'amapiano', 'aksak']);
   for (const k of SWING_KEYS) { const sh = SWING_TEMPLATES[k].shift; if (sh) { assert.equal(sh[0], 0, `${k}: the group's first step stays on the grid`); assert.ok(sh.every(x => x >= 0 && x <= 1), k); } }
-  const l = new Lane('hat', { length: 16, ratioIndex: 9 }); l.swing = 0.5;
+  const l = new Lane('hat', { length: 16, ratioIndex: ratioIndexOf(4) }); l.swing = 0.5;
   assert.deepEqual([0, 1, 2, 3].map(s => l.swingAt(s)), [0, 0.5, 0, 0.5], 'MPC by default');
   l.setSwingTpl('triplet'); assert.ok(Math.abs(l.swingAt(1) - 1 / 3) < 1e-12, 'triplet 50 % → ⅓');
   l.setSwingTpl('straight'); assert.equal(l.swingAt(1), 0); l.setSwingTpl('nope'); assert.equal(l.swingTpl, 'straight', 'an unknown key is ignored');
   l.setSwingTpl('amapiano'); assert.ok(l.swingAt(1) > l.swingAt(3) && l.swingAt(3) > 0, 'amapiano: the e is pushed further than the a'); assert.equal(l.swingAt(2), 0);
   l.setSwingTpl('aksak'); assert.equal(l.swingPeriod(), 7); l.setSwingTpl('3-3-2'); assert.equal(l.swingPeriod(), 8);
   // collectHits: a ×4 lane at 120 bpm, steps 0.125 s; triplet 50 % puts step 1 at 0.125 + 0.125/3
-  const m = new Machine(); m.lanes.forEach(x => x.clear()); const h = m.lanes[2]; h.setRatio(9); h.setLength(4); h.setEuclid(4); h.swing = 0.5; h.setSwingTpl('triplet');
-  const t = collectHits(m, { from: 0, to: 24, tempo: 120 }).map(x => x.time);
+  const m = new Machine(); m.lanes.forEach(x => x.clear()); const h = m.lanes[2]; h.setRatio(ratioIndexOf(4)); h.setLength(4); h.setEuclid(4); h.swing = 0.5; h.setSwingTpl('triplet');
+  const t = collectHits(m, { from: 0, to: P, tempo: 120 }).map(x => x.time);
   assert.ok(Math.abs(t[1] - (0.125 + 0.125 / 3)) < 1e-9 && Math.abs(t[3] - (0.375 + 0.125 / 3)) < 1e-9 && t[2] === 0.25);
   // an odd lane with a 7-step template: the cycle covers the whole swing group
   const mm = new Machine(); mm.lanes.forEach(x => { x.clear(); x.setRatio(5); x.setLength(4); }); mm.lanes[0].setLength(4); mm.lanes[0].setEuclid(4); mm.lanes[0].swing = 0.3; mm.lanes[0].setSwingTpl('aksak');
@@ -630,7 +632,7 @@ test('G6 swing templates: data, MPC = the old rule, triplet at 50 % = exactly �
 test('ORBIT2-05: a save without the new fields loads unchanged (MPC swing, no offset, no nudge)', () => {
   const old = { lanes: [{ name: 'kick', length: 4, ratioIndex: 5, hits: [true, false, true, false], accents: [], rotation: 0, swing: 0.25, prob: 1, tune: 0, muted: false, euclidK: 2, sound: {}, voice: 'kick', locks: [{ vel: 0.5 }], trigs: [] }], selected: 0, humanize: 0 };
   const m = Machine.from(old), l = m.lanes[0]; assert.equal(l.swingTpl, 'mpc'); assert.equal(l.offsetMs, 0); assert.deepEqual(l.locks[0], { vel: 0.5 });
-  assert.equal(l.at(24, () => 0).swung, 0.25, 'old swing plays as before');
+  assert.equal(l.at(P, () => 0).swung, 0.25, 'old swing plays as before');
   const j = l.toJSON(); assert.equal(j.swingTpl, 'mpc'); assert.equal(j.offsetMs, 0);
 });
 test('G4 velocity tiers: ghost / normal / accent from taps, from a vel lock and from recorded pad velocity', async () => {
@@ -647,14 +649,14 @@ test('G4 velocity tiers: ghost / normal / accent from taps, from a vel lock and 
 });
 test('G3 velocity humanize: per lane, symmetric around the tier (±20 % of the velocity), seeded by locked dice, saved', async () => {
   const { collectHits } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
-  const m = new Machine(); m.lanes.forEach(l => l.clear()); const h = m.lanes[2]; h.setRatio(9); h.setLength(16); h.setEuclid(16);
-  const plain = collectHits(m, { from: 0, to: 96 * 8, tempo: 120 }); assert.ok(plain.every(x => x.vel === 0.7), 'off: every hit at its tier');
-  h.velHuman = 1; const d = Dice.take(7), a = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d }), b = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d });
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const h = m.lanes[2]; h.setRatio(ratioIndexOf(4)); h.setLength(16); h.setEuclid(16);
+  const plain = collectHits(m, { from: 0, to: T(96 * 8), tempo: 120 }); assert.ok(plain.every(x => x.vel === 0.7), 'off: every hit at its tier');
+  h.velHuman = 1; const d = Dice.take(7), a = collectHits(m, { from: 0, to: T(96 * 8), tempo: 120, dice: d }), b = collectHits(m, { from: 0, to: T(96 * 8), tempo: 120, dice: d });
   assert.deepEqual(a.map(x => x.vel), b.map(x => x.vel), 'locked dice: the same velocities'); assert.deepEqual(a.map(x => x.time), plain.map(x => x.time), 'velocity humanize leaves timing alone');
   const vs = a.map(x => x.vel), mean = vs.reduce((s, v) => s + v, 0) / vs.length;
   assert.ok(vs.every(v => v >= 0.56 - 1e-9 && v <= 0.84 + 1e-9), '±20 % of 0.7 at 100 %'); assert.ok(Math.abs(mean - 0.7) < 0.03, `symmetric (mean ${mean.toFixed(3)})`); assert.ok(new Set(vs).size > 20);
   // a ghost wobbles by the same ratio (dB), not by a fixed amount that would spread it over 11 dB
-  for (let i = 0; i < 16; i++) h.setTier(i, 'ghost'); const gv = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice: d }).map(x => x.vel);
+  for (let i = 0; i < 16; i++) h.setTier(i, 'ghost'); const gv = collectHits(m, { from: 0, to: T(96 * 8), tempo: 120, dice: d }).map(x => x.vel);
   assert.ok(gv.every(v => v >= 0.28 - 1e-9 && v <= 0.42 + 1e-9), `ghosts ${Math.min(...gv).toFixed(3)}–${Math.max(...gv).toFixed(3)}`); for (let i = 0; i < 16; i++) h.setTier(i, 'normal');
   assert.equal(Machine.from(JSON.parse(JSON.stringify(m))).lanes[2].velHuman, 1); assert.equal(Machine.from({ lanes: [{ name: 'kick' }] }).lanes[0].velHuman, 0);
   h.prob = 1; const mm = new Machine(); mm.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); }); mm.lanes[0].setEuclid(4); mm.lanes[0].velHuman = 0.5; assert.equal(mm.cycleSteps({ repeat: 3 }), 12, 'velocity rolls count for the dice repeat');
@@ -690,7 +692,7 @@ test('ORBIT2-05 r1: the MIDI export wraps a hit nudged or pushed out of the clip
   const lanes = [36, 38, 42, 39].map(note => ({ note, ch: 10 })), notes = (hits, o = {}) => readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: [], bars: 4, ...o })).tracks.flatMap(t => t.notes);
   // ×1 lane, 4 bars at 120 bpm = 1536 ticks (96 a beat): every step 1 nudged −½ step = 48 ticks early; the first wraps to 1488
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setEuclid(4); k.setLock(0, 'nudge', -0.5);
-  const hits = collectHits(m, { from: 0, to: 4 * 96, tempo: 120 }); assert.equal(hits[0].time, -0.25);
+  const hits = collectHits(m, { from: 0, to: T(4 * 96), tempo: 120 }); assert.equal(hits[0].time, -0.25);
   const ons = notes(hits).map(n => n.on).sort((a, b) => a - b);
   assert.deepEqual(ons, [96, 192, 288, 336, 480, 576, 672, 720, 864, 960, 1056, 1104, 1248, 1344, 1440, 1488]);
   assert.deepEqual(notes(hits, { loop: false }).map(n => n.on).sort((a, b) => a - b)[0], 0, 'one-shot: onto the downbeat, as the one-shot WAV');
@@ -701,7 +703,7 @@ test('ORBIT2-05 r1: the MIDI export wraps a hit nudged or pushed out of the clip
 });
 test('ORBIT2-05 r1: live play = the render; an early step is decided at the last tick; a slot swap decides afresh; a mute drops the rest', async () => {
   const { collectHits, liveTick, earlyStep } = await import('../src/poly/export.js'); const { Dice } = await import('../src/poly/dice.js');
-  const tickSec = 60 / 120 / 24, dice = Dice.take(99), r9 = (x) => Math.round(x * 1e9) / 1e9;
+  const tickSec = TICK, dice = Dice.take(99), r9 = (x) => Math.round(x * 1e9) / 1e9;
   const live = (m, to, { ahead = [], before } = {}) => {
     const out = []; let firstEarly = Infinity;
     for (let t = 0; t < to; t++) { before?.(t); liveTick(m, t, ahead, { dice, tickSec }).forEach((r, li) => { if (r.early.length) firstEarly = Math.min(firstEarly, ...r.early.map(h => h.dt)); for (const h of [...r.early, ...r.hits]) out.push({ li, time: r9(t * tickSec + h.dt), vel: h.vel }); }); }
@@ -712,23 +714,24 @@ test('ORBIT2-05 r1: live play = the render; an early step is decided at the last
   const m = new Machine(); m.humanize = 0.5; m.lanes.forEach((l, i) => { l.clear(); l.setRatio(5 + (i % 2) * 2); l.setLength(8); l.setEuclid(5); l.prob = 0.8; });
   m.lanes[0].setOffset(-20); m.lanes[1].setOffset(25); m.lanes[1].setLock(2, 'nudge', -0.5); m.lanes[2].setLock(1, 'nudge', 0.4); m.lanes[2].setLock(3, 'nudge', -0.3);
   m.lanes[3].setTrig(0, { ratchet: 4 }); m.lanes[3].setLock(0, 'nudge', -0.3); m.lanes[3].swing = 0.4; m.lanes[3].setSwingTpl('amapiano'); m.lanes[2].velHuman = 1;
-  const L = live(m, 96 * 8), want = collectHits(m, { from: 0, to: 96 * 8, tempo: 120, dice }), upTo = (96 * 8 - 48) * tickSec;
+  const L = live(m, T(96 * 8)), want = collectHits(m, { from: 0, to: T(96 * 8), tempo: 120, dice }), upTo = T(96 * 8 - 48) * tickSec;
   assert.deepEqual(same(L.hits, upTo), same(want, upTo), 'live play holds exactly the hits of the render');
   assert.ok(L.firstEarly >= -1e-9 && L.firstEarly < tickSec + 0.015 * m.humanize, `early parts go out at the last tick that can hold them (${L.firstEarly})`);
-  // when: −20 ms at 120 bpm (a tick is 20.8 ms) → one tick ahead; −½ step (0.25 s = 12 ticks) → at tick 12, not a step ahead
+  // when: −20 ms at 120 bpm (a tick is 0.595 ms, step 1 at tick 840) → from tick 806 (33.6 ticks ahead); −½ step
+  // (0.25 s = 420 ticks) → from tick 420, not a step ahead
   const p = new Lane('kick', { length: 4, ratioIndex: 5 }); p.setEuclid(4); p.setOffset(-20);
-  assert.deepEqual([22, 23].map(t => earlyStep(p, t, { tickSec })), [-1, 1]);
-  p.setOffset(0); p.setLock(1, 'nudge', -0.5); assert.deepEqual([10, 12, 23].map(t => earlyStep(p, t, { tickSec })), [-1, 1, 1]);
-  p.swing = 0.5; assert.equal(earlyStep(p, 23, { tickSec }), -1, 'MPC swing on step 2 cancels the −½ nudge'); p.swing = 0;
-  p.toggle(1); assert.equal(earlyStep(p, 23, { tickSec }), -1, 'an empty step: nothing to decide');
+  assert.deepEqual([805, 806].map(t => earlyStep(p, t, { tickSec })), [-1, 1]);
+  p.setOffset(0); p.setLock(1, 'nudge', -0.5); assert.deepEqual([419, 420, 839].map(t => earlyStep(p, t, { tickSec })), [-1, 1, 1]);
+  p.swing = 0.5; assert.equal(earlyStep(p, 839, { tickSec }), -1, 'MPC swing on step 2 cancels the −½ nudge'); p.swing = 0;
+  p.toggle(1); assert.equal(earlyStep(p, 839, { tickSec }), -1, 'an empty step: nothing to decide');
   // the architect's repro: slot A (kick off, pushed −20 ms) → slot B (kick on every beat) on the bar line at tick 96
   const A = new Machine(); A.lanes.forEach(l => { l.clear(); l.setRatio(5); l.setLength(4); }); A.lanes[2].setEuclid(4); A.lanes[0].setOffset(-20);
   const B = Machine.from(A.toJSON()); B.lanes[0].setEuclid(4); const mm = Machine.from(A.toJSON());
-  const kicks = live(mm, 96 * 2, { before: (t) => { if (t === 96) mm.assign(B.toJSON()); } }).hits.filter(h => h.li === 0).map(h => h.time);
+  const kicks = live(mm, T(96 * 2), { before: (t) => { if (t === T(96)) mm.assign(B.toJSON()); } }).hits.filter(h => h.li === 0).map(h => h.time);
   assert.deepEqual(kicks, [1.98, 2.48, 2.98, 3.48, 3.98], 'the new slot\'s downbeat kick plays (it was dropped)');
   // a ratchet ×4 nudged −0.3: two repeats go out early; muted before its tick, the other two are dropped
   const r = new Machine(); r.lanes.forEach(l => l.clear()); const R = r.lanes[1]; R.setRatio(5); R.setLength(4); R.toggle(0); R.setTrig(0, { ratchet: 4 }); R.setLock(0, 'nudge', -0.3);
-  const count = (mute) => live(r, 97, { before: (t) => { if (t === 90 && mute) R.muted = true; } }).hits.filter(h => h.li === 1 && h.time > 1).length;
+  const count = (mute) => live(r, T(97), { before: (t) => { if (t === T(90) && mute) R.muted = true; } }).hits.filter(h => h.li === 1 && h.time > 1).length;
   assert.deepEqual([count(false), count(true)], [4, 2]);
 });
 test('ORBIT2-05 r1: tiers leave no trace; Shift lifts a ghost to a real accent; a loud hand-set vel lock survives; a ghost is not "locked"', async () => {
@@ -758,11 +761,11 @@ test('ORBIT2-05 r1: G5 darker, not quieter: voices whose band sits above the lan
 test('ORBIT2-05 r2: SlotBank.nextSwitch names the tick where due() loads the next slot (queued now / bar / cycle, a chain)', async () => {
   const { SlotBank } = await import('../src/poly/slots.js'); const json = new Machine().toJSON();
   const run = (setup, acts = {}) => {
-    const bank = new SlotBank(); [0, 1, 2].forEach(i => bank.save(i, json)); setup(bank); const loads = [], said = [], at = Object.keys(acts).map(Number);
-    const end = 96 * 9; for (let t = 0; t < end; t++) { acts[t]?.(bank); if (bank.due(t, 72) >= 0) loads.push(t); said.push(bank.nextSwitch(t, 72)); }
+    const bank = new SlotBank(); [0, 1, 2].forEach(i => bank.save(i, json)); setup(bank); const loads = [], said = [], at = Object.keys(acts).map(k => T(+k));
+    const end = T(96 * 9); for (let t = 0; t < end; t++) { if (t % MIDI_DIV === 0) acts[t / MIDI_DIV]?.(bank); if (bank.due(t, T(72)) >= 0) loads.push(t); said.push(bank.nextSwitch(t, T(72))); }
     // right after due(t) it names the next tick that loads a slot (unless you recall something in between)
     said.forEach((s, t) => { const next = loads.find(x => x > t); if (at.some(a => a > t && a <= (next ?? end))) return; if (next == null) assert.ok(s >= end, `tick ${t}: ${s}`); else assert.equal(s, next, `tick ${t}`); });
-    return loads;
+    return loads.map(t => t / MIDI_DIV);   // in old ticks, as written below
   };
   assert.deepEqual(run(b => { b.chainBars = 2; b.setChain([0, 1, 2]); }), [0, 192, 384, 576, 768], 'a chain moves on every 2 bars');
   assert.deepEqual(run(b => b.recall(0), { 130: b => b.recall(1) }), [0, 192], 'bar: the next bar line');
@@ -772,14 +775,14 @@ test('ORBIT2-05 r2: SlotBank.nextSwitch names the tick where due() loads the nex
 });
 test('ORBIT2-05 r2: a slot switch or a chain step plays what the chain render has; a lane replaced mid-step never doubles a hit', async () => {
   const { liveTick, collectChain, collectHits } = await import('../src/poly/export.js'); const { SlotBank } = await import('../src/poly/slots.js');
-  const tickSec = 60 / 120 / 24, r4 = (x) => Math.round(x * 1e4) / 1e4;
+  const tickSec = TICK, r4 = (x) => Math.round(x * 1e4) / 1e4;
   const kick = (f) => { const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.hits.fill(true, 0, 4); f?.(k); return m.toJSON(); };
   // the app's master tick (onTick): due() and its slot load first, then liveTick with the next switch as the cut
   const play = (bank, to, act) => {
     const m = new Machine(), ahead = [], out = [];
     for (let t = 0; t < to; t++) {
-      act?.(t, m); const si = bank.due(t, 96); if (si >= 0) m.assign(bank.get(si));
-      liveTick(m, t, ahead, { rng: () => 0, tickSec, cut: bank.nextSwitch(t, 96) }).forEach(({ early, hits }) => { for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); });
+      act?.(t, m); const si = bank.due(t, T(96)); if (si >= 0) m.assign(bank.get(si));
+      liveTick(m, t, ahead, { rng: () => 0, tickSec, cut: bank.nextSwitch(t, T(96)) }).forEach(({ early, hits }) => { for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); });
     }
     return out.sort((a, b) => a - b);
   };
@@ -791,27 +794,27 @@ test('ORBIT2-05 r2: a slot switch or a chain step plays what the chain render ha
   for (const [name, [A, B]] of Object.entries(cases)) {   // round 2: 1.98 + 2.00, 1.98 twice, a kick B hasn't, 1.75 + 2.00
     const bank = new SlotBank(); bank.save(0, A); bank.save(1, B); bank.chainBars = 1; bank.setChain([0, 1]);
     const want = collectChain([A, B, A, B], { bars: 1, tempo: 120 }).map(h => r4(h.time)).filter(x => x >= 0);
-    assert.deepEqual(play(bank, 96 * 4).filter(x => x >= 0), want, `chain: ${name}`);
+    assert.deepEqual(play(bank, T(96 * 4)).filter(x => x >= 0), want, `chain: ${name}`);
   }
   // a slot recalled while playing (bar mode): the bar line plays the new slot's downbeat only
   const [A, B] = cases['A pushed −20 ms → B on the grid'], bank = new SlotBank(); bank.save(0, A); bank.save(1, B); bank.recall(0);
-  assert.deepEqual(play(bank, 192, (t) => { if (t === 70) bank.recall(1); }).filter(x => x > 1.5), [2, 2.5, 3, 3.5]);
+  assert.deepEqual(play(bank, T(192), (t) => { if (t === T(70)) bank.recall(1); }).filter(x => x > 1.5), [2, 2.5, 3, 3.5]);
   // undo, redo, a link: nothing announces them. The same lanes again inside a step's early window: no second hit
-  const u = kick(k => k.setLock(2, 'nudge', -0.5)), none = new SlotBank(), at40 = (json) => (t, m) => { if (t === 0) m.assign(u); if (t === 40) m.assign(json); };
-  assert.deepEqual(play(none, 96, at40(u)), collectHits(Machine.from(u), { from: 0, to: 96, tempo: 120 }).map(h => r4(h.time)));
+  const u = kick(k => k.setLock(2, 'nudge', -0.5)), none = new SlotBank(), at40 = (json) => (t, m) => { if (t === 0) m.assign(u); if (t === T(40)) m.assign(json); };
+  assert.deepEqual(play(none, T(96), at40(u)), collectHits(Machine.from(u), { from: 0, to: T(96), tempo: 120 }).map(h => r4(h.time)));
   // another pattern: what already sounded stays and the step isn't started again (whether B has it on the grid or not)
-  assert.deepEqual(play(none, 96, at40(kick())), [0, 0.5, 0.75, 1.5]);
-  assert.deepEqual(play(none, 96, at40(kick(k => { k.hits[2] = false; }))), [0, 0.5, 0.75, 1.5]);
+  assert.deepEqual(play(none, T(96), at40(kick())), [0, 0.5, 0.75, 1.5]);
+  assert.deepEqual(play(none, T(96), at40(kick(k => { k.hits[2] = false; }))), [0, 0.5, 0.75, 1.5]);
 });
 // ---- ORBIT2-05 review round 3 ----
 test('ORBIT2-05 r3: a lane that changes speed between an early decision and its tick plays that moment once', async () => {
   const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
-  const tickSec = 60 / 120 / 24, r3 = (x) => Math.round(x * 1e3) / 1e3;
+  const tickSec = TICK, r3 = (x) => Math.round(x * 1e3) / 1e3;
   // kick on every beat (×1), changed on the bar line (tick 96, before that tick plays: evolve, a slot) as in onTick
   const play = (f, change, { roll = () => 0.5 } = {}) => {
     const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(1)); k.setLength(4); k.hits.fill(true, 0, 4); f(k);
     const ahead = [], out = [];
-    for (let t = 0; t < 150; t++) { if (t === 96) change(m); liveTick(m, t, ahead, { rng: () => roll(t), tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
+    for (let t = 0; t < T(150); t++) { if (t === T(96)) change(m); liveTick(m, t, ahead, { rng: () => roll(t), tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
     return out.filter(x => x > 1.5);
   };
   const push = (k) => k.setOffset(-20), speed = (r) => (m) => m.lanes[0].setRatio(RATIOS.indexOf(r));
@@ -820,18 +823,18 @@ test('ORBIT2-05 r3: a lane that changes speed between an early decision and its 
   assert.deepEqual(play(push, speed(3 / 4)), [1.98, 2.647], '×1 → ×¾');
   assert.deepEqual(play(push, (m) => m.evolve({ scope: 'all', amount: 1 }, () => 0.8)), [1.98, 2.313, 2.647, 2.98], 'evolve "all" changes the speed on the bar line');
   assert.deepEqual(play(k => [0, 1, 2, 3].forEach(i => k.setLock(i, 'nudge', -0.5)), speed(3 / 2)), [1.75, 2.167, 2.5, 2.833], 'one downbeat, nudged −½');
-  assert.deepEqual(play(push, (m) => { const j = m.toJSON(); j.lanes[0].ratioIndex = RATIOS.indexOf(2); m.assign(j); }), [1.98, 2.23, 2.48, 2.73, 2.98], 'a slot, undo or a link at another speed');
+  assert.deepEqual(play(push, (m) => { const j = m.toJSON(); j.lanes[0].ratio = 2; m.assign(j); }), [1.98, 2.23, 2.48, 2.73, 2.98], 'a slot, undo or a link at another speed');
   // nothing sounded yet (the early roll missed): the lane at its new speed decides its own step afresh
   const missed = (k) => { push(k); k.prob = 0.5; };
-  assert.deepEqual(play(missed, speed(3 / 2), { roll: (t) => (t < 96 ? 0.9 : 0.1) }), [1.98, 2.313, 2.647, 2.98]);
+  assert.deepEqual(play(missed, speed(3 / 2), { roll: (t) => (t < T(96) ? 0.9 : 0.1) }), [1.98, 2.313, 2.647, 2.98]);
 });
 test('ORBIT2-05 r3: live record: a step a pad just played sounds neither its early part nor its own hits (skip)', async () => {
   const { liveTick } = await import('../src/poly/export.js');
-  const tickSec = 60 / 120 / 24, m = new Machine(); m.lanes.forEach(l => l.clear());
+  const tickSec = TICK, m = new Machine(); m.lanes.forEach(l => l.clear());
   const k = m.lanes[0]; k.setRatio(5); k.setLength(4); k.setOffset(-20); k.toggle(1); k.toggle(2); k.setTrig(1, { ratchet: 4 }); k.setLock(1, 'nudge', -0.3);
   // the pad played step 1 before its tick was scheduled (liveHit adds 'lane:tick', tick 24 here): its early repeats and its own go
-  const skip = new Set(['0:24']), ahead = [], hits = [], shown = [];
-  for (let t = 0; t < 130; t++) liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ ev, early, hits: own }, li) => {
+  const skip = new Set([`0:${P}`]), ahead = [], hits = [], shown = [];
+  for (let t = 0; t < T(130); t++) liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ ev, early, hits: own }, li) => {
     if (li) return; if (ev?.index === 1) shown.push(ev.hit); for (const h of [...early, ...own]) hits.push(Math.round((t * tickSec + h.dt) * 1e3) / 1e3);
   });
   assert.deepEqual(shown, [false, true], 'the scene shows the pad\'s hit, not a second one; the next loop plays it again');
@@ -842,15 +845,15 @@ test('ORBIT2-05 r3: live record: a step a pad just played sounds neither its ear
 // ---- ORBIT2-05 close (confirmation round) ----
 test('ORBIT2-05 close: a lane that speeds up inside an early window plays the decided moment once, and the new speed\'s steps before it', async () => {
   const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
-  const tickSec = 60 / 120 / 24, r4 = (x) => Math.round(x * 1e4) / 1e4;
+  const tickSec = TICK, r4 = (x) => Math.round(x * 1e4) / 1e4;
   // a kick on every step of 4 (all nudged, or only the downbeat), changed before tick `at` plays (as in onTick)
   const play = ({ ratio = 1, nudge = -0.5, steps = [0, 1, 2, 3] }, at, change) => {
     const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(ratio)); k.setLength(4); k.hits.fill(true, 0, 4); steps.forEach(i => k.setLock(i, 'nudge', nudge));
     const ahead = [], out = [];
-    for (let t = 0; t < 120; t++) { if (t === at) change(m); liveTick(m, t, ahead, { rng: () => 0, tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); }); }
+    for (let t = 0; t < T(120); t++) { if (t === T(at)) change(m); liveTick(m, t, ahead, { rng: () => 0, tickSec }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r4(t * tickSec + h.dt)); }); }
     return out.sort((a, b) => a - b).filter(x => x > 1.4);
   };
-  const speed = (r) => (m) => m.lanes[0].setRatio(RATIOS.indexOf(r)), assign = (r) => (m) => { const j = m.toJSON(); j.lanes[0].ratioIndex = RATIOS.indexOf(r); m.assign(j); };
+  const speed = (r) => (m) => m.lanes[0].setRatio(RATIOS.indexOf(r)), assign = (r) => (m) => { const j = m.toJSON(); j.lanes[0].ratio = r; m.assign(j); };
   // confirmation round: the new speed's step before the bar line (×4 step 15, tick 90) took the lane's one decision, so
   // the bar-line moment, sounded at 1.75 s, started again (×4 step 16 at 1.9375; ×3 1.9167, −0.3 1.9625, ×½ → ×2 1.875)
   assert.deepEqual(play({}, 89, speed(4)), [1.75, 1.8125, 2.0625, 2.1875, 2.3125, 2.4375], 'the speed gauge ×1 → ×4');
@@ -862,12 +865,12 @@ test('ORBIT2-05 close: a lane that speeds up inside an early window plays the de
 });
 test('ORBIT2-05 close: a pad\'s moment is keyed on the master tick, so a speed change before it neither doubles it nor silences another', async () => {
   const { liveTick } = await import('../src/poly/export.js'); const { RATIOS } = await import('../src/poly/lanes.js');
-  const tickSec = 60 / 120 / 24, r3 = (x) => Math.round(x * 1e3) / 1e3;
+  const tickSec = TICK, r3 = (x) => Math.round(x * 1e3) / 1e3;
   // a kick on every beat pushed −20 ms; the pad played the bar line (step 4, tick 96) before it was scheduled; the speed changes at tick 90
   const play = (r) => {
     const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0]; k.setRatio(RATIOS.indexOf(1)); k.setLength(4); k.hits.fill(true, 0, 4); k.setOffset(-20);
     const skip = new Set([`0:${4 * k.stepTicks()}`]), ahead = [], out = [];
-    for (let t = 0; t < 200; t++) { if (t === 90) k.setRatio(RATIOS.indexOf(r)); liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
+    for (let t = 0; t < T(200); t++) { if (t === T(90)) k.setRatio(RATIOS.indexOf(r)); liveTick(m, t, ahead, { rng: () => 0, tickSec, skip }).forEach(({ early, hits }, li) => { if (!li) for (const h of [...early, ...hits]) out.push(r3(t * tickSec + h.dt)); }); }
     return { hits: out.filter(x => x > 1.5), left: skip.size };
   };
   // keyed on the step number: ×2 numbers tick 96 as step 8 and played it again (1.98); ×½ kept the key and silenced its step 4 (3.98)
@@ -892,4 +895,27 @@ test('ORBIT2-05 r2: dsp G5 has no level step under normal velocity; a softer cla
   const s = makeSlot(); trigger(s, { kind: 1, bp: 1800, dark: 0.25 }, sr, 0, 0); assert.equal(s.dkW, 1, 'from a quarter octave on (every ghost tier): the whole filter');
   trigger(s, { kind: 1, dark: 0.05 }, sr, 0, 0); assert.ok(s.dkLp && Math.abs(s.dkW - 0.2) < 1e-9, 'a low-pass added to an open layer fades in too');
   assert.ok(velShape({ ...p, vel: GHOST_VEL }, 'shaker').dark <= 0.4, 'the shaker moves a fraction of an octave, like the hats');
+});
+
+// ---- ORBIT2-06 R1 / R2 ----
+test('R1 840 PPQ: every ratio steps on whole ticks; a block of MIDI_DIV ticks = one MIDI clock; old positions ×35', () => {
+  assert.equal(P, 840); assert.equal(MIDI_DIV, 35); assert.equal(P / MIDI_DIV, 24, '24 MIDI clocks per quarter');
+  for (const r of RATIOS) { assert.ok(Number.isInteger(P / r), `×${r}`); }
+  // the same pattern at the old resolution: the old hit ticks × 35 (step numbers, dice keys and loops unchanged)
+  const m = new Machine(); [2 / 3, 3 / 2, 3, 4].forEach((r, i) => { const l = m.lanes[i]; l.setRatio(ratioIndexOf(r)); l.setLength(5 + i); l.setEuclid(3); l.swing = 0.2; });
+  const old = []; for (let t = 0; t < 96 * 4; t++) m.tick(t * MIDI_DIV, () => 0).forEach((e, li) => { if (e?.hit) old.push([li, t, e.step]); });
+  const fine = []; for (let t = 0; t < T(96 * 4); t++) m.tick(t, () => 0).forEach((e, li) => { if (e?.hit) fine.push([li, t / MIDI_DIV, e.step]); });
+  assert.deepEqual(fine, old); assert.ok(fine.length > 20);
+});
+test('R2 new ratios: labels match, the knob order is slowest first; old saves and links map their index through the old table', async () => {
+  const { RATIO_LABEL } = await import('../src/poly/lanes.js'); const { encodeShare, decodeShare } = await import('../src/poly/export.js');
+  assert.equal(RATIO_LABEL.length, RATIOS.length); assert.deepEqual([...RATIOS].sort((a, b) => a - b), RATIOS);
+  for (const r of [5 / 4, 4 / 3, 7 / 4, 5, 6, 3 / 2]) assert.ok(ratioIndexOf(r) >= 0, `×${r}`);
+  // pre-R2 indices: 6 = 3/2, 7 = ×2, 8 = ×3, 9 = ×4
+  const old = { lanes: [6, 7, 8, 9].map((ratioIndex, i) => ({ name: ['kick', 'snare', 'hat', 'perc'][i], length: 4, ratioIndex, hits: [true] })) };
+  assert.deepEqual(Machine.from(old).lanes.map(l => l.ratio), [3 / 2, 2, 3, 4]);
+  const m = new Machine(); m.lanes[0].setRatio(ratioIndexOf(5 / 4)); m.lanes[1].setRatio(ratioIndexOf(7 / 4));
+  const back = Machine.from(JSON.parse(JSON.stringify(m.toJSON()))); assert.deepEqual(back.lanes.map(l => l.ratio), m.lanes.map(l => l.ratio), 'new saves by value');
+  const link = await decodeShare(await encodeShare(old, 120)); assert.deepEqual(Machine.from(link.m).lanes.map(l => l.ratio), [3 / 2, 2, 3, 4], 'an old link');
+  assert.equal(Machine.from({ lanes: [{ name: 'kick', ratioIndex: 99 }] }).lanes[0].ratio, 1, 'nonsense → ×1');
 });

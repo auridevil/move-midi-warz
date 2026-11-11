@@ -1,9 +1,9 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { hitVel, liveTick, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, liveTick, liveQuiet, collectHits, collectChain, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
@@ -170,8 +170,10 @@ function cycleKit(dir) { const cur = m.kitKey() ?? KIT_KEYS.find(k => KITS[k].na
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
 async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
 
-// ---- the master clock: one loop at 24 ticks per beat drives every lane, MIDI clock, slots and evolve ----
+// ---- the master clock: 840 ticks per beat drive every lane, MIDI clock, slots and evolve ----
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
+// The Tone loop still fires 24 times per beat (cheap); each call is a block of MIDI_DIV (35) ticks: one MIDI clock,
+// the modulo bookkeeping on every tick, the lanes only on ticks where something can happen (liveQuiet).
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
@@ -181,25 +183,33 @@ const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
 /** The master tick being heard right now (fractional): the scheduler runs ahead of the speakers, which lag a little. */
 const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
-function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onTick(time), `${T.getTransport().PPQ / PPQ}i`); loop.start(0); }
-function onTick(time) {
+function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
+function onBlock(time) {
   if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; }   // both are keyed on the old ticks
-  const t = tick++; clockRef = { tick: t, time }; const at = perfAt(time);
+  const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
-  pmidi.clock(at); jamTick(t, time);
-  const cyc = m.cycleTicks(cycleOpts()), si = bank.due(t, cyc); if (si >= 0) loadSlot(si, true);
+  pmidi.clock(perfAt(time));   // 24 per quarter, whatever PPQ is
+  let cyc = m.cycleTicks(cycleOpts());   // once per block (and again when a slot or evolve changes the pattern)
+  for (let t = t0; t < t0 + MIDI_DIV; t++) cyc = onTick(t, time + (t - t0) * ts, cyc, ts);
+}
+function onTick(t, time, cyc, ts) {
+  jamTick(t, time);
+  const si = bank.due(t, cyc); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); }
   if (t % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) evolveNow(t / BAR_TICKS, true);
-  const now = T.getContext().rawContext.currentTime;
+  if (evo.on && t > 0 && t % (BAR_TICKS * evo.every) === 0) { evolveNow(t / BAR_TICKS, true); cyc = m.cycleTicks(cycleOpts()); }
+  const cut = bank.nextSwitch(t, cyc);
+  if (liveQuiet(m, t, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
+  const now = T.getContext().rawContext.currentTime, at = perfAt(time);
   const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
-  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: tickSec(), cut: bank.nextSwitch(t, cyc), skip }).forEach(({ ev, hits, early: soon }, li) => {
+  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
     const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
     if (!ev) return;
     for (const h of hits) play(li, lane, h);
     T.getDraw().schedule(() => { scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
+  return cyc;
 }
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
 function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); }
@@ -231,7 +241,7 @@ const INFO = {
   length: 'How many steps the lane loops over (1–16). Different lengths at the same speed = polymeter: 3 against 4 lines up every 12 steps.',
   euclid: 'Spreads this many hits as evenly as possible over the length (E(3,8) is the tresillo). Changing it rewrites the pattern; toggles after that are yours.',
   rotation: 'Shifts the whole pattern by N steps without changing it. Rotate the snare so its hits fall on 2 and 4.',
-  ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm.',
+  ratio: 'Speed against the master tempo. ×1 = one step per beat (4 steps = a bar), ×2 eighths, ×4 sixteenths, ½ half notes; 3/2 or ⅔ against ×1 is a true polyrhythm; 5/4 and 7/4 play fives and sevens across four beats, 4/3 the hemiola, ×6 sixteenth triplets.',
   swing: 'Delays every second step by this fraction of a step. Steps are counted on the master clock, not the loop, so the swung moments stay put whatever the length. With the MPC template, at ×3, ×3/2 and ×¾ the middle step of each three swings. 0 = straight, ~20% = loose, 33% = triplet swing (2:1), 50% = dotted (3:1). The template next to it changes which steps move.',
   'swing template': 'Which steps the swing moves, and how far: it shapes the swing amount, so at 0% swing every template plays straight. MPC 16th: every second step (the classic). triplet: at 50% exactly the 2:1 shuffle. 3-3-2 and aksak 2+2+3 lean on their groups. amapiano: the "e" pushed further than the "a". straight: no swing at all.',
   offset: 'Push / pull: the whole lane early (−) or late (+) by up to 30 ms. A hat a few ms late lays back; a snare early drives.',
@@ -517,7 +527,7 @@ function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
 }
 /** Init: every lane empty, length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
-  const n = new Machine(); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(RATIOS.indexOf(1)); }); n.lanes[0].hits[0] = true;
+  const n = new Machine(); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
   loadMachine(n.toJSON());
 }
 /** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
@@ -604,7 +614,8 @@ function buildMidiUI() {
     // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
     tick: (ext, t) => {
       if (!playing) return; const raw = T.getContext().rawContext, audioT = raw.currentTime + (t - performance.now()) / 1000;
-      const { jump, trim } = phaseCorrection(clockRef.tick + (audioT - clockRef.time) / tickSec() - ext);
+      // compared in MIDI clock ticks (24 PPQ); a snap moves our clock by whole MIDI ticks, so blocks stay on that grid
+      const { jump: j, trim } = phaseCorrection((clockRef.tick + (audioT - clockRef.time) / tickSec()) / MIDI_DIV - ext), jump = j * MIDI_DIV;
       // a snap renumbers the ticks still to come; the reference moves with them, or every clock tick that arrives
       // before the next scheduler batch would apply the same snap again (and the clock would swing further and further)
       if (jump) { const to = Math.max(0, tick + jump); clockRef = { ...clockRef, tick: clockRef.tick + to - tick }; tick = to; }

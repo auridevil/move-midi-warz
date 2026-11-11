@@ -3,14 +3,24 @@
 import { KITS } from './kits.js';
 import { VOICES } from './voices.js';
 export const MAX_STEPS = 16;
-export const RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 3 / 2, 2, 3, 4];
-export const RATIO_LABEL = ['¼', '⅓', '½', '⅔', '¾', '1', '3/2', '2', '3', '4'];
+/** Speed ratios, slowest first (the speed knob's order). Saved as the value (`ratio`); older saves only have an index
+ *  into OLD_RATIOS. ×5/4 and ×7/4 are quintuplet / septuplet feels, ×4/3 the hemiola, ×5 and ×6 fives and 16th triplets. */
+export const RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 5 / 4, 4 / 3, 3 / 2, 7 / 4, 2, 3, 4, 5, 6];
+export const RATIO_LABEL = ['¼', '⅓', '½', '⅔', '¾', '1', '5/4', '4/3', '3/2', '7/4', '2', '3', '4', '5', '6'];
+/** The table `ratioIndex` pointed into before R2 (saves and links without a `ratio` field). */
+export const OLD_RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 3 / 2, 2, 3, 4];
+/** Index of a ratio value in RATIOS (−1 when it isn't one). */
+export const ratioIndexOf = (r) => RATIOS.findIndex(x => Math.abs(x - r) < 1e-9);
+/** Evolve's speed moves stay on the classic set (the range it always used), never onto ×7/4 by surprise. */
+const EVOLVE_RATIOS = [2 / 3, 3 / 4, 1, 3 / 2, 2, 3];
 export const LANE_NAMES = ['kick', 'snare', 'hat', 'perc'];
 /** Per-lane sound sculpting, all 0..1: Shift + knobs on the Move. */
 export const SOUND_KEYS = ['decay', 'tone', 'drive', 'snap', 'color', 'send', 'pan', 'level'];
 export const DEFAULT_SOUND = { decay: 0.5, tone: 0.75, drive: 0, snap: 0.5, color: 0.5, send: 0.15, pan: 0.5, level: 0.8 };
-/** Master clock resolution (ticks per beat). 24 = MIDI clock, and every ratio's step is a whole number of ticks. */
-export const PPQ = 24, BAR_TICKS = PPQ * 4;
+/** Master clock resolution (ticks per beat). 840 = 24 × 35 = 2³·3·5·7: every ratio's step is a whole number of ticks
+ *  (×5/4 = 672, ×7/4 = 480, ×6 = 140), so 5- and 7-tuplets are exact. MIDI clock (24 per beat) = every MIDI_DIV ticks;
+ *  the old 24-PPQ positions are exactly ×35, so a pattern plays the same hits. BAR_TICKS = a 4/4 bar. */
+export const PPQ = 840, MIDI_DIV = PPQ / 24, BAR_TICKS = PPQ * 4;
 /** Per-step parameter locks: hold a step and turn a knob. tune is −1..1, nudge −½..½ of a step (early/late), the rest 0..1. */
 export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
 export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5] };
@@ -64,8 +74,11 @@ export function euclid(k, n) {
   return Array.from({ length: n }, (_, i) => k > 0 && Math.floor(i * k / n) !== Math.floor((i - 1) * k / n));
 }
 
+/** The ratio index of a saved lane: by its `ratio` value, else (older saves, links) its index into the pre-R2 table. */
+const ratioFrom = (o) => { const i = ratioIndexOf(typeof o.ratio === 'number' ? o.ratio : OLD_RATIOS[o.ratioIndex] ?? 1); return i < 0 ? ratioIndexOf(1) : i; };
+
 export class Lane {
-  constructor(name, { length = 8, ratioIndex = 5 } = {}) {
+  constructor(name, { length = 8, ratioIndex = ratioIndexOf(1) } = {}) {
     this.name = name; this.length = length; this.ratioIndex = ratioIndex;
     this.hits = new Array(MAX_STEPS).fill(false); this.accents = new Array(MAX_STEPS).fill(false);
     this.rotation = 0; this.swing = 0; this.prob = 1; this.tune = 0; this.muted = false; this.pos = 0; this.euclidK = 0;
@@ -148,7 +161,7 @@ export class Lane {
   lockAt(i) { return this.locks[this.stepIndex(i)]; }
   /** The locks to show as "locked" at visible position i: a lone ghost vel lock is the tier, shown as a ghost instead. */
   shownLock(i) { const lk = this.lockAt(i); return lk && !(lk.vel === GHOST_VEL && Object.keys(lk).length === 1) ? lk : null; }
-  /** Master-clock ticks per step: ×1 = 24 (a beat), ×4 = 6, ⅔ = 36. */
+  /** Master-clock ticks per step: ×1 = 840 (a beat), ×4 = 210, ×5/4 = 672, ⅔ = 1260. */
   stepTicks() { return Math.round(PPQ / this.ratio); }
   /** Steps from one step on a beat to the next: 1 (every step is on a beat), 2, 4, or 3 at ×3, ×3/2 and ×¾. */
   beatGroup() { const st = this.stepTicks(); return lcm(st, PPQ) / st; }
@@ -211,14 +224,14 @@ export class Lane {
     const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1);
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
-  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
+  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: o.ratioIndex }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = o.sample ? JSON.parse(JSON.stringify(o.sample)) : null; l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {
   // a new machine plays the Common kit: lane names are ids, not voices ('perc' is not a voice)
-  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: [5, 5, 7, 7][i] })); this.selected = 0; this.humanize = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
+  constructor() { this.lanes = LANE_NAMES.map((n, i) => new Lane(n, { length: [4, 4, 8, 5][i], ratioIndex: ratioIndexOf([1, 1, 2, 2][i]) })); this.selected = 0; this.humanize = 0; this.applyKit(KITS.common, DEFAULT_SOUND); }
   get lane() { return this.lanes[this.selected]; }
   select(i) { this.selected = ((i % this.lanes.length) + this.lanes.length) % this.lanes.length; return this.lane; }
   /** Seconds per step: at ratio ×1 a step is a quarter note (4 steps = one bar); ×2 = eighths, ×4 = sixteenths, ½ = half notes. */
@@ -227,13 +240,15 @@ export class Machine {
    * Beats (quarter notes) until the whole machine repeats exactly: lengths × speeds, × trig conditions (1:3 = three
    * loops), × the locked dice repeat. opts.repeat = dice.repeat when the dice are locked (else 1).
    */
-  cycleSteps({ repeat = 1 } = {}) { return this.lanes.reduce((acc, l) => lcm(acc, Math.round(l.length / l.ratio * 12) * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1) / 12; }
+  cycleSteps(opts) { return this.cycleTicks(opts) / PPQ; }
   resetAll() { for (const l of this.lanes) l.reset(); }
-  /** Master ticks until every lane lines up again. */
-  cycleTicks(opts) { return Math.max(1, Math.round(this.cycleSteps(opts) * PPQ)); }
+  /** Master ticks until every lane lines up again: in whole ticks (a ×5/4 loop is not a whole number of 12ths of a beat). */
+  cycleTicks({ repeat = 1 } = {}) { return Math.max(1, this.lanes.reduce((acc, l) => lcm(acc, l.length * l.stepTicks() * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1)); }
   /** Every lane's event at master tick `tick` (null where a lane doesn't step). */
   /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
-  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo); return this.lanes.map((l, li) => l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo })); }
+  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo); return this.lanes.map((l, li) => tick % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo })); }   // most ticks step no lane: nothing allocated
+  /** Does any lane step at master tick `tick`? */
+  steps(tick) { return this.lanes.some(l => tick % l.stepTicks() === 0); }
   /** Replace the whole state in place (pattern slots), keeping the object other code holds. */
   assign(o) { const n = Machine.from(o); this.lanes = n.lanes; this.selected = n.selected; this.humanize = n.humanize; this.kit = n.kit; return this; }
   /**
@@ -252,7 +267,7 @@ export class Machine {
         else { const i = Math.floor(rng() * l.length); if (!(l.hits[i] && l.hits.filter(Boolean).length <= 1)) l.toggle(i); }
       }
       if (kind === 'length') { l.setLength(clamp(l.length + dir, 2, MAX_STEPS)); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); l.rotation %= l.length; }
-      if (kind === 'ratio') l.setRatio(clamp(l.ratioIndex + dir, 3, 8));
+      if (kind === 'ratio') { const e = EVOLVE_RATIOS, k = e.reduce((b, r, j) => Math.abs(r - l.ratio) < Math.abs(e[b] - l.ratio) ? j : b, 0); l.setRatio(ratioIndexOf(e[clamp(k + dir, 0, e.length - 1)])); }
       changes.push({ lane: li, kind, dir });
     });
     return changes;
@@ -362,4 +377,4 @@ export const MUSICAL_FAMILIES = [
     } },
 ];
 function gcd(a, b) { return b ? gcd(b, a % b) : a; }
-function lcm(a, b) { return a * b / gcd(a, b); }
+function lcm(a, b) { return a / gcd(a, b) * b; }   // divide first: cycles in 840-PPQ ticks get big

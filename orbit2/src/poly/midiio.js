@@ -1,4 +1,4 @@
-// Orbits ↔ the rest of the studio: lane hits as MIDI notes, MIDI clock out (24 PPQ, from the master clock),
+// Orbits ↔ the rest of the studio: lane hits as MIDI notes, MIDI clock out (24 PPQ: one per MIDI_DIV master ticks),
 // and MIDI clock in (follow tempo, optionally start/stop). Uses the page's Web MIDI access; ports are picked
 // by name so the choice survives reloads. The Move's own port is never used as an output while it's in
 // control mode: notes there would repaint its pads instead of playing anything.
@@ -109,7 +109,7 @@ export class PolyMidi {
     this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60;
     this.inName = ''; this.follow = 'off'; this.input = null; this.onIn = null;
     this.handlers = { tempo: () => {}, start: () => {}, stop: () => {}, tick: () => {} };
-    this.extTick = 0;   // incoming clock ticks since start (or since a Song Position Pointer)
+    this.extTick = 0;   // incoming clock ticks since start (or since a Song Position Pointer), in MIDI ticks (24 PPQ): the app scales
     this.follower = makeBpmFollower();
   }
   get extBpm() { return this.follower.bpm; }
