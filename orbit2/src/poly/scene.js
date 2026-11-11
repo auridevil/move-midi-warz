@@ -64,7 +64,7 @@ export function createScene(cv, o) {
   const sprites = new Map(); const sprite = (hex) => { if (!sprites.has(hex)) sprites.set(hex, glowSprite(hex)); return sprites.get(hex); };
   const white = glowSprite('#ece9f7');
   const last = [];        // per lane: { index, t } of the latest step, for the smooth playhead
-  const energy = [0, 0, 0, 0, 0, 0], flash = new Map();   // one per lane, up to 6   // energy per lane (decays), flash per "lane:index"
+  const energy = [0, 0, 0, 0, 0, 0], flash = new Map();   // energy per lane (up to 6) (decays), flash per "lane:index"
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 

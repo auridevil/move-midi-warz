@@ -849,7 +849,8 @@ async function toggleJam() {
   if (jam.state === 'rec' || jam.state === 'armed') return stopJam();
   if (jam.state === 'finishing') return;   // the take is closing on its bar line: a press now would mix two takes
   try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
-  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.lanes = m.lanes.length; jam.beats = 0;   // lanes: the most the take played (L2) jam.state = 'armed'; renderJam(); paintLeds();
+  // lanes: the most the take played (L2)
+  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
   if (!playing) togglePlay();
 }
 function stopJam() {

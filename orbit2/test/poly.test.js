@@ -1090,3 +1090,52 @@ test('ORBIT2-06 r1: the clock also skips ticks whose early steps are decided, an
   const all = play(false), skipped = play(true); assert.deepEqual(skipped.out, all.out); assert.ok(all.out.length > 20, `${all.out.length} hits`);
   assert.ok(skipped.ran < 8 * P * 0.02, `the lanes ran on ${skipped.ran} of ${8 * P} ticks (72; the rule before round 1: 1262)`);
 });
+test('ORBIT2-07 L1: 32-step lanes (euclid, rotation, playhead, locks and trigs on steps 17–32); evolve keeps its 16-step reach', async () => {
+  const { MAX_STEPS } = await import('../src/poly/lanes.js'); assert.equal(MAX_STEPS, 32);
+  assert.equal(euclid(5, 32).filter(Boolean).length, 5); assert.equal(euclid(32, 32).filter(Boolean).length, 32);
+  assert.deepEqual(euclid(3, 32).map((h, i) => (h ? i : -1)).filter(i => i >= 0), [0, 11, 22], 'E(3,32) spread over the whole lane');
+  const l = new Lane('hat', { length: 32 }); l.setEuclid(7); assert.equal(l.hits.filter(Boolean).length, 7); assert.equal(l.hits.length, 32);
+  l.rotation = 20; for (let i = 0; i < 32; i++) assert.equal(l.hitAt(i), l.hits[((i - 20) % 32 + 32) % 32], `rotation over 32, step ${i}`);
+  assert.equal(l.toggle(31), !euclid(7, 32)[31]); l.setLock(30, 'tune', 0.5); l.setTrig(29, { ratchet: 2 }); l.setLength(32);
+  const seen = []; for (let s = 0; s < 40; s++) seen.push(l.at(s * P, () => 0).index); assert.deepEqual(seen.slice(28, 36), [28, 29, 30, 31, 0, 1, 2, 3], 'the playhead walks 32 steps, then wraps');
+  const back = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(back.hits, l.hits); assert.equal(back.locks[30].tune, 0.5); assert.equal(back.trigs[29].ratchet, 2);
+  l.setLength(20); assert.equal(l.length, 20); assert.ok(l.hits[25] != null, 'steps past the length are kept, not cut');
+  // evolve: a 16-step lane never grows past 16, a 32-step one only shrinks
+  const m = new Machine(); m.lanes.forEach(x => { x.setLength(16); x.setEuclid(5); }); m.lanes[1].setLength(32);
+  let seed = 3; const rng = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let n = 0; n < 300; n++) m.evolve({ scope: 'all', amount: 1 }, rng);
+  for (const [i, x] of m.lanes.entries()) assert.ok(x.length >= 2 && x.length <= (i === 1 ? 32 : 16), `lane ${i}: ${x.length}`);
+});
+test('ORBIT2-07 L2: 4 or 6 lanes — Machine.from keeps the count, setLaneCount adds / drops lanes 5–6, collectHits plays them', async () => {
+  const { MAX_LANES, laneCountOf } = await import('../src/poly/lanes.js'); const { collectHits, encodeShare, decodeShare } = await import('../src/poly/export.js');
+  assert.equal(MAX_LANES, 6); assert.deepEqual([0, 3, 4, 5, 6, 9].map(laneCountOf), [4, 4, 4, 6, 6, 6]);
+  assert.equal(new Machine().lanes.length, 4, 'default 4'); const m = new Machine(6); assert.equal(m.lanes.length, 6);
+  assert.deepEqual(m.lanes.map(l => l.voice), KITS.common.lanes.map(k => k.voice), 'Common kit on all six'); assert.equal(m.kitKey(), 'common');
+  m.lanes[4].setEuclid(3); m.lanes[5].hits[0] = true; m.lanes[5].accents[0] = true; m.lanes[5].choke = 4; m.selected = 5;
+  const j = JSON.parse(JSON.stringify(m.toJSON())), r = Machine.from(j); assert.equal(r.lanes.length, 6); assert.deepEqual(r.toJSON(), m.toJSON(), '6-lane round-trip'); assert.equal(r.selected, 5);
+  const link = Machine.from((await decodeShare(await encodeShare(m.toJSON(), 120))).m); assert.equal(link.lanes.length, 6, 'a link keeps 6 lanes');
+  // collectHits: lanes 5–6 (li 4, 5) play, at their own times
+  const hits = collectHits(r, { from: 0, to: 4 * 4 * P, tempo: 120 }); const five = hits.filter(h => h.li === 4), six = hits.filter(h => h.li === 5);
+  assert.equal(five.length, 3 * 4, 'E(3,8) at ×2 = 3 hits a bar, 4 bars'); assert.equal(six.length, 2, 'lane 6: 8 steps at ×1, step 1 = every 2 bars'); assert.equal(six[0].time, 0); assert.equal(six[0].accent, true);
+  // 6 → 4 drops lanes 5–6 and a choke into them; 4 → 6 brings fresh empty lanes with the kit's voices
+  const d = Machine.from(j); d.lanes[0].choke = 5; d.setLaneCount(4); assert.equal(d.lanes.length, 4); assert.equal(d.lanes[0].choke, -1); assert.equal(d.selected, 3);
+  d.applyKit(KITS.trap, DEFAULT_SOUND); d.setLaneCount(6); assert.deepEqual(d.lanes.slice(4).map(l => l.voice), [KITS.trap.lanes[4].voice, KITS.trap.lanes[5].voice]); assert.equal(d.kitKey(), 'trap');
+  assert.ok(d.lanes.slice(4).every(l => !l.hits.some(Boolean)), 'new lanes come in empty');
+  // a link edited to 5 or 9 lanes: filled up / cut to 6; a choke past the end goes
+  const five5 = Machine.from({ ...j, lanes: j.lanes.slice(0, 5).map((l, i) => (i ? l : { ...l, choke: 7 })) }); assert.equal(five5.lanes.length, 6); assert.equal(five5.lanes[0].choke, -1);
+  assert.equal(Machine.from({ ...j, lanes: [...j.lanes, ...j.lanes.slice(0, 3)] }).lanes.length, 6);
+  // musical randomize: a 4-lane pattern rolls what it always did; 6 lanes add parts for 5–6 without touching lanes 1–4
+  const roll = (n) => { let s = 42; const g = () => (s = (s * 16807) % 2147483647) / 2147483647; const x = new Machine(n); x.randomizeMusical(g, 'fourfloor'); return x; };
+  const a4 = roll(4), a6 = roll(6); assert.deepEqual(a6.lanes.slice(0, 4).map(l => l.toJSON()), a4.lanes.map(l => l.toJSON()));
+  assert.ok(a6.lanes[4].hits.some(Boolean) && a6.lanes[5].hits[0]); assert.ok(a6.cycleTicks() <= 16 * 4 * P);
+});
+test('ORBIT2-07: old 4-lane / 16-step saves load unchanged; MIDI lanes 5–6 default to 46 / 49 on channel 10; rings for 6 lanes', async () => {
+  const { PolyMidi, DEFAULT_NOTES } = await import('../src/poly/midiio.js'); const { ringGeo } = await import('../src/poly/scene.js');
+  const old = new Machine(); old.lanes.forEach(l => l.setEuclid(3)); const j = JSON.parse(JSON.stringify(old.toJSON()));
+  for (const l of j.lanes) for (const k of ['hits', 'accents', 'locks', 'trigs']) l[k] = l[k].slice(0, 16);   // as a pre-L1 save holds them
+  const m = Machine.from(j); assert.equal(m.lanes.length, 4); assert.equal(m.kitKey(), 'common', 'an old pattern still reads as its kit');
+  for (const [i, l] of m.lanes.entries()) { assert.equal(l.hits.length, 32); assert.deepEqual(l.hits.slice(0, 16), j.lanes[i].hits); assert.ok(!l.hits.slice(16).some(Boolean)); assert.equal(l.length, old.lanes[i].length); }
+  const p = new PolyMidi({ getAccess: () => null }); assert.deepEqual(DEFAULT_NOTES, [36, 38, 42, 39, 46, 49]);
+  p.fromJSON({ lanes: [{ note: 40, ch: 2 }, { note: 41, ch: 3 }, { note: 42, ch: 10 }, { note: 43, ch: 10 }] }); assert.deepEqual(p.lanes.slice(4), [{ note: 46, ch: 10 }, { note: 49, ch: 10 }], 'old settings: lanes 5–6 get the defaults'); assert.equal(p.lanes[0].note, 40);
+  const g4 = ringGeo(800, 800), g6 = ringGeo(800, 800, null, 6); assert.equal(g4.outer, g4.R * 0.85); assert.ok(Math.abs(g6.outer - g6.R * 0.85) < 1e-9, 'six rings fit where four did'); assert.ok(g6.ring(1) - g6.ring(0) > 0.1 * g6.R);
+});
