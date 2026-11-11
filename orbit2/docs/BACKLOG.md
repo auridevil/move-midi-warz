@@ -405,3 +405,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   decay isn't closed; a closed stroke that caps the decay would change every unlocked hat.
 - **The djembe in a 4-lane Afro pattern** (ORBIT2-08 round 1, tomi): the Afro kit's djembe and open hat are lanes 5–6, so
   a 4-lane pattern has kick, log drum, shekere and agogo only.
+- **A pure strokes module** (ORBIT2-08 round 2, architect): `ARTICS`, `articAt`, `strokeOf` live in `voices.js` (the Tone
+  voice module), so `dsp-voices.js` imports it, and `export.js` imports `midiio.js` for `strokeNotes`; a small pure
+  `strokes.js` with the four would keep the boundaries clean. `strokeNotes` is also rebuilt for every live note (~0.9 µs)
+  and `strokeAt` runs twice per hit (harmless).
+- **The synth slap crack at the default lane tone** (ORBIT2-08 round 2, sound): the high-passed white-noise crack sits
+  partly above the lane's 4.3 kHz low-pass at the default tone, so the synth bongo / djembe slaps carry 5.2 / 3.4 % of
+  their energy above 2 kHz against the dsp twins' 10.5 / 5.3 %; a band-passed crack around 2.5–3.5 kHz would survive it.
+- **The synth agogo's clang** (ORBIT2-08 round 2, sound): it has its dsp twin's level but almost no metal (0.1 % above
+  2 kHz, centroid 643 / 965 Hz, against 44 % and 1.7 / 2.3 kHz); an inharmonic partial or a higher modulation index.

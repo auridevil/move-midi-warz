@@ -79,8 +79,8 @@ D.djembe = (p) => {
     { kind: 1, dec: 0.012, hp: 1500, vel: p.vel * p.snap, gain: 0.3 },
   ];
   return [
-    { kind: 0, wave: 0, f: mf(64 + p.tune * 12), sweep: 1.5, pd: 0.005, dec: 0.03 + p.dec * 0.12, att: 0.0008, f2: 1.7, g2: 0.4, drive: 0.4, vel: p.vel, gain: 0.9 },
-    { kind: 1, bp: 4000, bq: 0.7, hp: 1500, att: 0.001, dec: 0.03 + p.dec * 0.06, vel: p.vel * (0.7 + p.snap * 0.3), gain: 1.1 },   // the crack, above the body's band
+    { kind: 0, wave: 0, f: mf(64 + p.tune * 12), sweep: 1.5, pd: 0.005, dec: 0.03 + p.dec * 0.12, att: 0.0008, f2: 1.7, g2: 0.4, drive: 0.4, vel: p.vel, gain: 0.8 },
+    { kind: 1, bp: 4000, bq: 0.7, hp: 1500, att: 0.001, dec: 0.03 + p.dec * 0.06, vel: p.vel * (0.7 + p.snap * 0.3), gain: 1 },   // the crack, above the body's band
   ];
 };
 // log drum (Amapiano): a sub with a woody knock, gliding down by color over most of its length (color 1: an octave)

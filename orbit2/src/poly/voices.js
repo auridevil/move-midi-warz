@@ -95,7 +95,7 @@ V.agogo = { label: 'agogo', make: (T, out) => ({ f: new T.FMSynth({ harmonicity:
   hit: (T, n, p, t) => { const hi = (p.artic ?? strokeOf('agogo', null, p.color)) === 1, d = 0.1 + p.dec * 0.6; n.f.set({ modulationIndex: 1 + p.snap * 2, envelope: { decay: d } }); n.f.triggerAttackRelease(640 * Math.pow(2, p.tune) * (hi ? 1.5 : 1), d, t, p.vel); } };
 // shekere: a gourd of beads — shake (rolled noise bursts) or slap (artic 1: a palm on the gourd, then the beads). White
 // noise: pink loses ~16 dB in the beads' band (5–8 kHz), which left the synth shekere 18 dB under its dsp twin
-V.shekere = { label: 'shekere', make: (T, out) => { const bp = new T.Filter({ type: 'bandpass', frequency: 6000, Q: 0.7 }).connect(out); return { bp, n: new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.004, decay: 0.1, sustain: 0 }, volume: -4 }).connect(bp), m: new T.MembraneSynth({ pitchDecay: 0.006, octaves: 0.6, envelope: { attack: 0.0005, decay: 0.08, sustain: 0 }, volume: -8 }).connect(out) }; },
+V.shekere = { label: 'shekere', make: (T, out) => { const bp = new T.Filter({ type: 'bandpass', frequency: 6000, Q: 0.7 }).connect(out); return { bp, n: new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.004, decay: 0.1, sustain: 0 }, volume: -4 }).connect(bp), m: new T.MembraneSynth({ pitchDecay: 0.006, octaves: 0.6, envelope: { attack: 0.0005, decay: 0.08, sustain: 0 }, volume: -5 }).connect(out) }; },
   hit: (T, n, p, t) => {
     const slap = p.artic === 1, d = 0.05 + p.dec * 0.2; n.bp.frequency.setValueAtTime(4500 + p.color * 3500, t); n.n.set({ envelope: { attack: slap ? 0.001 : 0.004 + (1 - p.snap) * 0.02, decay: d } });
     for (let i = 0; i < 3; i++) n.n.triggerAttackRelease(i === 2 ? d : 0.014, t + i * 0.009, p.vel * (slap ? 0.8 : 1) * Math.pow(0.85, i));
@@ -122,7 +122,7 @@ export const VOICE_KEYS = Object.keys(V);
 /**
  * L3 articulations: the voices with more than one stroke, and their names. An `artic` step lock is an index here (0 is
  * the first stroke, not "no lock": an unlocked step plays the lane's own sound, which for djembe and agogo comes from
- * color). Both engines read p.artic; MIDI plays the lane's note + the index (neighbouring notes).
+ * color). Both engines read p.artic (strokeOf below); MIDI gives every stroke a note of its own (midiio.js strokeNotes).
  */
 export const ARTICS = { conga: ['open', 'mute', 'slap'], bongo: ['open', 'mute', 'slap'], djembe: ['bass', 'tone', 'slap'], hat: ['closed', 'open'], agogo: ['low', 'high'], shekere: ['shake', 'slap'] };
 export const ARTIC_MAX = Math.max(...Object.values(ARTICS).map(a => a.length)) - 1;

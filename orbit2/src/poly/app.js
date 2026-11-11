@@ -163,6 +163,8 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit) {
   try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {}
   try { if (c.voice === 'sample') playSample(c, lane, p, time); else if (viaDsp) c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p).map(x => p.dark ? { ...x, dark: p.dark } : x) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
 }
+/** Live MIDI out for a hit: the note of the stroke it plays (L3). The one path to pmidi.note, for the clock and the pads. */
+function midiHit(li, lane, vel, at, lock) { pmidi.note(li, vel, at, lane.strokeAt(lock)); }
 const ui = {};   // segmented controls / chips by name (src/ui.js)
 const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name || 'sample').replace(/\.[^.]+$/, '').slice(0, 12)}` : VOICES[lane.voice]?.label || lane.voice;
 /** File / track names for n lanes (stems, jam takes, MIDI tracks): a lane the pattern no longer has is "lane N". */
@@ -219,7 +221,7 @@ function onTick(t, time, cyc, ts) {
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); pmidi.note(li, h.vel, at + (ht - time) * 1000, lane.strokeAt(h.lock)); };
+  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
   liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
@@ -537,7 +539,8 @@ function buildSlotsUI() {
 function liveHit(li, col, velocity = 100, accent = velocity != null && velocity >= rec.accentVel) {
   const lane = m.lanes[li]; if (!awake) { wake(); return; }
   const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = velocity == null ? null : Math.max(0.25, Math.min(1, velocity / 127));
-  hitSound(lane, T.immediate(), accent, tune != null ? { tune } : null, accent ? 1 : v); pmidi.note(li, accent ? 1 : v ?? hitVel(false, null), performance.now());
+  const lock = tune != null ? { tune } : null;
+  hitSound(lane, T.immediate(), accent, lock, accent ? 1 : v); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
   if (!rec.armed || !playing) { m.select(li); sync(); return; }
   const q = lane.quantize(heardTick() - m.origin, rec.quant), idx = lane.stepIndex(q.index);   // steps count from the pattern's bar 1
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent

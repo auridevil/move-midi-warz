@@ -9,15 +9,20 @@ import { ARTIC_MAX } from './voices.js';
 export const DEFAULT_NOTES = [36, 38, 42, 39, 46, 49];   // GM drums: kick, snare, closed hat, clap, open hat, crash (L2 lanes 5–6)
 /**
  * L3 strokes on MIDI: a lane's first stroke plays its own note, the others the next notes up that no lane's note and no
- * earlier stroke takes on the same channel, so a conga slap never plays another lane's drum (with the default notes a
- * conga on 36 is 36 / 37 / 40: 38 and 39 are lanes 2 and 4). Worked out over the whole note map, whatever the voices,
- * so live out, the export and every slot agree. lanes: [{ note, ch }] → per lane [note of stroke 0, 1, 2].
+ * earlier stroke takes on the same channel (at the top of the range, the next free ones down), so a conga slap never
+ * plays another lane's drum (with the default notes a conga on 36 is 36 / 37 / 40: 38 and 39 are lanes 2 and 4). Worked
+ * out over the whole note map, whatever the voices, so live out, the export and every slot agree.
+ * lanes: [{ note, ch }] → per lane [note of stroke 0, 1, 2].
  */
 export function strokeNotes(lanes) {
   const at = (ch, n) => ch * 128 + n, taken = new Set(lanes.map(l => at(l.ch, l.note)));
+  const free = (ch, n, dir) => { while (n >= 0 && n <= 127 && taken.has(at(ch, n))) n += dir; return n >= 0 && n <= 127 ? n : -1; };
   return lanes.map((l) => {
     const row = [l.note];
-    for (let n = l.note; row.length <= ARTIC_MAX;) { do n++; while (n < 127 && taken.has(at(l.ch, n))); n = Math.min(127, n); taken.add(at(l.ch, n)); row.push(n); }
+    while (row.length <= ARTIC_MAX) {
+      let n = free(l.ch, Math.max(...row) + 1, 1); if (n < 0) n = free(l.ch, Math.min(...row) - 1, -1); if (n < 0) n = l.note;   // up; past 127, down
+      taken.add(at(l.ch, n)); row.push(n);
+    }
     return row;
   });
 }

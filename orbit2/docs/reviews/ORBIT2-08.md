@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-08
 title: ORBIT2-08 new voices and articulations (L3, L4), review panel
 date: 2026-11-11
-round: 1
+round: 2
 stalled: 0
 result: IN PROGRESS
 reviewers:
   verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  architect: HAPPY
+  sound: HAPPY
   tomi: HAPPY
   dex: HAPPY
 tags: [orbit2, review]
@@ -144,3 +144,68 @@ with 70–75 ms headroom for Afro at 118 bpm and Jungle at 170.
   title of a stroke on a kick, the stroke chooser by a real click (agogo "high" → `{ artic: 1 }`), Move hold + push × 2 on
   the djembe → tone with the step kept on, phone 390 × 844 without sideways scroll, 0 page errors; screenshots looked at.
   `app.js` 1270 → 1275 lines.
+
+## Round 2 (re-check): 2 of 3 HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `abb88c0` on +100, the code before the round-1 fixes
+`f1066d9` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, L3 / L4, the phase spec, the
+"where" table, the must-fix rule with the later ids and the Later items, round 1's included), `git diff --stat
+abb88c0..ba46a18` (11 files, +455/−35) and the round-1 fixes alone (`f1066d9..ba46a18`, 10 files, +299/−43), each one's
+own round-1 MUST-FIX and "Changes after round 1", with the instruction to confirm their items first with the same repro,
+then check nearby, anything new only in scope and marked NEW. Pre-checks on `ba46a18`: `npm run check` clean, `npm test`
+152 + 9. `stalled: 0`: every round-1 MUST-FIX is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | Round-1 items FIXED: (1) Node, lane 5 djembe on 46 at color 0.5, steps [no lock, bass, tone, slap] play 220 / 87 / 220 / 330 Hz and send 50 / 46 / 50 / 51 in the file and live (`f1066d9`: 46 / 46 / 47 / 48); color 0.9 unlocked sends 51; agogo at 0.7 unlocked 47, low 39, high 47; page the same, heard = sent. (2) Hand drums conga [no lock, mute, slap, open] live 36 / 37 / 40 / 36, Latin conga slap 40, bongo 38 / 41 / 43 / 38; 18 different default stroke notes, none on another lane's, also for maps 36–41, two lanes on 36, 60–65; the drawer's list matches. (1) NEW: a pad hit while recording still sends another stroke's note: `liveHit` (`app.js:540`, Move pads `:1029` and the computer keys `:1136` when record is armed) calls `pmidi.note` without a stroke, while its `hitSound` plays `lane.strokeAt(lock)`. Page: Afro, lane 5 djembe at color 0.5, `setRec(true); liveHit(4, 0, 90)`: stopped sends 46 (bass) while it plays 220 Hz (tone, 50); armed and playing the pad sends 46, then its recorded step plays back as 50, 50; agogo at 0.7: the pad sends 39 while it rings 960 Hz, its step plays back on 47. `f1066d9` gives the same 46 / 39. |
+| architect | HAPPY | none. (1) FIXED: Afro djembe [no lock, artic 0, artic 1, color lock 0.9] heard tone / bass / tone / slap in both engines (dsp layers, and the Tone triggers through a fake Tone), file and live 50 / 46 / 50 / 51; more cases (artic 2 → 51, color 0.1 → 46, color 0.9 + artic 0 → 46); agogo [no lock, 0, 1, color 0.2, artic 2] high / low / high / low / high → 47 / 39 / 47 / 39 / 47; page: 20 / 20 synth and 18 / 18 dsp heard → sent pairs right, the export's djembe `{46: 4, 50: 8, 51: 4}`; on `f1066d9` the same harness shows the old bug. Nearby: 18 kits' phase-start patterns (6 lanes, color and velocity locks) give identical MIDI bytes at `abb88c0` and HEAD; every older voice's dsp layers identical; check, 152 + 9. |
+| sound | HAPPY | none. (1) FIXED: synth shake −14.1 / −30.6 against the dsp's −11.8 / −30.0 (`f1066d9` −30.4 / −47.4), slap −12.5 / −30.1 against −7.5 / −27.5, inside ±6 dB at vel 1 and 0.35 too; Afro stems (own 6-lane pattern, 120 bpm, 4 bars) synth shekere 4.0 LU under the kick (`f1066d9` 20.8), dsp 5.5. (2) FIXED: synth slaps conga −6.9 / −28.1 / 2.9 %, bongo −10.4 / −30.8 / 5.2 %, djembe −8.0 / −27.7 / 3.4 % (at the default lane tone, ~4.3 kHz low-pass) over their open / bass strokes in all 12 extra knob / velocity cases (by 0.3–3.8 dB), the slap as much brighter than the open stroke as on dsp (centroid ratio 2.1 / 1.9 / 4.3 × vs 2.2 / 1.9 / 4.9 ×). Nearby: open, mute, bass and tone unchanged across HEAD, `f1066d9`, `abb88c0` (≤ 0.2 dB, 0.0 LU); synth agogo 6.0 LU under the kick in the Afro stems (dsp 5.1); the log drum glides 82.4 → 65.9 Hz at color 0.4, an octave at 1, both engines; no clicks, DC ≤ −34.8 dB re peak, 0 page errors. |
+
+The implementer reproduced the verifier's NEW item on `ba46a18` before fixing (page 5400/9400, silent): Afro, lane 5
+djembe at color 0.5, `__poly.pmidi.out` captured, `setRec(true); liveHit(4, 0, 90)` → note 46 while `strokeAt(null)` is
+1 (tone, note 50).
+
+SHOULD items recorded (never block): at the top of the note range the strokes pile on 127, another lane's note there
+(lanes 120–127, or 125 and 127) (verifier, architect); `PolyMidi.note` rebuilds `strokeNotes` (a Set and seven arrays)
+for every live note, ~0.9 µs, and `lane.strokeAt` runs twice per hit (verifier, architect); the `ARTICS` comment in
+`voices.js` still said "the lane's note + the index" (architect); the pure stroke rules (`ARTICS`, `articAt`,
+`strokeOf`) live in the Tone voice module, so `dsp-voices.js` imports it, and `export.js` imports the MIDI I/O module for
+`strokeNotes`: a small pure `strokes.js` would keep the boundaries clean (architect); NEW (sound): the synth bongo and
+djembe slap cracks are thinner than the twins' at the default lane tone (5.2 / 3.4 % against 10.5 / 5.3 %: the
+high-passed white noise sits partly above the lane's 4.3 kHz low-pass; a band-pass around 2.5–3.5 kHz would survive it),
+the synth shekere slap peaks 5.0 dB under its twin (1.6 dB over the shake, the dsp's 4.3), the dsp djembe slap is now
+the hottest single hit (−4.5 dBFS at vel 0.7 against the bass's −7.1 and the kick's −6.9), the synth agogo has its twin's
+level but not its clang (HF 0.1 % against 44 %).
+
+GOOD: one stroke rule on the pure model (`strokeOf` + `Lane.strokeAt`) asked by both engines, live MIDI and the export,
+its thresholds in one table (verifier, architect); the stroke-note map worked out over all six lanes, so live out, the
+export and chain slots agree, and the drawer shows the notes that go out (verifier, architect); the shekere fixed in its
+bead band, not by a blanket gain (shake 0.6 LU from its twin, centroid 4.27 vs 4.41 kHz), and the crack its own layer,
+firing only on slaps (sound).
+
+### Changes after round 2
+
+- **A pad hit sends the stroke it plays** (verifier, NEW in round 2): `midiHit(li, lane, vel, at, lock)` in `app.js` is
+  the one path to `pmidi.note`, adding `lane.strokeAt(lock)`; the clock's `play` and `liveHit` (Move pads and computer
+  keys while recording, and every pad tap) both use it, `liveHit` with its own lock (null, or `{ tune }` from the pitch
+  pads). Page (5400/9400, silent; Afro, djembe lane 5 at color 0.5, agogo lane 4 at 0.7): `liveHit` stopped sends 50 and
+  47 (was 46 and 39), armed and playing the pad sends 50 and its recorded step plays back on 50.
+- **Quick SHOULDs done.** At the top of the note range the strokes take the next free notes down instead of piling on
+  127 (`strokeNotes`): lanes 125 and 127 → [125, 126, 124] and [127, 123, 122], lanes 120–127 → 18 different notes
+  (verifier, architect). The `ARTICS` comment points to `strokeNotes` (architect). The synth shekere's palm thump +3 dB
+  (−8 → −5): slap −8.4 / −26.0 against its twin's −6.3 / −26.2 (was ~4–5 dB under), 1.9 dB over the shake (sound). The
+  dsp djembe slap trimmed ~1 dB (body 0.9 → 0.8, crack 1.1 → 1.0): −5.9 / −25.6 / 7.4 %, 1 dB over the kick's peak; the
+  2 dB the sound engineer suggested put its 50 ms loudness 6.5 dB under the conga, outside the phase's own level window
+  (the "ORBIT2-08 L4" test caught it) (sound).
+- Not changed: `strokeNotes` rebuilt for every live note (~0.9 µs) and `strokeAt` run twice per hit (harmless, measured
+  by the architect); → [[BACKLOG]] Later: a pure `strokes.js`, the synth slap crack at the default lane tone, the synth
+  agogo's clang.
+- Tests (153 + 9; 1 new, fails on `ba46a18`): "ORBIT2-08 r2": `app.js` has exactly one `pmidi.note` call, it adds
+  `strokeAt(lock)`, `liveHit` sends through it with its lock; a pad's `{ tune }` lock plays (and sends) the color's
+  stroke, 50 on the Afro djembe. "ORBIT2-08 r1" now also covers the top of the range (126 → 127, 125; 125 and 127; six
+  lanes 120–127 all different). `npm run check` clean, `npm test` 153 + 9, `node tools/smoke.mjs http://localhost:5400`
+  10/10 ok (serve.py 5400 + headless Chrome 9222, both stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`,
+  deleted): the `liveHit` repro above (46 / 39 on `ba46a18`), the stroke measurements of round 1 again (slaps, shekere,
+  agogo unchanged but for the two trims; Afro and Jungle stems in both engines unchanged, raw mix peaks −4.0 / −1.7 /
+  −6.6 / −5.5 dBFS), 0 page errors.

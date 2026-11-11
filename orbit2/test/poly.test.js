@@ -1266,9 +1266,11 @@ test('ORBIT2-08 r1: the note sent is the stroke heard, stroke notes never land o
   const all = rows.flat(); assert.equal(new Set(all).size, all.length); assert.deepEqual(rows[0], [36, 37, 40], 'lane 1: 36, 37, 40 (38, 39 = lanes 2, 4)');
   const mh = new Machine(6); mh.applyKit(KITS.hands, DEFAULT_SOUND); const ns = sent(mh, 0, [{ artic: 0 }, { artic: 1 }, { artic: 2 }, null]);
   assert.ok(!ns.slice(1, 3).some(n => DEFAULT_NOTES.includes(n)), `Hand drums conga mute / slap on ${ns.slice(1, 3)}`);
-  // another channel is another instrument (no clash there); past 127 a stroke stays on 127
+  // another channel is another instrument (no clash there); past 127 the strokes go down (round 2), still on free notes
   assert.deepEqual(strokeNotes([{ note: 36, ch: 10 }, { note: 37, ch: 1 }, { note: 38, ch: 10 }]).map(r => r.join()), ['36,37,39', '37,38,39', '38,40,41']);
-  assert.deepEqual(strokeNotes([{ note: 126, ch: 10 }])[0], [126, 127, 127]);
+  assert.deepEqual(strokeNotes([{ note: 126, ch: 10 }])[0], [126, 127, 125]);
+  assert.deepEqual(strokeNotes([{ note: 125, ch: 10 }, { note: 127, ch: 10 }]), [[125, 126, 124], [127, 123, 122]]);
+  const top = strokeNotes([120, 122, 124, 125, 126, 127].map(note => ({ note, ch: 10 }))).flat(); assert.equal(new Set(top).size, 18, `top of the range: ${top}`);
   // live out sends the notes the file has
   const out = [], pm = new PolyMidi({ getAccess: () => null }); pm.out = { send: (b) => out.push(b) }; pm.note(0, 0.8, 0, 2); pm.note(4, 0.8, 0, 1); pm.note(2, 0.8, 0, null);
   assert.deepEqual(out.filter(b => (b[0] & 0xf0) === 0x90).map(b => b[1]), [rows[0][2], rows[4][1], 42]);
@@ -1289,4 +1291,16 @@ test('ORBIT2-08 r1: the note sent is the stroke heard, stroke notes never land o
     assert.ok(s.hp && s.noise >= 4 * o.noise && s.noise >= 0.25, `${k} slap crack ${s.noise.toFixed(3)} vs open ${o.noise.toFixed(3)}`); assert.ok(s.body >= 0.85 * p.vel, `${k} slap body ${s.body}`);
   }
   const { T: fT } = fakeT(), sk = VOICES.shekere.make(fT, {}); assert.equal(sk.n.o.noise?.type, 'white'); assert.ok(sk.n.o.volume >= -6);
+});
+test('ORBIT2-08 r2: every live MIDI note (the clock and a pad played while recording) goes out as the stroke it plays', async () => {
+  // repro (verifier, round 2): a pad hit (liveHit) sent the lane's first-stroke note: the Afro djembe at color 0.5 sent 46
+  // (bass) while it played its tone (50). app.js now has one path to pmidi.note, which adds the stroke; both live callers use it
+  const { readFileSync } = await import('node:fs'); const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  const calls = src.match(/pmidi\.note\([^;]*\)/g) || []; assert.equal(calls.length, 1, `one pmidi.note call: ${calls}`); assert.match(calls[0], /strokeAt\(lock\)/);
+  assert.match(src, /function liveHit[\s\S]*?midiHit\(li, lane, [^;]*, lock\)/, 'liveHit sends through midiHit with its lock');
+  // the stroke a pad hit plays: liveHit's lock is null or { tune } (pitch pads): the color's stroke either way
+  const { DEFAULT_SOUND: DS } = await import('../src/poly/lanes.js'); const { strokeNotes, PolyMidi } = await import('../src/poly/midiio.js');
+  const m = new Machine(6); m.applyKit(KITS.afro, DS); const dj = m.lanes[4]; assert.equal(dj.strokeAt(null), 1); assert.equal(dj.strokeAt({ tune: 0.3 }), 1);
+  const out = [], pm = new PolyMidi({ getAccess: () => null }); pm.out = { send: (b) => out.push(b) }; pm.note(4, 0.7, 0, dj.strokeAt({ tune: 0.3 }));
+  assert.equal(out[0][1], strokeNotes(pm.lanes)[4][1]); assert.equal(out[0][1], 50);
 });
