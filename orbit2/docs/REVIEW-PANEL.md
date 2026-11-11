@@ -80,36 +80,52 @@ phase: ORBIT2-NN
 title: ...
 date: YYYY-MM-DD
 round: 2            # last COMPLETED round (0 = none yet)
+stalled: 0          # rounds in a row that closed none of the previous round's MUST-FIX
 result: IN PROGRESS # IN PROGRESS | HAPPY | BLOCKED
 reviewers:          # this phase's panel and each one's latest verdict
   verifier: HAPPY
   architect: NOT HAPPY
   sound: HAPPY
   kai: HAPPY
-  ines: NOT HAPPY
+  ines: HAPPY (deferred: <item>, see [[ORBIT2-NN-FOLLOWUP]])
 ---
 ```
 
-Body: one section per round (`## Round N`), a table `reviewer | verdict | MUST-FIX` (with evidence), then
-`### Changes after round N` (what was fixed, tests added, check/test results). Factual, short.
+Body: one section per round (`## Round N`), a table `reviewer | verdict | MUST-FIX` (with evidence; findings that are
+new this round are marked NEW), then `### Changes after round N` (what was fixed, tests added, check/test results), and
+if it comes to that `## Motion to defer`. Factual, short.
 
-## One review round (one playbook task)
+## The loop: fix until happy, as long as it makes progress
 
-Each round is its own checkbox, so a round is a bounded piece of work and a crash loses at most one round.
+A NOT HAPPY reviewer is never the end of the road. The phase cycles **review → fix → re-check** while each round closes
+something, and when it stops closing things the **whole panel decides** whether the rest can move to a follow-up
+playbook. Only a refused deferral stops the run for the conductor.
 
-1. **Read the state.** If `result` is HAPPY or BLOCKED, or `round` is already ≥ this task's round, tick the box and
-   stop. (Round 1 also checks the gate: the previous phase's review file says `result: HAPPY`; if not, halt the
-   playbook saying so.)
-2. **Who:** round 1 = the whole panel; later rounds = only reviewers whose latest verdict is NOT HAPPY.
+```
+round 1 (whole panel) ─► fix ─► re-check (only the NOT HAPPY ones) ─► fix ─► … ─► all HAPPY ─► close
+                                   │
+                                   └─ 2 rounds in a row with no MUST-FIX closed, or the round slots run out
+                                        ─► motion to defer ─► whole panel votes
+                                              ├─ unanimous ACCEPT ─► follow-up playbook, phase closes HAPPY
+                                              └─ any REJECT ─► BLOCKED, halt: the conductor decides
+```
+
+### One review round (one playbook task; a playbook has several round slots)
+
+1. **Read the state.** If `result` is not IN PROGRESS, or `round` is already ≥ this slot's number, or `stalled` ≥ 2,
+   change nothing and tick the box (the next task takes over).
+2. **Who:** round 1 = the whole panel. Later rounds = only the reviewers whose latest verdict is NOT HAPPY.
 3. **Brief** (same for everyone): the phase goal, its backlog ids with their text from `BACKLOG.md`, the must-fix rule
    above, `git diff --stat <phase start>..HEAD` + `git status --short`, how to open `orbit2/index.html` with
-   `orbit2/tools/cdp.mjs`, and for a re-review: that reviewer's own previous MUST-FIX items plus the "Changes after
-   round N-1" section. Plus persona, ports, scratch dir and these rules: read-only (never edit repo files), verify by
-   running things, **at most ~25 tool calls, stay on this phase**, close every browser and server, answer exactly:
+   `orbit2/tools/cdp.mjs`. For a **re-check**, also that reviewer's open MUST-FIX items and the latest "Changes after
+   round" section, with the instruction: *first confirm each of your open items is fixed (with the same repro), then
+   check the fix broke nothing nearby; report anything else only if it is in scope, and mark it NEW.* Plus persona,
+   ports, scratch dir and these rules: read-only (never edit repo files), verify by running things, **at most ~25 tool
+   calls, stay on this phase**, close every browser and server, answer exactly:
 
    ```
    VERDICT: HAPPY | NOT HAPPY
-   MUST-FIX (in scope only, blocks HAPPY): numbered, each with evidence (file:line, repro, measurement), expected vs actual
+   MUST-FIX (in scope only, blocks HAPPY): numbered, each with evidence (file:line, repro, measurement), expected vs actual; NEW if not raised before
    SHOULD (never blocks): numbered
    GOOD: up to 3 things to keep
    ```
@@ -117,19 +133,42 @@ Each round is its own checkbox, so a round is a bounded piece of work and a cras
 4. **Launch** them as fresh sub-agents (Agent tool, `general-purpose`) **in one message, in parallel**. Core reviewers
    use the default model; personas use `model: "sonnet"`. Never reuse agent ids from an earlier task: they do not
    survive a new session, which is why previous findings travel in the brief.
-5. **Record** the verdicts in the file (round table, `reviewers`, `round`, and `result: HAPPY` if all are HAPPY).
-6. **Fix** every in-scope MUST-FIX inside `orbit2/` with tests; run `npm run check`, `npm test`, `node tools/smoke.mjs`;
-   write "Changes after round N"; **commit locally** (`orbit2: phase NN review round N`). Do not start the next round
-   in the same task.
+5. **Record** the round (table, `reviewers`, `round`). **Progress:** if at least one MUST-FIX open before this round is
+   now closed, or everyone is HAPPY, set `stalled: 0`; otherwise `stalled` + 1. All HAPPY → `result: HAPPY`, commit
+   locally, done.
+6. **Fix** every open in-scope MUST-FIX inside `orbit2/` with tests; run `npm run check`, `npm test`,
+   `node tools/smoke.mjs`; write "Changes after round N"; **commit locally** (`orbit2: phase NN review round N`). Do not
+   start the next round in the same task: the next slot re-checks the fix. **A fix is never left unchecked.**
 
-## Closing a phase (the close task)
+### Motion to defer (one task, after the round slots)
 
-1. If `result` is IN PROGRESS: a **confirmation round** with only the reviewers still NOT HAPPY, on the fixes of the last
-   round (same brief rules). If they are all HAPPY now, set `result: HAPPY`. Otherwise fix what's in scope **once**
-   more, then set `result: BLOCKED`, list each open MUST-FIX and the reviewer, and halt the playbook with that reason:
-   the conductor decides. Two reviewers demanding incompatible things is also BLOCKED.
-2. If `result: HAPPY`: mark the phase's backlog ids done, run check/test (green), confirm only `orbit2/` changed, commit
-   locally `orbit2: <phase title>`.
+Runs only if `result` is still IN PROGRESS (the loop stalled twice, or the slots ran out). For each open MUST-FIX the
+implementer writes a motion in the review file under `## Motion to defer`:
+
+- the item, its reviewer, the evidence and how many rounds it has been open (and what each fix closed);
+- **why the phase can ship without it**: how rare it is, what a user would hear or see, whether it is a regression of the
+  shipped Orbits (a regression can't be deferred unless it is guarded off);
+- a **guard** added now when possible (a test pinned as a known failure, an assertion, the feature off in that case);
+- where it goes: `.maestro/playbooks/2026-11-06-Orbit2-Lab/followups/ORBIT2-NN-FOLLOWUP.md`.
+
+**The whole panel votes** (fresh sub-agents, one message, parallel, personas on `sonnet`, about 10 tool calls each),
+including the reviewer who raised the item. Brief: the motion, its evidence and the last round's section. Answer:
+`VOTE: ACCEPT | REJECT` and one paragraph. Record the votes.
+
+- **Unanimous ACCEPT:** write the follow-up playbook (same header and rules as the phase, one build task per deferred
+  item with its repro and the expected behaviour, a tests-and-browser task, round slots, motion and close per this
+  file, the same panel); add the items to `BACKLOG.md` under "Deferred" with a link; set the raising reviewer to
+  `HAPPY (deferred: …)`, `result: HAPPY`; commit locally.
+- **Any REJECT:** `result: BLOCKED`, the rejecting reviewers and their reasons in the file, commit locally, and halt the
+  playbook: "ORBIT2-NN blocked: <reviewer> rejected deferring <item>". This is the only way a phase stops the run.
+
+Two reviewers demanding incompatible things is settled the same way: the motion proposes one side, the panel votes.
+
+### Closing a phase (the close task)
+
+`result: HAPPY` → mark the phase's backlog ids done (` ✅ ORBIT2-NN`, plus ` (part deferred → ORBIT2-NN-FOLLOWUP)` where
+it applies), run check/test (green), confirm only `orbit2/` changed, commit locally `orbit2: <phase title>`.
+`result: BLOCKED` or still IN PROGRESS → halt the playbook with the reason in the file.
 
 A reviewer is never told what to conclude, and never given the implementer's opinion of the work, only the brief.
 

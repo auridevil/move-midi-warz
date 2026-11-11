@@ -171,6 +171,11 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **I7 simple mode / plain words**: "hits" not "euclid hits", "shift" not "rotation"; advanced controls tucked behind
   "advanced". (Maya)
 
+## Deferred
+
+(In-scope MUST-FIX items the whole panel agreed to move to a follow-up playbook, see [[REVIEW-PANEL]] "Motion to
+defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
+
 ## Later
 
 (Reviewers' non-blocking SHOULD items that were not done land here, with the phase that raised them.)

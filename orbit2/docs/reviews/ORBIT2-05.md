@@ -4,7 +4,8 @@ phase: ORBIT2-05
 title: ORBIT2-05 groove and dynamics (G1–G6), review panel
 date: 2026-11-10
 round: 4
-result: BLOCKED
+stalled: 0
+result: IN PROGRESS
 reviewers:
   verifier: NOT HAPPY
   architect: HAPPY
@@ -391,3 +392,10 @@ The close task fixes in-scope MUST-FIX once and stops ([[REVIEW-PANEL]], "Closin
 The conductor decides: a confirmation round with the verifier on that commit (set `result: IN PROGRESS` and run the
 close task again), or accept the fix (set `verifier: HAPPY` and `result: HAPPY`, then run the close task again: it marks
 G1–G6 done and commits `orbit2: groove and dynamics`).
+
+## Reopened (2026-11-11)
+
+The process changed ([[REVIEW-PANEL]], "The loop"): a fix is always re-checked, and the review continues while each
+round closes something. Round 4 closed the verifier's round-3 items (progress), so `stalled: 0`, `result: IN PROGRESS`.
+Round 5 re-checks the verifier on the round-4 fix (commit `orbit2: phase 05 confirmation round (blocked: verifier)`).
+
