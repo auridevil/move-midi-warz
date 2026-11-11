@@ -3,11 +3,11 @@ type: review
 phase: ORBIT2-05
 title: ORBIT2-05 groove and dynamics (G1–G6), review panel
 date: 2026-11-10
-round: 4
+round: 5
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
+  verifier: HAPPY
   architect: HAPPY
   sound: HAPPY
   tomi: HAPPY
@@ -398,4 +398,46 @@ G1–G6 done and commits `orbit2: groove and dynamics`).
 The process changed ([[REVIEW-PANEL]], "The loop"): a fix is always re-checked, and the review continues while each
 round closes something. Round 4 closed the verifier's round-3 items (progress), so `stalled: 0`, `result: IN PROGRESS`.
 Round 5 re-checks the verifier on the round-4 fix (commit `orbit2: phase 05 confirmation round (blocked: verifier)`).
+
+## Round 5 (re-check): 1 of 1 HAPPY, the whole panel HAPPY
+
+Only the reviewer NOT HAPPY after round 4 (verifier), fresh sub-agent on the default model, ports 5401 / 9401, copies of
+the phase start `c5c49a1` (5501 / 9501) and of `f7d5da0` (just before the round-4 fix, 5601 / 9601) in
+`/tmp/orbit2-verifier/`, smoke on 9222. Brief: the goal, G1–G6 + phase spec, the "where" table with live play as it is
+since round 4 (per lane a Map from master tick to decision, skip keys `'lane:tick'`), the must-fix rule with the later
+ids and this phase's Later items as SHOULDs, `git diff --stat c5c49a1..09670b6` (15 files, +1126/−109; the code is
+`971b748`'s), the verifier's MUST-FIX of rounds 1–4 (round 4 open) and "Changes after round 4", with the re-check rule
+(the open item with the same repro first, then what is nearby, anything else only in scope and marked NEW). Pre-checks
+on 09670b6: `npm run check` clean, `npm test` 129 + 9.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | none. Round-4 item fixed. Model, lane-0 hits between 1.4 and 2.2 s, f7d5da0 → HEAD: ×1 → ×4 at tick 89 and an assign at ×4: 1.75, 1.8125, 2.0625, 2.1875 (f7d5da0 also 1.9375); → ×3 at 86: 1.75, 1.75 (two moments: the ×1 bar line and the ×3 step at tick 88), 2.0833 (f7d5da0 also 1.9167); nudge −0.3: no 1.9625; ×½ → ×2: no 1.875; only the downbeat nudged: no 1.9375; two more variants (×4 at 86 then ×1 at 92; ×4 at 86 then an assign at ×2 at 91) play the bar-line moment once (f7d5da0 twice). 600 random machines × 2400 ticks (40–300 bpm, every ratio, lengths 1–16, nudges to ±½, pushes to ±30 ms, swing and templates, humanize, 40 random speed changes / assigns / mutes / solos / nudge and push edits each): 0 moments started twice (f7d5da0: 9), none silent and none with an extra hit against f7d5da0, at most 2 decisions held per lane; 300 machines with 25 pad presses each: 0 twice, 0 skip keys left; 300 machines that don't change, ratchets and fades: live = the render. Page, the round-4 setup plus an on-time anchor lane, each run against `liveTick` on a copy of the machine with the same changes: the speed gauge's path (×4 at tick 89, back to ×1 at tick 1, every bar) 31 / 31 kicks, two per bar line (the ×1 downbeat at −250 ms and the ×4 step 15 at −187.5 ms), within 3.3 ms of the model; the assign path 31 / 31; the same runs on f7d5da0: 36, three per bar line (a second downbeat at −62.5 ms). |
+
+Nearby, page runs on HEAD, each matching the model, 0 page errors: Stop and Play just after an early downbeat sounded,
+21 / 21 kicks (Play clears the old decisions); two changes a bar (×3 at 86, then an assign at ×2 at 91) 26 / 26; reset
+at tick 186 after the bar-3 downbeat sounded early, 20 / 20; mute and solo between a downbeat's early decision (tick 84)
+and its tick, undone after the bar line, 21 / 21, one kick per bar line; slots: push −20 ms, two identical slots, 4
+recalls while playing (one at tick 479, after the outgoing lane decided its downbeat), 32 beats with exactly one kick
+each; live record at ×2, 16 empty steps, push −20 ms, 5 pad presses: 20 notes, no two closer than 650 ms; phone
+390 × 844 plays, no sideways scroll. `npm run check` clean, `npm test` 129 + 9, `node tools/smoke.mjs
+http://localhost:5401` 10/10 ok; every server and browser closed. The implementer re-ran the verifier's model script
+before recording it: the same numbers (0 moments started twice on HEAD, 9 on f7d5da0, 0 live ≠ render).
+
+SHOULD (never blocks): the Later item "an early first downbeat after Play" happens after the reset button too: the first
+downbeat after a reset, nudged −½, is clamped to the look-ahead and sounds 102.9 ms later than its time, about 146 ms
+after the old bar's early downbeat; the count is right (verifier) → added to that item in [[BACKLOG]].
+
+GOOD: early decisions and pad skip keys both live on the master tick inside the pure `liveTick` (`export.js:56-75`): one
+rule for speed changes, assigns and pads, no drops against f7d5da0; reset (`app.js:186`) and Play (`app.js:209`) clear
+both `early` and `skip`, so old ticks can't silence a moment in the next run; the page plays what the pure model
+predicts (within ~3 ms in every scenario), and live play equals the render on machines that don't change.
+
+No MUST-FIX is open, so nothing to fix: no code changed in this round. Progress: the round-4 item is closed and everyone
+is HAPPY, `stalled: 0`.
+
+## Result: HAPPY
+
+The whole panel is HAPPY: verifier (round 5), architect and sound (round 3), dex (round 2), tomi (round 1). The close
+task marks G1–G6 done in [[BACKLOG]] and commits `orbit2: groove and dynamics`.
 

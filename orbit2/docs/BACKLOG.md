@@ -329,7 +329,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   drop, the synth clap ~0.2, so the two engines' ghost claps sit ~3.8 dB apart (inside the documented 4–5 dB).
 - **An early first downbeat after Play** (ORBIT2-05 round 3, sound): a downbeat nudged −½ sounds only as early as the
   scheduler's look-ahead (~60 ms) on the first bar after Play, exact from the second. Play it on the grid, or start
-  the transport later by the earliest lead.
+  the transport later by the earliest lead. The reset button does the same (round 5, verifier): the first downbeat
+  after a reset, nudged −½, sounds 102.9 ms later than its time, ~146 ms after the old bar's early downbeat.
 - **One filter per lane** (ORBIT2-05 round 3, sound): a late, darker ratchet repeat also darkens the tail of the plain
   step it overlaps (live and in the WAV alike).
 - **Smoke on any debug port** (ORBIT2-05 round 3, sound; a root tool, outside `orbit2/`): `tools/smoke.mjs` connects to
