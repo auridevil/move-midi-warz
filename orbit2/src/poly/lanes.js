@@ -50,6 +50,15 @@ export const barTicks = (meter) => BAR_OF[meter] ?? BAR_TICKS;
 export const LOCK_KEYS = ['tune', 'prob', 'vel', 'decay', 'tone', 'snap', 'color', 'nudge'];
 /** S1: a slice set holds up to 16 slices (a bar of 16ths). */
 export const MAX_SLICES = 16;
+/** S1 / S2: the speed (a RATIOS index) at which n steps last a break `sec` seconds long at `bpm`. The break is taken as
+ *  ½, 1, 2 or 4 bars of 4/4, whichever is nearest its length at this tempo and gives each slice a whole step at a speed
+ *  the lane has: 16 slices of a bar play as 16ths (×4), 8 as 8ths (×2), 16 of two bars as 8ths. A count no bar fits
+ *  (11 slices from a hand-off) gets the nearest speed. */
+export function breakSpeed(n, sec, bpm) {
+  const b0 = (sec * bpm) / 60, beats = b0 > 0 ? b0 : 4, far = (b) => Math.abs(Math.log2(b / beats)), near = (list) => list.reduce((a, b) => (far(b) < far(a) ? b : a));
+  const fits = [2, 4, 8, 16].filter(b => ratioIndexOf(n / b) >= 0); if (fits.length) return ratioIndexOf(n / near(fits));
+  const r = n / near([2, 4, 8, 16]); return RATIOS.reduce((best, x, i) => (Math.abs(Math.log2(x / r)) < Math.abs(Math.log2(RATIOS[best] / r)) ? i : best), 0);
+}
 export const LOCK_RANGE = { tune: [-1, 1], nudge: [-0.5, 0.5], artic: [0, ARTIC_MAX], slice: [0, MAX_SLICES - 1] };
 /** Every step lock: the knob locks plus L3 `artic` (a whole number, the voice's articulation: voices.js ARTICS). It has
  *  no knob or gauge of its own (lock panel: a chooser; Move: hold the step and push the jog wheel). S1 / S3 on a sample
@@ -159,6 +168,23 @@ export class Lane {
   /** S1: put a slice set { name, slices: [id…] } on the lane (as loadSample; `id` is its first slice, so everything that
    *  only knows one sample still finds audio). */
   loadSlices({ name, slices }) { const ids = slices.slice(0, MAX_SLICES); if (!ids.length) return; this.loadSample({ id: ids[0], name }); this.sample.slices = ids; }
+  /** S1 / S2: a whole break (`sec` long) as the lane's slice set. A lane already playing a slice set with steps on keeps
+   *  its chops (a new break in the same pattern); any other lane gets the break laid across it at the speed that makes
+   *  its steps last the break (breakSpeed at `bpm`). True when it was laid out. */
+  loadBreak({ name, slices, sec, bpm }) {
+    const keep = this.sliceCount() > 0 && this.hits.some((h, i) => h && i < this.length); if (!slices?.length) return false;
+    this.loadSlices({ name, slices }); if (keep) return false;
+    const n = this.sliceCount(); this.layBreak(n, breakSpeed(n, sec, bpm)); return true;
+  }
+  /** n slices across the lane, played straight as recorded: n steps, all on, from step 1, at speed ri, without swing,
+   *  push, humanize, tune or chance, the filter open and no delay. The old pattern (hits, accents, locks, conditions)
+   *  goes: one undo brings it back. */
+  layBreak(n, ri) {
+    this.clear(); Object.assign(this, { rotation: 0, swing: 0, offsetMs: 0, velHuman: 0, tune: 0, prob: 1 });
+    this.setLength(n); this.setRatio(ri); this.setEuclid(this.length); Object.assign(this.sound, { tone: 1, send: 0 });
+  }
+  /** S3: something on the lane plays backwards (the lane, or a step's rev lock), so its reversed copies are worth making early. */
+  usesRev() { return !!this.sample?.rev || this.locks.some(l => l?.rev === 1); }
   /** Slices in the lane's set, 0 for a single sample or none. */
   sliceCount() { return this.sample?.slices?.length || 0; }
   /** S1: the slice stored step `i` plays: its `slice` lock (kept in the set), else step i of the set (i mod N); null

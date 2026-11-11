@@ -5,7 +5,7 @@ import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from './pages.js';
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
-import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
+import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, floatStemsToInt16, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, withAcid } from './jam.js';
 import { Library } from './library.js';
@@ -81,6 +81,7 @@ function makeKit({ raw = false } = {}) {
 function buildVoice(li, k = kit) {
   if (!k) return; while (k.chains.length <= li) addChain(k); const lane = m.lanes[li], c = k.chains[li];
   const key = lane.voice === 'sample' && lane.sample ? 'sample' : VOICES[lane.voice] ? lane.voice : 'kick';
+  if (key === 'sample') ensureSample(lane);   // also on a chain that already plays a sample: a recalled slot, an undo or a setup can bring a set this page never loaded
   const eng = engine === 'dsp' && key !== 'sample' && DSP_VOICES[key] && dspReady(k.tc) ? 'dsp' : 'synth';
   if (c.voice === key && c.engine === eng && c.v) return;
   if (c.v) for (const n of Object.values(c.v)) { try { n.dispose(); } catch {} }
@@ -89,7 +90,6 @@ function buildVoice(li, k = kit) {
     c.v = {};
   } else c.v = key === 'sample' ? {} : VOICES[key].make(T, c.choke);   // samples make their nodes per hit
   c.voice = key; c.engine = eng;
-  if (key === 'sample') ensureSample(lane);
   // the dsp engine is wanted but its module is not in this context yet: load it, then move every lane over
   if (engine === 'dsp' && eng === 'synth' && key !== 'sample' && !dspReady(k.tc)) ensureDsp(k.tc).then(() => { m.lanes.forEach((_, i) => buildVoice(i, k)); }).catch(() => {});
 }
@@ -122,10 +122,14 @@ function buildEngineUI() {
 }
 // ---- samples on lanes: buffers by id (IndexedDB holds the audio; the lane only keeps { id, name }) ----
 const sampleBufs = new Map();
-/** Every audio buffer a lane plays: its sample, or each slice of its set (S1). */
+/** Every audio buffer a lane plays: its sample, or each slice of its set (S1) with its padded copy (padBuf), and the
+ *  reversed ones when something on the lane plays backwards (S3): made here, the scheduler never copies a buffer. */
 async function ensureSample(lane) {
   const ids = lane.sample?.slices || [lane.sample?.id];
   await Promise.all(ids.map(async (id) => { if (!id || sampleBufs.has(id)) return; const r = await getSample(id); if (r) sampleBufs.set(id, toAudioBuffer(r, T.getContext().rawContext)); }));
+  const rev = lane.usesRev();
+  if (lane.sliceCount()) ids.forEach((_, k) => { padBuf(lane, k, false); if (rev) padBuf(lane, k, true); });
+  else if (rev && ids[0]) revBuf(ids[0]);
 }
 /** S3: a sample backwards, made once per id (Web Audio can't play a buffer in reverse). */
 function revBuf(id) {
@@ -137,23 +141,36 @@ function revBuf(id) {
 /** One-shot playback: tune = rate (±1 oct), decay = how much of the sample plays, snap < ½ softens the attack and
  *  > ½ skips into the sample, color = a pitch swoop into the note (up above ½, down below). S1 / S3: `slice` picks the
  *  slice of a set; start / end / rev (locks over the lane's) cut the part that plays, backwards with rev, and the knobs
- *  above work inside that part. */
+ *  above work inside that part (samples.js sampleWindow). */
 function playSample(c, lane, p, time, lock = null, slice = null) {
-  const id = lane.sampleId(slice), tr = lane.trimAt(lock), buf = tr.rev ? revBuf(id) : sampleBufs.get(id); if (!buf) return;
-  // the part [lo, hi] in seconds (at least 5 ms); backwards it starts at the mirror of hi in the reversed buffer
-  const d = buf.duration, lo = Math.min(tr.start, tr.end, 0.995) * d, hi = Math.max(lo + 0.005 * d, Math.max(tr.start, tr.end) * d), len = Math.min(d, hi) - lo;
-  const skip = p.snap > 0.5 ? (p.snap - 0.5) * 0.6 * len : 0, offset = (tr.rev ? d - Math.min(d, hi) : lo) + skip, attack = p.snap < 0.5 ? 0.001 + (0.5 - p.snap) * 0.06 : 0.001;
-  const rate = Math.pow(2, p.tune), avail = (len - skip) / rate;   // seconds left at this speed (tuned down = longer)
-  const play = Math.min(avail, 0.03 + Math.pow(p.decayRaw, 1.5) * avail);
-  // decay at the top plays the whole sample (only a 10 ms click guard at the end); lower, the last quarter fades
-  const hold = p.decayRaw >= 0.99 ? Math.max(attack, play - 0.01) : Math.max(attack, play * 0.75);
+  const id = lane.sampleId(slice), tr = lane.trimAt(lock), plain = sampleBufs.get(id); if (!plain) return;
+  // a slice of a set plays from its copy with what follows it in the break (padBuf), so it can fade out over that
+  const n = lane.sliceCount(), padded = n ? padBuf(lane, slice ?? 0, tr.rev) : null, buf = padded || (tr.rev ? revBuf(id) : plain);
+  const w = sampleWindow({ dur: plain.duration, pad: buf.duration - plain.duration, ...tr, snap: p.snap, tune: p.tune, decay: p.decayRaw, slice: n > 0 });
   const src = new T.ToneBufferSource(buf), env = new T.Gain(0).connect(c.choke); src.connect(env);
-  env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + attack); env.gain.setValueAtTime(p.vel, time + hold); env.gain.linearRampToValueAtTime(0, time + play);
-  src.playbackRate.setValueAtTime(rate * Math.pow(2, (p.color - 0.5) * 2), time); src.playbackRate.exponentialRampToValueAtTime(rate, time + 0.06);
+  env.gain.setValueAtTime(0, time); env.gain.linearRampToValueAtTime(p.vel, time + w.attack); env.gain.setValueAtTime(p.vel, time + w.hold); env.gain.linearRampToValueAtTime(0, time + w.play);
+  src.playbackRate.setValueAtTime(w.rate * Math.pow(2, (p.color - 0.5) * 2), time); src.playbackRate.exponentialRampToValueAtTime(w.rate, time + 0.06);
   // an offline render (WAV, stems) runs its clock, onended included, before it renders: disposing there silenced the
   // sample in every export. The offline context is thrown away whole afterwards anyway.
   if (!T.getContext().isOffline) src.onended = () => { try { src.dispose(); env.dispose(); } catch {} };
-  src.start(time, offset); src.stop(time + play + 0.02);
+  src.start(time, w.offset); src.stop(time + w.play + 0.02);
+}
+/** The longest fade-out a slice makes over what follows it: snap 0's 31 ms attack at twice the speed (tune +1). */
+const PAD_SEC = 0.07;
+/** S1: slice k of the lane's set with the start of the slice after it in the set appended (backwards: reversed, with
+ *  the reversed end of the slice before it), made once per pair. One source then plays straight through the cut, where
+ *  two sources meeting at a buffer's edge leave a one-sample seam when Chrome resamples. null until both are loaded. */
+function padBuf(lane, k, rev) {
+  const n = lane.sliceCount(), id = lane.sampleId(k), nid = lane.sampleId(rev ? (k + n - 1) % n : (k + 1) % n), key = `${id}${rev ? '<' : '>'}${nid}`;
+  if (sampleBufs.has(key)) return sampleBufs.get(key);
+  const a = sampleBufs.get(id), b = sampleBufs.get(nid); if (!a || !b || a.numberOfChannels !== b.numberOfChannels || a.sampleRate !== b.sampleRate) return null;
+  const p = Math.min(b.length, Math.round(PAD_SEC * a.sampleRate)), r = new AudioBuffer({ numberOfChannels: a.numberOfChannels, length: a.length + p, sampleRate: a.sampleRate });
+  for (let c = 0; c < a.numberOfChannels; c++) {
+    const x = a.getChannelData(c), y = b.getChannelData(c), o = r.getChannelData(c);
+    if (rev) { for (let i = 0; i < a.length; i++) o[i] = x[a.length - 1 - i]; for (let i = 0; i < p; i++) o[a.length + i] = y[b.length - 1 - i]; }
+    else { o.set(x); o.set(y.subarray(0, p), a.length); }
+  }
+  sampleBufs.set(key, r); return r;
 }
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
 function applySound(li, k = kit) {
@@ -434,10 +451,19 @@ const LOCK_UI = {
   nudge: { label: 'nudge', min: -50, max: 50, fmt: v => (v > 0 ? '+' : '') + v + '%', say: v => v ? `${Math.abs(v)}% of a step ${v > 0 ? 'late' : 'early'}` : 'on the grid', base: () => 0 },
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
-function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); }
+// opening it brings the panel into view: in the scrolling lane panel the slice picker can open below its edge
+function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) $('lockpanel').scrollIntoView({ block: 'nearest' }); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). */
 function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); readout(); }
+/** Lock parameter k on the step the lock panel edits to v (null = unlock), then audition it and record it. */
+function lockHere(k, v) {
+  if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v == null) lane.unlock(i, k); else lane.setLock(i, k, v);
+  if (k === 'rev') ensureSample(lane);   // the reversed copies, made before the step plays
+  auditionLock(); stepEdited();
+}
+/** S3: a start / end gauge in % of the sample (the lane's row and the lock panel); onChange gets 0..1. */
+function trimGauge(k, onChange) { return makeGauge({ label: k, value: k === 'end' ? 100 : 0, fmt: v => v + '%', title: INFO.trim, onChange: (v) => onChange(v / 100) }); }
 function buildLockGauges() {
   const el = $('lock-gauges'); el.innerHTML = '';
   for (const k of LOCK_KEYS) {
@@ -455,12 +481,11 @@ function buildLockGauges() {
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
   $('lock-close').onclick = () => editLocks(lockStep);
   // L3 stroke: 'lane' = no artic lock (the lane's own sound); the options follow the lane's voice (renderLocks)
-  ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => { if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v === 'lane') lane.unlock(i, 'artic'); else lane.setLock(i, 'artic', v); auditionLock(); stepEdited(); } }));
+  ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => lockHere('artic', v === 'lane' ? null : v) }));
   // S3 on a sample lane: this step's start / end and direction ('lane' = no lock: the lane's own)
-  const lockSample = (k, v) => { if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v == null) lane.unlock(i, k); else lane.setLock(i, k, v); auditionLock(); stepEdited(); };
   $('lock-trim').innerHTML = '';
-  for (const k of ['start', 'end']) { const g = makeGauge({ label: k, value: k === 'end' ? 100 : 0, fmt: v => v + '%', title: INFO.trim, onChange: (v) => lockSample(k, v / 100) }); sliders['lock:' + k] = g; $('lock-trim').appendChild(g.el); }
-  ui.lockRev = mount('lock-rev', segmented({ options: [['lane', 'lane', 'no lock: as the lane plays'], [0, 'forwards'], [1, 'backwards']], value: 'lane', onChange: (v) => lockSample('rev', v === 'lane' ? null : v) }));
+  for (const k of ['start', 'end']) { const g = trimGauge(k, (v) => lockHere(k, v)); sliders['lock:' + k] = g; $('lock-trim').appendChild(g.el); }
+  ui.lockRev = mount('lock-rev', segmented({ options: [['lane', 'lane', 'no lock: as the lane plays'], [0, 'forwards'], [1, 'backwards']], value: 'lane', onChange: (v) => lockHere('rev', v === 'lane' ? null : v) }));
 }
 /** "slap" for an artic lock, "slice 3" / "backwards" for the sample locks, the key name for the rest (the lock panel title). */
 const lockName = (lane, k, lk) => k === 'artic' ? ARTICS[lane.voice]?.[articAt(lane.voice, lk)] ?? `stroke (not on ${voiceLabel(lane)})`   // kept from another voice: plays the lane sound here
@@ -479,11 +504,11 @@ function sliceTile(d, label, title, onclick) {
  *  only when the set or its loaded audio changes, so a click never lands on a detached tile; the lit tile follows. */
 let slicesFor = '';
 function renderSliceLock(lane, lk) {
-  const el = $('lock-slices'), n = lane.sliceCount(); el.hidden = !n; if (!n) return;
+  const el = $('lock-slices'), n = lane.sliceCount(); $('lock-slice-row').hidden = !n; if (!n) return;
   const ids = lane.sample.slices, key = ids.map(id => id + (sampleBufs.has(id) ? '+' : '')).join();
   if (slicesFor !== key) {
     slicesFor = key; el.innerHTML = '';
-    const pick = (s) => () => { if (lockStep < 0) return; const l = m.lane, i = l.stepIndex(lockStep); if (s == null) l.unlock(i, 'slice'); else l.setLock(i, 'slice', s); auditionLock(); stepEdited(); };
+    const pick = (s) => () => lockHere('slice', s);
     el.appendChild(sliceTile(null, 'step', 'no slice lock: step N plays slice N of the set (wrapping round)', pick(null)));
     ids.forEach((id, k) => el.appendChild(sliceTile(sampleBufs.get(id)?.getChannelData(0), k + 1, `this step plays slice ${k + 1}`, pick(k))));
     if (ids.some(id => !sampleBufs.has(id))) ensureSample(lane).then(() => { if (lockStep >= 0) renderLocks(); });
@@ -595,10 +620,12 @@ function buildSlotsUI() {
 function liveHit(li, col, velocity = 100, accent = velocity != null && velocity >= rec.accentVel) {
   const lane = m.lanes[li]; if (!awake) { wake(); return; }
   const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = velocity == null ? null : Math.max(0.25, Math.min(1, velocity / 127));
-  const lock = tune != null ? { tune } : null;
-  hitSound(lane, T.immediate(), accent, lock, accent ? 1 : v); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
-  if (!rec.armed || !playing) { m.select(li); sync(); return; }
-  const q = lane.quantize(heardTick() - m.origin, rec.quant), idx = lane.stepIndex(q.index);   // steps count from the pattern's bar 1
+  const lock = tune != null ? { tune } : null, recd = rec.armed && playing;
+  // a pad plays what its step will play (S1 its slice, S3 its start / end / direction): recording, the step the hit
+  // lands on (steps count from the pattern's bar 1); otherwise the step under the pad
+  const q = recd ? lane.quantize(heardTick() - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), sl = lane.voice === 'sample' && lane.locks[idx];
+  hitSound(lane, T.immediate(), accent, sl ? { start: sl.start, end: sl.end, rev: sl.rev, ...lock } : lock, accent ? 1 : v, kit, lane.sliceAt(idx, lane.locks[idx])); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
+  if (!recd) { m.select(li); sync(); return; }
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
   const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
@@ -769,14 +796,14 @@ async function renderSlices() {
   all.onclick = () => assignSlices(m.selected, short, sl.sampleRate, sl.slices); head.appendChild(all); el.appendChild(head);
   sl.slices.forEach((ch, k) => el.appendChild(sliceTile(ch[0], k + 1, `slice ${k + 1}`, () => assignSample(m.selected, { name: `${short} #${k + 1}`, sampleRate: sl.sampleRate, channels: ch }))));
 }
-/** S1: put a slice set on lane li: each slice stored under its own id, the lane plays slice i on step i. An empty lane
- *  gets a step per slice, all on, so the break plays straight away; a lane with a pattern keeps it. */
+/** S1: put a slice set on lane li: each slice stored under its own id, the lane plays slice i on step i. The break is
+ *  laid across the lane (a step per slice, all on, at the speed that makes them last the break at this tempo) unless the
+ *  lane already plays a slice set with steps on: then the chops stay (Lane.loadBreak). */
 async function assignSlices(li, name, sampleRate, slices) {
-  if (!slices?.length) return; await wake(); const base = `orbits-${Date.now().toString(36)}-${li}`, ctx = T.getContext().rawContext;
-  const ids = await Promise.all(slices.slice(0, MAX_SLICES).map(async (channels, k) => { const id = `${base}-s${k}`, rec = { name: `${name} #${k + 1}`, sampleRate, channels }; await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, ctx)); return id; }));
-  const lane = m.lanes[li]; lane.loadSlices({ name, slices: ids });
-  if (!lane.hits.some((h, i) => h && i < lane.length)) { lane.setLength(ids.length); lane.setEuclid(ids.length); }
-  buildVoice(li); m.select(li); sync();
+  if (!slices?.length) return; await wake(); const base = `orbits-${Date.now().toString(36)}-${li}`, ctx = T.getContext().rawContext, use = slices.slice(0, MAX_SLICES);
+  const ids = await Promise.all(use.map(async (channels, k) => { const id = `${base}-s${k}`, rec = { name: `${name} #${k + 1}`, sampleRate, channels }; await putSample(id, rec); sampleBufs.set(id, toAudioBuffer(rec, ctx)); return id; }));
+  const lane = m.lanes[li]; lane.loadBreak({ name, slices: ids, sec: use.reduce((a, ch) => a + ch[0].length, 0) / sampleRate, bpm: tempo });
+  buildVoice(li); applySound(li); m.select(li); sync();
   if (!playing) hitSound(lane, T.now(), false, null, null, kit, 0);
 }
 /** S2: a whole break from a file, cut into 8 or 16 equal slices, onto lane li as a slice set. Kept as it is (no
@@ -785,7 +812,7 @@ let breakN = 16;
 async function breakFromFile(li, file, n = breakN) {
   try {
     await wake(); const buf = await T.getContext().rawContext.decodeAudioData(await file.arrayBuffer()), rec = fromAudioBuffer(buf, file.name);
-    const cap = Math.round(16 * rec.sampleRate); if (rec.channels[0].length > cap) rec.channels = rec.channels.map(d => d.slice(0, cap));
+    const cap = Math.round(16 * rec.sampleRate); if (rec.channels[0].length > cap) { rec.channels = rec.channels.map(d => d.slice(0, cap)); toast(`${file.name} is longer than 16 s: its first 16 s are cut into slices`, 4000); }
     await assignSlices(li, file.name.replace(/\.[^.]+$/, '').slice(0, 16), rec.sampleRate, chopEqual(rec, n));
   } catch (e) { $('sample-name').textContent = `could not read ${file.name}: ${e.message || e}`; }
 }
@@ -801,8 +828,8 @@ function buildSampleUI() {
   $('btn-break-file').onclick = () => $('break-file').click();
   $('break-file').onchange = () => { const f = $('break-file').files[0]; if (f) breakFromFile(m.selected, f); $('break-file').value = ''; };
   ui.breakN = mount('break-n', segmented({ options: [[8, '8'], [16, '16']], value: breakN, onChange: (n) => { breakN = n; } }));
-  const trim = (k, v) => { m.lane.setTrim(k, v); save(); if (awake && !playing) hitSound(m.lane, T.now(), false); };
-  for (const k of ['start', 'end']) { const g = makeGauge({ label: k, value: k === 'end' ? 100 : 0, fmt: v => v + '%', title: INFO.trim, onChange: (v) => trim(k, v / 100) }); sliders['trim:' + k] = g; $('sample-trim-gauges').appendChild(g.el); }
+  const trim = (k, v) => { m.lane.setTrim(k, v); if (k === 'rev') ensureSample(m.lane); save(); if (awake && !playing) hitSound(m.lane, T.now(), false); };
+  for (const k of ['start', 'end']) { const g = trimGauge(k, (v) => trim(k, v)); sliders['trim:' + k] = g; $('sample-trim-gauges').appendChild(g.el); }
   ui.rev = mount('sample-rev', toggleChip({ label: 'backwards', title: 'Play the sample (every slice) backwards', onChange: (v) => trim('rev', v) }));
   addEventListener('storage', (e) => { if (e.key === SLICES_PING) renderSlices(); });
   for (const ev of ['dragenter', 'dragover']) $('cv').addEventListener(ev, (e) => e.preventDefault());
@@ -1134,10 +1161,13 @@ move.addEventListener('encoder', (e) => {
     for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
     auditionLock(); stepEdited(); return;
   }
-  if (held.size && index === 6 && m.lane.voice === 'sample' && m.lane.sliceCount()) {   // S1: on a slice set, hold step(s) + knob 7 = which slice, 4 clicks a slice
-    const lane = m.lane, top = (lane.sliceCount() - 1) * 4;
-    for (const h of held.values()) { const i = h.step, si = lane.stepIndex(i); h.used = true; h.sl = Math.max(0, Math.min(top, (h.sl ?? lane.sliceAt(si, lane.locks[si]) * 4) + delta)); lane.setLock(si, 'slice', Math.round(h.sl / 4)); lockStep = i; }
-    auditionLock(); stepEdited(); return;
+  if (held.size && index === 6 && m.lane.voice === 'sample' && m.lane.sliceCount()) {   // S1: on a slice set, hold step(s) + knob 7 = which slice, every 4 clicks either way
+    const lane = m.lane, top = lane.sliceCount() - 1; let moved = false;
+    for (const h of held.values()) {
+      const i = h.step, si = lane.stepIndex(i), k = Math.trunc((h.sl = (h.sl || 0) + delta) / 4); h.used = true; lockStep = i;
+      if (k) { h.sl -= k * 4; lane.setLock(si, 'slice', Math.max(0, Math.min(top, lane.sliceAt(si, lane.locks[si]) + k))); moved = true; }
+    }
+    if (moved) auditionLock(); stepEdited(); return;
   }
   if (held.size && index < LOCK_KEYS.length) {   // hold step(s) + knob 1–7 = lock tune · prob · vel · decay · tone · snap · color on those steps
     const k = LOCK_KEYS[index], lane = m.lane, span = k === 'tune' ? 0.02 : 0.02;

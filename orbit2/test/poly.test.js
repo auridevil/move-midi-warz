@@ -1342,3 +1342,54 @@ test('S2 hand-off: v1 (8 slices) and v2 (a region + cuts, up to 16) read as one 
   assert.equal(ch.length, 16); assert.deepEqual(ch.slice(0, 15).map(s => s[0].length), Array(15).fill(6)); assert.equal(ch[15][0].length, 13, 'the remainder goes to the last slice');
   assert.equal(ch[2][1][0], 512); assert.equal(chopEqual(brk, 8).length, 8); assert.equal(chopEqual({ channels: [f(3)] }, 16).length, 3, 'never an empty slice');
 });
+test('ORBIT2-09 r1: slices join without a hole, a break lies across its lane at its own speed, a pad plays its step\'s slice, a recalled set loads', async () => {
+  const { sampleWindow } = await import('../src/samples.js'), { collectHits } = await import('../src/poly/export.js'), { breakSpeed } = await import('../src/poly/lanes.js');
+  const near = (a, b, msg) => assert.ok(Math.abs(a - b) < 1e-9, `${msg}: ${a} vs ${b}`);
+  // sound 1: a slice (played from its copy with the next slice's start appended, app.js padBuf, 70 ms) stays at full level
+  // to its cut, then fades out over that audio as the next slice fades in (the same attack): in order the two are the
+  // same audio, so they sum back to the break
+  const PAD = 0.07, sl = sampleWindow({ dur: 0.125, pad: PAD, slice: true });
+  assert.equal(sl.follow, 'same'); near(sl.offset, 0, 'from its start'); near(sl.hold, 0.125, 'full level to the cut'); near(sl.play - sl.hold, sl.attack, 'fades as the next fades in');
+  const tuned = sampleWindow({ dur: 0.125, pad: PAD, tune: -1, slice: true }); near(tuned.hold, 0.25, 'an octave down: twice as long'); assert.equal(tuned.follow, 'same');
+  const soft = sampleWindow({ dur: 0.125, pad: PAD, snap: 0, tune: 1, slice: true }); near(soft.attack, 0.031, 'snap 0'); near(soft.play - soft.hold, soft.attack, 'the padding holds the longest fade at twice the speed');
+  // nothing after it (the next slice not loaded yet): a 2 ms guard on a slice (it was 10 ms, a 5.5 ms hole at every join)
+  const lone = sampleWindow({ dur: 0.125, slice: true }); assert.equal(lone.follow, null); near(lone.play - lone.hold, 0.002, 'a slice\'s guard');
+  near(sampleWindow({ dur: 0.5, rev: true }).play - sampleWindow({ dur: 0.5, rev: true }).hold, 0.002, 'the reversed attack keeps its crack');
+  // backwards the part sits at its mirror and fades over what came before it; an end point fades over what follows it
+  const back = sampleWindow({ dur: 0.1, start: 0.25, end: 0.75, rev: true }); near(back.offset, 0.025, 'mirror of the end'); assert.equal(back.follow, 'same');
+  assert.equal(sampleWindow({ dur: 0.1, pad: PAD, rev: true, slice: true }).follow, 'same', 'a reversed slice fades over the reversed end of the one before');
+  const trimmed = sampleWindow({ dur: 0.2, end: 0.5 }); assert.equal(trimmed.follow, 'same'); near(trimmed.hold, 0.1, 'to the end point'); near(trimmed.play, 0.101, 'then 1 ms over what follows');
+  near(sampleWindow({ dur: 0.125, start: 0.5, end: 0.5 }).hold, 0.005, 'start = end still plays 5 ms (not 0.5 % of the part)');
+  // a whole sample and every lower decay: the formula from before the phase, unchanged
+  const old = ({ dur, snap, tune, decay }) => { const skip = snap > 0.5 ? (snap - 0.5) * 0.6 * dur : 0, attack = snap < 0.5 ? 0.001 + (0.5 - snap) * 0.06 : 0.001, rate = 2 ** tune, avail = (dur - skip) / rate, play = Math.min(avail, 0.03 + decay ** 1.5 * avail); return { offset: skip, rate, attack, hold: decay >= 0.99 ? Math.max(attack, play - 0.01) : Math.max(attack, play * 0.75), play }; };
+  for (const dur of [0.05, 0.5, 3]) for (const snap of [0, 0.3, 0.5, 0.8, 1]) for (const tune of [-1, 0, 0.5]) for (const decay of [0, 0.4, 0.99, 1]) {
+    const w = sampleWindow({ dur, snap, tune, decay }), o = old({ dur, snap, tune, decay }); assert.equal(w.follow, null);
+    for (const k of ['offset', 'rate', 'attack', 'hold', 'play']) near(w[k], o[k], `${k} at ${dur} s, snap ${snap}, tune ${tune}, decay ${decay}`);
+  }
+  // sound 2: a break lies across the lane at the speed that makes its steps last it at this tempo
+  const R = (i) => RATIOS[i];
+  assert.equal(R(breakSpeed(16, 2, 120)), 4, '16 slices of a bar: 16ths'); assert.equal(R(breakSpeed(8, 2, 120)), 2, '8: 8ths'); assert.equal(R(breakSpeed(16, 4, 120)), 2, 'two bars: 8ths');
+  assert.equal(R(breakSpeed(8, 4, 120)), 1); assert.equal(R(breakSpeed(8, 1, 120)), 4, 'half a bar'); assert.equal(R(breakSpeed(16, (60 / 170) * 4, 100)), 4, 'a 170 bpm bar at 100 bpm is still a bar');
+  assert.equal(R(breakSpeed(12, 2, 120)), 3); assert.equal(R(breakSpeed(11, 2, 120)), 3, 'no bar fits: the nearest speed'); assert.equal(R(breakSpeed(16, 2, 0)), 4, 'no tempo: a bar');
+  const m = new Machine(), l = m.lanes[0]; l.setLength(4); l.setRatio(ratioIndexOf(4)); l.hits[0] = true; l.rotation = 1; l.tune = 0.3; l.swing = 0.3; l.setLock(0, 'vel', 0.2);
+  const ids = Array.from({ length: 8 }, (_, k) => 'b' + k);
+  assert.equal(l.loadBreak({ name: 'brk', slices: ids, sec: 2, bpm: 120 }), true, 'a drum lane with a pattern gets the break laid out');
+  assert.deepEqual([l.length, l.ratio, l.hits.slice(0, 8).every(Boolean), l.rotation, l.tune, l.swing, l.locks[0], l.sound.tone, l.sound.send], [8, 2, true, 0, 0, 0, null, 1, 0]);
+  // the reviewer's repro (8 slices of a 2 s bar on a ×4 lane): now once a bar, in order, 250 ms apart, one at a time
+  const hits = collectHits(m, { to: P * 4, tempo: 120 }).filter(h => h.li === 0); assert.deepEqual(hits.map(h => h.slice), [0, 1, 2, 3, 4, 5, 6, 7]); hits.forEach((h, k) => near(h.time, k * 0.25, 'slice ' + k));
+  // a lane already playing a slice set with steps on keeps its chops for a new break; an empty one is laid out again
+  l.setLock(3, 'slice', 6); l.toggle(5);
+  assert.equal(l.loadBreak({ name: 'other', slices: ['c0', 'c1', 'c2', 'c3'], sec: 1, bpm: 120 }), false); assert.equal(l.locks[3].slice, 6, 'locks stay'); assert.equal(l.hits[5], false, 'hits stay');
+  assert.equal(l.sample.slices.length, 4); assert.equal(l.sliceAt(3, l.locks[3]), 3, 'a lock past the new set plays its last slice');
+  l.clear(); assert.equal(l.loadBreak({ name: 'third', slices: ids, sec: 2, bpm: 120 }), true);
+  // S3: the app makes reversed copies early when something plays backwards (a rev lock of 0 is forwards)
+  assert.equal(l.usesRev(), false); l.setLock(2, 'rev', 0); assert.equal(l.usesRev(), false); l.setLock(2, 'rev', 1); assert.equal(l.usesRev(), true); l.unlock(2, 'rev'); l.setTrim('rev', true); assert.equal(l.usesRev(), true);
+  // app.js has no unit seam for these two (checked in the page, see the review file): a pad hit plays the slice of the
+  // step it lands on (architect 1), and every buildVoice of a sample lane loads its set, even on a chain that already
+  // plays a sample, as after a slot recall (dex 1)
+  const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  const live = app.slice(app.indexOf('function liveHit('), app.indexOf('function setRec('));
+  assert.match(live, /hitSound\([^;]*lane\.sliceAt\(idx, lane\.locks\[idx\]\)\)/, 'liveHit plays its step\'s slice'); assert.ok(live.indexOf('lane.quantize(') < live.indexOf('hitSound('), 'the step is known before the hit sounds');
+  const bv = app.slice(app.indexOf('function buildVoice('), app.indexOf('// ---- engines')), at = bv.indexOf('ensureSample(lane)');
+  assert.ok(at > 0 && at < bv.indexOf('&& c.v) return'), 'ensureSample runs before the early return');
+});

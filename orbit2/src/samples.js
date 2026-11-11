@@ -13,6 +13,26 @@ export function trimRecord(rec, { thr = 0.02, maxSec = 4 } = {}) {
   s = Math.max(0, s - Math.round(rec.sampleRate * 0.002)); const e = Math.min(d.length, s + Math.round(maxSec * rec.sampleRate));
   return { ...rec, channels: rec.channels.map(c => c.slice(s, e)) };
 }
+/**
+ * S1 / S3: how one hit of a sample plays, in seconds of output time. The part from `start` to `end` (0..1 of a sample
+ * `dur` long, at least 5 ms), backwards with `rev` (the caller then plays a reversed buffer, where the part sits at its
+ * mirror), at speed 2^tune; snap < ½ softens the attack, > ½ skips into the part; `decay` sets how much of it plays (the
+ * last quarter fading). The buffer played may hold `pad` seconds more after the sample: a slice of a set carries the
+ * start of the slice that follows it in the break (backwards: the end of the one before). A part played to its end
+ * fades out over the audio after it (`follow` 'same') in the attack time, the time the next slice fades in: in order the
+ * two are the same audio and sum back to the break, out of order they cross-fade. With nothing after it a part ends on a
+ * guard: 10 ms for a whole sample (as before slices), 2 ms on a slice or backwards (a cut point, the reversed attack).
+ */
+export function sampleWindow({ dur, pad = 0, start = 0, end = 1, rev = false, snap = 0.5, tune = 0, decay = 1, slice = false }) {
+  const min = Math.min(0.005, dur), lo = Math.min(Math.min(start, end) * dur, dur - min), hi = Math.min(dur, Math.max(lo + min, Math.max(start, end) * dur));
+  const len = hi - lo, a = rev ? dur - hi : lo, rate = Math.pow(2, tune);   // a: where the part starts in the buffer played
+  const skip = snap > 0.5 ? (snap - 0.5) * 0.6 * len : 0, attack = snap < 0.5 ? 0.001 + (0.5 - snap) * 0.06 : 0.001;
+  const avail = (len - skip) / rate, play = Math.min(avail, 0.03 + Math.pow(decay, 1.5) * avail), w = { offset: a + skip, rate, attack, follow: null };   // avail: the part left at this speed (tuned down = longer)
+  if (decay < 0.99) return { ...w, hold: Math.max(attack, play * 0.75), play };
+  const after = (dur + pad - a - len) / rate;   // audio after the part in the buffer played, at this speed
+  if (play >= avail && after > 1e-4) return { ...w, hold: avail, play: avail + Math.min(attack, after), follow: 'same' };
+  return { ...w, hold: Math.max(attack, play - (slice || rev ? 0.002 : 0.01)), play };
+}
 /** Unassembler → Orbits hand-off: key of the slices, and a localStorage ping other tabs listen to. */
 export const SLICES_KEY = 'unasm-slices', SLICES_PING = 'midi-warz.samples.slices';
 /** S2: the most slices a hand-off (or an auto-sliced break) brings: a bar of 16ths. */

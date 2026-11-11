@@ -53,8 +53,13 @@ non-Float32Array channel are dropped. `mode` is always `'tiles'`.
 ## What Orbits does with it
 
 - The sample row shows a tile per slice (waveform + number). Tap a tile = that slice on the selected lane (one sample,
-  as before). **all to this lane** = every slice on the selected lane as a slice set (`Lane.loadSlices`): step N plays
-  slice N (mod the set), a `slice` step lock picks another. An empty lane gets a step per slice, all on.
+  as before). **all to this lane** = every slice on the selected lane as a slice set (`Lane.loadBreak`): step N plays
+  slice N (mod the set), a `slice` step lock picks another. The break is laid across the lane (`Lane.layBreak`: a step
+  per slice, all on, from step 1, played straight, at the speed `breakSpeed` picks so the steps last the break at the
+  current tempo: 16 slices of a bar as 16ths, 8 as 8ths, 16 of two bars as 8ths), unless the lane already plays a slice
+  set with steps on: then its chops stay and only the audio changes.
+- A slice played to its end hands over to the slice after it in the set, fading out over the first moment of it while
+  the next step's slice fades in (`samples.js sampleWindow`), so slices played in order join without a hole.
 - Each slice is stored under its own id (`orbits-<time>-<lane>-s<k>`), so the lane keeps playing after the next
   hand-off overwrites `unasm-slices`.
 
@@ -74,4 +79,5 @@ send v1 there and v2 to orbit2.
 ## Break from a file (inside orbit2)
 
 `break file…` in the sample row loads a whole break (up to 16 s, no silence trim so the cuts follow the bar) and cuts
-it into 8 or 16 equal slices (`samples.js chopEqual`), then puts them on the selected lane as a slice set.
+it into 8 or 16 equal slices (`samples.js chopEqual`), then puts them on the selected lane as a slice set, laid out as
+above. A longer file says so (a toast): only its first 16 s are cut.

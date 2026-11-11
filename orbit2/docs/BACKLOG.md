@@ -434,3 +434,29 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   driving `liveHit` with a fake MIDI out (or `liveHit`'s note logic moved somewhere pure) would be sturdier.
 - **The synth agogo's clang** (ORBIT2-08 round 2, sound): it has its dsp twin's level but almost no metal (0.1 % above
   2 kHz, centroid 643 / 965 Hz, against 44 % and 1.7 / 2.3 kHz); an inharmonic partial or a higher modulation index.
+- **Sample audio is never deleted** (ORBIT2-09 round 1, verifier, architect): every break file, "all to this lane" or
+  re-cut writes N new IndexedDB records (17 → 49 after two re-cuts of one break, ~6 MB a 16 s stereo break), and
+  nothing removes `orbits-*` ids no pattern, undo step, slot or library setup refers to any more (single samples never
+  were either); a sweep of unreferenced ids, or ids by content.
+- **Slice sets in share links** (ORBIT2-09 round 1, verifier, architect; phase 15): links carry no samples, so a slice
+  lane opens as the drum it replaced, its slice / start / end / direction locks inert; the link could say so on open,
+  or carry a small set.
+- **`hitSound`'s positional parameters** (ORBIT2-09 round 1, architect): seven, and a missing slice means slice 1 (how
+  `liveHit` slipped through); an options object, or the hit itself.
+- **Tempo from the break** (ORBIT2-09 round 1, sound): a break at another tempo than the page's leaves a gap after each
+  slice (a 120 bpm break at 100 bpm: 25 ms) or overlaps them; an option on load: tempo = 60 × beats / length, the break
+  taken as 1, 2 or 4 bars.
+- **Mono slice lanes** (ORBIT2-09 round 1, sound): a slice rings on under the next when steps come faster than the
+  slices (a faster tempo, ratchets); a mode where each hit cuts the lane's last one with a 1–2 ms fade, like Simpler or
+  an MPC in mono.
+- **Sample gain staging** (ORBIT2-09 round 1, sound; from before the phase): a slice comes out ~12 dB under its source
+  in the raw stem (velocity 0.7, the −3 dB pan law, lane level 0.66² × 1.2); a −1 dBFS break bounces at −15.4 dBFS peak
+  after the master.
+- **The sender port needs the shipped reader** (ORBIT2-09 round 1, architect; the port-back): the v2 payload shares the
+  `unasm-slices` key, and the shipped Orbits reads only v1; port `src/unasm/app.js` together with the shipped reader, or
+  send both formats.
+- **Breaks on a phone** (ORBIT2-09 round 1, maya; phases 14, 16): "break file…", the 8 / 16 choice and the slice picker
+  sit deep in the lane drawer, and nothing near the ring says a break can go there.
+- **One limit for slices** (ORBIT2-09 round 1, architect): 16 is `MAX_SLICES` in `lanes.js` and `MAX_HANDOFF` in
+  `samples.js` (and the 16 s break cap sits in `app.js`); one constant means one module importing the other for a
+  number.
