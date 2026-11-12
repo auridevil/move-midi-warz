@@ -126,3 +126,22 @@ test('V2 coupling: a hit lifts the next lane\'s next step; deterministic with lo
   const m = make('next'); m.lanes[1].prob = 0; const r = () => 0.5; m.tick(0, r); assert.equal(m.boostOf(1), 0.6); const ev = m.tick(840, r); assert.equal(ev[1].hit, true); assert.equal(m.boostOf(1), 0.6, 'lane 1 hit again on that tick');
   m.lanes[0].clear(); m.tick(1680, r); assert.equal(m.boostOf(1), 0, 'used up'); assert.equal(m.tick(2520, r)[1].hit, false);
 });
+
+test('ORBIT2-12: live play = the render with every new feature on (locked dice: coupling, masks, ratchet curves + ramp, modulator, timbre dice, scale)', async () => {
+  const { liveTick } = await import('../src/poly/export.js');
+  const build = () => {
+    const m = new Machine(6); m.lanes.forEach((l, i) => { l.clear(); l.setLength([4, 8, 16, 5, 6, 3][i]); l.setRatio([5, 10, 12, 10, 10, 5][i]); l.setEuclid([4, 3, 7, 2, 4, 1][i]); l.prob = [1, 0.4, 0.7, 0.5, 0.6, 1][i]; });
+    m.couple.mode = 'matrix'; m.couple.matrix[0][1] = 0.5; m.couple.matrix[2][3] = 0.4; m.couple.matrix[3][4] = 0.7;
+    const h = m.lanes[2]; h.setEuclidMode('xor'); h.hits[1] = h.hits[2] = true; h.setTrig(0, { ratchet: 6, curve: 'down', ramp: -0.5 });
+    m.lanes[1].setTrig(2, { ratchet: 8, curve: 'up', ramp: 0.25 }); m.lanes[1].voice = 'conga'; m.lanes[1].setScale('just'); m.lanes[1].tune = 0.2;
+    m.lanes[0].setMod({ target: 'tone', loops: 3, depth: 0.8 }); m.lanes[3].setMod({ target: 'decay', loops: 0, depth: 0.5 }); m.lanes[4].setTimbreDice({ tone: 0.5, color: 0.3 });
+    return m;
+  };
+  const dice = new Dice().fromJSON({ locked: true, seed: 77, repeat: 2 }), tempo = 133, tickSec = 60 / tempo / PPQ, to = 4 * BAR_TICKS * 4;
+  const key = (h) => `${h.li}@${h.time.toFixed(6)} v${h.vel.toFixed(4)} ${JSON.stringify(h.lock)}`;
+  const m = build(), cycle = m.cycleTicks({ repeat: 2 }), ahead = [], live = [];
+  for (let t = 0; t < to; t++) liveTick(m, t, ahead, { dice, tickSec, cycle }).forEach((r, li) => { for (const h of [...r.early, ...r.hits]) live.push({ li, time: t * tickSec + h.dt, vel: h.vel, lock: h.lock ?? null }); });
+  const render = collectHits(build(), { to, tempo, dice }).map(h => ({ li: h.li, time: h.time, vel: h.vel, lock: h.lock ?? null }));
+  const sort = (a) => a.map(key).sort();
+  assert.ok(render.length > 200, `${render.length} hits`); assert.deepEqual(sort(live), sort(render));
+});
