@@ -122,12 +122,12 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 
 ## E · Export for producers (phase 10)
 
-- **E1 24-bit and 32-bit float WAV**, sample rate 44.1/48 kHz choice. (Dex, Sofia)
-- **E2 dry stems + FX return**: stems without the delay plus a 5th "delay return" stem; option to bake or not. (Dex)
-- **E3 Drum-Rack MIDI**: one merged track option (notes per lane on 36/38/42/39…), plus the per-lane tracks. (Dex)
-- **E4 kit export**: one-shot WAV of each lane's sound (with its settings) to load into Simpler/Drum Rack. (Dex)
-- **E5 export all**: WAV + stems + MIDI from ONE hit list in one zip (see B5). (Dex)
-- **E6 smpl chunk** (loop points) next to `acid`; optional ring-out file for jam takes. (producer review)
+- **E1 24-bit and 32-bit float WAV**, sample rate 44.1/48 kHz choice. (Dex, Sofia) ✅ ORBIT2-10
+- **E2 dry stems + FX return**: stems without the delay plus a 5th "delay return" stem; option to bake or not. (Dex) ✅ ORBIT2-10
+- **E3 Drum-Rack MIDI**: one merged track option (notes per lane on 36/38/42/39…), plus the per-lane tracks. (Dex) ✅ ORBIT2-10
+- **E4 kit export**: one-shot WAV of each lane's sound (with its settings) to load into Simpler/Drum Rack. (Dex) ✅ ORBIT2-10
+- **E5 export all**: WAV + stems + MIDI from ONE hit list in one zip (see B5). (Dex) ✅ ORBIT2-10
+- **E6 smpl chunk** (loop points) next to `acid`; optional ring-out file for jam takes. (producer review) ✅ ORBIT2-10
 
 ## P · Live performance (phase 11)
 
