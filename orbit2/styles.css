@@ -502,6 +502,9 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .trig-row { border-top: 1px solid rgba(103,232,249,.2); padding-top: 6px; }
 .sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
 #btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
+#btn-mute.armed { background: var(--star-white); border-color: var(--star-white); color: var(--void-black); }
+#btn-latch.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
+.lane-tab.pend { border-style: dashed; border-color: var(--signal-cyan); }   /* P2: a mute waits for the next bar line */
 #btn-fill.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
 #btn-dice.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); box-shadow: 0 0 14px rgba(103,232,249,.4); }
 #dice-seed { width: 80px; }

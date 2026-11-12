@@ -29,12 +29,14 @@
       <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">undo</button>
       <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z)">redo</button>
       <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill (hold)</button>
+      <button id="btn-latch" class="small" type="button" aria-pressed="false">fill next bar</button>
       <button id="btn-jam" class="jam-btn" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
       <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
     <div class="status" id="move-status" hidden>
       <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
       <button id="btn-connect" class="primary" type="button">Connect Move</button>
+      <span id="live-mode"></span>
     </div>
     <!-- C2 one status line; the per-lane and sound rows live in "nerd stats" (left column) -->
     <p id="readout" class="readout"></p>
@@ -188,7 +190,8 @@
     <details class="drawer keys-pop" id="keys-pop">
       <summary>Move <span class="pop-x">esc ×</span></summary>
       <table class="gtable keys">
-        <tr><th>Pads row</th><td>8 of the lane's steps (toggle) · Shift+pad = accent · record armed: play + record</td></tr>
+        <tr><th>Live mode</th><td>on by default (the chip by Connect Move): pads play, Capture and Delete need Shift or a hold. Off = editing: pads toggle steps, every button acts at once</td></tr>
+        <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
         <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle</td></tr>
         <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
         <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
@@ -197,8 +200,9 @@
         <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
         <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
         <tr><th>Hold Layout</th><td>fill</td></tr>
+        <tr><th>Shift + Layout</th><td>fill for the next whole bar, hands free (Layout lights cyan while it waits) · again before it starts = cancel</td></tr>
         <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
-        <tr><th>Delete</th><td>clear the lane</td></tr>
+        <tr><th>Delete</th><td>clear the lane · live mode: Shift + Delete, or hold it 0.6 s (it blinks red first; a shorter tap does nothing)</td></tr>
         <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
         <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
         <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
@@ -207,8 +211,10 @@
         <tr><th>Knobs 5–7</th><td>swing · probability · tune</td></tr>
         <tr><th>Knob 8</th><td>master tempo</td></tr>
         <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
-        <tr><th>Mute</th><td>mute lane · Shift = solo</td></tr>
-        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off</td></tr>
+        <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
+        <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (cyan until then) · mutes are never undo steps</td></tr>
+        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
+        <tr><th>−</th><td>evolve on/off</td></tr>
         <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
         <tr><th>Record</th><td>arm live record · Shift = tap tempo</td></tr>
         <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
@@ -264,6 +270,7 @@
         <label>kit (all lanes) <select id="kit-select"></select></label>
       </div>
       <div class="row-ctl">
+        <button id="btn-mute" class="small" type="button" aria-pressed="false" title="Mute this lane (a performance move: undo leaves it)">mute</button><span id="mute-bar"></span>
         <button id="btn-solo" class="small" title="Only soloed lanes play">solo</button>
         <div class="ctl" title="When this lane hits it cuts off…"><span class="ctl-lbl">chokes</span><div id="choke-select"></div></div>
       </div>

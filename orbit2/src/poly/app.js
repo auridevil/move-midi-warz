@@ -14,6 +14,7 @@ import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
+import { HOLD_MS, MuteQueue, FillLatch, Guard } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -43,7 +44,8 @@ const hist = new History(); let restoring = false, loadNext = false;
 let spoken = null, announceTimer = 0, hush = false;   // screen-reader announcements (announceChanges, next to readout)
 const perfKey = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo' || k === 'selected' ? undefined : v));
 const save = () => { const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; try { localStorage.setItem(SAVE, full); } catch {} };
-const dice = new Dice(); let fill = false;
+const dice = new Dice(); let fill = false, fillHold = false;   // fill = held (Layout, the fill button, key 0) or latched for a bar (P3)
+const latch = new FillLatch(), muteQ = new MuteQueue();   // P3 fill for the next bar; P2 mutes waiting for the next bar line
 const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one last loaded / saved
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
 const SETTINGS = 'midi-warz.orbit2.settings.v1';
@@ -56,9 +58,12 @@ const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => mo
 // stems + delay return, MIDI as one Drum-Rack track. Older settings have none of it: the defaults are the old formats
 // (16-bit, 44.1 kHz, wet stems, a track per lane); 16-bit stems now share one gain with their raw mix (stemFiles).
 const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false };
+// P1 / P2 live performance: live = the Move's pads play instead of writing steps, Capture / Delete need Shift or a hold
+// (on by default: it only changes what the Move does); muteBar = mutes wait for the next bar line while playing
+const perf = { live: true, muteBar: false };
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
-const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp })); } catch {} };
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
+const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf })); } catch {} };
 
 // ---- sounds ----
 let kit = null, loop = null;
@@ -267,6 +272,8 @@ function onTick(t, time, cyc, ts) {
   trackMeter(t);
   const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars (and lanes) here
   if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
+  // P2 / P3 on every bar line, Play's downbeat included: queued mutes flip, the fill latch turns on (or off) for the bar
+  if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
   // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
@@ -296,7 +303,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); flushPerf(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -358,6 +365,9 @@ const INFO = {
   condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
+  'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
+  'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
+  'fill latch': 'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
   sample: 'Load a file, record up to 4 s from the mic, take a slice Unassembler sent (or all of them as a slice set), load a whole break and cut it into 8 or 16 slices, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit. A slice set plays slice N on step N; lock a step to another slice in its lock panel (Move: hold the step, turn knob 7).',
   trim: 'Start and end: the part of the sample (of each slice) that plays, from 0 to 100 % of it. With backwards it plays from the end to the start.',
@@ -407,8 +417,9 @@ function sync() {
   ui.swingTpl.set(m.lane.swingTpl);
   for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100)); ui.meter?.set(m.meter);
+  muteQ.trim(m.lanes.length);   // a lane the pattern no longer has (6 → 4, a slot) has no mute waiting
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
-  ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
+  ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${m.lanes[i].muted ? 'unmutes' : 'mutes'} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${m.lanes[i].muted ? 'unmutes' : 'mutes'} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); renderLocks(); paintLeds(); save(); readout(); renderStrokeNotes();
@@ -425,6 +436,7 @@ function renderVoiceOptions() {
 }
 function renderLaneMix() {
   const lane = m.lane; $('btn-solo').classList.toggle('armed', lane.solo);
+  const mb = $('btn-mute'); mb.classList.toggle('armed', lane.muted); mb.setAttribute('aria-pressed', lane.muted); mb.textContent = muteQ.has(m.selected) ? `${lane.muted ? 'unmute' : 'mute'} ⇥ bar` : 'mute';
   ui.choke.setOptions([[-1, 'nothing'], ...m.lanes.map((l, i) => [i, `${i + 1} · ${voiceLabel(l)}`, `cut lane ${i + 1} when this lane hits`])]); ui.choke.disable(m.selected); ui.choke.set(lane.choke);
   [...ui.choke.el.children].forEach((b, k) => { if (k) b.style.setProperty('--chip', LANE_HEX[k - 1]); });
   $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.sliceCount() ? ` · ${lane.sliceCount()} slices, a slice per step` : ''}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
@@ -715,7 +727,32 @@ function applyState(step) {
   rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
 }
 const undo = () => applyState(hist.undo({ tempo })), redo = () => applyState(hist.redo());
-function setFill(on) { if (fill === on) return; fill = on; $('btn-fill').classList.toggle('armed', on); paintLeds(); readout(); }
+/** Momentary fill (Layout, the fill button, key 0): on while held, on top of a latched bar. */
+function setFill(on) { if (fillHold === on) return; fillHold = on; fill = fillHold || latch.on; renderFill(); }
+/** P3: Shift + Layout or "fill next bar": the next whole bar fills (again before it starts = cancel). Stopped, it waits for Play's downbeat. */
+function armLatch() { latch.arm(); fill = fillHold || latch.on; renderFill(); }
+function renderFill() {
+  $('btn-fill').classList.toggle('armed', fill); const b = $('btn-latch'); b.classList.toggle('armed', latch.state !== 'off');
+  b.textContent = latch.state === 'armed' ? 'fill: next bar…' : latch.on ? 'fill: this bar' : 'fill next bar'; b.setAttribute('aria-pressed', latch.state !== 'off');
+  paintLeds(); readout();
+}
+/** P2: mute or unmute lane li without selecting it: at once, or on the next bar line while playing with "mute on next
+ *  bar" (a second press before it takes it back). A performance move: never an undo step (perfKey). */
+function toggleMute(li) {
+  if (li < 0 || li >= m.lanes.length) return;
+  if (perf.muteBar && playing) muteQ.toggle(li); else m.lanes[li].muted = !m.lanes[li].muted;
+  sync();
+}
+/** Master clock, on a bar line: what P2 / P3 queued for it. The model changes now (this tick plays it), the page after. */
+function barPerf() {
+  const flips = muteQ.bar(); for (const li of flips) if (m.lanes[li]) m.lanes[li].muted = !m.lanes[li].muted;
+  if (latch.bar()) fill = fillHold || latch.on;
+  offClock(true, () => { if (flips.length) sync(); renderFill(); });
+}
+/** Stopped: nothing waits for a bar line that won't come (queued mutes flip now, the latch lets go). */
+function flushPerf() { flushMutes(); latch.clear(); fill = fillHold; renderFill(); }
+/** The waiting mutes flip now (stop, or "mute on next bar" switched off). */
+function flushMutes() { const flips = muteQ.bar(); for (const li of flips) if (m.lanes[li]) m.lanes[li].muted = !m.lanes[li].muted; if (flips.length) sync(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
   if (evo.home && evoCount >= evo.home) { m.assign(evoSnap, { keep: true, selected: m.selected }); rebuildVoices(); evoCount = 0; lastEvolve = 'back home'; }
@@ -779,7 +816,9 @@ function buildMidiUI() {
 // ---- solo & choke ----
 function toggleSolo(li = m.selected) { m.lanes[li].solo = !m.lanes[li].solo; sync(); }
 function buildMixUI() {
-  $('btn-solo').onclick = () => toggleSolo();
+  $('btn-solo').onclick = () => toggleSolo(); $('btn-mute').onclick = () => toggleMute(m.selected);
+  ui.muteBar = mount('mute-bar', toggleChip({ label: 'on next bar', on: perf.muteBar, title: INFO['mute next bar'], onChange: (v) => { perf.muteBar = v; saveSettings(); if (!v) flushMutes(); } }));
+  ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; saveSettings(); paintLeds(); } }));
   ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
 
@@ -1056,6 +1095,7 @@ function buildExportUI() {
 function buildEditUI() {
   $('btn-undo').onclick = undo; $('btn-redo').onclick = redo;
   const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
+  $('btn-latch').onclick = armLatch; $('btn-latch').title = INFO['fill latch'];
 }
 
 // ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as a track per lane (4 or 6), up to 256 beats ----
@@ -1246,6 +1286,19 @@ renderLib();
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34, nearestPaletteIndex('#2f7a45'), nearestPaletteIndex('#8a5a20')];
 const REC_LED = nearestPaletteIndex('#ef4444'), CYAN_LED = nearestPaletteIndex('#67e8f9'), MAGENTA_LED = nearestPaletteIndex('#f0abfc');
 let loopHeld = false, dupHeld = false, chainPick = [];
+// P1 / P2 / P3 (perform.js): Mute held (used = it muted a lane or soloed, so its release doesn't), Layout pressed with
+// Shift (its release is not the end of a held fill), Capture / Delete guarded in live mode, their LEDs blinking
+const mute = { held: false, used: false }, guard = new Guard(), blink = new Map(); let latchPress = false;
+const FLASH_MS = 200;   // with Shift a guarded button flashes this long before it acts
+function startBlink(name) { if (blink.has(name)) return; const b = { on: true, timer: setInterval(() => { b.on = !b.on; paintLeds(); }, 90) }; blink.set(name, b); paintLeds(); }
+function stopBlink(name) { const b = blink.get(name); if (!b) return; clearInterval(b.timer); blink.delete(name); paintLeds(); }
+/** A destructive Move button in live mode: Shift = flash, then act; alone = blink while held, act at HOLD_MS; let go sooner = nothing (a hint says how). */
+function guarded(name, pressed, act, what) {
+  if (!pressed) { const cut = guard.release(name) === 'cancel'; if (cut) { stopBlink(name); toast(`${name}: hold it (or Shift + ${name}) to ${what}`); } return; }
+  const { now, id } = guard.press(name, shift); startBlink(name);
+  if (now) setTimeout(() => { stopBlink(name); act(); }, FLASH_MS);
+  else setTimeout(() => { if (guard.fire(name, id)) { stopBlink(name); act(); } }, HOLD_MS);
+}
 // L5 pages and the L2 pad window (pages.js): a pad row shows 8 steps of its lane, the 16 step buttons 16 steps of the
 // selected lane. Following (the default) each row shows the page its own lane's playhead is on, so every step's
 // playhead is seen; Back + ◀ ▶ (or Back + a step button) pins one page for every row, Back alone follows again. The 4
@@ -1266,14 +1319,17 @@ function paintLeds() {
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
   } else for (let b = 0; b < STEP_BTNS; b++) { const i = s0 + b; move.setStepColor(b, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]); }
   move.setButtonColor('back', pages.follow ? (np > 1 ? 16 : 0) : CYAN_LED);   // lit = there are pages; cyan = one is pinned
-  for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }   // Shift held: track 4 / 3 = lanes 5 / 6
-  move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); move.setButtonColor('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : 16); move.setButtonColor('delete', 16);
+  // Shift held: track 4 / 3 = lanes 5 / 6. Mute held: the track buttons show the mutes (lane colour = playing, off = muted, cyan = changes on the next bar)
+  for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, mute.held ? (muteQ.has(li) ? CYAN_LED : m.lanes[li].muted ? 0 : LANE_LED[li]) : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
+  const blinkLed = (name, idle) => { const b = blink.get(name); move.setButtonColor(name, b ? (b.on ? REC_LED : 0) : idle); };
+  move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); blinkLed('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : latch.state === 'armed' ? CYAN_LED : 16); blinkLed('delete', 16); move.setButtonColor('minus', evo.on ? MAGENTA_LED : 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
   move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
 move.addEventListener('pad', (e) => {
   if (!e.detail.on) return; const { col, velocity } = e.detail, li = padBase() + e.detail.row;   // the row's lane in the window (selecting it keeps the window)
-  if (rec.armed) return liveHit(li, col, velocity);
+  if (mute.held) { mute.used = true; toggleMute(li); return; }   // P2: hold Mute + a pad of a row = that lane's mute (no sound, no step)
+  if (rec.armed || perf.live) return liveHit(li, col, velocity);   // P1 live mode: the pad plays its step's sound, with velocity; it writes only with Record armed
   const lane = m.lanes[li], i = pages.padFirst(lane, playing) + col; if (i >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false, lane.lockAt(i), null, kit, lane.sliceAt(lane.stepIndex(i), lane.lockAt(i))); m.select(li); sync();
 });
 move.addEventListener('step', (e) => {
@@ -1328,13 +1384,24 @@ move.addEventListener('button', (e) => {
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
   if (name === 'back') { if (pressed) pages.backDown(); else pages.backUp(); paintLeds(); return; }   // L5 pages
   if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
-  if (name === 'layout') { setFill(pressed); return; }   // hold = fill
+  // hold = fill; P3 Shift + Layout = fill for the next bar (its release is not the end of a held fill)
+  if (name === 'layout') { if (pressed && shift) { latchPress = true; armLatch(); } else if (!pressed && latchPress) latchPress = false; else setFill(pressed); return; }
   if (name === 'sampling' && pressed) { toggleJam(); return; }
+  // P2 Mute: a tap (on release) mutes the selected lane, Shift + Mute = solo; held, a track button or a pad row mutes that lane instead
+  if (name === 'mute') {
+    if (pressed) { mute.held = true; mute.used = shift; if (shift) toggleSolo(); paintLeds(); }
+    else { const used = mute.used; mute.held = false; mute.used = false; if (!used) toggleMute(m.selected); else paintLeds(); }
+    return;
+  }
+  if (name === 'delete' && pressed && held.size) { for (const h of held.values()) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(h.step)); m.lane.trigs[m.lane.stepIndex(h.step)] = null; } stepEdited(); return; }
+  // P1: in live mode Delete (clear lane) and Capture (randomize all) need Shift or a hold, and flash first
+  if (name === 'delete' && (perf.live || guard.held('delete'))) return guarded('delete', pressed, clearLane, 'clear the lane');
+  if (name === 'capture' && (perf.live || guard.held('capture'))) return guarded('capture', pressed, () => randomizeAll(), 'randomize all');
   if (!pressed) return;
-  const tr = /^track(\d)$/.exec(name); if (tr) { m.select(trackLane(+tr[1], shift, m.lanes.length)); lockStep = -1; sync(); return; }   // track 1 is the top button = lane 4; Shift + track 4 / 3 = lane 5 / 6
-  if (name === 'delete' && held.size) { for (const h of held.values()) { h.used = true; m.lane.clearLocks(m.lane.stepIndex(h.step)); m.lane.trigs[m.lane.stepIndex(h.step)] = null; } stepEdited(); return; }
+  const tr = /^track(\d)$/.exec(name); if (tr) { const li = trackLane(+tr[1], shift, m.lanes.length); if (mute.held) { mute.used = true; toggleMute(li); return; } m.select(li); lockStep = -1; sync(); return; }   // track 1 is the top button = lane 4; Shift + track 4 / 3 = lane 5 / 6; Mute held = that lane's mute
   if (name === 'delete') { clearLane(); return; }   // Delete alone = clear the lane (undoable)
-  if (name === 'play') togglePlay(); if (name === 'mute') { if (shift) toggleSolo(); else { m.lane.muted = !m.lane.muted; sync(); } } if (name === 'undo') { if (shift) redo(); else undo(); }
+  if (name === 'minus') { setEvolve(!evo.on); return; }   // − = evolve on / off (in live mode Shift + Capture randomizes)
+  if (name === 'play') togglePlay(); if (name === 'undo') { if (shift) redo(); else undo(); }
   if (name === 'capture') { if (shift) setEvolve(!evo.on); else randomizeAll(); }
   if (name === 'record') { if (shift) tapTempo(); else setRec(!rec.armed); }
   if (name === 'left' || name === 'right') { const dir = name === 'right' ? 1 : -1; if (shift) cycleKit(dir); else cycleVoice(m.selected, dir); }
@@ -1443,7 +1510,7 @@ function readout() {
   poke();
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
   $('readout').textContent = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
-    ...(fill ? ['FILL'] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
+    ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
     const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
       ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}%${l.swingTpl !== 'mpc' ? ` ${SWING_TEMPLATES[l.swingTpl].name}` : ''}${l.offsetMs ? ` ${l.offsetMs > 0 ? '+' : ''}${l.offsetMs}ms` : ''} prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
@@ -1526,5 +1593,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();
