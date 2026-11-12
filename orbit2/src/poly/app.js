@@ -7,7 +7,7 @@ import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from '.
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
-import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, splitChunks, tagWav } from './jam.js';
+import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, splitChunks, tagWav, trimOneShot, safeName } from './jam.js';
 import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
@@ -967,6 +967,30 @@ async function exportAll() {
   download(zipStored(files), `${base}.zip`, 'application/zip');
   $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}`;
 }
+/**
+ * E4 kit: each lane's sound as one-shot WAVs to load into Simpler or a Drum Rack, an accent and a normal hit (velocity
+ * 1 and 0.7, as the pattern plays them), with the lane's current voice, knobs, drive, tone and pan, but no delay (a
+ * rack has its own sends) and no master. 2 s at most, cut where it falls silent, the onset on sample 0. Tempo-free:
+ * no ACID, no smpl. One offline render per hit, so no lane chokes or bleeds into another.
+ */
+const KIT_PRE = 0.05;
+async function exportKit() {
+  await wake(); const n = m.lanes.length, rate = exp.rate, files = [], base = `orbits-kit-${stamp()}`;
+  for (const l of m.lanes) await ensureSample(l);
+  for (let li = 0; li < n; li++) for (const accent of [true, false]) {
+    $('exp-status').textContent = `rendering the kit: lane ${li + 1} of ${n}…`;
+    const out = await T.Offline(async () => {
+      if (engine === 'dsp') await ensureDsp(T.getContext());
+      const k = makeKit({ raw: true }); for (const c of k.chains) c.send.gain.value = 0;
+      hitSound(m.lanes[li], KIT_PRE, accent, null, null, k); await dspFlush(k);
+    }, KIT_PRE + 2, 2, rate);
+    const b = out.get(), lane = m.lanes[li], voice = lane.voice === 'sample' ? safeName((lane.sample?.name || 'sample').replace(/\.[^.]+$/, '')) : lane.voice;
+    const chans = trimOneShot([b.getChannelData(0), b.getChannelData(1)], rate, { pre: KIT_PRE, maxSec: 2 });
+    files.push({ name: `${base}/orbits-kit-${li + 1}-${voice}-${accent ? 'accent' : 'normal'}.wav`, data: encodeWav(chans, rate, { bits: exp.bits }) });
+  }
+  download(zipStored(files), `${base}.zip`, 'application/zip');
+  $('exp-status').textContent = `kit: ${n} lanes × accent + normal · one-shots, no delay · ${fmtNote()}`;
+}
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
  *  history starts at the link and play pulses, like the demo. */
 async function loadShared({ first = false } = {}) {
@@ -986,7 +1010,7 @@ function buildExportUI() {
   ui.expDry = mount('exp-dry', toggleChip({ label: 'dry stems', on: exp.dry, title: 'stems without their delay: every lane\'s echoes go to one more stem pair, "delay return", so you can treat them in the DAW. The stems plus the return still add up to the mix.', onChange: (v) => { exp.dry = v; saveSettings(); } }));
   ui.expMidiOne = mount('exp-midi-one', segmented({ options: [[false, 'per lane', 'a MIDI track per lane, each on its own channel'], [true, 'one track', 'one track for a Drum Rack: every lane on its note from the MIDI drawer, on lane 1\'s channel']], value: exp.midiOne, onChange: (v) => { exp.midiOne = v; saveSettings(); } }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
-  $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-all').onclick = () => exportAll().catch(e => { $('exp-status').textContent = `export all: ${e.message}`; }); $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
+  $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-kit').onclick = () => exportKit().catch(e => { $('exp-status').textContent = `kit: ${e.message}`; }); $('exp-all').onclick = () => exportAll().catch(e => { $('exp-status').textContent = `export all: ${e.message}`; }); $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   $('exp-roll').onclick = () => { expRoll = newRoll(); $('exp-status').textContent = dice.locked ? `dice are locked: exports use dice ${dice.seed} (re-roll in the dice drawer)` : `roll ${expRoll}: the next WAV, stems and MIDI share these hits`; };
   addEventListener('hashchange', () => loadShared());
 }
@@ -1433,5 +1457,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();

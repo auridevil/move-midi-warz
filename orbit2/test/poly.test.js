@@ -1472,3 +1472,13 @@ test('ORBIT2-10 E2: dry stems + the delay return add up to the wet mix; stemFile
   assert.ok(gain < 1 && gain > 0, 'the summed mix peaks over 0.98: everything scaled by one gain');
   assert.equal(stemFiles(dry, ['a', 'b', 'c', 'd'], 48000, 'f', { bits: 32, ret }).gain, 1, 'float: as rendered');
 });
+test('ORBIT2-10 E4: a kit one-shot starts at its onset, ends where it falls silent, at most 2 s with a fade', async () => {
+  const { trimOneShot } = await import('../src/poly/jam.js');
+  const sr = 100, d = new Float32Array(400); d[10] = 1; d[60] = 0.5; d[61] = 1e-6;   // pre 0.1 s = 10 samples
+  const [a] = trimOneShot([d, new Float32Array(400)], sr, { pre: 0.1, maxSec: 2 }); assert.equal(a.length, 51, 'onset → last sample over -90 dBFS (1e-6 is under it)'); assert.equal(a[0], 1, 'onset on sample 0');
+  const loud = Float32Array.from({ length: 400 }, () => 0.5), [b] = trimOneShot([loud], sr, { pre: 0.1, maxSec: 2 });
+  assert.equal(b.length, 200, 'capped at 2 s'); assert.equal(b[199], 0, 'faded out, no click'); assert.equal(b[100], 0.5);
+  assert.equal(trimOneShot([new Float32Array(50)], sr, { pre: 0.1 })[0].length, 1, 'silence: one sample, not an empty file');
+  const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), kit = app.slice(app.indexOf('async function exportKit('), app.indexOf('/** Open a #p= link'));
+  assert.match(kit, /orbits-kit-\$\{li \+ 1\}-\$\{voice\}/); assert.match(kit, /c\.send\.gain\.value = 0/, 'no delay'); assert.doesNotMatch(kit, /tagWav|withAcid|withSmpl/, 'tempo-free');
+});
