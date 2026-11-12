@@ -95,6 +95,7 @@
       <p id="chain-info" class="hint tight"></p>
       <div class="row-ctl">
         <div class="ctl" title="When a recalled slot takes over"><span class="ctl-lbl">switch</span><div id="slot-switch"></div></div>
+        <span id="slot-restart"></span>
         <div id="slot-gauges" class="gauges one"></div>
         <button id="chain-stop" class="small">stop chain</button>
       </div>
@@ -164,8 +165,9 @@
       <div id="midi-body" hidden>
         <div class="ctl-col"><span class="ctl-lbl">send notes &amp; clock to</span><div id="midi-out"></div></div>
         <div class="row-ctl"><div id="midi-clock-out"></div></div>
-        <span class="ctl-lbl">note · channel per lane, gate</span>
+        <span class="ctl-lbl">note · channel per lane, gate, out offset</span>
         <div id="midi-lanes" class="gauges midi-gauges"></div>
+        <div class="row-ctl"><span id="midi-lat-auto"></span></div>
         <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
         <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
         <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
@@ -197,6 +199,7 @@
         <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
         <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
+        <tr><th>Hold a step</th><td>the step buttons turn into loops 1–16 and light on the loops it plays (lane colour; cyan = it depends on fill or on the step before; white = the loop playing now)</td></tr>
         <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
         <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
         <tr><th>Hold Layout</th><td>fill</td></tr>

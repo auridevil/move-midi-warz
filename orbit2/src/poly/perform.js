@@ -2,6 +2,17 @@
 // effect. Pure (no DOM, no MIDI, no timers), so they are unit-tested; app.js owns one of each and calls them from the
 // Move handlers, the on-screen controls and the master clock.
 
+import { condPasses } from './lanes.js';
+
+/**
+ * P7: which of the next `n` loops (loop 1 first) a step with condition `cond` plays on, for the step buttons while it
+ * is held: true / false, or null where it depends on the moment (fill, pre / not pre).
+ */
+export function condLoops(cond, n = 16) {
+  const live = cond === 'fill' || cond === 'not fill' || cond === 'pre' || cond === 'not pre';
+  return Array.from({ length: n }, (_, loop) => (live ? null : condPasses(cond, loop)));
+}
+
 /** P1: how long Capture / Delete must be held to act without Shift. */
 export const HOLD_MS = 600;
 

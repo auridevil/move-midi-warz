@@ -287,9 +287,11 @@ export class Lane {
   /**
    * What this lane does at master tick `tick`, or null when it doesn't step there. The position is derived
    * from the tick, never accumulated, so lanes stay phase-locked through ratio, length and tempo changes.
+   * ctx.origin: the master tick the lane's step 1 is on (the pattern's bar 1, or where a slot restarted it: P4); the
+   * steps, loops and the playhead count from there, nothing steps before it.
    */
   at(tick, rng = Math.random, ctx = {}) {
-    const st = this.stepTicks(); if (tick % st) return null;
+    if (ctx.origin) tick -= ctx.origin; const st = this.stepTicks(); if (tick < 0 || tick % st) return null;
     const step = tick / st, i = step % this.length, lock = this.lockAt(i), trig = this.trigAt(i), loop = this.loopAt(step);
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
     // the condition is judged on every active step, muted or not, so a mute doesn't change what pre / not pre read later
@@ -385,7 +387,7 @@ export class Machine {
   cycleTicks({ repeat = 1 } = {}) { return Math.max(1, this.lanes.reduce((acc, l) => lcm(acc, l.length * l.stepTicks() * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1)); }
   /** Every lane's event at master tick `tick` (null where a lane doesn't step), its steps counted from `origin`. */
   /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
-  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo), r = tick - this.origin; return this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(r, rng, { ...ctx, li, silenced: solo && !l.solo })); }   // most ticks step no lane: nothing allocated
+  tick(tick, rng = Math.random, ctx = {}) { const solo = this.lanes.some(l => l.solo), r = tick - this.origin; return this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin })); }   // most ticks step no lane: nothing allocated
   /** Does any lane step at master tick `tick`? */
   steps(tick) { const r = tick - this.origin; return r >= 0 && this.lanes.some(l => r % l.stepTicks() === 0); }
   /**

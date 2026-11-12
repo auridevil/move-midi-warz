@@ -27,6 +27,8 @@ export function strokeNotes(lanes) {
   });
 }
 export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
+/** P5: the MIDI out offset range, ms either way. */
+export const LATENCY_MAX = 50;
 /**
  * Phase lock: `drift` = our master tick − the incoming clock's tick at the same moment (positive = we're ahead).
  * Small drift trims the tempo (a gentle PLL, at most ±4 %); a big one (a missed start, a jump) snaps the clock.
@@ -129,6 +131,9 @@ export class PolyMidi {
     this.getAccess = getAccess; this.isMovePort = isMovePort;
     this.out = null; this.outName = ''; this.clockOut = false;
     this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60;
+    // P5 out offset: every scheduled note and clock goes out this many ms later (− = earlier). null = auto: the audio
+    // output's latency (autoMs, set by the app), so notes leave when the speakers play the same hit
+    this.offsetMs = null; this.autoMs = 0;
     this.inName = ''; this.follow = 'off'; this.input = null; this.onIn = null;
     this.handlers = { tempo: () => {}, start: () => {}, stop: () => {}, tick: () => {} };
     this.extTick = 0;   // incoming clock ticks since start (or since a Song Position Pointer), in MIDI ticks (24 PPQ): the app scales
@@ -150,14 +155,16 @@ export class PolyMidi {
   /** Re-resolve ports after the device list changes (plug / unplug). */
   refresh() { this.setOutput(this.outName); if (this.inName && !this.input) this.setInput(this.inName); }
   send(bytes, at) { try { this.out?.send(bytes, at); } catch {} }
+  /** P5: the offset in use, whole ms within ±LATENCY_MAX: the manual one, else the output latency. */
+  get latencyMs() { return Math.max(-LATENCY_MAX, Math.min(LATENCY_MAX, Math.round(this.offsetMs ?? this.autoMs) || 0)); }
   note(li, vel01, at, artic = null) {   // artic: L3, the stroke (Lane.strokeAt) → its note (strokeNotes)
-    if (!this.out) return; const { ch } = this.lanes[li], note = strokeNotes(this.lanes)[li][artic || 0], st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
+    if (!this.out) return; at += this.latencyMs; const { ch } = this.lanes[li], note = strokeNotes(this.lanes)[li][artic || 0], st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
     this.send([st, note & 127, v], at); this.send([0x80 | ((ch - 1) & 15), note & 127, 0], at + this.gateMs);
   }
-  clock(at) { if (this.out && this.clockOut) this.send([0xF8], at); }
+  clock(at) { if (this.out && this.clockOut) this.send([0xF8], at + this.latencyMs); }
   /** Master tick `tick` (any PPQ): a MIDI clock on every MIDI_DIV-th, so 24 per quarter. */
   clockAt(tick, at) { if (tick % MIDI_DIV === 0) this.clock(at); }
-  start(at) { if (this.out && this.clockOut) this.send([0xFA], at); }
+  start(at) { if (this.out && this.clockOut) this.send([0xFA], at + this.latencyMs); }
   stop() { if (this.out && this.clockOut) this.send([0xFC]); }
   /** Follow mode change: the ticks heard before (or while 'off') say nothing about now. */
   setFollow(mode) { this.follow = FOLLOW_MODES.includes(mode) ? mode : 'off'; this.follower.reset(); }
@@ -174,9 +181,10 @@ export class PolyMidi {
       if (s === 0xFC) this.handlers.stop(); else { if (s === 0xFA) this.extTick = 0; this.handlers.start(); }
     } else if (s === 0xF2) this.extTick = ((data[2] << 7) | data[1]) * 6;   // Song Position Pointer: sixteenths → 24 PPQ ticks
   }
-  toJSON() { const { outName, clockOut, lanes, gateMs, inName, follow } = this; return { outName, clockOut, lanes, gateMs, inName, follow }; }
+  toJSON() { const { outName, clockOut, lanes, gateMs, inName, follow, offsetMs } = this; return { outName, clockOut, lanes, gateMs, inName, follow, offsetMs }; }
   fromJSON(o) {
     if (!o) return; Object.assign(this, { outName: o.outName || '', clockOut: !!o.clockOut, gateMs: o.gateMs || 60, inName: o.inName || '', follow: FOLLOW_MODES.includes(o.follow) ? o.follow : 'off' });
+    this.offsetMs = Number.isFinite(o.offsetMs) ? Math.max(-LATENCY_MAX, Math.min(LATENCY_MAX, Math.round(o.offsetMs))) : null;   // older settings: auto
     if (Array.isArray(o.lanes)) this.lanes = DEFAULT_NOTES.map((n, i) => ({ note: o.lanes[i]?.note ?? n, ch: o.lanes[i]?.ch ?? 10 }));
   }
 }

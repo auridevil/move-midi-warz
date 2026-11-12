@@ -27,6 +27,9 @@ export class SlotBank {
     this.current = -1; this.pending = -1;      // slot playing / waiting for its boundary
     this.chain = []; this.chainPos = 0;        // song: slot indices played in order, `chainBars` bars each
     this.switchAt = 'bar'; this.chainBars = 4; this.barsInSlot = 0;
+    // P4 "restart on change": a slot due() loads starts its lanes on step 1 at the tick it came in (`start`), so its
+    // first loop is loop 1 again ('first' conditions fire). Off: it picks up where the master count is, as before.
+    this.restart = true; this.start = 0;
     try { const o = JSON.parse(store?.getItem(key) || 'null'); if (o) this.fromJSON(o); } catch {}
   }
   persist() { try { this.store?.setItem(this.key, JSON.stringify(this)); } catch {} }
@@ -41,31 +44,33 @@ export class SlotBank {
    * Called on every master tick (before the tick's events are computed). Returns the slot index to load
    * now, or -1. `cycleTicks` = ticks until all lanes line up (for switchAt 'cycle'). `bars` = { at, len }: bar lines
    * fall on `at + k × len` (the app moves the anchor when the time signature changes); the lanes count from `at` too,
-   * so they line up again at `at + k × cycleTicks`.
+   * so they line up again at `at + k × cycleTicks`; `origin` = where the lanes count from now (a restarted slot's
+   * start: the cycle lines up from there), the bar anchor if not given. A slot loaded here sets `start` = tick.
    */
-  due(tick, cycleTicks, bars = BARS) {
+  due(tick, cycleTicks, bars = BARS, origin = bars.at) {
     const bar = onBar(tick, bars);
     if (bar && tick > 0 && this.current >= 0) this.barsInSlot++;
     // a running chain moves on after `chainBars` bars, always on a bar line, so the song keeps its length
-    if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; return this.take(this.chain[this.chainPos]); }
-    if (this.pending < 0) return -1;
-    const ok = this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : onBar(tick, { at: bars.at, len: Math.max(1, cycleTicks) }));
-    return ok ? this.take(this.pending) : -1;
+    let i = -1;
+    if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; i = this.take(this.chain[this.chainPos]); }
+    else if (this.pending >= 0 && (this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : onBar(tick, { at: origin, len: Math.max(1, cycleTicks) })))) i = this.take(this.pending);
+    if (i >= 0) this.start = tick;
+    return i;
   }
   take(i) { this.pending = -1; this.current = i; this.barsInSlot = 0; return this.filled(i) ? i : -1; }
   /** The next master tick after `tick` where due() loads a slot (a queued one, or the chain moving on), else Infinity.
    *  Pure: live play leaves the steps from there on to the incoming slot (liveTick's cut). */
-  nextSwitch(tick, cycleTicks, bars = BARS) {
+  nextSwitch(tick, cycleTicks, bars = BARS, origin = bars.at) {
     const next = (n, at = 0) => at + (Math.floor((tick - at) / n) + 1) * n;
-    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : next(this.switchAt === 'bar' ? bars.len : Math.max(1, cycleTicks), bars.at);
+    if (this.pending >= 0) return this.switchAt === 'now' ? tick + 1 : this.switchAt === 'bar' ? next(bars.len, bars.at) : next(Math.max(1, cycleTicks), origin);
     if (this.chain.length > 1 && this.current >= 0) return next(bars.len, bars.at) + Math.max(0, this.chainBars - this.barsInSlot - 1) * bars.len;
     return Infinity;
   }
   get(i) { return this.slots[i]; }
-  toJSON() { const { slots, current, chain, switchAt, chainBars } = this; return { slots, current, chain, switchAt, chainBars }; }
+  toJSON() { const { slots, current, chain, switchAt, chainBars, restart } = this; return { slots, current, chain, switchAt, chainBars, restart }; }
   fromJSON(o) {
     if (Array.isArray(o.slots)) this.slots = Array.from({ length: SLOT_COUNT }, (_, i) => o.slots[i] || null);
     this.current = o.current ?? -1; this.chain = (o.chain || []).filter(i => this.slots[i]);
-    if (SWITCH_MODES.includes(o.switchAt)) this.switchAt = o.switchAt; if (o.chainBars) this.chainBars = o.chainBars;
+    if (SWITCH_MODES.includes(o.switchAt)) this.switchAt = o.switchAt; if (o.chainBars) this.chainBars = o.chainBars; if (typeof o.restart === 'boolean') this.restart = o.restart;   // older banks: on
   }
 }

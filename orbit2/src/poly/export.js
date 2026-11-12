@@ -98,12 +98,13 @@ export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false,
 
 /** A chain of slot states, `bars` each (in each slot's own time signature), on one continuous master clock, as it plays
  *  live: the bar anchor follows the app's rule (trackBars), so a slot whose bar is another length starts its lanes on
- *  its own first bar line and a slot in the same bar length goes on counting from where the anchor was. */
-export function collectChain(slotStates, { bars, tempo, dice = null }) {
+ *  its own first bar line and a slot in the same bar length goes on counting from where the anchor was; with `restart`
+ *  (P4, the live "restart on change") every slot starts its lanes on step 1 where it comes in. */
+export function collectChain(slotStates, { bars, tempo, dice = null, restart = false }) {
   const out = []; let from = 0, anchor = null;
   slotStates.forEach((json) => {
     const m = Machine.from(json), b = m.barTicks(), to = from + bars * b; anchor = anchor ? trackBars(anchor, from, b) : { at: 0, len: b, next: null };
-    out.push(...collectHits(m, { from, to, tempo, dice, origin: anchor.at })); from = to;
+    out.push(...collectHits(m, { from, to, tempo, dice, origin: restart ? from : anchor.at })); from = to;
   });
   return out;
 }

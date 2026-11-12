@@ -12,9 +12,9 @@ import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
-import { PolyMidi, FOLLOW_MODES, strokeNotes } from './midiio.js';
+import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
-import { HOLD_MS, MuteQueue, FillLatch, Guard } from './perform.js';
+import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -235,7 +235,9 @@ function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelec
 function cycleKit(dir) { const cur = m.kitKey() ?? KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
-async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); }
+async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); setAutoLatency(); }
+/** P5: the auto MIDI out offset = the audio output's latency, known once the context runs. */
+function setAutoLatency() { pmidi.autoMs = (T.getContext().rawContext.outputLatency || 0) * 1000; if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs); }
 
 // ---- the master clock: 840 ticks per beat drive every lane, MIDI clock, slots and evolve ----
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
@@ -270,7 +272,8 @@ function onBlock(time) {
 }
 function onTick(t, time, cyc, ts) {
   trackMeter(t);
-  const si = bank.due(t, cyc, bars); if (si >= 0) { loadSlot(si, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }   // a slot in another meter starts its bars (and lanes) here
+  // a slot in another meter starts its bars (and lanes) here; P4 with "restart on change" any slot does: step 1, loop 1
+  const si = bank.due(t, cyc, bars, m.origin); if (si >= 0) { loadSlot(si, true); if (bank.restart) m.setOrigin(t); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
   // P2 / P3 on every bar line, Play's downbeat included: queued mutes flip, the fill latch turns on (or off) for the bar
   if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
@@ -281,7 +284,7 @@ function onTick(t, time, cyc, ts) {
   jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
   if (pending.size) pending.settle(t, time);   // E6: the early parts of the steps on this tick get the time it came at
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
-  const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
+  const cut = Math.min(bank.nextSwitch(t, cyc, bars, m.origin), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
   const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt), e = hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); return e; };
@@ -303,7 +306,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); flushPerf(); }
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); flushPerf(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -353,7 +356,8 @@ const INFO = {
   'lock vel': 'Velocity of this step only (an accent still adds on top). Also sent as the MIDI note velocity.',
   'lock tone': 'Opens or closes the lane filter for this hit only; the next unlocked hit puts it back.',
   'switch at': 'When a recalled slot takes over: at once, on the next bar line (4 beats), or when every lane lines up again (the full polyrhythm cycle).',
-  'chain bars': 'In a chain (song), how many bars each slot plays before the next one comes in. Chains always change on a bar line.',
+  'restart on change': 'A slot (or the next slot of a chain) starts its lanes on step 1 where it comes in, and its first loop counts as the first again, so "1st loop" steps play. Off: it picks up where the running count is. The chain\'s MIDI export follows it.',
+  'chain bars':'In a chain (song), how many bars each slot plays before the next one comes in. Chains always change on a bar line.',
   'accent above': 'Live record: pad velocity at or above this becomes an accent (keyboard: Shift = accent).',
   quantize: 'Live record: "nearest step" rounds, so a slightly early hit lands on the coming step; "step just played" always files it under the last step.',
   'pitch pads': 'Live record: the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
@@ -361,7 +365,8 @@ const INFO = {
   'evolve amount': 'Evolve mode: chance per lane of being nudged at each mutation.',
   'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
-  'clock out': 'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
+  'midi offset': 'MIDI out offset, −50…+50 ms: notes and clock leave this much later (+) or earlier (−) than the hit is scheduled here. Auto = the audio output\'s latency, so a drum machine on MIDI sounds with the speakers; turn it down when the other device is slow itself.',
+  'clock out':'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
   condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
@@ -647,6 +652,7 @@ function buildSlotsUI() {
   ui.meter = mount('meter', segmented({ options: METERS.map(k => [k, k, INFO.meter]), value: m.meter, onChange: (v) => { m.setMeter(v); sync(); } }));
   ui.laneCount = mount('lane-count', segmented({ options: LANE_COUNTS.map(n => [n, `${n} lanes`, INFO.lanes]), value: m.lanes.length, onChange: setLaneCount }));
   ui.slotSwitch = mount('slot-switch', segmented({ options: [['now', 'at once'], ['bar', 'next bar'], ['cycle', 'full cycle', 'when every lane lines up again']], value: bank.switchAt, onChange: (v) => { bank.switchAt = v; bank.persist(); renderSlots(); } }));
+  ui.slotRestart = mount('slot-restart', toggleChip({ label: 'restart on change', on: bank.restart, title: INFO['restart on change'], onChange: (v) => { bank.restart = v; bank.persist(); } }));
   sliders.chainBars = makeGauge({ label: 'bars per slot', min: 1, max: 16, value: bank.chainBars, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['chain bars'], color: 'var(--ember-magenta)', onChange: (v) => { bank.chainBars = v; bank.persist(); renderSlots(); } }); $('slot-gauges').appendChild(sliders.chainBars.el);
   $('chain-stop').onclick = () => { bank.chain = []; bank.persist(); renderSlots(); readout(); };
   renderSlots();
@@ -800,6 +806,10 @@ function buildMidiUI() {
     g.appendChild(makeGauge({ label: `lane ${i + 1} ch`, min: 1, max: 16, value: pmidi.lanes[i].ch, fmt: (v) => `ch ${v}`, say: (v) => `channel ${v}`, color: LANE_HEX[i], onChange: (v) => { pmidi.lanes[i].ch = v; saveSettings(); renderStrokeNotes(); } }).el);
   });
   g.appendChild(makeGauge({ label: 'gate', min: 5, max: 500, value: pmidi.gateMs, fmt: (v) => `${v} ms`, color: 'var(--star-white)', title: 'how long each MIDI note is held', onChange: (v) => { pmidi.gateMs = v; saveSettings(); } }).el);
+  // P5: notes and clock out later (+) or earlier (−) than the audio is scheduled; auto = the audio output's latency
+  sliders.midiLat = makeGauge({ label: 'out offset', min: -LATENCY_MAX, max: LATENCY_MAX, value: pmidi.latencyMs, fmt: (v) => `${v > 0 ? '+' : ''}${v} ms`, say: (v) => v ? `${Math.abs(v)} ms ${v > 0 ? 'later' : 'earlier'}` : 'no offset', color: 'var(--star-white)', title: INFO['midi offset'], onChange: (v) => { pmidi.offsetMs = v; ui.midiLatAuto.set(false); saveSettings(); } });
+  g.appendChild(sliders.midiLat.el);
+  ui.midiLatAuto = mount('midi-lat-auto', toggleChip({ label: 'auto offset', on: pmidi.offsetMs == null, title: INFO['midi offset'], onChange: (v) => { pmidi.offsetMs = v ? null : pmidi.latencyMs; sliders.midiLat.set(pmidi.latencyMs); saveSettings(); } }));
   pmidi.handlers = { tempo: (bpm) => { followClockTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
     // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
     tick: (ext, t) => {
@@ -1027,7 +1037,7 @@ const midiNote = () => exp.midiOne ? 'one Drum-Rack track' : 'a track per lane';
 function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
-  const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice() }) : exportHits(ticks);
+  const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice(), restart: bank.restart }) : exportHits(ticks);
   download(midiOf(hits, { states, bars }), `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars · ${midiNote()}${chain ? ` · chain of ${bank.chain.length}` : ''}`;
 }
 /**
@@ -1315,6 +1325,9 @@ function paintLeds() {
   const lane = m.lane, s0 = pages.stepFirst(lane, playing), cur = pages.current(lane, playing);
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
+  } else if (held.size) {   // P7: a step held: the step buttons are loops 1–16 and light where it plays (cyan = depends on fill / the step before; white = the loop playing now)
+    const h = held.values().next().value, si = lane.stepIndex(h.step), on = lane.hits[si], loops = condLoops(lane.trigs[si]?.cond), now = playing && lane.loopN != null ? lane.loopN % STEP_BTNS : -1;
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, !on ? (i === now ? COLOR.DARK_GREY : 0) : i === now ? (loops[i] === false ? COLOR.DARK_GREY : COLOR.WHITE) : loops[i] === null ? CYAN_LED : loops[i] ? LANE_LED[m.selected] : 0);
   } else if (pages.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
   } else for (let b = 0; b < STEP_BTNS; b++) { const i = s0 + b; move.setStepColor(b, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]); }
@@ -1340,7 +1353,7 @@ move.addEventListener('step', (e) => {
   if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
   if (pages.back) { pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
   const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
-  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else pages.press(btn, step, first);
+  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else { pages.press(btn, step, first); paintLeds(); }   // P7: the buttons show its loops while held
 });
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
