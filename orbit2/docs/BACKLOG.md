@@ -525,3 +525,26 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   gets the last one's value (all land at time 0), live it lands at now + look-ahead (and, like the chain params before
   `holdParam`, can be lost on a silent chain); `setValueAtTime(v, t)` would put each where its hit is (`voices.js` lines
   45, 50, 52, 59, 117: filter frequencies; 119: an auto-filter's rate).
+- **Delay echoes drift one render quantum a repeat** (ORBIT2-11 round 1, sound; the lane delays pre-existing): Chrome
+  adds 128 frames inside a feedback cycle, so Tone's `FeedbackDelay` repeats at D, 2D + 2.67 ms, 3D + 5.33 ms … at
+  48 kHz (the throw at 100 bpm: the 6th repeat 13 ms late, flamming against the grid; levels exact). A first tap of D
+  plus a loop delay of D − 128 / sr would keep every repeat on the grid, for the throw and the lane delays.
+- **Performance filter voice** (ORBIT2-11 round 1, sound, kai; taste): Q 0.9 is a +1.9 dB knee (−3 dB at 268 Hz for a
+  200 Hz low-pass, 4.6 kHz for a 6 kHz high-pass); 3–6 dB of resonance (or Shift + knob) would make sweeps speak; a
+  fully closed low-pass drops the mix ~9 dB (no makeup gain). On the wheel 4 % a click is slow on stage (12–25 clicks
+  to a clear sweep): accelerate on fast turns.
+- **`heardTick` reads the wrapper's `outputLatency`** (ORBIT2-11 round 1, implementer; pre-existing, also the shipped
+  Orbits `src/poly/app.js:375`): Tone's context is a standardized-audio-context wrapper with no `outputLatency`, so the
+  live-record "heard" position ignores the output latency (16 ms in a headless page, more on Bluetooth); `autoLatencyMs`
+  in midiio.js reads the native context and could serve it too (a change to live record's rounding: test on the Move).
+- **The lock cue on lane 2** (ORBIT2-11 round 1, architect; pre-existing): the step buttons show a locked step in cyan,
+  which is lane 2's own colour, so lane 2's locks don't show; P2 / P7 use blue (`CUE_LED`), the lock cue could too.
+- **app.js structure after phase 11** (ORBIT2-11 round 1, architect): the P6 block (`makeMaster`'s fx, `pfx`, `glide`,
+  `setFilter`, `setThrow`, `filterSay`) is self-contained and could be its own module; "perf" names two things (`perf`
+  the live-mode settings next to `perfAt`, `perfKey`, `pfx`, `barPerf`); the origin is handled two ways (`Machine.tick`
+  hands `Lane.at` the absolute tick plus `origin`, `liveTick` a relative tick), so a caller passing a relative tick and
+  an origin would subtract twice.
+- **Live-mode cues on screen** (ORBIT2-11 round 1, greta; taste): the "live mode" chip is a quiet toggle next to a big
+  Connect button ("live: on" in words would say more for a safety setting); a one-line legend of the button states
+  (cyan, white, magenta) in the help; on a phone the transport strip takes three rows before the status line
+  (verifier, greta). Check on the real Move that the guarded buttons' red blink reads from the stage (kai).

@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from './pages.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
@@ -12,9 +12,9 @@ import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
-import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX } from './midiio.js';
+import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
-import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, fxFreqs, stepFilter } from './perform.js';
+import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, loopWindow, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -75,18 +75,19 @@ let kit = null, loop = null;
 /** The master glue: compressor → limiter → out. Both look ahead, so the chain delays everything (masterLatency).
  *  fx (P6 performance FX, the live kit; an export only with "print FX"): the filter before the compressor (low-pass →
  *  high-pass, both open at the centre), and the delay throw: a send from the master input into its own dotted-eighth
- *  delay that feeds the filter, so its echoes follow the knob too. The input node carries them as `.fx`. */
+ *  delay that feeds the filter, so its echoes follow the knob too. The input node carries them as `.fx`. fx.sr: the rate
+ *  the filter is heard at (a print at another export rate keeps the cutoffs heard live); fx.throw: a throw held while the
+ *  kit is built (the first press on a cold page wakes it) starts thrown. */
+const FX_Q = 0.9, THROW = { send: 0.7, fb: 0.55, rest: 0.3 };   // P6: resonance (a touch over flat, so a sweep is heard); the throw's send and feedback held / at rest
 function makeMaster(gain, fx = null) {
   const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter), input = new T.Gain(gain);
   if (!fx) return input.connect(comp);
-  const raw = T.getContext().rawContext, f = fxFreqs(fx.filter, raw.sampleRate), lp = raw.createBiquadFilter(), hp = raw.createBiquadFilter();
-  lp.type = 'lowpass'; hp.type = 'highpass'; lp.Q.value = hp.Q.value = FX_Q; lp.frequency.value = f.lp; hp.frequency.value = f.hp;
+  const raw = T.getContext().rawContext, f = fxFreqs(fx.filter, fx.sr || raw.sampleRate), lp = raw.createBiquadFilter(), hp = raw.createBiquadFilter();
+  lp.type = 'lowpass'; hp.type = 'highpass'; lp.Q.value = hp.Q.value = FX_Q; lp.frequency.value = Math.min(f.lp, raw.sampleRate / 2); hp.frequency.value = f.hp;
   T.connect(input, lp); lp.connect(hp); T.connect(hp, comp);
-  const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, maxDelay: 2, feedback: THROW.rest, wet: 1 }), send = new T.Gain(0).connect(delay); T.connect(delay, lp); input.connect(send);
+  const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, maxDelay: 2, feedback: fx.throw ? THROW.fb : THROW.rest, wet: 1 }), send = new T.Gain(fx.throw ? THROW.send : 0).connect(delay); T.connect(delay, lp); input.connect(send);
   input.fx = { lp, hp, delay, send }; return input;
 }
-/** P6: filter resonance (a touch over flat, so a sweep is heard), and the throw: send and feedback while held, at rest. */
-const FX_Q = 0.9, THROW = { send: 0.7, fb: 0.55, rest: 0.3 };
 /** One more lane chain on kit k (L2: a kit grows when the pattern goes to 6 lanes; it never shrinks, a spare chain is
  *  silent). The live kit's new bus also feeds the jam recorder. */
 function addChain(k) {
@@ -267,13 +268,18 @@ function setThrow(on) {
   if (f) { glide(f.send.gain, on ? THROW.send : 0, on ? 0.005 : 0.02); glide(f.delay.feedback, on ? THROW.fb : THROW.rest, on ? 0.01 : 0.08); }
   $('btn-throw').classList.toggle('armed', on); $('btn-throw').setAttribute('aria-pressed', on); paintLeds(); readout();
 }
-/** The filter knob's words: "off", "low-pass 1.2 kHz", "high-pass 340 Hz". */
+/** The filter knob's words: "off", "low-pass 1.2 kHz", "high-pass 340 Hz" (at the page's own rate, as heard). */
 function filterSay(v) {
-  if (!v) return 'off'; const { lp, hp } = fxFreqs(v / 100), hz = v < 0 ? lp : hp;
+  if (!v) return 'off'; const { lp, hp } = fxFreqs(v / 100, T.getContext().rawContext.sampleRate), hz = v < 0 ? lp : hp;
   return `${v < 0 ? 'low-pass' : 'high-pass'} ${hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`}`;
 }
-/** P5: the auto MIDI out offset = the audio output's latency, known once the context runs. */
-function setAutoLatency() { pmidi.autoMs = (T.getContext().rawContext.outputLatency || 0) * 1000; if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs); }
+/** P5: the auto MIDI out offset = when a hit leaves the speakers: the output's latency (known once the context runs)
+ *  + the master's look-ahead (measured once per rate, like the exports'). */
+function setAutoLatency() {
+  const raw = T.getContext().rawContext, sr = raw.sampleRate, show = () => { if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs); };
+  pmidi.autoMs = autoLatencyMs(raw, latencyCache.get(sr)); show();
+  if (!latencyCache.has(sr)) masterLatency(sr).then((s) => { pmidi.autoMs = autoLatencyMs(raw, s); show(); }).catch(() => {});
+}
 
 // ---- the master clock: 840 ticks per beat drive every lane, MIDI clock, slots and evolve ----
 // Each lane's position is derived from the tick (Lane.at), so lanes can't drift apart, whatever you change mid-play.
@@ -342,7 +348,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); flushPerf(); }
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); }   // MIDI stop when the transport stops: after the clocks it still schedules
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -406,7 +412,7 @@ const INFO = {
   condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
   repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
   solo: 'Solo: only soloed lanes play (several can be).',
-  'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
+  'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back; a slot coming in on that line gets it too). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
   'fx filter': 'Performance filter on the whole mix, before the master compressor: left = low-pass (darker, down to 200 Hz), right = high-pass (thinner, up to 6 kHz), centre = off. Glides, so a fast turn doesn\'t crackle. Move: the jog wheel (it stops at the centre on the way across; push it = off; Shift + wheel = humanize). Exports leave it out unless "print FX" is on.',
   'fill latch':'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
@@ -461,7 +467,7 @@ function sync() {
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100)); ui.meter?.set(m.meter);
   muteQ.trim(m.lanes.length);   // a lane the pattern no longer has (6 → 4, a slot) has no mute waiting
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
-  ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${m.lanes[i].muted ? 'unmutes' : 'mutes'} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${m.lanes[i].muted ? 'unmutes' : 'mutes'} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
+  ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${muteWord(i)} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); renderLocks(); paintLeds(); save(); readout(); renderStrokeNotes();
@@ -478,7 +484,7 @@ function renderVoiceOptions() {
 }
 function renderLaneMix() {
   const lane = m.lane; $('btn-solo').classList.toggle('armed', lane.solo);
-  const mb = $('btn-mute'); mb.classList.toggle('armed', lane.muted); mb.setAttribute('aria-pressed', lane.muted); mb.textContent = muteQ.has(m.selected) ? `${lane.muted ? 'unmute' : 'mute'} ⇥ bar` : 'mute';
+  const mb = $('btn-mute'); mb.classList.toggle('armed', lane.muted); mb.setAttribute('aria-pressed', lane.muted); mb.textContent = muteQ.has(m.selected) ? `${muteQ.target(m.selected) ? 'mute' : 'unmute'} ⇥ bar` : 'mute';
   ui.choke.setOptions([[-1, 'nothing'], ...m.lanes.map((l, i) => [i, `${i + 1} · ${voiceLabel(l)}`, `cut lane ${i + 1} when this lane hits`])]); ui.choke.disable(m.selected); ui.choke.set(lane.choke);
   [...ui.choke.el.children].forEach((b, k) => { if (k) b.style.setProperty('--chip', LANE_HEX[k - 1]); });
   $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.sliceCount() ? ` · ${lane.sliceCount()} slices, a slice per step` : ''}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
@@ -780,22 +786,26 @@ function renderFill() {
   paintLeds(); readout();
 }
 /** P2: mute or unmute lane li without selecting it: at once, or on the next bar line while playing with "mute on next
- *  bar" (a second press before it takes it back). A performance move: never an undo step (perfKey). */
+ *  bar" (it waits for the mute asked now, whatever loads before the line; a second press before it takes it back). A
+ *  performance move: never an undo step (perfKey). */
 function toggleMute(li) {
   if (li < 0 || li >= m.lanes.length) return;
-  if (perf.muteBar && playing) muteQ.toggle(li); else m.lanes[li].muted = !m.lanes[li].muted;
+  if (perf.muteBar && playing) muteQ.toggle(li, !m.lanes[li].muted); else m.lanes[li].muted = !m.lanes[li].muted;
   sync();
 }
-/** Master clock, on a bar line: what P2 / P3 queued for it. The model changes now (this tick plays it), the page after. */
+/** What a waiting mute does to lane li, in words ("mutes" / "unmutes"). */
+const muteWord = (li) => (muteQ.target(li) ? 'mutes' : 'unmutes');
+/** Master clock, on a bar line: what P2 / P3 queued for it, after a slot due here has loaded (a waiting mute lands on
+ *  the lanes that play from here). The model changes now (this tick plays it), the page after. */
 function barPerf() {
-  const flips = muteQ.bar(); for (const li of flips) if (m.lanes[li]) m.lanes[li].muted = !m.lanes[li].muted;
+  const waited = muteQ.size; muteQ.apply(m.lanes);
   if (latch.bar()) fill = fillHold || latch.on;
-  offClock(true, () => { if (flips.length) sync(); renderFill(); });
+  offClock(true, () => { if (waited) sync(); renderFill(); });
 }
-/** Stopped: nothing waits for a bar line that won't come (queued mutes flip now, the latch lets go). */
+/** Stopped: nothing waits for a bar line that won't come (queued mutes land now, the latch lets go). */
 function flushPerf() { flushMutes(); latch.clear(); fill = fillHold; renderFill(); }
-/** The waiting mutes flip now (stop, or "mute on next bar" switched off). */
-function flushMutes() { const flips = muteQ.bar(); for (const li of flips) if (m.lanes[li]) m.lanes[li].muted = !m.lanes[li].muted; if (flips.length) sync(); }
+/** The waiting mutes land now (stop, or "mute on next bar" switched off). */
+function flushMutes() { if (!muteQ.size) return; muteQ.apply(m.lanes); sync(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
   if (evo.home && evoCount >= evo.home) { m.assign(evoSnap, { keep: true, selected: m.selected }); rebuildVoices(); evoCount = 0; lastEvolve = 'back home'; }
@@ -1018,7 +1028,8 @@ const exportHits = (ticks = renderTicks().ticks) => collectHits(m, { from: 0, to
  *  pairs plus the return still add up to the wet stems' sum. hits: a hit list already rolled (E5: export all renders
  *  the mix and the stems from one). */
 async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
-  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate, fx = !stems && exp.printFx && pfx.filter !== 0;   // P6: the mix only (stems stay raw)
+  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate;
+  const fx = !stems && exp.printFx && pfx.filter !== 0 ? { filter: pfx.filter, sr: T.getContext().rawContext.sampleRate } : null;   // P6: the mix only (stems stay raw), at the cutoffs heard live
   hits ??= exportHits(ticks);
   // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
   const lead = renderLead(hits);
@@ -1026,7 +1037,7 @@ async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
   const lat = stems ? 0 : await masterLatency(rate);
   const b = await offline(({ transport }) => {
     transport.bpm.value = tempo;
-    const k = makeKit({ raw: stems, fx: fx ? { filter: pfx.filter } : null });   // a fresh kit in the offline context, same voices and sounds (P6: the filter only with "print FX")
+    const k = makeKit({ raw: stems, fx });   // a fresh kit in the offline context, same voices and sounds (P6: the filter only with "print FX")
     if (stems) routeStems(k, dry);
     // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
     for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k, h.slice);
@@ -1043,7 +1054,7 @@ const renderTags = (r) => ({ acid: acidOf(tempo, r.bars), smpl: r.loop });
 const mixWav = (r) => tagWav(encodeWav(r.chans, r.sr, { bits: exp.bits }), r.sr, renderTags(r));
 /** File names carry tempo and length; a one-shot names the pattern and its ring-out ("4bars+2tail-oneshot"). */
 const fileBase = (kind, r, bpm = tempo) => `orbits-${kind ? `${kind}-` : ''}${bpm}bpm-${r.loop ? nBars(r.bars).replace(' ', '') : `${nBars(r.patternBars).replace(' ', '')}+${r.bars - r.patternBars}tail-oneshot`}-${stamp()}`;
-const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}${r.fx ? ` · performance filter printed (${filterSay(Math.round(pfx.filter * 100))})` : ''}`;
+const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}${r.fx ? ` · performance filter printed (${filterSay(Math.round(r.fx.filter * 100))})` : ''}`;
 // One take, one hit list: free dice still roll, but from a per-take seed, so WAV, stems and MIDI made while this roll
 // is current hold the same hits (count and times). "new roll" draws another take; locked dice use their own seed.
 const newRoll = () => 1 + Math.floor(Math.random() * 99999);
@@ -1148,7 +1159,8 @@ function buildEditUI() {
   sliders.fxFilter = makeGauge({ label: 'filter', min: -100, max: 100, value: 0, fmt: (v) => (v ? `${v < 0 ? 'LP' : 'HP'} ${Math.abs(v)}` : 'off'), say: filterSay, title: INFO['fx filter'], color: 'var(--signal-cyan)', onChange: (v) => setFilter(v / 100) });
   $('fx-gauge').replaceChildren(sliders.fxFilter.el);
   const th = $('btn-throw'); th.onpointerdown = () => { wake(); setThrow(true); }; for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) th.addEventListener(ev, () => setThrow(false));
-  th.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); setThrow(true); } }); th.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') setThrow(false); }); th.addEventListener('blur', () => setThrow(false));
+  // keys hold it only when the keyboard reached it (controlOwnsKey): clicked, Space is the page's play / stop, as on every other button
+  th.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat && controlOwnsKey(e)) { e.preventDefault(); setThrow(true); } }); th.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') setThrow(false); }); th.addEventListener('blur', () => setThrow(false));
 }
 
 // ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as a track per lane (4 or 6), up to 256 beats ----
@@ -1338,6 +1350,7 @@ renderLib();
 // ---- Move ----
 const LANE_LED = LANE_HEX.map(nearestPaletteIndex), LANE_DIM = [24, 16, 30, 34, nearestPaletteIndex('#2f7a45'), nearestPaletteIndex('#8a5a20')];
 const REC_LED = nearestPaletteIndex('#ef4444'), CYAN_LED = nearestPaletteIndex('#67e8f9'), MAGENTA_LED = nearestPaletteIndex('#f0abfc');
+const CUE_LED = COLOR.BLUE;   // P2 / P7 cues among lane colours: no lane is blue (cyan is lane 2's own colour)
 let loopHeld = false, dupHeld = false, chainPick = [];
 // P1 / P2 / P3 (perform.js): Mute held (used = it muted a lane or soloed, so its release doesn't), Layout pressed with
 // Shift (its release is not the end of a held fill), Capture / Delete guarded in live mode, their LEDs blinking
@@ -1348,6 +1361,7 @@ function stopBlink(name) { const b = blink.get(name); if (!b) return; clearInter
 /** A destructive Move button in live mode: Shift = flash, then act; alone = blink while held, act at HOLD_MS; let go sooner = nothing (a hint says how). */
 function guarded(name, pressed, act, what) {
   if (!pressed) { const cut = guard.release(name) === 'cancel'; if (cut) { stopBlink(name); toast(`${name}: hold it (or Shift + ${name}) to ${what}`); } return; }
+  if (blink.has(name)) return;   // a Shift press still flashing: a quick second press doesn't act twice
   const { now, id } = guard.press(name, shift); startBlink(name);
   if (now) setTimeout(() => { stopBlink(name); act(); }, FLASH_MS);
   else setTimeout(() => { if (guard.fire(name, id)) { stopBlink(name); act(); } }, HOLD_MS);
@@ -1365,18 +1379,18 @@ function paintLeds() {
     const li = base + r, lane = m.lanes[li], f = pages.padFirst(lane, playing);
     for (let c = 0; c < PAD_COLS; c++) { const i = f + c; const pad = r * PAD_COLS + c; let col = 0; if (i < lane.length) { col = lane.hitAt(i) ? (lane.accentAt(i) ? COLOR.WHITE : LANE_LED[li]) : LANE_DIM[li]; if (playing && lane.shown === i) col = lane.hitAt(i) ? COLOR.WHITE : 120; } move.setPadColor(pad, lane.muted || (anySolo && !lane.solo) ? (col ? LANE_DIM[li] : 0) : col); }
   }
-  const lane = m.lane, s0 = pages.stepFirst(lane, playing), cur = pages.current(lane, playing);
+  const lane = m.lane, s0 = pages.stepFirst(lane, playing), cur = pages.current(lane, playing); let look = null;
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
-  } else if (held.size) {   // P7: a step held: the step buttons are loops 1–16 and light where it plays (cyan = depends on fill / the step before; white = the loop playing now)
-    const h = held.values().next().value, si = lane.stepIndex(h.step), on = lane.hits[si], loops = condLoops(lane.trigs[si]?.cond), now = playing && lane.loopN != null ? lane.loopN % STEP_BTNS : -1;
-    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, !on ? (i === now ? COLOR.DARK_GREY : 0) : i === now ? (loops[i] === false ? COLOR.DARK_GREY : COLOR.WHITE) : loops[i] === null ? CYAN_LED : loops[i] ? LANE_LED[m.selected] : 0);
+  } else if ((look = pages.looked(performance.now()))) {   // P7: a step held (LOOK_MS, or edited): the step buttons are 16 of its loops (1–16, or the 16 holding the loop playing now) and light where it plays (blue = depends on fill / the step before; white = the loop playing now)
+    const si = lane.stepIndex(look.step), on = lane.hits[si], now = playing && lane.loopN != null ? lane.loopN : -1, from = loopWindow(now, STEP_BTNS), loops = condLoops(lane.trigs[si]?.cond, STEP_BTNS, from), at = now - from;
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, !on ? (i === at ? COLOR.DARK_GREY : 0) : i === at ? (loops[i] === false ? COLOR.DARK_GREY : COLOR.WHITE) : loops[i] === null ? CUE_LED : loops[i] ? LANE_LED[m.selected] : 0);
   } else if (pages.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
   } else for (let b = 0; b < STEP_BTNS; b++) { const i = s0 + b; move.setStepColor(b, i >= lane.length ? 0 : (playing && lane.shown === i) ? COLOR.WHITE : lane.hitAt(i) ? (lane.shownLock(i) ? CYAN_LED : LANE_LED[m.selected]) : LANE_DIM[m.selected]); }
   move.setButtonColor('back', pages.follow ? (np > 1 ? 16 : 0) : CYAN_LED);   // lit = there are pages; cyan = one is pinned
-  // Shift held: track 4 / 3 = lanes 5 / 6. Mute held: the track buttons show the mutes (lane colour = playing, off = muted, cyan = changes on the next bar)
-  for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, mute.held ? (muteQ.has(li) ? CYAN_LED : m.lanes[li].muted ? 0 : LANE_LED[li]) : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
+  // Shift held: track 4 / 3 = lanes 5 / 6. Mute held: the track buttons show the mutes (lane colour = playing, off = muted, blue = changes on the next bar)
+  for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, mute.held ? (muteQ.has(li) ? CUE_LED : m.lanes[li].muted ? 0 : LANE_LED[li]) : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   const blinkLed = (name, idle) => { const b = blink.get(name); move.setButtonColor(name, b ? (b.on ? REC_LED : 0) : idle); };
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); blinkLed('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : latch.state === 'armed' ? CYAN_LED : 16); blinkLed('delete', 16); move.setButtonColor('minus', evo.on ? MAGENTA_LED : 16); move.setButtonColor('plus', pfx.throw ? COLOR.WHITE : 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
@@ -1391,12 +1405,12 @@ move.addEventListener('pad', (e) => {
 move.addEventListener('step', (e) => {
   const { index: btn, on } = e.detail;
   // a release ends its own press, whatever happened since (the page turned, Back went down, the lane got shorter):
-  // a tap toggles the step it went down on; a hold + knob locked something instead
-  if (!on) { const h = pages.release(btn), lane = m.lane; if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else paintLeds(); return; }
+  // a tap toggles the step it went down on; a hold + knob locked something instead, a longer hold looked at its loops (P7)
+  if (!on) { const h = pages.release(btn, performance.now()), lane = m.lane; if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else paintLeds(); return; }
   if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
   if (pages.back) { pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
   const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
-  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else { pages.press(btn, step, first); paintLeds(); }   // P7: the buttons show its loops while held
+  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else { pages.press(btn, step, first, performance.now()); setTimeout(paintLeds, LOOK_MS + 10); }   // P7: held LOOK_MS, the buttons show its loops
 });
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;

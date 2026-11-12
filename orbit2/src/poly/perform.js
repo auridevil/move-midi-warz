@@ -5,13 +5,16 @@
 import { condPasses } from './lanes.js';
 
 /**
- * P7: which of the next `n` loops (loop 1 first) a step with condition `cond` plays on, for the step buttons while it
- * is held: true / false, or null where it depends on the moment (fill, pre / not pre).
+ * P7: which of `n` loops, from loop `from` (0 = loop 1), a step with condition `cond` plays on, for the step buttons
+ * while it is held: true / false, or null where it depends on the moment (fill, pre / not pre).
  */
-export function condLoops(cond, n = 16) {
+export function condLoops(cond, n = 16, from = 0) {
   const live = cond === 'fill' || cond === 'not fill' || cond === 'pre' || cond === 'not pre';
-  return Array.from({ length: n }, (_, loop) => (live ? null : condPasses(cond, loop)));
+  return Array.from({ length: n }, (_, i) => (live ? null : condPasses(cond, from + i)));
 }
+/** P7: the first loop of the window of `n` the step buttons show: the one holding loop `now` (0-based; < 0 = stopped,
+ *  loops 1–n), so the white "now" marker always sits on its own loop (loop 17 is button 1 of loops 17–32). */
+export const loopWindow = (now, n = 16) => (now > 0 ? now - (now % n) : 0);
 
 /**
  * P6 master filter, one knob x in −1…1: left = low-pass from the top of the band (Nyquist: the biquad is a plain wire
@@ -34,21 +37,29 @@ export function stepFilter(x, delta, per = 0.04) {
 export const HOLD_MS = 600;
 
 /**
- * P2 mutes that wait for the next bar line ("mute on next bar"). toggle() queues a lane (a second toggle before the
- * bar line takes it back); bar() at a bar line returns the lanes to flip now and empties the queue. Mutes are
- * performance moves: the app flips `lane.muted`, which stays out of undo (perfKey).
+ * P2 mutes that wait for the next bar line ("mute on next bar"). A lane waits for the mute it was asked for (muted or
+ * not), not for a flip: a slot or a chain coming in on the same bar line, or evolve going home, can change the lane's
+ * mute in between, and the bar line still lands what was asked. toggle() queues it (again before the bar line = take it
+ * back); apply() at the bar line (or at once, on stop) sets every waiting lane and empties the queue. Mutes are
+ * performance moves: `lane.muted` stays out of undo (perfKey).
  */
 export class MuteQueue {
-  constructor() { this.lanes = new Set(); }
+  constructor() { this.lanes = new Map(); }   // lane index → the mute it gets on the bar line
   has(li) { return this.lanes.has(li); }
+  /** The mute lane li waits for (true = muted), or undefined. */
+  target(li) { return this.lanes.get(li); }
   get size() { return this.lanes.size; }
-  /** Queue lane li, or take it back if it already waits. Returns true when it now waits. */
-  toggle(li) { if (this.lanes.delete(li)) return false; this.lanes.add(li); return true; }
-  /** At a bar line: the lanes to flip (in lane order), queue emptied. */
-  bar() { const out = [...this.lanes].sort((a, b) => a - b); this.lanes.clear(); return out; }
+  /** Queue lane li to become `muted` on the bar line, or take it back if it already waits. Returns true when it now waits. */
+  toggle(li, muted) { if (this.lanes.delete(li)) return false; this.lanes.set(li, !!muted); return true; }
+  /** The bar line: every waiting lane of `lanes` gets its mute, the queue empties. Returns the lanes that changed. */
+  apply(lanes) {
+    const out = []; for (const [li, muted] of [...this.lanes].sort((a, b) => a[0] - b[0])) if (lanes[li] && lanes[li].muted !== muted) { lanes[li].muted = muted; out.push(li); }
+    this.lanes.clear(); return out;
+  }
   /** Lanes a pattern no longer has (6 → 4, a slot) drop out of the queue. */
-  trim(n) { for (const li of this.lanes) if (li >= n) this.lanes.delete(li); }
+  trim(n) { for (const li of this.lanes.keys()) if (li >= n) this.lanes.delete(li); }
   clear() { this.lanes.clear(); }
+  toJSON() { return Object.fromEntries(this.lanes); }   // { lane: muted }, for a look from the console
 }
 
 /**

@@ -27,9 +27,10 @@ export class SlotBank {
     this.current = -1; this.pending = -1;      // slot playing / waiting for its boundary
     this.chain = []; this.chainPos = 0;        // song: slot indices played in order, `chainBars` bars each
     this.switchAt = 'bar'; this.chainBars = 4; this.barsInSlot = 0;
-    // P4 "restart on change": a slot due() loads starts its lanes on step 1 at the tick it came in (`start`), so its
-    // first loop is loop 1 again ('first' conditions fire). Off: it picks up where the master count is, as before.
-    this.restart = true; this.start = 0;
+    // P4 "restart on change": a slot due() loads starts its lanes on step 1 at the tick it came in (the app moves the
+    // machine's origin there), so its first loop is loop 1 again ('first' conditions fire). Off: it picks up where the
+    // master count is, as before.
+    this.restart = true;
     try { const o = JSON.parse(store?.getItem(key) || 'null'); if (o) this.fromJSON(o); } catch {}
   }
   persist() { try { this.store?.setItem(this.key, JSON.stringify(this)); } catch {} }
@@ -45,17 +46,16 @@ export class SlotBank {
    * now, or -1. `cycleTicks` = ticks until all lanes line up (for switchAt 'cycle'). `bars` = { at, len }: bar lines
    * fall on `at + k × len` (the app moves the anchor when the time signature changes); the lanes count from `at` too,
    * so they line up again at `at + k × cycleTicks`; `origin` = where the lanes count from now (a restarted slot's
-   * start: the cycle lines up from there), the bar anchor if not given. A slot loaded here sets `start` = tick.
+   * start: the cycle lines up from there), the bar anchor if not given.
    */
   due(tick, cycleTicks, bars = BARS, origin = bars.at) {
     const bar = onBar(tick, bars);
     if (bar && tick > 0 && this.current >= 0) this.barsInSlot++;
     // a running chain moves on after `chainBars` bars, always on a bar line, so the song keeps its length
-    let i = -1;
-    if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; i = this.take(this.chain[this.chainPos]); }
-    else if (this.pending >= 0 && (this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : onBar(tick, { at: origin, len: Math.max(1, cycleTicks) })))) i = this.take(this.pending);
-    if (i >= 0) this.start = tick;
-    return i;
+    if (this.chain.length > 1 && bar && this.pending < 0 && this.barsInSlot >= this.chainBars) { this.chainPos = (this.chainPos + 1) % this.chain.length; return this.take(this.chain[this.chainPos]); }
+    if (this.pending < 0) return -1;
+    const ok = this.switchAt === 'now' || (this.switchAt === 'bar' ? bar : onBar(tick, { at: origin, len: Math.max(1, cycleTicks) }));
+    return ok ? this.take(this.pending) : -1;
   }
   take(i) { this.pending = -1; this.current = i; this.barsInSlot = 0; return this.filled(i) ? i : -1; }
   /** The next master tick after `tick` where due() loads a slot (a queued one, or the chain moving on), else Infinity.

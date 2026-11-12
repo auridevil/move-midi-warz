@@ -2,12 +2,16 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MuteQueue, FillLatch, Guard, HOLD_MS } from '../src/poly/perform.js';
 
-test('P2 mute queue: lanes wait for the bar line, a second press takes one back', () => {
-  const q = new MuteQueue();
-  assert.equal(q.toggle(2), true); assert.equal(q.toggle(0), true); assert.equal(q.has(2), true); assert.equal(q.size, 2);
-  assert.equal(q.toggle(2), false, 'pressed again before the bar: nothing waits'); assert.equal(q.has(2), false);
-  q.toggle(5); q.trim(4); assert.equal(q.has(5), false, 'a lane the pattern lost drops out');
-  assert.deepEqual(q.bar(), [0], 'the bar line flips what waits'); assert.equal(q.size, 0); assert.deepEqual(q.bar(), [], 'and only once');
+test('P2 mute queue: lanes wait for the bar line with the mute asked, a second press takes one back', () => {
+  const q = new MuteQueue(), lanes = [{ muted: false }, { muted: true }, { muted: false }];
+  assert.equal(q.toggle(2, true), true); assert.equal(q.toggle(0, true), true); assert.equal(q.has(2), true); assert.equal(q.size, 2);
+  assert.equal(q.target(0), true); assert.equal(q.target(1), undefined);
+  assert.equal(q.toggle(2, true), false, 'pressed again before the bar: nothing waits'); assert.equal(q.has(2), false);
+  q.toggle(5, true); q.trim(4); assert.equal(q.has(5), false, 'a lane the pattern lost drops out');
+  q.toggle(1, false); assert.deepEqual(JSON.parse(JSON.stringify(q)), { 0: true, 1: false }, 'readable from the console');
+  assert.deepEqual(q.apply(lanes), [0, 1], 'the bar line lands what waits'); assert.deepEqual(lanes.map(l => l.muted), [true, false, false]);
+  assert.equal(q.size, 0); assert.deepEqual(q.apply(lanes), [], 'and only once');
+  q.toggle(0, true); assert.deepEqual(q.apply(lanes), [], 'a lane already as asked doesn\'t change'); assert.equal(q.size, 0, 'but stops waiting');
 });
 
 test('P3 fill latch: armed → the next bar fills → off at the bar after', () => {
@@ -47,11 +51,11 @@ test('P4 Lane.at with an origin: step 1 and loop 1 start there, nothing steps be
   assert.equal(m.tick(o)[0].index, 0, 'Machine.tick hands the origin to Lane.at'); assert.equal(m.tick(o - PPQ)[0], null);
 });
 
-test('P4 slots: a slot due() loads records its start; restart persists (old banks: on); the cycle lines up from the origin', async () => {
+test('P4 slots: restart persists (old banks: on); the cycle lines up from the origin', async () => {
   const { SlotBank } = await import('../src/poly/slots.js'); const { BAR_TICKS: B, PPQ } = await import('../src/poly/lanes.js');
   const store = new Map(), st = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
   const b = new SlotBank(st); assert.equal(b.restart, true); b.save(0, { lanes: [] }); b.save(1, { lanes: [] });
-  b.recall(1); assert.equal(b.due(B + PPQ, 1, { at: 0, len: B }), -1, 'bar mode: not mid-bar'); assert.equal(b.due(2 * B, 1, { at: 0, len: B }), 1); assert.equal(b.start, 2 * B);
+  b.recall(1); assert.equal(b.due(B + PPQ, 1, { at: 0, len: B }), -1, 'bar mode: not mid-bar'); assert.equal(b.due(2 * B, 1, { at: 0, len: B }), 1);
   b.restart = false; b.persist(); assert.equal(new SlotBank(st).restart, false);
   store.set('midi-warz.orbit2.slots.v1', JSON.stringify({ slots: [null], switchAt: 'bar' })); assert.equal(new SlotBank(st).restart, true, 'an older bank restarts');
   const c = new SlotBank(); c.save(0, { lanes: [] }); c.switchAt = 'cycle'; c.recall(0);
@@ -103,9 +107,69 @@ test('P2 mute on next bar: a mute queued mid-bar silences the lane from the bar 
   const q = new MuteQueue(), bars = { at: 0, len: B }, heard = [];
   // the app's clock order: bar-line work (barPerf) before the lanes step on that tick
   for (let t = 0; t < 3 * B; t++) {
-    if (t === B + PPQ + 5) q.toggle(1);   // pressed during bar 2, just after beat 2
-    if (q.size && onBar(t, bars)) for (const li of q.bar()) m.lanes[li].muted = !m.lanes[li].muted;
+    if (t === B + PPQ + 5) q.toggle(1, !m.lanes[1].muted);   // pressed during bar 2, just after beat 2
+    if (q.size && onBar(t, bars)) q.apply(m.lanes);
     const ev = m.tick(t, () => 0)[1]; if (ev?.hit) heard.push(t / PPQ);
   }
   assert.deepEqual(heard, [0, 1, 2, 3, 4, 5, 6, 7], 'bar 2 plays out whole; bar 3 is silent from its downbeat');
+});
+
+test('ORBIT2-11 r1 P2: a queued mute lands as asked when a slot comes in on the same bar line', async () => {
+  const { Machine } = await import('../src/poly/lanes.js');
+  for (const ask of [false, true]) {   // lane 1 muted, "unmute ⇥ bar" / playing, "mute ⇥ bar"
+    const m = new Machine(); m.lanes[0].muted = !ask; const q = new MuteQueue(); q.toggle(0, !m.lanes[0].muted);
+    const slot = m.toJSON(); slot.lanes[0].muted = ask;   // the slot due on that line has lane 1 the way that was asked
+    const next = Machine.from(slot); q.apply(next.lanes);   // the clock: bank.due loads the slot, then barPerf
+    assert.equal(next.lanes[0].muted, ask, `asked ${ask ? 'mute' : 'unmute'} (a flip of the slot's lane gave ${!ask})`);
+  }
+});
+
+test('ORBIT2-11 r1 P7: a step held LOOK_MS is a look (its release toggles nothing), a tap still toggles', async () => {
+  const { MovePages, LOOK_MS } = await import('../src/poly/pages.js'); const { LONG_MS } = await import('../src/ui.js');
+  assert.equal(LOOK_MS, LONG_MS, 'as long as a long-press on screen');
+  const p = new MovePages();
+  p.press(0, 0, 0, 1000); assert.equal(p.looked(1000 + LOOK_MS - 1), null, 'may still be a tap: the buttons keep showing the steps');
+  assert.deepEqual(p.release(0, 1000 + LOOK_MS - 1), { step: 0, used: false }, 'a tap: the app toggles the step');
+  p.press(1, 1, 0, 2000); assert.equal(p.looked(2000 + LOOK_MS).step, 1, 'held: the buttons show its loops');
+  assert.deepEqual(p.release(1, 2000 + LOOK_MS + 300), { step: 1, used: true }, 'a look: nothing toggles');
+  p.press(2, 2, 0, 3000); p.held.get(2).used = true; assert.equal(p.looked(3001).step, 2, 'a knob turned: its loops at once');
+  p.release(2, 3002); assert.equal(p.held.size + p.down.size, 0); assert.equal(p.looked(9999), null);
+});
+
+test('ORBIT2-11 r1 P7: the white "now" marker sits on the loop playing, past loop 16 too', async () => {
+  const { condLoops, loopWindow } = await import('../src/poly/perform.js'); const { condPasses } = await import('../src/poly/lanes.js');
+  assert.deepEqual([-1, 0, 15, 16, 17, 33].map(n => loopWindow(n)), [0, 0, 0, 16, 16, 32], 'stopped: loops 1–16; else the 16 holding the loop playing');
+  for (const c of ['1:3', '2:3', '3:3', '3:4', '1:2', 'first', 'not first', 'always'])
+    for (let now = 0; now < 64; now++) { const from = loopWindow(now); assert.equal(condLoops(c, 16, from)[now - from], condPasses(c, now), `${c} on loop ${now + 1}`); }
+  assert.equal(condLoops('first', 16, 16).some(Boolean), false, 'loops 17–32: "first" never plays again');
+});
+
+test('ORBIT2-11 r1 P5: auto = the native output latency + the master look-ahead; stop leaves after the last clock', async () => {
+  const { autoLatencyMs, PolyMidi } = await import('../src/poly/midiio.js'); const { MIDI_DIV } = await import('../src/poly/lanes.js');
+  assert.equal(autoLatencyMs({ _nativeAudioContext: { outputLatency: 0.02 } }, 0.012), 32, 'Tone\'s wrapper has none: the native context behind it');
+  assert.equal(autoLatencyMs({ outputLatency: 0.01, _nativeAudioContext: { outputLatency: 0.5 } }), 10, 'a context that has it is read first');
+  assert.equal(autoLatencyMs({}), 0); assert.equal(autoLatencyMs(null, NaN), 0);
+  const sent = [], port = { name: 'DAW', send: (b, t) => sent.push([b[0], t]) };
+  const p = new PolyMidi({ getAccess: () => ({ outputs: new Map([['a', port]]), inputs: new Map() }) }); p.setOutput('DAW'); p.clockOut = true; p.offsetMs = 30;
+  p.stop(500); assert.deepEqual(sent.pop(), [0xFC, 530], 'the transport\'s stop + the offset, like the clocks');
+  p.start(1000); p.clockAt(0, 1000); p.clockAt(MIDI_DIV, 1020); p.stop(1010);
+  assert.deepEqual(sent.at(-1), [0xFC, 1050], 'never before a clock already scheduled (1020 + 30 ms)');
+  p.stop(1100); assert.deepEqual(sent.at(-1), [0xFC, 1130]);
+});
+
+test('ORBIT2-11 r1 wiring: cues unlike any lane colour, a clicked throw leaves Space to play, auto latency, print at the heard cutoffs', async () => {
+  const { readFileSync } = await import('node:fs'); const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  const { nearestPaletteIndex, COLOR } = await import('movewire');
+  const leds = JSON.parse(src.match(/const LANE_HEX = (\[[^\]]+\])/)[1].replace(/'/g, '"')).map(nearestPaletteIndex), cue = COLOR[src.match(/const CUE_LED = COLOR\.(\w+)/)[1]];
+  assert.equal(leds.includes(cue), false, 'no lane LED has the cue colour'); assert.equal(leds.includes(nearestPaletteIndex('#67e8f9')), true, 'cyan is lane 2\'s: why the cue isn\'t cyan');
+  assert.match(src, /mute\.held \? \(muteQ\.has\(li\) \? CUE_LED/, 'Mute held: a waiting mute in the cue colour'); assert.match(src, /loops\[i\] === null \? CUE_LED/, 'P7: "depends" in the cue colour');
+  assert.match(src, /th\.addEventListener\('keydown', \(e\) => \{ if \(\(e\.key === ' ' \|\| e\.key === 'Enter'\) && !e\.repeat && controlOwnsKey\(e\)\)/, 'keys hold the throw only when the keyboard owns the button');
+  assert.match(src, /pmidi\.autoMs = autoLatencyMs\(raw, /); assert.doesNotMatch(src, /autoMs = \(T\.getContext\(\)\.rawContext\.outputLatency/);
+  assert.match(src, /pages\.press\(btn, step, first, performance\.now\(\)\)/); assert.match(src, /pages\.release\(btn, performance\.now\(\)\)/); assert.match(src, /pages\.looked\(performance\.now\(\)\)/);
+  assert.match(src, /muteQ\.toggle\(li, !m\.lanes\[li\]\.muted\)/); assert.match(src, /muteQ\.apply\(m\.lanes\)/);
+  assert.match(src, /new T\.Gain\(fx\.throw \? THROW\.send : 0\)/, 'a throw held while the kit is built starts thrown');
+  assert.match(src, /fxFreqs\(fx\.filter, fx\.sr \|\| raw\.sampleRate\)/); assert.match(src, /\{ filter: pfx\.filter, sr: T\.getContext\(\)\.rawContext\.sampleRate \}/, 'a print keeps the cutoffs heard live');
+  // the clock order a waiting mute relies on: the slot due on a bar line loads before barPerf lands the mutes
+  const tick = src.slice(src.indexOf('function onTick('), src.indexOf('function retime('));
+  assert.ok(tick.indexOf('bank.due(') < tick.indexOf('barPerf()') && tick.indexOf('barPerf()') < tick.indexOf('liveQuiet('), 'slot → mutes → the lanes step');
 });

@@ -1,7 +1,11 @@
 // The Move's view of a pattern: which steps the pad rows and the step buttons show (L5 pages), which lanes the four pad
 // rows are (L2 window), what a track button selects, and which step a held step button holds. Pure (no DOM, no MIDI),
 // so the rules are unit-tested; app.js keeps one MovePages and paints the LEDs from it.
+import { LONG_MS } from '../ui.js';
 export const PAD_COLS = 8, PAD_ROWS = 4, STEP_BTNS = 16;
+/** P7: a step button held this long is a look (the step buttons show its loops), not a tap, so its release doesn't
+ *  toggle the step: the same time as a long-press on screen. */
+export const LOOK_MS = LONG_MS;
 
 /** Pad pages of the longest lane (1–4): what Back + ◀ ▶ can pin. */
 export const padPages = (lanes) => Math.max(1, ...lanes.map(l => Math.ceil(l.length / PAD_COLS)));
@@ -19,6 +23,7 @@ export class MovePages {
     this.back = false; this.backUsed = false;   // Back held; a page was pinned while it was (else its release = follow)
     this.base = 0;            // the first lane of the pad window: 0 (lanes 1–4), or 2 (lanes 3–6 of six)
     this.held = new Map();    // step button → { step, used }: the step it pressed, by its own number (17–32 on page 2)
+    this.down = new Map();    // step button → when it went down (ms), for P7's tap or look
     this.hold = -1;           // the first step the step buttons showed when the first held one went down
   }
   /** The pad page a row of `lane` shows: following, the page its playhead is on (page 1 while stopped); pinned, the
@@ -48,9 +53,16 @@ export class MovePages {
     if (sel < this.base || sel >= this.base + PAD_ROWS) this.base = sel >= PAD_ROWS ? n - PAD_ROWS : 0;
     return (this.base = Math.min(this.base, n - PAD_ROWS));
   }
-  /** Step button `btn` goes down on step `step`; `first` = the first step the buttons show now (kept while held). */
-  press(btn, step, first) { if (!this.held.size) this.hold = first; this.held.set(btn, { step, used: false }); }
-  /** Step button `btn` comes up: what it pressed ({ step, used }), or undefined. A release always ends its own press,
-   *  whatever happened since (the page turned, Back went down, the lane got shorter). */
-  release(btn) { const h = this.held.get(btn); this.held.delete(btn); if (!this.held.size) this.hold = -1; return h; }
+  /** Step button `btn` goes down on step `step` at `at` ms; `first` = the first step the buttons show now (kept while held). */
+  press(btn, step, first, at = 0) { if (!this.held.size) this.hold = first; this.held.set(btn, { step, used: false }); this.down.set(btn, at); }
+  /** P7: the held step whose loops the step buttons show at `at` ms: the first one a knob (or the wheel, or Delete)
+   *  edited, or one held LOOK_MS; null while every press may still be a tap (the buttons keep showing the steps). */
+  looked(at) { for (const [btn, h] of this.held) if (h.used || at - this.down.get(btn) >= LOOK_MS) return h; return null; }
+  /** Step button `btn` comes up at `at` ms: what it pressed ({ step, used }), or undefined; held LOOK_MS it was a look,
+   *  so it comes back used (no toggle). A release always ends its own press, whatever happened since (the page turned,
+   *  Back went down, the lane got shorter). */
+  release(btn, at) {
+    const h = this.held.get(btn); if (h && at - this.down.get(btn) >= LOOK_MS) h.used = true;
+    this.held.delete(btn); this.down.delete(btn); if (!this.held.size) this.hold = -1; return h;
+  }
 }

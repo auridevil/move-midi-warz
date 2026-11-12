@@ -30,6 +30,15 @@ export const FOLLOW_MODES = ['off', 'tempo', 'transport', 'lock'];
 /** P5: the MIDI out offset range, ms either way. */
 export const LATENCY_MAX = 50;
 /**
+ * P5 auto offset, ms: how long after its scheduled time a hit leaves the speakers = the output's latency (Tone's
+ * context is a standardized-audio-context wrapper with no `outputLatency`: the native context behind it has it) + the
+ * master's look-ahead `masterSec` (compressor + limiter, measured by the app).
+ */
+export function autoLatencyMs(raw, masterSec = 0) {
+  const out = raw?.outputLatency ?? raw?._nativeAudioContext?.outputLatency;
+  return ((Number.isFinite(out) ? out : 0) + (Number.isFinite(masterSec) ? masterSec : 0)) * 1000;
+}
+/**
  * Phase lock: `drift` = our master tick − the incoming clock's tick at the same moment (positive = we're ahead).
  * Small drift trims the tempo (a gentle PLL, at most ±4 %); a big one (a missed start, a jump) snaps the clock.
  */
@@ -133,7 +142,7 @@ export class PolyMidi {
     this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60;
     // P5 out offset: every scheduled note and clock goes out this many ms later (− = earlier). null = auto: the audio
     // output's latency (autoMs, set by the app), so notes leave when the speakers play the same hit
-    this.offsetMs = null; this.autoMs = 0;
+    this.offsetMs = null; this.autoMs = 0; this.lastClock = 0;   // lastClock: when the last clock / start leaves (stop goes after it)
     this.inName = ''; this.follow = 'off'; this.input = null; this.onIn = null;
     this.handlers = { tempo: () => {}, start: () => {}, stop: () => {}, tick: () => {} };
     this.extTick = 0;   // incoming clock ticks since start (or since a Song Position Pointer), in MIDI ticks (24 PPQ): the app scales
@@ -161,11 +170,14 @@ export class PolyMidi {
     if (!this.out) return; at += this.latencyMs; const { ch } = this.lanes[li], note = strokeNotes(this.lanes)[li][artic || 0], st = 0x90 | ((ch - 1) & 15), v = Math.max(1, Math.min(127, Math.round(vel01 * 127)));
     this.send([st, note & 127, v], at); this.send([0x80 | ((ch - 1) & 15), note & 127, 0], at + this.gateMs);
   }
-  clock(at) { if (this.out && this.clockOut) this.send([0xF8], at + this.latencyMs); }
+  clock(at) { if (this.out && this.clockOut) this.sendClock(0xF8, at + this.latencyMs); }
   /** Master tick `tick` (any PPQ): a MIDI clock on every MIDI_DIV-th, so 24 per quarter. */
   clockAt(tick, at) { if (tick % MIDI_DIV === 0) this.clock(at); }
-  start(at) { if (this.out && this.clockOut) this.send([0xFA], at + this.latencyMs); }
-  stop() { if (this.out && this.clockOut) this.send([0xFC]); }
+  start(at) { if (this.out && this.clockOut) this.sendClock(0xFA, at + this.latencyMs); }
+  /** Stop at `at` (the transport's stop, a Web MIDI timestamp) + the P5 offset like the clocks, and never before a clock
+   *  already scheduled: the transport stops a look-ahead after the press and clocks until then. */
+  stop(at = 0) { if (this.out && this.clockOut) this.send([0xFC], Math.max(at + this.latencyMs, this.lastClock)); }
+  sendClock(s, at) { this.lastClock = Math.max(this.lastClock, at); this.send([s], at); }
   /** Follow mode change: the ticks heard before (or while 'off') say nothing about now. */
   setFollow(mode) { this.follow = FOLLOW_MODES.includes(mode) ? mode : 'off'; this.follower.reset(); }
   /** Clock in: a smoothed float bpm (tempo handler only on a real change), plus start / stop when following the transport. */
