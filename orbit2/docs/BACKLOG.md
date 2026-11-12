@@ -132,15 +132,15 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## P · Live performance (phase 11)
 
 - **P1 safe Move live mode**: pads play sounds only (with velocity) unless Record; Capture (randomize all) and Delete
-  (clear lane) need Shift or a hold; destructive actions confirmable. (Kai)
+  (clear lane) need Shift or a hold; destructive actions confirmable. (Kai) ✅ ORBIT2-11
 - **P2 one-gesture mutes**: hold Mute + track button / pad row mutes that lane without changing selection; "mute on
-  next bar" option. (Kai)
-- **P3 fill latch**: Shift + Layout = fill for the next bar. (Kai)
+  next bar" option. (Kai) ✅ ORBIT2-11
+- **P3 fill latch**: Shift + Layout = fill for the next bar. (Kai) ✅ ORBIT2-11
 - **P4 slot change restarts lanes** at step 1 (option, default on): per-slot start tick subtracted in `Lane.at()`;
-  `first` conditions fire again. (Kai)
-- **P5 MIDI out latency offset** (± ms for notes and clock), using `outputLatency` as the default. (Kai)
-- **P6 master performance FX**: HP/LP filter on the wheel (Shift+wheel = humanize), momentary delay throw. (Kai)
-- **P7 conditions visible without the screen**: step buttons light per condition while holding a step. (Kai)
+  `first` conditions fire again. (Kai) ✅ ORBIT2-11
+- **P5 MIDI out latency offset** (± ms for notes and clock), using `outputLatency` as the default. (Kai) ✅ ORBIT2-11
+- **P6 master performance FX**: HP/LP filter on the wheel (Shift+wheel = humanize), momentary delay throw. (Kai) ✅ ORBIT2-11
+- **P7 conditions visible without the screen**: step buttons light per condition while holding a step. (Kai) ✅ ORBIT2-11
 
 ## V · Generative & visual structure (phases 12, 13)
 
