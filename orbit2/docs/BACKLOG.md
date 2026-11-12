@@ -145,12 +145,12 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## V · Generative & visual structure (phases 12, 13)
 
 - **V1 steerable evolve**: per-kind weights, "gravity" toward home instead of the hard reset, max cycle bars, keep
-  hand edits (euclid lanes don't overwrite), move locks/conditions with their hits. (Ines)
-- **V2 cross-lane coupling**: a hit on lane A raises probability on lane B (energy like `chaos/field.js`). (Ines)
-- **V3 euclid as a mask**: AND / XOR / replace with the hand pattern. Document `euclid(5,8)` vs Bjorklund. (Ines)
-- **V4 ratchet curves**: speed-up / slow-down spacing, pitch ramp, up to ×8. (Ines)
+  hand edits (euclid lanes don't overwrite), move locks/conditions with their hits. (Ines) ✅ ORBIT2-12
+- **V2 cross-lane coupling**: a hit on lane A raises probability on lane B (energy like `chaos/field.js`). (Ines) ✅ ORBIT2-12
+- **V3 euclid as a mask**: AND / XOR / replace with the hand pattern. Document `euclid(5,8)` vs Bjorklund. (Ines) ✅ ORBIT2-12
+- **V4 ratchet curves**: speed-up / slow-down spacing, pitch ramp, up to ×8. (Ines) ✅ ORBIT2-12
 - **V5 timbre modulation**: per-lane slow modulator (tone/color over N loops or the cycle); seeded timbre dice with a
-  range; scale-snapped tune option for pitched voices. (Ines)
+  range; scale-snapped tune option for pitched voices. (Ines) ✅ ORBIT2-12
 - **V6 show what didn't play**: ghost flash on steps skipped by probability/condition/dice; planet opacity by
   probability (incl. prob locks); condition halo as `b` arcs with the active one lit; outer arc for position in the
   full cycle. (Ines)
