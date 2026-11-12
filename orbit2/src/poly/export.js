@@ -1,6 +1,7 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
-import { Machine, PPQ, meterParts } from './lanes.js';
+import { Machine, PPQ, meterParts, ratchetTimes, snapTune, TIMBRE_KEYS } from './lanes.js';
+import { TUNE_SEMIS } from './voices.js';
 import { trackBars } from './slots.js';
 import { KITS } from './kits.js';
 import { strokeNotes } from './midiio.js';
@@ -21,7 +22,28 @@ export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec })
   // G3 velocity humanize: symmetric, up to ±20 % of the hit's own velocity at 100 % (a ghost wobbles as much in dB as an
   // accent), its own dice salt (locked dice repeat it); never over 1
   const vh = lane.velHuman || 0, v0 = hitVel(ev.accent, ev.lock), v = vh ? Math.min(1, v0 * (1 + ((dice ? dice.at(li, ev.step, lane.length, 3) : Math.random()) - 0.5) * 0.4 * vh)) : v0;
-  return Array.from({ length: n }, (_, k) => ({ dt: base + (k * stepSec) / n, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: ev.lock, slice: ev.slice }));
+  // V4: repeats spaced by the step's curve, tune ramping from the hit's own to + ramp on the last; V5 timbre on the lock
+  const lock = timbreLock(ev, lane, li, dice), at = ratchetTimes(n, ev.curve), ramp = n > 1 ? ev.ramp || 0 : 0;
+  return Array.from({ length: n }, (_, k) => ({ dt: base + at[k] * stepSec, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: tuneLock(lane, lock, ramp * (k / Math.max(1, n - 1))), slice: ev.slice }));
+}
+/**
+ * V5: the step lock a hit plays with its timbre moves on top: the slow modulator's offset (ev.mod) and the timbre dice
+ * (± half the lane's range, own dice salts 10–12: locked dice repeat them) on whatever the hit would play (its lock, else
+ * the lane's sound), kept in 0..1. The step's own lock object is never changed: a new one comes back when anything moved.
+ */
+export function timbreLock(ev, lane, li, dice) {
+  const td = lane.tdice; if (!ev.mod && !td) return ev.lock;
+  const o = { ...(ev.lock || {}) }, val = (k) => o[k] ?? lane.sound[k];
+  if (ev.mod) o[ev.mod.k] = Math.max(0, Math.min(1, val(ev.mod.k) + ev.mod.d));
+  if (td) TIMBRE_KEYS.forEach((k, j) => { if (td[k] > 0) o[k] = Math.max(0, Math.min(1, val(k) + ((dice ? dice.at(li, ev.step, lane.length, 10 + j) : Math.random()) - 0.5) * td[k])); });
+  return o;
+}
+/** V4 / V5: the lock with its tune moved by `add` (a ratchet's pitch ramp) and snapped to the lane's scale on a pitched
+ *  voice (voices.js TUNE_SEMIS); untouched when neither applies. */
+export function tuneLock(lane, lock, add = 0) {
+  const semis = lane.scale !== 'off' ? TUNE_SEMIS[lane.voice] : 0; if (!add && !semis) return lock;
+  let t = Math.max(-1, Math.min(1, (lock?.tune ?? lane.tune) + add)); if (semis) t = snapTune(t, lane.scale, semis);
+  return { ...(lock || {}), tune: t };
 }
 
 /**
@@ -57,9 +79,9 @@ const decided = (pre, lane, step, tick) => pre?.tick === tick && (pre.played || 
  * The lanes count their steps from `m.origin` (bar 1 of the pattern's meter); `ahead`, `skip` and `cut` stay on the
  * master tick. The origin only moves on a cut (a new meter's first bar line), so no decision spans a move.
  */
-export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null }) {
+export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null, cycle }) {
   const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec }, o0 = m.origin;
-  return m.tick(t, rng, { fill, dice }).map((ev, li) => {
+  return m.tick(t, rng, { fill, dice, cycle }).map((ev, li) => {
     const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] }, due = (ahead[li] ??= new Map());
     const pre = due.get(t), padded = !!skip?.size && skip.delete(`${li}:${t}`);
     for (const k of due.keys()) if (k <= t) due.delete(k);   // its tick has come (or passed with no step on it)
@@ -71,7 +93,7 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
     const step = earlyStep(lane, t - o0, { ...o, cut: cut - o0 }), at = o0 + step * lane.stepTicks();
     if (step >= 0 && !decided(due.get(at), lane, step, at)) {
       // V2: a coupled lane's early step takes the lift waiting now (hits between now and its tick lift the step after)
-      const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced, boost: m.boostOf(li) }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
+      const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced, boost: m.boostOf(li), cycle: cycle ?? (lane.mod ? m.cycleTicks() : 0) }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
       if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt, tick: at }));   // tick: its step's (a jam take's end goes by steps)
       due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
     }
@@ -93,7 +115,8 @@ export function liveQuiet(m, t, ahead, { humanize = 0, tickSec, cut = Infinity }
  *  the render's own and the live ones are left alone. */
 export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false, origin = 0 }) {
   const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON()); m.origin = origin;
-  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, slice: h.slice, artic: m.lanes[li].strokeAt(h.lock) }); });
+  const cycle = m.cycleTicks({ repeat: dice?.locked && Number.isFinite(dice.repeat) ? dice.repeat : 1 });   // V5: as the clock has it
+  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill, cycle }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, slice: h.slice, artic: m.lanes[li].strokeAt(h.lock) }); });
   return out.sort((a, b) => a.time - b.time);
 }
 

@@ -53,6 +53,10 @@ const coupleFrom = (o) => {
   const matrix = Array.from({ length: MAX_LANES }, (_, a) => Array.from({ length: MAX_LANES }, (_, b) => clamp(+o?.matrix?.[a]?.[b] || 0, 0, 1)));
   return { mode, amount, matrix };
 };
+/** V5 modulator from saved data: a known target, loops 0..16 (0 = the whole cycle), depth 0..1; null when off. */
+const modFrom = (o) => (o && MOD_TARGETS.includes(o.target) ? { target: o.target, loops: clamp(Math.round(+o.loops || 0), 0, 16), depth: clamp(+o.depth || 0, 0, 1) } : null);
+/** V5 timbre dice from saved data: a range 0..1 per key; null when every range is 0. */
+const tdiceFrom = (o) => { if (!o) return null; const t = Object.fromEntries(TIMBRE_KEYS.map(k => [k, clamp(+o[k] || 0, 0, 1)])); return TIMBRE_KEYS.some(k => t[k] > 0) ? t : null; };
 /** Lane ids (not voices). L2: a pattern has 4 or 6 lanes; lanes 5–6 default to an open hat and a cymbal (the kit's). */
 export const LANE_NAMES = ['kick', 'snare', 'hat', 'perc', 'open', 'cymbal'];
 export const LANE_COUNTS = [4, 6], MAX_LANES = 6;
@@ -136,7 +140,37 @@ export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4',
 /** Conditions that set what pre / not pre read: every real condition except always and pre / not pre themselves (as on
  *  Elektron boxes, PRE looks past other PRE trigs). The probability roll and mutes don't count: only the condition. */
 const setsPrev = (cond) => !!cond && cond !== 'always' && cond !== 'pre' && cond !== 'not pre';
-export const MAX_RATCHET = 4;
+/** V4: a step repeats up to 8 times inside itself. */
+export const MAX_RATCHET = 8;
+/** V4 ratchet spacing: even, speed-up (the gaps shrink), slow-down (they grow). */
+export const RATCHET_CURVES = ['even', 'up', 'down'];
+/** V4: where repeat k of n starts, as a fraction of the step (0 = on it, always < 1): even k/n, speed-up 1 − (1 − k/n)²,
+ *  slow-down (k/n)². The first is always on the step, the last always inside it. */
+export const ratchetTimes = (n, curve = 'even') => Array.from({ length: n }, (_, k) => { const x = k / n; return curve === 'up' ? 1 - (1 - x) * (1 - x) : curve === 'down' ? x * x : x; });
+/** V3 euclid combine modes: replace = the fill is the pattern (the classic euclid knob, hand edits on top); and = only the
+ *  hand hits the fill also has play; xor = the hand pattern flips the fill (a hand hit on a fill hit rests, one off it
+ *  plays). With and / xor the hand pattern stays as you set it: the euclid knob moves only the mask. */
+export const EUCLID_MODES = ['replace', 'and', 'xor'];
+/** V5 slow modulator targets (lane sound keys) and timbre dice keys. */
+export const MOD_TARGETS = ['tone', 'color', 'decay'], TIMBRE_KEYS = ['tone', 'color', 'decay'];
+/** V5: the modulator's offset at phase ph (0..1 of its period): a sine, ± depth / 2 around the sound it moves. */
+export const modValue = (depth, ph) => depth * 0.5 * Math.sin(2 * Math.PI * ph);
+/** V5 scale snap: semitone degrees in an octave. just = the 12 just-intonation ratios (1, 16/15, 9/8 … 15/8) as semitones,
+ *  so a tuned lane lands on pure intervals instead of equal-tempered ones. */
+export const SCALES = {
+  off: null, major: [0, 2, 4, 5, 7, 9, 11], minor: [0, 2, 3, 5, 7, 8, 10], penta: [0, 2, 4, 7, 9],
+  just: [1, 16 / 15, 9 / 8, 6 / 5, 5 / 4, 4 / 3, 45 / 32, 3 / 2, 8 / 5, 5 / 3, 9 / 5, 15 / 8].map(r => 12 * Math.log2(r)),
+};
+export const SCALE_KEYS = Object.keys(SCALES);
+/** V5: a tune (−1..1, `semis` semitones per unit on this voice) moved to the nearest degree of `scale`, from the voice's
+ *  own root; it stays in −1..1. */
+export function snapTune(t, scale, semis = 12) {
+  const deg = SCALES[scale]; if (!deg || !semis) return t;
+  const s = t * semis, oct = Math.floor(s / 12), r = s - 12 * oct, all = [...deg, 12];
+  const d = all.reduce((a, b) => (Math.abs(b - r) < Math.abs(a - r) ? b : a));
+  let x = (12 * oct + d) / semis; if (x > 1 + 1e-9) x = (12 * oct + all.filter(v => (12 * oct + v) / semis <= 1 + 1e-9).at(-1)) / semis; if (x < -1 - 1e-9) x = -1;
+  return clamp(x, -1, 1);
+}
 /** A sample plays whole, from its first sample: decay at the top, no skip-in (snap) and no pitch swoop (color). */
 const SAMPLE_KEYS = ['decay', 'snap', 'color'], SAMPLE_SOUND = { decay: 1, snap: 0.5, color: 0.5 };
 const pick = (o, ks) => Object.fromEntries(ks.map(k => [k, o[k]]));
@@ -150,7 +184,13 @@ export function condPasses(cond, loop, fill = false, prev = false) {
   const [a, b] = cond.split(':').map(Number); return loop % b === a - 1;
 }
 
-/** Bjorklund / euclidean rhythm: k hits spread as evenly as possible over n steps. */
+/**
+ * Euclidean rhythm: k hits spread as evenly as possible over n steps, always starting on a hit. V3 note: this is the
+ * "floor" (Bresenham) form, not Bjorklund's algorithm. Both give the same gaps, but not always in the same order or from
+ * the same step: E(5,8) here is x.x.xx.x (gaps 2 2 1 2 1); Bjorklund / Toussaint's cinquillo is x.xx.xx. (2 1 2 1 2), the
+ * same necklace started two steps later (rotation 6 here, or 2 the other way, gives the cinquillo). E(3,8) is the
+ * tresillo x..x..x. in both. Saved patterns store the hits, so this can't change under them.
+ */
 export function euclid(k, n) {
   k = Math.max(0, Math.min(n, k)); if (n <= 0) return [];
   // a hit wherever floor(i·k/n) steps up: E(3,8) = 10010010 (tresillo), always starting on a hit
@@ -181,7 +221,28 @@ export class Lane {
     this.solo = false; this.choke = -1;             // choke: index of the lane this one cuts off when it hits   // locks: per stored step, {key: value} or null
     this.sound = { ...DEFAULT_SOUND }; this.voice = name;   // voice = engine key from voices.js; defaults to the lane's classic sound
     this.shown = null;   // runtime, not saved: the visible step that sounded last (the playhead; the app sets it)
+    // V3 euclid combine mode; V5 slow modulator { target, loops (0 = the whole cycle), depth } or null, timbre dice
+    // { tone, color, decay: range 0..1 } or null, scale snap for tune (SCALES key)
+    this.euclidMode = 'replace'; this.mod = null; this.tdice = null; this.scale = 'off';
     this.resetLoops();
+  }
+  /** V3: the euclid mask of the lane (cached on k and length). */
+  mask() { const key = this.euclidK * 64 + this.length; if (this._maskKey !== key) { this._mask = euclid(this.euclidK, this.length); this._maskKey = key; } return this._mask; }
+  /** V3: does stored step si play? The hand hit, through the euclid mask in and / xor mode. */
+  played(si) { const h = this.hits[si]; if (this.euclidMode === 'replace' || si >= this.length) return h; const e = !!this.mask()[si]; return this.euclidMode === 'and' ? h && e : h !== e; }
+  /** V3: in and / xor mode a stored hand hit the mask silences (shown dimmed). */
+  maskedOut(si) { return this.euclidMode !== 'replace' && si < this.length && this.hits[si] && !this.played(si); }
+  setEuclidMode(mode) { if (EUCLID_MODES.includes(mode)) this.euclidMode = mode; return this.euclidMode; }
+  /** V5 slow modulator, put back in range (null = off). */
+  setMod(o) { this.mod = modFrom(o); return this.mod; }
+  /** V5 timbre dice ranges, put back in range (null = off). */
+  setTimbreDice(o) { this.tdice = tdiceFrom(o); return this.tdice; }
+  setScale(key) { this.scale = SCALE_KEYS.includes(key) ? key : 'off'; return this.scale; }
+  /** V5: what the modulator does to a hit on absolute step `step` (tick = master ticks from the lane's origin, cycle = the
+   *  pattern's cycle in ticks, for a modulator on the whole cycle): { k, d } (sound key, offset) or null. */
+  modAt(step, tick, cycle) {
+    const md = this.mod; if (!md?.depth) return null; const per = md.loops > 0 ? this.length * md.loops : 0;
+    const ph = per ? (step % per) / per : cycle > 0 ? (tick % cycle) / cycle : 0; return { k: md.target, d: modValue(md.depth, ph) };
   }
   /** Switching between a drum voice and the lane's sample swaps decay / snap / color: each side keeps its own. */
   setVoice(key) {
@@ -241,7 +302,8 @@ export class Lane {
   get ratio() { return RATIOS[this.ratioIndex]; }
   setLength(n) { this.length = Math.max(1, Math.min(MAX_STEPS, Math.round(n))); if (this.pos >= this.length) this.pos = 0; return this.length; }
   setRatio(i) { this.ratioIndex = Math.max(0, Math.min(RATIOS.length - 1, Math.round(i))); return this.ratioIndex; }
-  setEuclid(k) { this.euclidK = Math.max(0, Math.min(this.length, Math.round(k))); const e = euclid(this.euclidK, this.length); for (let i = 0; i < MAX_STEPS; i++) this.hits[i] = i < this.length ? e[i] : false; return this.euclidK; }
+  /** The euclid knob: in replace mode a new fill (the hits), in and / xor mode only the mask (the hand hits stay). */
+  setEuclid(k) { this.euclidK = Math.max(0, Math.min(this.length, Math.round(k))); if (this.euclidMode !== 'replace') return this.euclidK; const e = euclid(this.euclidK, this.length); for (let i = 0; i < MAX_STEPS; i++) this.hits[i] = i < this.length ? e[i] : false; return this.euclidK; }
   toggle(i) { if (i >= this.length) return false; this.hits[i] = !this.hits[i]; return this.hits[i]; }
   /** The accent flag alone (Shift+tap). Turning it on lifts a ghost to an accent: the soft vel lock goes, or the accent
    *  would play under a normal hit. */
@@ -270,6 +332,8 @@ export class Lane {
   setTrig(i, patch) {
     if (i < 0 || i >= MAX_STEPS) return null; const t = { cond: 'always', ratchet: 1, fade: false, ...(this.trigs[i] || {}), ...patch };
     if (!CONDS.includes(t.cond)) t.cond = 'always'; t.ratchet = clamp(Math.round(t.ratchet), 1, MAX_RATCHET); t.fade = !!t.fade;
+    // V4 spacing and pitch ramp (−1..1 of tune over the repeats), stored only when set: older trigs stay as they were
+    if (!RATCHET_CURVES.includes(t.curve) || t.curve === 'even') delete t.curve; t.ramp = clamp(+t.ramp || 0, -1, 1); if (!t.ramp) delete t.ramp;
     this.trigs[i] = t.cond === 'always' && t.ratchet === 1 ? null : t; return this.trigs[i];
   }
   trigAt(i) { return this.trigs[this.stepIndex(i)]; }
@@ -332,7 +396,7 @@ export class Lane {
     this.pos = (i + 1) % this.length; this.loopN = loop; this.lastTick = tick;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, loop, slice: this.sliceAt(this.stepIndex(i), lock) };
+    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, curve: trig?.curve, ramp: trig?.ramp || 0, loop, slice: this.sliceAt(this.stepIndex(i), lock), mod: hit && this.mod ? this.modAt(step, tick, ctx.cycle) : null };
   }
   /** at() without moving the playhead (pos) or the loop counter: live play looks ahead with it. */
   peek(tick, rng, ctx) { const { pos, loopN, lastTick, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastTick, lastCond }); return ev; }
@@ -359,7 +423,7 @@ export class Lane {
   }
   /** Read a step through the rotation. */
   stepIndex(i) { return ((i - this.rotation) % this.length + this.length) % this.length; }
-  hitAt(i) { return this.hits[this.stepIndex(i)]; }
+  hitAt(i) { return this.played(this.stepIndex(i)); }
   accentAt(i) { return this.accents[this.stepIndex(i)]; }
   reset() { this.pos = 0; this.shown = null; this.resetLoops(); }   // a restart lights no step until one sounds, counts loops from 0
   /**
@@ -370,10 +434,11 @@ export class Lane {
    */
   loopsPerCycle({ repeat = 1, humanize = 0 } = {}) {
     let n = 1, any = false;
-    for (let i = 0; i < this.length; i++) { if (!this.hits[i]) continue; any = true; const ab = /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
+    for (let i = 0; i < this.length; i++) { if (!this.played(i)) continue; any = true; const ab = /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
     if (!any) return 1;
     if (this.swing > 0) n = lcm(n, lcm(this.length, this.swingPeriod()) / this.length);
-    const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1);
+    const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1) || TIMBRE_KEYS.some(k => this.tdice?.[k] > 0);
+    if (this.mod?.depth > 0 && this.mod.loops > 0) n = lcm(n, this.mod.loops);   // V5: the modulator's period, in loops
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
   /** V1: is the lane exactly its euclid fill (no hand edits on the steps it loops over)? */
@@ -403,6 +468,7 @@ export class Lane {
    */
   evolveHits(dir, rng) {
     const n = this.length, count = this.hits.slice(0, n).filter(Boolean).length;
+    if (this.euclidMode !== 'replace') { this.setEuclid(clamp(this.euclidK + dir, 1, n)); return dir; }   // V3 mask mode: the mask moves, your hits stay
     if (this.isEuclid()) { this.refill(clamp(this.euclidK + dir, 1, n)); return dir; }
     if (this.euclidK) {
       const k = clamp(this.euclidK + dir, 1, n), e = euclid(k, n), idx = [...Array(n).keys()];
@@ -449,9 +515,11 @@ export class Lane {
   }
   /** Put back what evolve may change, from a toJSON copy (the max cycle guard refusing a move). */
   restore(o) { const b = Lane.from(o); for (const k of EVOLVE_FIELDS) this[k] = b[k]; if (this.pos >= this.length) this.pos = 0; }
-  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null }; }
+  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null, ...this.genJSON() }; }
+  /** V3 / V5 settings, saved only when set (an older lane saves as it always did). */
+  genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; return o; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); return l; }   // older saves: no template (MPC), no offset
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); l.setEuclidMode(o.euclidMode); l.setMod(o.mod); l.setTimbreDice(o.tdice); l.setScale(o.scale); for (const t of l.trigs) if (t) { t.ratchet = clamp(Math.round(+t.ratchet || 1), 1, MAX_RATCHET); if (t.ramp != null) t.ramp = clamp(+t.ramp || 0, -1, 1); } return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {
@@ -503,7 +571,9 @@ export class Machine {
   /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
   tick(tick, rng = Math.random, ctx = {}) {
     const solo = this.lanes.some(l => l.solo), r = tick - this.origin, cp = this.couple.mode !== 'off';
-    const evs = this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin, boost: cp ? this.boost[li] || 0 : 0 }));   // most ticks step no lane: nothing allocated
+    // V5: a modulator over the whole cycle needs its length (the clock passes the one it has; else worked out here)
+    const cycle = ctx.cycle ?? (this.lanes.some(l => l.mod?.depth > 0 && !(l.mod.loops > 0)) && this.steps(tick) ? this.cycleTicks() : 0);
+    const evs = this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin, boost: cp ? this.boost[li] || 0 : 0, cycle }));   // most ticks step no lane: nothing allocated
     if (cp && evs.some(Boolean)) this.coupleAfter(evs); return evs;
   }
   /** Does any lane step at master tick `tick`? */

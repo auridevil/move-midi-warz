@@ -119,6 +119,9 @@ V.noiseburst = { label: 'noise burst', make: (T, out) => { const f = new T.AutoF
   hit: (T, n, p, t) => { n.f.frequency.value = 2 + p.snap * 20; n.f.baseFrequency = 200 + p.color * 2000; n.n.triggerAttackRelease(0.05 + p.dec * 0.5, t, p.vel); } };
 export const VOICES = V;
 export const VOICE_KEYS = Object.keys(V);
+/** V5 scale snap: the pitched voices, and how many semitones a tune of 1 moves each (both engines agree: × 12 or × 24, or
+ *  a power of 2 = 12). Unpitched voices (hats, noise, claps…) don't snap. */
+export const TUNE_SEMIS = { sub: 12, kick808: 12, tom: 24, cowbell: 12, wood: 24, blip: 24, bell: 24, gong: 12, conga: 12, bongo: 12, tabla: 12, cuica: 12, djembe: 12, logdrum: 12, agogo: 12, marimba: 24, steel: 24, kalimba: 24 };
 /**
  * L3 articulations: the voices with more than one stroke, and their names. An `artic` step lock is an index here (0 is
  * the first stroke, not "no lock": an unlocked step plays the lane's own sound, which for djembe and agogo comes from

@@ -1,10 +1,10 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, COUPLE_MODES } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
-import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, tuneLock, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, pendingSteps, ringPlan, ringOut, joinRing } from './jam.js';
@@ -13,7 +13,7 @@ import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs } from './midiio.js';
-import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
+import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt, TUNE_SEMIS } from './voices.js';
 import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, loopWindow, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
@@ -337,7 +337,7 @@ function onTick(t, time, cyc, ts) {
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip).
   // step: when the hit's own step is due (this tick; for an early part the later tick it belongs to, estimated at this
   // tempo until that tick comes: pending)
-  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
+  liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip, cycle: cyc }).forEach(({ ev, hits, early: soon }, li) => {
     const lane = m.lanes[li]; for (const h of soon) { const e = play(li, lane, h, time + (h.tick - t) * ts); if (e) pending.add(h.tick, e); }
     if (!ev) return;
     for (const h of hits) play(li, lane, h, time);
@@ -417,7 +417,13 @@ const INFO = {
   'midi offset': 'MIDI out offset, −50…+50 ms: notes and clock leave this much later (+) or earlier (−) than the hit is scheduled here. Auto = the audio output\'s latency, so a drum machine on MIDI sounds with the speakers; turn it down when the other device is slow itself.',
   'clock out':'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
   condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
-  repeats: 'Per step ratchet: the hit repeats 2–4 times inside its own step; "fade" makes each repeat quieter.',
+  repeats: 'Per step ratchet: the hit repeats 2–8 times inside its own step; "fade" makes each repeat quieter.',
+  'ratchet curve': 'How the repeats are spaced inside the step: evenly, speeding up (the gaps get shorter, a roll into the next beat) or slowing down (a bouncing ball).',
+  'ratchet ramp': 'Pitch ramp: the last repeat plays this many semitones above (+) or below (−) the first, the ones between in steps (on voices tuned ±24 it is twice as far).',
+  'euclid mode': 'How the euclid hits combine with the steps you set. Replace: the euclid knob writes the steps (as always). AND: only your steps that are also euclid hits play. XOR: euclid hits play, and each step you set flips one (on an euclid hit it rests, off it it plays). With AND / XOR your steps stay as you set them: the knob moves only the mask. (These are the even "floor" fills: E(5,8) is x.x.xx.x; Bjorklund\'s cinquillo x.xx.xx. is the same with rotation 6.)',
+  modulate: 'A slow wave on one sound knob of this lane (tone, color or decay): it rises and falls by ± half the depth around where the knob (or a step lock) is, once every N loops of this lane, or once over the whole cycle.',
+  'timbre dice': 'Every hit rolls its tone, color or decay within this range around where it is (± half the range). Lock the dice to make the rolls repeat.',
+  scale: 'Snap this lane\'s tune (and its tune locks, pitch ramps and the evolve tune moves) to a scale from the voice\'s own note: major, minor, pentatonic, or just intonation (pure ratios like 3/2 and 5/4 instead of equal steps). Pitched voices only.',
   solo: 'Solo: only soloed lanes play (several can be).',
   'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back; a slot coming in on that line gets it too). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
@@ -477,7 +483,7 @@ function sync() {
   ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${muteWord(i)} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
-  renderSteps(); renderLocks(); paintLeds(); save(); readout(); renderStrokeNotes();
+  renderSteps(); renderLocks(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes();
 }
 /** The MIDI drawer names the note of every stroke the lanes can play now (strokeNotes; it follows voices and notes). */
 function renderStrokeNotes() {
@@ -521,12 +527,12 @@ function renderSteps() {
   const lane = m.lane; playheadAt = -1; $('stepsui').classList.toggle('short', lane.length <= 16);   // L1: steps 17–32 only for a lane that reaches them
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   stepBtns.forEach((b, i) => {
-    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost';
-    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
+    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
-    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
+    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : mk ? 'off (silenced by the euclid mask)' : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
   });
   paintPlayhead();
@@ -569,8 +575,12 @@ function buildLockGauges() {
   ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
   ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st'], ['pre', 'if last passed', INFO.pre], ['not pre', 'if last failed', INFO.pre]], value: null, chips: true,
     onChange: (c) => setTrig({ cond: m.lane.trigAt(lockStep)?.cond === c ? 'always' : c }) }));
-  ui.ratchet = mount('trig-ratchet', segmented({ options: [1, 2, 3, 4].map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
+  ui.ratchet = mount('trig-ratchet', segmented({ options: Array.from({ length: MAX_RATCHET }, (_, k) => k + 1).map(r => [r, r === 1 ? '1' : `×${r}`, r === 1 ? 'one hit' : `${r} hits inside the step`]), value: 1, onChange: (r) => setTrig({ ratchet: r }) }));
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
+  // V4: how the repeats are spaced, and a pitch ramp across them
+  ui.curve = mount('trig-curve', segmented({ options: [['even', 'even', INFO['ratchet curve']], ['up', 'speed up', INFO['ratchet curve']], ['down', 'slow down', INFO['ratchet curve']]], value: 'even', onChange: (c) => setTrig({ curve: c }) }));
+  sliders.ramp = makeGauge({ label: 'pitch ramp', min: -12, max: 12, value: 0, fmt: v => (v > 0 ? '+' : '') + v, say: v => `${v} semitones`, title: INFO['ratchet ramp'], color: 'var(--signal-cyan)', onChange: (v) => setTrig({ ramp: v / 12 }) });
+  $('trig-ramp').replaceChildren(sliders.ramp.el);
   $('lock-close').onclick = () => editLocks(lockStep);
   // L3 stroke: 'lane' = no artic lock (the lane's own sound); the options follow the lane's voice (renderLocks)
   ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => lockHere('artic', v === 'lane' ? null : v) }));
@@ -627,14 +637,15 @@ function renderLocks() {   // always after renderSteps, which closes a step a sh
 /** Condition picker state from a step's trig: 'a:b' → "1 in b" + dot a lit; specials light their chip. */
 function renderTrig(tg) {
   const cond = tg?.cond || 'always', ab = /^(\d):(\d)$/.exec(cond), b = ab ? +ab[2] : cond === 'always' ? 1 : null, a = ab ? +ab[1] : 1;
-  ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade);
+  ui.condEvery.set(b); ui.condSpecial.set(ab || cond === 'always' ? null : cond); ui.ratchet.set(tg?.ratchet || 1); ui.fade.set(!!tg?.fade); ui.curve.set(tg?.curve || 'even'); sliders.ramp.set(Math.round((tg?.ramp || 0) * 12)); $('trig-shape').hidden = !(tg?.ratchet > 1);
   const dots = $('cond-dots'); dots.innerHTML = ''; $('cond-dots-wrap').hidden = !(b > 1);
   for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); stepEdited(); }; dots.appendChild(d); }
   $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays', pre: 'plays when the last step with a condition on this lane passed it (PRE)', 'not pre': 'plays when the last step with a condition on this lane failed it (not PRE)' }[cond];
 }
 function auditionLock() {
   if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
-  for (let k = 0; k < n; k++) hitSound(lane, T.now() + k * 0.09 / n * 2, lane.accentAt(lockStep) && !k, lane.lockAt(lockStep), tg?.fade ? v * Math.pow(0.72, k) : v, kit, lane.sliceAt(lane.stepIndex(lockStep), lane.lockAt(lockStep)));
+  const at = ratchetTimes(n, tg?.curve), lk = lane.lockAt(lockStep);
+  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, lane.accentAt(lockStep) && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), tg?.fade ? v * Math.pow(0.72, k) : v, kit, lane.sliceAt(lane.stepIndex(lockStep), lk));
 }
 
 // ---- pattern slots & chains ----
@@ -827,6 +838,23 @@ function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
   m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
   renderCouple();
+}
+/** V3 / V5 per-lane generative controls: euclid combine mode, slow modulator, timbre dice, scale snap. */
+function buildGenUI() {
+  ui.genEuclid = mount('gen-euclid', segmented({ options: [['replace', 'replace', INFO['euclid mode']], ['and', 'AND', INFO['euclid mode']], ['xor', 'XOR', INFO['euclid mode']]], value: m.lane.euclidMode, onChange: (v) => { m.lane.setEuclidMode(v); sync(); } }));
+  const setMod = (patch) => { const l = m.lane, o = { target: 'tone', loops: 4, depth: 0.5, ...(l.mod || {}), ...patch }; l.setMod(o.target === 'off' ? null : o); sync(); };
+  ui.genMod = mount('gen-mod', segmented({ options: [['off', 'off'], ...MOD_TARGETS.map(k => [k, k, INFO.modulate])], value: m.lane.mod?.target || 'off', onChange: (v) => setMod({ target: v }) }));
+  sliders.modLoops = makeGauge({ label: 'period', min: 0, max: 16, value: 4, fmt: v => v ? `${v} loop${v === 1 ? '' : 's'}` : 'cycle', say: v => v ? `${v} loops` : 'the whole cycle', title: INFO.modulate, color: 'var(--nebula-purple)', onChange: (v) => setMod({ loops: v }) });
+  sliders.modDepth = makeGauge({ label: 'depth', min: 0, max: 100, value: 50, fmt: v => v + '%', title: INFO.modulate, color: 'var(--nebula-purple)', onChange: (v) => setMod({ depth: v / 100 }) });
+  $('gen-mod-gauges').append(sliders.modLoops.el, sliders.modDepth.el);
+  for (const k of TIMBRE_KEYS) { sliders['td:' + k] = makeGauge({ label: `${k} range`, min: 0, max: 100, value: 0, fmt: v => v ? `±${v / 2}%` : 'off', say: v => v ? `plus or minus ${v / 2} percent` : 'off', title: INFO['timbre dice'], color: 'var(--nebula-purple)', onChange: (v) => { m.lane.setTimbreDice({ ...(m.lane.tdice || {}), [k]: v / 100 }); sync(); } }); $('gen-tdice').append(sliders['td:' + k].el); }
+  ui.genScale = mount('gen-scale', segmented({ options: SCALE_KEYS.map(k => [k, { off: 'off', major: 'major', minor: 'minor', penta: 'pentatonic', just: 'just' }[k], INFO.scale]), value: m.lane.scale, onChange: (v) => { m.lane.setScale(v); sync(); } }));
+}
+function renderGen() {
+  const l = m.lane; ui.genEuclid.set(l.euclidMode); ui.genMod.set(l.mod?.target || 'off'); $('gen-mod-gauges').hidden = !l.mod;
+  if (l.mod) { sliders.modLoops.set(l.mod.loops); sliders.modDepth.set(Math.round(l.mod.depth * 100)); }
+  for (const k of TIMBRE_KEYS) sliders['td:' + k].set(Math.round((l.tdice?.[k] || 0) * 100));
+  ui.genScale.set(l.scale); $('gen-scale-note').textContent = l.voice === 'sample' || !TUNE_SEMIS[l.voice] ? `${voiceLabel(l)} has no pitch to snap: the scale works on toms, congas, bells, mallets and other pitched voices.` : '';
 }
 /** V2 coupling (part of the pattern: a slot, undo or link brings its own): the mode, the "next lane" amount, the matrix. */
 function renderCouple() {
@@ -1327,7 +1355,7 @@ function toast(txt, ms = 2400) {
   const t = $('toast'); t.textContent = txt; t.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = setTimeout(() => { t.textContent = ''; }, 300); }, ms);
 }
-buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
+buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
@@ -1421,7 +1449,7 @@ function paintLeds() {
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
   } else if ((look = pages.looked(performance.now()))) {   // P7: a step held (LOOK_MS, or edited): the step buttons are 16 of its loops (1–16, or the 16 holding the loop playing now) and light where it plays (blue = depends on fill / the step before; white = the loop playing now)
-    const si = lane.stepIndex(look.step), on = lane.hits[si], now = playing && lane.loopN != null ? lane.loopN : -1, from = loopWindow(now, STEP_BTNS), loops = condLoops(lane.trigs[si]?.cond, STEP_BTNS, from), at = now - from;
+    const si = lane.stepIndex(look.step), on = lane.played(si), now = playing && lane.loopN != null ? lane.loopN : -1, from = loopWindow(now, STEP_BTNS), loops = condLoops(lane.trigs[si]?.cond, STEP_BTNS, from), at = now - from;
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, !on ? (i === at ? COLOR.DARK_GREY : 0) : i === at ? (loops[i] === false ? COLOR.DARK_GREY : COLOR.WHITE) : loops[i] === null ? CUE_LED : loops[i] ? LANE_LED[m.selected] : 0);
   } else if (pages.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);

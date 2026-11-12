@@ -1,9 +1,75 @@
-// ORBIT2-12 steerable generative: evolve weights / gravity / max cycle / euclid hand edits (V1), coupling (V2).
+// ORBIT2-12 steerable generative: evolve weights / gravity / max cycle / euclid hand edits (V1), coupling (V2), euclid
+// masks (V3), ratchet curves (V4), timbre modulation, timbre dice and scale snap (V5).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS } from '../src/poly/lanes.js';
+import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS, PPQ, ratchetTimes, modValue, snapTune, SCALES } from '../src/poly/lanes.js';
 import { mulberry32, Dice } from '../src/poly/dice.js';
-import { collectHits } from '../src/poly/export.js';
+import { collectHits, expandHits } from '../src/poly/export.js';
+
+const bits = (l) => Array.from({ length: l.length }, (_, i) => (l.hitAt(i) ? 'x' : '.')).join('');
+
+test('V3 euclid masks: replace / AND / XOR with the hand pattern; the knob moves only the mask; euclid(5,8) vs the cinquillo', () => {
+  const l = new Lane('hat', { length: 8 }); l.hits.fill(false); [0, 1, 2, 3].forEach(i => { l.hits[i] = true; });   // hand: xxxx....
+  l.setEuclidMode('and'); l.setEuclid(4); assert.equal(bits(l), 'x.x.....', 'AND: hand ∧ E(4,8) = x.x.x.x.');
+  assert.equal(l.hits.slice(0, 8).filter(Boolean).length, 4, 'the hand hits are not rewritten');
+  l.setEuclidMode('xor'); assert.equal(bits(l), '.x.xx.x.', 'XOR: hand ⊕ E(4,8)');
+  assert.ok(l.maskedOut(0) && !l.maskedOut(1), 'a hand hit the mask silences shows as masked');
+  l.setEuclid(2); assert.equal(bits(l), '.xxxx...', 'the knob moves the mask: hand ⊕ E(2,8)');
+  l.setEuclidMode('replace'); assert.equal(bits(l), 'xxxx....', 'back to replace: the hand pattern as it was'); l.setEuclid(3); assert.equal(bits(l), 'x..x..x.');
+  const j = Lane.from(JSON.parse(JSON.stringify(Object.assign(new Lane('kick'), { euclidMode: 'xor' })))); assert.equal(j.euclidMode, 'xor');
+  assert.equal(new Lane('kick').toJSON().euclidMode, undefined, 'replace is not saved: old lanes save as before');
+  assert.equal(Lane.from({ name: 'kick', length: 4, euclidMode: 'nope' }).euclidMode, 'replace');
+  // the floor form vs Bjorklund: the same necklace, read from another step
+  assert.equal(euclid(5, 8).map(b => (b ? 'x' : '.')).join(''), 'x.x.xx.x');
+  const c = new Lane('kick', { length: 8 }); c.setEuclid(5); c.rotation = 6; assert.equal(bits(c), 'x.xx.xx.', 'rotation 6 = the cinquillo');
+  const m = new Machine(); m.lanes[2].setEuclidMode('and'); m.lanes[2].evolve = true; const hand = m.lanes[2].hits.join();
+  for (let s = 0; s < 20; s++) m.evolve({ scope: 'hits', amount: 1, weights: { ...EVOLVE_WEIGHTS, rotate: 0 } }, mulberry32(s)); assert.equal(m.lanes[2].hits.join(), hand, 'evolve on a mask lane moves the mask, not your hits');
+});
+
+test('V4 ratchet curves: times, spacing, up to ×8, pitch ramp', () => {
+  assert.deepEqual(ratchetTimes(4), [0, 0.25, 0.5, 0.75]);
+  assert.deepEqual(ratchetTimes(4, 'up'), [0, 0.4375, 0.75, 0.9375], 'speed up: gaps shrink');
+  assert.deepEqual(ratchetTimes(4, 'down'), [0, 0.0625, 0.25, 0.5625], 'slow down: gaps grow');
+  for (const c of ['even', 'up', 'down']) { const t = ratchetTimes(8, c); assert.equal(t[0], 0); assert.ok(t.every(x => x < 1)); assert.ok(t.every((x, k) => !k || x > t[k - 1])); }
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(5); l.hits[0] = true; l.tune = 0.25;
+  l.setTrig(0, { ratchet: 8, curve: 'up', ramp: 0.5 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false, curve: 'up', ramp: 0.5 });
+  l.setTrig(0, { curve: 'even', ramp: 0 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false }, 'defaults are not stored');
+  l.setTrig(0, { ratchet: 4, curve: 'up', ramp: 0.5 });
+  const hits = collectHits(m, { to: PPQ, tempo: 120 }); assert.equal(hits.length, 4);
+  assert.deepEqual(hits.map(h => +(h.time / 0.5).toFixed(4)), [0, 0.4375, 0.75, 0.9375], 'at the curve\'s times (a step = 0.5 s)');
+  assert.deepEqual(hits.map(h => +(h.lock?.tune ?? l.tune).toFixed(4)), [0.25, 0.4167, 0.5833, 0.75], 'tune ramps from the lane\'s to + 0.5');
+  const one = expandHits({ hit: true, step: 0, swung: 0, ratchet: 1, ramp: 0.5, lock: null }, l, 0, { tickSec: 1 / PPQ }); assert.equal(one[0].lock, null, 'one hit: no ramp, no lock');
+});
+
+test('V5 modulator: a sine over N loops or the cycle, ± depth / 2 around the sound, saved', () => {
+  assert.equal(modValue(0.6, 0), 0); assert.ok(Math.abs(modValue(0.6, 0.25) - 0.3) < 1e-12); assert.ok(Math.abs(modValue(0.6, 0.75) + 0.3) < 1e-12);
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(5); l.setEuclid(4); l.sound.tone = 0.5;
+  l.setMod({ target: 'tone', loops: 2, depth: 0.6 });   // a period of 8 steps
+  const tone = collectHits(m, { to: PPQ * 8, tempo: 120 }).map(h => +h.lock.tone.toFixed(4));
+  assert.deepEqual(tone, [0.5, 0.7121, 0.8, 0.7121, 0.5, 0.2879, 0.2, 0.2879], 'one period over 2 loops of 4 steps');
+  assert.equal(m.lanes[0].loopsPerCycle(), 2, 'the cycle counts the modulator\'s period');
+  l.setLock(2, 'tone', 0.9); assert.equal(collectHits(m, { to: PPQ * 8, tempo: 120 })[2].lock.tone, 1, 'around a step lock, kept in 0..1');
+  l.setMod({ target: 'color', loops: 0, depth: 1 }); const k = new Machine(); k.lanes.forEach(x => x.clear()); Object.assign(k.lanes[0], { length: 4, euclidK: 0 }); k.lanes[0].setEuclid(4); k.lanes[1].setLength(3); k.lanes[1].setEuclid(1); k.lanes[0].setMod({ target: 'color', loops: 0, depth: 1 });
+  const cyc = k.cycleTicks(), col = collectHits(k, { to: cyc, tempo: 120 }).filter(h => h.li === 0).map(h => h.lock.color);
+  assert.equal(col.length, cyc / PPQ); assert.equal(col[0], 0.5); assert.ok(Math.max(...col) > 0.95 && Math.min(...col) < 0.05, 'over the whole cycle');
+  assert.deepEqual(Lane.from(JSON.parse(JSON.stringify(l))).mod, { target: 'color', loops: 0, depth: 1 }); assert.equal(Lane.from({ name: 'x', mod: { target: 'pan' } }).mod, null);
+});
+
+test('V5 timbre dice: within the range, repeat with locked dice; scale snap on pitched voices only', () => {
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(5); l.setEuclid(4); l.setTimbreDice({ decay: 0.4 });
+  const d = new Dice().fromJSON({ locked: true, seed: 3, repeat: 1 }), a = collectHits(m, { to: PPQ * 16, tempo: 120, dice: d }).map(h => h.lock.decay);
+  assert.ok(a.every(x => x >= 0.3 - 1e-9 && x <= 0.7 + 1e-9), 'decay 0.5 ± 0.2'); assert.ok(new Set(a).size > 3);
+  assert.deepEqual(collectHits(m, { to: PPQ * 16, tempo: 120, dice: d }).map(h => h.lock.decay), a, 'locked dice: the same rolls');
+  assert.deepEqual(a.slice(0, 4), a.slice(4, 8), 'repeat 1: every loop the same'); assert.equal(Lane.from({ name: 'x', tdice: { tone: 0 } }).tdice, null);
+  // scale snap: tune 0.3 on a ±12 voice = 3.6 semitones → major 4, minor 3, pentatonic 4, just 5/4 (3.86)
+  assert.equal(snapTune(0.3, 'major', 12), 4 / 12); assert.equal(snapTune(0.3, 'minor', 12), 3 / 12);
+  assert.equal(snapTune(-0.1, 'penta', 12), 0, '−1.2 semitones: the root is nearest'); assert.equal(snapTune(-0.2, 'penta', 12), -3 / 12, '−2.4: a minor third under (the 9 of the octave below)');
+  assert.ok(Math.abs(snapTune(0.3, 'just', 12) - SCALES.just[4] / 12) < 1e-12, 'just: the 5/4 major third'); assert.equal(snapTune(0.3, 'major', 24), 7 / 24, '±24 voice: 7.2 → 7');
+  assert.equal(snapTune(1, 'major', 12), 1); assert.equal(snapTune(0.3, 'off', 12), 0.3);
+  const s = new Machine(); s.lanes.forEach(x => x.clear()); const c = s.lanes[0]; c.setLength(1); c.setRatio(5); c.hits[0] = true; c.tune = 0.3; c.setScale('minor');
+  c.voice = 'conga'; assert.equal(collectHits(s, { to: PPQ, tempo: 120 })[0].lock.tune, 0.25, 'a conga snaps');
+  c.voice = 'hat'; assert.equal(collectHits(s, { to: PPQ, tempo: 120 })[0].lock, null, 'a hat has no pitch to snap');
+});
 
 const shape = (m) => m.lanes.map(l => ({ hits: l.hits.join(''), accents: l.accents.join(''), locks: JSON.stringify(l.locks), trigs: JSON.stringify(l.trigs), rotation: l.rotation, length: l.length, ratioIndex: l.ratioIndex, prob: l.prob, tune: l.tune }));
 const groove = () => { const m = new Machine(); m.lanes.forEach((l, i) => { l.setLength([8, 8, 16, 5][i]); l.setEuclid([3, 2, 7, 2][i]); }); m.lanes[0].toggle(5); m.lanes[0].setLock(0, 'tune', 0.5); m.lanes[2].setTrig(0, { cond: '1:2' }); m.lanes[1].accents[0] = true; return m; };

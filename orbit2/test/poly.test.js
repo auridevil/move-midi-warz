@@ -124,7 +124,7 @@ test('trig conditions and ratchets: loop counting, fill, first, repeats', async 
   assert.ok(CONDS.includes('always'));
   const l = new Lane('kick', { length: 2 }); l.setEuclid(2); l.setTrig(0, { cond: '1:2' }); l.setTrig(1, { ratchet: 9, fade: true });
   const hits = []; for (let t = 0; t < P * 8; t += P) { const e = l.at(t, () => 0); hits.push(e.hit ? (e.ratchet > 1 ? 'R' : 'x') : '.'); }
-  assert.equal(hits.join(''), 'xR.RxR.R', 'step 0 every other loop, step 1 always as a 4× ratchet'); assert.equal(l.trigs[1].ratchet, 4, 'clamped');
+  assert.equal(hits.join(''), 'xR.RxR.R', 'step 0 every other loop, step 1 always as a ratchet'); assert.equal(l.trigs[1].ratchet, 8, 'clamped (V4: up to ×8)');
   assert.equal(l.setTrig(1, { ratchet: 1, fade: false }), null, 'back to a plain step');
   const c = Lane.from(JSON.parse(JSON.stringify(l))); assert.deepEqual(c.trigs[0], { cond: '1:2', ratchet: 1, fade: false });
 });

@@ -274,6 +274,7 @@
           </div>
           <div class="ctl" title="Repeat the hit inside its step"><span class="ctl-lbl">repeats</span><div id="trig-ratchet"></div></div>
           <div id="trig-fade"></div>
+          <div id="trig-shape" class="row-ctl" hidden><div class="ctl" title="How the repeats are spaced"><span class="ctl-lbl">spacing</span><div id="trig-curve"></div></div><div id="trig-ramp" class="gauges one"></div></div>
         </div>
       </div>
       <h3 class="subh">sound</h3>
@@ -296,6 +297,14 @@
       <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sample-trim" class="row-ctl" hidden><div id="sample-trim-gauges" class="gauges"></div><div id="sample-rev"></div></div>
       <div id="sound-sliders" class="gauges"></div>
+      <h3 class="subh">generative</h3>
+      <div class="row-ctl"><div class="ctl" title="How the euclid hits combine with the steps you set"><span class="ctl-lbl">euclid</span><div id="gen-euclid"></div></div></div>
+      <div class="row-ctl"><div class="ctl" title="A slow wave on one sound knob of this lane"><span class="ctl-lbl">modulate</span><div id="gen-mod"></div></div></div>
+      <div id="gen-mod-gauges" class="gauges two"></div>
+      <div class="ctl-lbl">timbre dice: each hit rolls within this range</div>
+      <div id="gen-tdice" class="gauges three"></div>
+      <div class="row-ctl"><div class="ctl" title="Snap this lane's tune to a scale"><span class="ctl-lbl">scale</span><div id="gen-scale"></div></div></div>
+      <p id="gen-scale-note" class="hint tight"></p>
     </details>
   </div>
   <script src="../vendor/tone/Tone.js"></script>
