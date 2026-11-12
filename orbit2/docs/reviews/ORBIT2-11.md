@@ -3,12 +3,12 @@ type: review
 phase: ORBIT2-11
 title: ORBIT2-11 live performance (P1–P7), review panel
 date: 2026-11-12
-round: 2
+round: 3
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
   sound: HAPPY
   kai: HAPPY
   greta: HAPPY
@@ -201,3 +201,37 @@ stop never before a scheduled clock, print FX at the cutoffs heard live at eithe
   look-ahead. `npm run check` clean, `npm test` 181 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py
   5400 + headless Chrome 9222, both stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks
   above, 0 page errors. `app.js` 1670 → 1671 lines.
+
+## Round 3 (re-check): the verifier and the architect HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 2 (verifier, architect, default model), fresh sub-agents in one message, own
+ports 5401 / 5402 (+ 940x; the phase start `be25191` on +100, the code before the round-2 fixes `e2b4042` on +200).
+Brief as before, `git diff --stat be25191..790345e` (12 files, +781/−70) and the round-2 fixes alone
+(`e2b4042..790345e`, 6 files, +93/−20), each one's open MUST-FIX and "Changes after round 2", confirm first, then
+nearby, new only in scope and marked NEW. `stalled: 0`: both open MUST-FIX are closed and everyone is HAPPY.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | (5) FIXED: the round-2 repro (stub out port, clock out, follow "transport", the master's Stop then Start 5 ms apart), two runs each on `790345e` and `e2b4042`: Start 1.0 ms after Stop, no clocks between them (round 2: 30 to the stopped gear), the first clock 54.2 / 54.6 ms after Start, orbit2 playing (`c-1.7 STOP0 START1 c55.2`); `e2b4042`: Start 44.0 / 42.7 ms before Stop, 2 clocks between. Also 0 and 20 ms apart, the page's Stop → Play 0 / 5 / 32 ms apart, the Move Play button 5 ms apart, the offset at −50 / +50: Start 1 ms after Stop, the first clock 47.5–83.5 ms later; 60 / 92 ms apart: Start 12.3 / 44 ms after Stop, ~100 ms before the first clock. Nearby: Play → Stop 5 / 30 ms apart (no clocks after Stop), a master's Stop → Start 600 ms apart, old clocks scheduled after the Start press still before Stop (0 after it, every case), offsets ±30 move clocks and notes as set, auto 28 moves clocks +30.0, clock spacing as `e2b4042`; a cold first Play: the start 39.8 ms after the click (`e2b4042` 36.3: the awaited measure costs ~3.5 ms) with the full auto offset, 90.2 ms before the first clock. check clean, 181 + 9, smoke 10/10, 0 page errors. |
+| architect | HAPPY | (1) FIXED: `onTick` runs slot (`app.js:318`) → evolve (`:323`) → `barPerf` (`:326`) → `jamTick` → `liveQuiet`. The round-2 repro (240 bpm, "on next bar", evolve every 1 bar, home after 1; home lines 6720 / 13440 / 20160 by wrapping `m.assign`): mute asked at 3640 → muted after the 6720 home line, the queue empty; unmute at 7280 → playing after 10080; mute at 10535 → muted after the 13440 home line. A/B: HEAD with only the `barPerf` line moved back above evolve → playing after 6720, and the "r1 wiring" order check fails; dropping the `stopAt` guard fails "r1 P5". Nearby: the slot case (unmute at 3920, slot 6 saved muted, due at 6720 → playing), the fill latch (armed stopped: on for bar 1; armed in bar 6: on for the bar after the 20160 home line, off at 23520), a home line bringing back another meter keeps `onBar(t, bars)` true (`trackBars` starts the new bars at t), the jam after slot, evolve and mutes; MIDI: a cold first Play's FA at +78 ms (50 + 28), 95 ms before the first clock; after 1 s stopped 99 ms; a quick restart (6–23 ms): FA 1 ms after FC in 8 of 8 (the mutated copy 27–43 ms before). check clean, 181 + 9, 0 page errors. |
+
+SHOULD items recorded (never block): a quick restart still leaves a clocked device a few clocks off: `togglePlay`
+resets `tick = 0` while the old transport delivers its look-ahead up to its stop, so the new run's first block plays in
+the old run's tail and then pauses (a 63.7 ms gap between two F8s at 240 bpm); per restart 0 … −5 clocks now, +4 … 0 at
+`be25191` (the cause is older than the phase) (architect); the `barPerf` comment named only the slot (architect); the
+order guard is a source check (architect, carried over); a quick restart's start leads the first clock by 49–57 ms
+instead of ~100 (verifier: still a safe lead, no action).
+
+GOOD: the MIDI wire order holds by one rule in PolyMidi ("never before what is still on its way": stop after the last
+clock, start after the stop), the same from the page, the Move, a master's transport and any offset, with the start
+keeping its lead (verifier, architect); one line moved for the bar-line order, with a comment and a test that fails when
+it is reverted, and a mute queue that lands what was asked, so only the order matters (architect); the first Play waits
+~3.5 ms for the look-ahead measure and its MIDI start carries the full offset (verifier, architect).
+
+### Changes after round 3
+
+- **Quick SHOULD done:** the `barPerf` comment says it runs after a slot and evolve's way home (architect). No code
+  change.
+- **Not changed:** the quick restart's clock count (pre-existing: the old transport's tail) → [[BACKLOG]] Later "A quick
+  restart's MIDI clock count"; the order guard stays a source check (Later "A jam module").
+- `npm run check` clean, `npm test` 181 + 9. **Phase 11 review: `result: HAPPY`.**

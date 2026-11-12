@@ -548,6 +548,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   is `m.assign(evoSnap, { keep: true })`, which brings back the snapshot's `muted`, so a mute pressed at once in the bar
   before a home line is undone on it (a mute waiting for that line now lands after it). Mutes are performance state
   everywhere else (`perfKey`, undo's `keepPerf`); keeping them on the way home too would match.
+- **A quick restart's MIDI clock count** (ORBIT2-11 round 3, architect; pre-existing): Play right after a stop resets
+  `tick = 0` in `togglePlay` while the old transport still delivers its look-ahead up to its stop, so the new run's
+  first block (step 1 and its clocks) plays in the old run's tail, then nothing until the transport restarts (240 bpm: a
+  63.7 ms gap between two F8s 10.4 ms apart); a clocked device ends 0 to 5 clocks off per restart (`be25191`: +4 … 0,
+  now 0 … −5 with the start after the stop). Dropping the callbacks before the restarted transport's start in
+  `onBlock` (or resetting there) would remove the tail's notes and clocks.
 - **Live-mode cues on screen** (ORBIT2-11 round 1, greta; taste): the "live mode" chip is a quiet toggle next to a big
   Connect button ("live: on" in words would say more for a safety setting); a one-line legend of the button states
   (cyan, white, magenta) in the help; on a phone the transport strip takes three rows before the status line

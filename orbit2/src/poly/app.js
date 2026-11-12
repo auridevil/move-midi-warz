@@ -796,8 +796,8 @@ function toggleMute(li) {
 }
 /** What a waiting mute does to lane li, in words ("mutes" / "unmutes"). */
 const muteWord = (li) => (muteQ.target(li) ? 'mutes' : 'unmutes');
-/** Master clock, on a bar line: what P2 / P3 queued for it, after a slot due here has loaded (a waiting mute lands on
- *  the lanes that play from here). The model changes now (this tick plays it), the page after. */
+/** Master clock, on a bar line: what P2 / P3 queued for it, after a slot due here has loaded and evolve's way home has
+ *  run (a waiting mute lands on the lanes that play from here). The model changes now (this tick plays it), the page after. */
 function barPerf() {
   const waited = muteQ.size; muteQ.apply(m.lanes);
   if (latch.bar()) fill = fillHold || latch.on;
