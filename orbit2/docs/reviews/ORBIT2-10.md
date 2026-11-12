@@ -3,7 +3,7 @@ type: review
 phase: ORBIT2-10
 title: ORBIT2-10 export for producers (E1–E6), review panel
 date: 2026-11-12
-round: 2
+round: 3
 stalled: 0
 result: IN PROGRESS
 reviewers:
@@ -234,3 +234,71 @@ identical) (verifier, architect, sound).
   `exp.bits`). `npm run check` clean, `npm test` 165 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py
   5400 + headless Chrome 9222, both stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks
   above, 0 page errors. `app.js` 1517 → 1522 lines.
+
+## Round 3 (re-check): 0 of 3 HAPPY, the round-2 item closed, one NEW item
+
+The same three reviewers (verifier, architect, sound, default model), fresh sub-agents in one message, own ports 5401 /
+5402 / 5403 (+ 940x; the phase start `1005992` on +100, the code before the round-2 fixes `45b1319` on +200). Brief as
+before, `git diff --stat 1005992..HEAD` (9 files, +774/−98) and the round-2 fixes alone (`45b1319..1054ef9`, 6 files,
++163/−41), each one's own round-2 MUST-FIX and "Changes after round 2", confirm first, then nearby, new only in scope
+and marked NEW. Pre-checks on `1054ef9`: `npm run check` clean, `npm test` 165 + 9, smoke 10/10. `stalled: 0`: the open
+MUST-FIX (the next downbeat played early into the ring-out) is closed.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | (1) FIXED: boombap, 240 bpm, humanize 0.08, stopJam at beat 5.5 with the pattern playing on, 10 takes (8 free dice, 2 at seed 7): the next downbeat (logged 1.2 ms before to 1.2 ms after the end) always left out; kick ring-outs start at −14.2 to −38.8 dBFS against take peaks of −7.7 to −8.5, no attack after (−30.6 to −36.9 from 50 ms on); at `45b1319` the same script: 7 of 10 opened at −7.9 to −8.5 dBFS. (2) NEW: pressing reset while a take closes puts new hits into the ring-out: `#btn-reset` 200 / 350 / 500 ms after stopJam: 4 of 8 takes kept 2 hits starting 15–74 ms after the end (shaker, crackle), logged in the same Play at ticks far below `stopTick`; `…-3-shaker-ringout.wav` −23 / −16 / −23.6 dBFS per 50 ms (a whole new hit at +72 ms; take peak −16.5), mix-raw −13.8 / −13.1. Cause: the reset sets `resetPending`, `onBlock` sets `tick = 0` without `run++` (`app.js:256`), and `ringPlan` reads the new ticks as the take's (`jam.js:133`); the MIDI clock's snap renumbers ticks too (`app.js:768`). With `45b1319`'s time rule these hits were out. |
+| architect | NOT HAPPY | (1) FIXED: boombap, 86 bpm, 48 kHz, mid-bar and grace stops, synth and dsp, 21 takes: 13 had the end's step logged 1.9–55 frames early (21 hits), none got in (ringPlan re-run on each copied log); those lanes' ring-outs at −46.7 to −58.3 dB re the take peak at 2–20 ms (round 2: 0.0 / 0.0 / +0.1 dB). (2) NEW, the same cause: reset 31–41 ms before the take's closing bar line (on the one): 3 of 3 takes have a whole new kick at +28 / +58 / +58 ms (−0.0 / −0.1 / −0.1 dB re the take's kick peak), shaker −3.2 / −1.9 / −1.4 dB, logged `tick 0, run 1` against `stopTick 73920, run 1`. A new run on reset alone would send a take reset mid-way back to the time rule (the early end step leaking again); test a same-run hit whose tick restarted after the end. |
+| sound | NOT HAPPY | (1) FIXED: free dice (−38.3 / −38.6 / −16.0 / −38.4 dBFS kick ring-out starts; the −16.0 is the take's own last 10 ms, its downbeat 1.18 ms early, bent down to the tail in 2 ms), dice at seed 7 (−28.6 / −38.4 / −31.0, dsp −38.7 / −38.7; round 2 −8.3 to −8.5), mix-raw −27.9 to −34.2 dBFS; at `45b1319` a 0.5 ms early kick in a 1-bar take gave a whole kick (+0.1 dB re peak), now −21.5 dB re peak. (2) NEW, the same cause: boombap, 240 bpm, seed 7, reset while 'finishing': a new kick at +14.5 ms (−31.3 → −11.2 dBFS, −2.8 dB re the take's peak), shaker +20.6 dB, crackle out of silence, mix-raw −11.6 dBFS in its first 20 ms; the ring-out 33387 frames against 26368 without the reset; at `45b1319` −23.9 dBFS continuing the take. Fix idea: a new run on reset, with a test of ticks restarting mid-take. |
+
+SHOULD items recorded (never block): the take's own edge is bigger than a hair once a lane is pushed or nudged early:
+a kick on 8ths pushed −30 ms with nudge −½ puts the next downbeat 92 ms inside the take (the ring-out leaves it out, the
+seam drops 20 dB), at humanize 100 % a kick 9.6 ms early drops 32.8 dB at the seam, a lane pushed −20 ms ends the take
+with 20 ms of that hit at full level, bent away within 2 ms (a 20 ms blip cut off; `45b1319` continued it) (verifier,
+sound, architect); `applyTempo(300)` stays at 240 (verifier); removing `run++` from Play passes the suite, nothing covers
+a reset (architect); `ringPlan`'s `ours` / `mine` and a module-level `run` read badly (architect); the download timeout
+is never cleared and, when it fires, the panel still says "rendering the ring-out…" (architect); app.js size (architect;
+taste); the synth engine's live kick doesn't repeat take to take (two live takes of one locked roll: correlation 1.00 in
+one run, 0.50 in another), so the join's 2 ms bend carries the difference (a 13 LSB step at −37 dBFS on a soloed kick
+stem); the dsp engine matches live to 1 LSB (sound; pre-existing engine behaviour).
+
+GOOD: the step rule holds under every timing offset tried (humanize 100 %, a swing template, a −½ nudge, a −30 ms push:
+next downbeats 7–92 ms early all out; the take's last step pushed past the end, ×4 ratchet, +½ nudge, +30 ms, rings out
+in full; a pad 20 ms before the end rings on across the seam; a 4/3 lane swung +125 ms: −0.9 dB re the take peak) and
+every other way to close a take is clean (Play stopped and started, a slot switch and evolve on the last bar line, a grace
+stop, 7/8, 6 lanes, the cap) (verifier, sound); the fix's shape: the step rides on the hit, the early parts are tagged in
+the pure `liveTick`, the lane choice is in the pure `ringPlan`, and the tests catch every mutation tried (`<=`, the run
+ignored, the time rule only, tick or time, an untagged early part, scheduler hits without their step, lanes from every
+hit); `lastAbove` / `toInt16` give the same output as `45b1319` on 1200 random cases (architect); it sounds like the music
+stopped on the bar line (dsp kick identical to live, correlation 1.000; synth within 0.12–1.5 dB), and the deterministic
+files are bit-identical to `45b1319` (stems, kits 16 / 44.1 and 24 / 48, export all 24 / 48 dry, the MIDI) (sound).
+
+### Changes after round 3
+
+- **A reset can't put new hits in a ring-out** (verifier 2, architect 2, sound 2, NEW): every logged hit now carries when
+  its step was due on the grid (`step`, context seconds: the tick's own time, or for an early part the time of the later
+  tick it belongs to: `time + (h.tick − t) · ts`) instead of a tick and a Play count, and the take keeps a hit when its
+  step was due before the take's end time (`jam.endTime`, remembered wherever an end goes to the recorder: a stop, the
+  clock on the stop tick, the cap) minus half a frame (a step due on the end is the end's). A time doesn't restart:
+  Play, the reset button and a MIDI clock's snap all count the ticks from 0 again, which is what the round-2 tick + Play
+  rule (`run`, gone) missed. What round 2 fixed stays: a downbeat due on the end and humanized early is out, the take's
+  step pushed past the end is in. Page, the reviewers' repro (boombap, 240 bpm, ring-out on, stopJam at 1.31 s with the
+  pattern playing on, reset 200 / 350 / 500 ms later or ~35 ms before the line): kick and shaker ring-outs never rise
+  over their own start (at most +4.3 dB: echo bumps; the reviewers saw new kicks and shakers at −11 to −16 dBFS). Checked
+  by construction on 5 reset takes (the log copied before done, `ringPlan` re-run in Node): every kept hit was due before
+  the end (0 at or after it) and none sounds after it; the new Play's hits due +62.5 ms after the end are left out; the
+  crackle's rises out of near-silence are its own last kept hit's dust tail (due −31 ms, sounding −6.5 ms). The round-2
+  repro and Play stopped + started: clean as before.
+- **Quick SHOULDs done:** `ringPlan` reads `takeHits`, and `run` is gone with the rule that needed it (architect); the
+  download timeout is cleared, and when it fires the jam panel says the zip went without the ring-out (architect).
+- **Not changed:** the take's own edge (a next-bar hit pushed or nudged early sounds inside the take, up to 92 ms; the
+  ring-out leaves it out, as asked in round 2, and `joinRing` bends the cut fragment away within 2 ms) is what the
+  recorder recorded → [[BACKLOG]] Later "Jam take edges", sizes added; the synth engine's take-to-take kick → Later "A
+  gentler ring-out join"; tempo stays clamped at 240 bpm (the app's range).
+- Tests (165 + 9): "ORBIT2-10 r2 / r3" on step times (the downbeat due on the end and played 5 ms early out; the take's
+  last step pushed 30 ms past the end in, 2 frames past the end in the render; a hit due after the end, whatever its
+  tick (a reset), out; a pad before the end in; the exact end time decides, not the frame-rounded end; a step just before
+  the end in; `liveTick`'s early-part tag; wiring: the scheduler passes when each step is due, the log keeps `step`, all
+  three posted ends are remembered and decide, the kit gain on `exp.bits`, the timeout cleared). `npm run check` clean,
+  `npm test` 165 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both
+  stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted; the page ran at 24 kHz): the checks above, 0 page
+  errors. `app.js` 1522 → 1525 lines.

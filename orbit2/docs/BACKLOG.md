@@ -481,10 +481,13 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   level / send / pan / drive with Tone's `.value =`, which Chrome loses on a chain that is silent when it comes due, so a
   lane played its constructor values (send 0.15, level 0.8) until a knob moved while it sounded; orbit2's `holdParam`
   fixes it. An audible change to live play (a send-0.6 lane: ~10 dB more echo than before, now = the export).
-- **Jam take edges** (ORBIT2-10 round 2, verifier, sound; pre-existing): a take ended by stopJam can end up to ~2 ms past
-  its bar line (48023 / 48058 frames for 2 bars at 24 kHz: the clock's bar-line time itself), and a hit humanized across
-  a take's start or end leaves part of its attack there (the next downbeat's first ~1 ms at the end, −33 dBFS on
-  boombap; a downbeat before the start begins mid-attack on sample 0).
+- **Jam take edges** (ORBIT2-10 round 2, verifier, sound; round 3, verifier, sound, architect; pre-existing): a take
+  ended by stopJam can end up to ~2 ms past its bar line (48023 / 48058 frames for 2 bars at 24 kHz: the clock's bar-line
+  time itself), and a hit played early across a take's start or end leaves part of it there: the next downbeat's first
+  ~1 ms at humanize 0.08 (−33 dBFS on boombap), up to 92 ms with a −30 ms push and nudge −½ (the take ends with that hit
+  at full level; the ring-out leaves it out as the next bar's and `joinRing` bends the cut away within 2 ms); a downbeat
+  before the start begins mid-attack on sample 0. A short fade at the take's edges, or gating each lane's early
+  next-bar hit out of the recording, would clean them.
 - **A gentler ring-out join on noise** (ORBIT2-10 round 2, sound): `joinRing` bends the ring-out's first 2 ms onto the
   line the take ends on, right for a smooth tail; on a noise tail that line is random (a dsp snare at 24 kHz: +4.9 dB
   for 5 ms over the live continuation; inaudible). A shorter bend or a value-only join on noisy lanes.

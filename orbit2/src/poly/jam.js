@@ -119,20 +119,20 @@ const lastAbove = (channels, from, to, floor) => { let last = from - 1; for (con
 /** A sample value in LSB → 16-bit, rounded and clamped as the jam recorder does (jam-worklet.js keeps its own copy). */
 const toInt16 = (x) => Math.max(-32768, Math.min(32767, Math.round(x)));
 /**
- * The ring-out render of a take: of the logged hits ({ li, lane, tick, run, time, … }; tick = the master tick of the step
- * it plays in Play number `run`, time = context seconds), those of the take's own steps (tick < endTick in the take's
- * run: a step on the end, even humanized or nudged a hair before it, is the next bar, the music going on; a hit of
- * another Play, or without ticks: a time before `endFrame`) that can still sound past the end (time + reach(li, lane)
- * s; a step of the take pushed past the end sounds only here). The render starts `lead` frames before the end on the
- * same sample grid (whole frames: a hit keeps its sub-sample place, so the tails go on from the take's last samples);
- * `at` = a hit's time in it, `frames` = how far past the end the longest can sound, `lanes[li]` = the lane each index
- * played the take's last hit with. null: nothing rings past the end.
+ * The ring-out render of a take: of the logged hits ({ li, lane, time, step, … }, context seconds; step = when the step
+ * it plays was due on the grid, before swing, nudge, push or humanize), those of the take's own steps (due before the
+ * take's end `endTime`: a step due on the end, even humanized or nudged a hair before it, is the next bar, the music
+ * going on) that can still sound past the end (time + reach(li, lane) s; a step of the take pushed past the end sounds
+ * only here). The render starts `lead` frames before the end frame `endFrame` on the same sample grid (whole frames: a
+ * hit keeps its sub-sample place, so the tails go on from the take's last samples); `at` = a hit's time in it,
+ * `frames` = how far past the end the longest can sound, `lanes[li]` = the lane each index played the take's last hit
+ * with. null: nothing rings past the end.
  */
-export function ringPlan(log, { endFrame, endTick = null, endRun, sampleRate: sr, reach, pre = 0.05 }) {
-  const end = endFrame / sr, ours = (h) => endTick != null && h.tick != null && h.run === endRun, lanes = [];
-  const mine = log.filter(h => (ours(h) ? h.tick < endTick : h.time * sr < endFrame - 0.5));
-  for (const h of mine) lanes[h.li] = h.lane;
-  const hits = mine.filter(h => h.time + reach(h.li, lanes[h.li]) > end);
+export function ringPlan(log, { endFrame, sampleRate: sr, endTime = endFrame / sr, reach, pre = 0.05 }) {
+  const end = endFrame / sr, cut = endTime - 0.5 / sr, lanes = [];   // half a frame: a step due on the end is the end's
+  const takeHits = log.filter(h => (h.step ?? h.time) < cut);
+  for (const h of takeHits) lanes[h.li] = h.lane;
+  const hits = takeHits.filter(h => h.time + reach(h.li, lanes[h.li]) > end);
   if (!hits.length) return null;
   let first = Infinity, last = -Infinity; for (const h of hits) { first = Math.min(first, h.time); last = Math.max(last, h.time + reach(h.li, lanes[h.li])); }
   const lead = Math.ceil((end - first + pre) * sr);
