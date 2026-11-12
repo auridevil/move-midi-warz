@@ -1479,6 +1479,7 @@ test('ORBIT2-10 E4: a kit one-shot starts at its onset, ends where it falls sile
   const loud = Float32Array.from({ length: 400 }, () => 0.5), [b] = trimOneShot([loud], sr, { pre: 0.1, maxSec: 2 });
   assert.equal(b.length, 200, 'capped at 2 s'); assert.equal(b[199], 0, 'faded out, no click'); assert.equal(b[100], 0.5);
   assert.equal(trimOneShot([new Float32Array(50)], sr, { pre: 0.1 })[0].length, 1, 'silence: one sample, not an empty file');
+  const late = new Float32Array(400); late[10] = 1e-5; late[14] = 0.8; late[20] = 0.1; const [c] = trimOneShot([late], sr, { pre: 0.1 }); assert.deepEqual([c.length, c[0]], [7, Math.fround(0.8)], 'a voice that speaks late still starts on sample 0 (under -80 dBFS before it is dropped)');
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), kit = app.slice(app.indexOf('async function exportKit('), app.indexOf('/** Open a #p= link'));
   assert.match(kit, /orbits-kit-\$\{li \+ 1\}-\$\{voice\}/); assert.match(kit, /c\.send\.gain\.value = 0/, 'no delay'); assert.doesNotMatch(kit, /tagWav|withAcid|withSmpl/, 'tempo-free');
 });

@@ -138,10 +138,13 @@ export function stemFiles(stems, names, sampleRate, folder = 'orbits', { bits = 
   if (ret) files.push(file('delay-return', ret)); files.push(file('mix-raw', mix));
   return { files, gain: g };
 }
-/** E4: a one-shot render → from its onset (`pre` s in) to the last sample above -90 dBFS, at most `maxSec`; a cut that
- *  lands on sound fades out over 10 ms instead of clicking. Returns [ch…]. */
+/** E4: a one-shot render → from its onset (the first sample over -80 dBFS from `pre` s in: some voices speak a few ms
+ *  after the hit's time, a sampler wants the sound on sample 0) to the last sample above -90 dBFS, at most `maxSec`; a
+ *  cut that lands on sound fades out over 10 ms instead of clicking. Returns [ch…]. */
 export function trimOneShot(channels, sampleRate, { pre = 0, maxSec = 2 } = {}) {
-  const p = Math.round(pre * sampleRate), cap = Math.round(maxSec * sampleRate), floor = 10 ** (-90 / 20); let last = -1;
+  const p0 = Math.round(pre * sampleRate), cap = Math.round(maxSec * sampleRate), floor = 10 ** (-90 / 20), on = 1e-4, n = channels[0]?.length || 0;
+  let p = p0; while (p < n && !channels.some(d => Math.abs(d[p]) > on)) p++; if (p >= n) p = p0;
+  let last = -1;
   for (const d of channels) for (let i = Math.min(d.length, p + cap) - 1; i > p + last; i--) if (Math.abs(d[i]) > floor) { last = i - p; break; }
   const len = Math.max(1, last + 1), out = channels.map(d => d.slice(p, p + len)), cut = len >= cap;
   if (cut) { const f = Math.min(len, Math.round(0.01 * sampleRate)); for (const d of out) for (let i = 0; i < f; i++) d[len - 1 - i] *= i / f; }

@@ -84,7 +84,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   };
 }
 
-/** WAV bytes → { frames, channels, sampleRate, chunks: [ids], acid?, firstOnset (frame where |x| > 1 % FS, or -1) }. */
+/** WAV bytes → { frames, channels, sampleRate, bits, format, chunks: [ids], acid?, smpl? (loops, type, start, end), firstOnset (frame where |x| > 1 % FS, or -1) }. */
 export function parseWav(u) {
   const v = new DataView(u.buffer, u.byteOffset, u.byteLength), id = (o) => String.fromCharCode(...u.slice(o, o + 4));
   const out = { chunks: [], frames: 0, channels: 0, sampleRate: 0, bits: 0, firstOnset: -1 };
@@ -92,6 +92,7 @@ export function parseWav(u) {
     const c = id(o), sz = v.getUint32(o + 4, true); out.chunks.push(c);
     if (c === 'fmt ') { out.format = v.getUint16(o + 8, true); out.channels = v.getUint16(o + 10, true); out.sampleRate = v.getUint32(o + 12, true); out.bits = v.getUint16(o + 22, true); }
     if (c === 'acid') out.acid = { flags: v.getUint32(o + 8, true), beats: v.getUint32(o + 20, true), bpm: v.getFloat32(o + 28, true) };
+    if (c === 'smpl') out.smpl = { loops: v.getUint32(o + 36, true), type: v.getUint32(o + 48, true), start: v.getUint32(o + 52, true), end: v.getUint32(o + 56, true) };
     if (c === 'data') {
       const bps = out.bits / 8, step = bps * out.channels; out.frames = sz / step;
       const at = (i) => out.bits === 16 ? v.getInt16(o + 8 + i, true) / 32768 : out.bits === 32 && out.format === 3 ? v.getFloat32(o + 8 + i, true) : out.bits === 24 ? ((v.getUint8(o + 8 + i) | v.getUint8(o + 9 + i) << 8 | v.getInt8(o + 10 + i) << 16) / 8388608) : 0;
