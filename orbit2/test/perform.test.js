@@ -155,6 +155,12 @@ test('ORBIT2-11 r1 P5: auto = the native output latency + the master look-ahead;
   p.start(1000); p.clockAt(0, 1000); p.clockAt(MIDI_DIV, 1020); p.stop(1010);
   assert.deepEqual(sent.at(-1), [0xFC, 1050], 'never before a clock already scheduled (1020 + 30 ms)');
   p.stop(1100); assert.deepEqual(sent.at(-1), [0xFC, 1130]);
+  p.start(1090); assert.deepEqual(sent.at(-1), [0xFA, 1131], 'r2: a quick restart\'s start never leaves before the stop on its way');
+  p.start(1200); assert.deepEqual(sent.at(-1), [0xFA, 1230]);
+  // the auto offset reads a private field of the vendored standardized-audio-context: a Tone update without it would
+  // silently drop the output latency again
+  const { readFileSync } = await import('node:fs');
+  assert.match(readFileSync(new URL('../../vendor/tone/Tone.js', import.meta.url), 'utf8'), /_nativeAudioContext/, 'Tone\'s wrapper keeps its native context where autoLatencyMs reads it');
 });
 
 test('ORBIT2-11 r1 wiring: cues unlike any lane colour, a clicked throw leaves Space to play, auto latency, print at the heard cutoffs', async () => {
@@ -169,7 +175,12 @@ test('ORBIT2-11 r1 wiring: cues unlike any lane colour, a clicked throw leaves S
   assert.match(src, /muteQ\.toggle\(li, !m\.lanes\[li\]\.muted\)/); assert.match(src, /muteQ\.apply\(m\.lanes\)/);
   assert.match(src, /new T\.Gain\(fx\.throw \? THROW\.send : 0\)/, 'a throw held while the kit is built starts thrown');
   assert.match(src, /fxFreqs\(fx\.filter, fx\.sr \|\| raw\.sampleRate\)/); assert.match(src, /\{ filter: pfx\.filter, sr: T\.getContext\(\)\.rawContext\.sampleRate \}/, 'a print keeps the cutoffs heard live');
-  // the clock order a waiting mute relies on: the slot due on a bar line loads before barPerf lands the mutes
-  const tick = src.slice(src.indexOf('function onTick('), src.indexOf('function retime('));
-  assert.ok(tick.indexOf('bank.due(') < tick.indexOf('barPerf()') && tick.indexOf('barPerf()') < tick.indexOf('liveQuiet('), 'slot → mutes → the lanes step');
+  // the clock order a waiting mute relies on: the slot due on a bar line loads, evolve (its way home brings back the
+  // home lanes' mutes) runs, then barPerf lands the mutes, then the lanes step (r2: evolve came after the mutes)
+  const tick = src.slice(src.indexOf('function onTick('), src.indexOf('function retime(')), at = (s) => tick.indexOf(s);
+  assert.ok(at('bank.due(') < at('evolveNow(') && at('evolveNow(') < at('barPerf()') && at('barPerf()') < at('liveQuiet('), 'slot → evolve → mutes → the lanes step');
+  // r2: MIDI stop goes with the transport's own stop time (start keeps its lead on the first clock, guarded in PolyMidi);
+  // the first Play waits for the look-ahead measure
+  assert.match(src, /T\.getTransport\(\)\.start\('\+0\.05'\); pmidi\.start\(performance\.now\(\) \+ 50\)/); assert.match(src, /const at = T\.now\(\); T\.getTransport\(\)\.stop\(at\); pmidi\.stop\(perfAt\(at\)\)/);
+  assert.match(src, /buildLoops\(\); await setAutoLatency\(\); \}/);
 });

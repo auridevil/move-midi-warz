@@ -1,11 +1,10 @@
 // The Move's view of a pattern: which steps the pad rows and the step buttons show (L5 pages), which lanes the four pad
 // rows are (L2 window), what a track button selects, and which step a held step button holds. Pure (no DOM, no MIDI),
 // so the rules are unit-tested; app.js keeps one MovePages and paints the LEDs from it.
-import { LONG_MS } from '../ui.js';
 export const PAD_COLS = 8, PAD_ROWS = 4, STEP_BTNS = 16;
 /** P7: a step button held this long is a look (the step buttons show its loops), not a tap, so its release doesn't
- *  toggle the step: the same time as a long-press on screen. */
-export const LOOK_MS = LONG_MS;
+ *  toggle the step: as long as a long-press on screen (ui.js LONG_MS; a test keeps them equal). */
+export const LOOK_MS = 450;
 
 /** Pad pages of the longest lane (1–4): what Back + ◀ ▶ can pin. */
 export const padPages = (lanes) => Math.max(1, ...lanes.map(l => Math.ceil(l.length / PAD_COLS)));

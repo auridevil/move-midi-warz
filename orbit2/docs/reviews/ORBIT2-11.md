@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-11
 title: ORBIT2-11 live performance (P1–P7), review panel
 date: 2026-11-12
-round: 1
+round: 2
 stalled: 0
 result: IN PROGRESS
 reviewers:
   verifier: NOT HAPPY
   architect: NOT HAPPY
-  sound: NOT HAPPY
+  sound: HAPPY
   kai: HAPPY
   greta: HAPPY
 tags: [orbit2, review]
@@ -145,3 +145,59 @@ sweeps), no zipper on fast wheel spins or knob drags (worst second difference �
   `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both stopped). Browser
   (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks above, 0 page errors on desktop (1440×900) and phone
   (390×844); screenshots looked at. `app.js` 1656 → 1670 lines.
+
+## Round 2 (re-check): 1 of 3 HAPPY (sound), every round-1 item closed but one case, one NEW item
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `be25191` on +100, the code before the round-1
+fixes `e3da941` on +200). Brief as in round 1 (goal, P1–P7, the spec, the "where" table, the must-fix rule with the
+later ids and the Later items, the page and its Move bytes, now with the transport stub), `git diff --stat
+be25191..e2b4042` (12 files, +708/−70) and the round-1 fixes alone (`e3da941..e2b4042`, 9 files, +365/−82), each one's
+own round-1 MUST-FIX and "Changes after round 1", with the instruction to confirm their items first with the same
+repro, then check nearby, anything new only in scope and marked NEW. `stalled: 0`: round-1 MUST-FIX are closed (all
+the verifier's, the sound one, and the architect's 2, 3a, 3b).
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | (1)–(4) FIXED: (1) the `1:2` repro: at 250 ms the steps view, at 650 ms `[51,0,51,0,…]`, released at 1004 ms the step stays on; a 120 ms tap toggles (stopped and playing), 700 ms / 3.6 s holds never (8 of 8), hold + knob 8 at 100 ms shows the loops at once, a tap on step 3 while step 1 is held toggles step 3 only. (2) clicked throw: Space plays / stops, no throw; Tab + Space or Enter: the throw, play untouched. (3) lane LEDs `[51,46,7,50,44,38]`, dims `[24,16,30,34,14,5]`, the cue 125 in neither; lane 2 `fill` 16 × 125, `1:2` `[46,0,46,0,…]`; Mute + track 3 → 125, again → 46, queued again → lands on the line (4515). (4) every painted frame while playing (lane 1 one step long, 240 bpm, loops 1–60, 8 conditions) against `condPasses`: 0 mismatches. (5) NEW, P5 MIDI start, from the round-1 stop timing (its own SHOULD): Stop (FC) now leaves at the transport's stop (`T.now()`, look-ahead 0.1 s) + the offset, Start (FA) still at `performance.now() + 50` + the offset, so a start under ~50 ms after a stop goes out first and the gear stays stopped while orbit2 plays. Follow "transport" + clock out (the UI allows both: orbit2 passes a master's transport on): the master's Stop then Start 5 ms apart → our FA at 4817.9, FC at 4861.2 (43.3 ms after it), then 30 clocks to the stopped gear; `be25191`: FC 57.4 ms before FA. Stop → Play on the page 32 ms apart: FC 17.8 ms after FA; 60 / 92 ms apart in order. |
+| architect | NOT HAPPY | (1) the slot case FIXED (the same repro: "unmute ⇥ bar" at 3850, `{0:false}`, slot 6 for the line at 6720 → lane 1 playing, slot 6 current, "mute"; a chain step takes the same path, not run alone); STILL OPEN when evolve goes home, part of the round-1 item: `onTick` lands the waiting mutes (`app.js:321`) before evolve (`:325`), and going home is `m.assign(evoSnap, { keep: true })` (`:811`), which brings back the snapshot's `muted`. 240 bpm, "on next bar", evolve every 1 bar, home after 1, lane 1 playing when evolve went on; home lines 6720 / 13440 / 20160 (by wrapping `m.assign`); mute pressed in bar 2 ("mute ⇥ bar", `{0:true}`) → after line 2 (home) lane 1 PLAYING, the queue empty; the same ask before line 3 (no home) → muted. Expected (`perform.js:41`): muted. `barPerf` after the evolve line, tried in a scratch copy: both home lines muted, 0 errors, the suite passes with either order (the wiring check reads `bank.due(` < `barPerf()` < `liveQuiet(`; add `evolveNow(`). (2) FIXED (`1:3`, 850 ms: stays on; steps view at 250 ms, loops at 650 ms; 120 ms taps toggle; hold + knob 8 at 100 ms: loops at once, stays on; playing, a 10 s look; dropping the long-hold `used = true` fails 1 test). (3a) FIXED (playing, held through loops 4–54, 86 samples, 63 past loop 16: one marker, white / dark grey as `condPasses` says, the row matching its window; `loopWindow → 0` fails 1 test). (3b) FIXED (lane 2 `fill` 16 × 125, `always` 16 × 46; Mute held `[50,7,46,51]`, lane 2 waiting `[50,7,125,51]`; going back to flips fails 2 tests, `barPerf` before `bank.due` fails 1). |
+| sound | HAPPY | (1) FIXED: `'outputLatency' in rawContext` false, the native context 16 ms, the look-ahead 12 ms → auto 28, the gauge "+28 ms" (`e3da941`: 0). Note-on minus the heard hit (an AudioWorklet after the limiter, onsets mapped to the speaker with the native `getOutputTimestamp()`): auto −2.0 ms median (−5.3…+0.6, n 36; another page −1.1), `e3da941` −28.7; manual +20 / −20 move it as set; live-mode pads stopped −0.8 (`e3da941` −29.1). Note-on and its block's F8 0.0 ms apart at auto, +20, −20. Nearby: a cold first Play, the stop (FC at the transport's stop + offset, 12.9–17.1 ms after the last clock, none after it; before the fix 4 clocks came after), the throw (0.7 / 0.55 ↔ 0 / 0.3), live cutoffs = `fxFreqs` at 48 kHz, print FX at 44.1 and 48 kHz = the live cutoff (LP −0.8: 521 Hz both), a held throw not printed, print off: no FX in the render; 0 errors. |
+
+SHOULD items recorded (never block): evolve's way home resets every mute, a mute pressed at once included
+(pre-existing) (architect); `pages.js` imports `LONG_MS` from `ui.js`, the pure Move model depending on the UI module
+for one number (architect); the "r1 wiring" test is mostly regexes over app.js, brittle to reformatting and blind to an
+order it doesn't spell out (architect); on a cold page the first MIDI start leaves at +16 (the look-ahead measure
+starts at wake and resolves after Play sends FA; every clock and note gets 28) (sound); the auto offset reads
+standardized-audio-context's private `_nativeAudioContext`: a Tone update without it would drop the output latency
+silently (sound).
+
+GOOD: tap = toggle, hold = read, the 16-loop window and its marker match `condPasses` on every loop tried, and the Move
+panel says so (verifier, architect); one cue colour no lane has, on both cues; the mute queue lands what was asked
+(verifier, architect); MIDI lands on the heard hit (−1 to −2 ms against −28.7: sequenced notes, clock, start, live pads),
+stop never before a scheduled clock, print FX at the cutoffs heard live at either export rate (sound).
+
+### Changes after round 2
+
+- **A waiting mute lands after evolve's way home** (architect 1): `onTick` now runs the bar line's work in the order
+  slot → evolve → waiting mutes and the fill latch (`barPerf`) → the lanes step, so a mute queued for a line where
+  evolve goes home lands on the home lanes. Page, the architect's repro (240 bpm, evolve every 1 bar, home after 1, lane
+  1 playing when it went on): mute queued at tick 3605 ("mute ⇥ bar", `{0:true}`), home at the 6720 line → lane 1 muted,
+  the queue empty; an unmute queued before the 13440 home line → playing. (A mute pressed at once before a home line is
+  still undone by the snapshot: pre-existing → [[BACKLOG]] Later "Evolve's way home resets the mutes".)
+- **A quick restart's MIDI start after its stop** (verifier 5, NEW): `PolyMidi.start` never leaves before a stop still
+  on its way (`stopAt + 1 ms`); the start keeps its lead on the first clock (`performance.now() + 50`, as at the phase
+  start: sending it with the transport's own start time was tried and dropped, the page put it 6.6 ms after the first
+  clock, from the jitter between two audio → MIDI time conversions, so a receiver would start a clock late). Page, the
+  verifier's repro (follow "transport" + clock out, the master's Stop then Start 5 ms apart): our FC 4692.7, FA 4693.7,
+  42 clocks after it, orbit2 playing; a cold first Play: FA 93 ms before the first clock.
+- **Quick SHOULDs done:** the first Play waits for the look-ahead measure (`wake` awaits `setAutoLatency`), so its MIDI
+  start carries the full auto offset (page, a cold Play: auto 28 when FA leaves) (sound); a test pins the vendored
+  Tone's `_nativeAudioContext`, so an update without it fails the suite instead of silently dropping the output latency
+  (sound); `LOOK_MS` is its own constant in `pages.js` (no import of the UI module), a test keeps it equal to `LONG_MS`
+  (architect); the wiring check spells out the whole bar-line order, evolve included (architect).
+- **Not changed:** the wiring checks stay source checks (the scheduler lives in app.js: Later "A jam module").
+- Tests (181 + 9): "r1 P5" adds a quick restart's start after the stop on its way and the pinned Tone field; "r1
+  wiring" the order slot → evolve → mutes → lanes, the transport's stop time for MIDI stop, the start's lead, the awaited
+  look-ahead. `npm run check` clean, `npm test` 181 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py
+  5400 + headless Chrome 9222, both stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks
+  above, 0 page errors. `app.js` 1670 → 1671 lines.

@@ -250,7 +250,7 @@ function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelec
 function cycleKit(dir) { const cur = m.kitKey() ?? KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
-async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit({ fx: pfx }); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); setAutoLatency(); }
+async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit({ fx: pfx }); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); await setAutoLatency(); }
 // ---- P6 performance FX on the live master: the filter (Move wheel, the transport strip's knob) and the delay throw
 // (hold + on the Move, or "throw"). Not saved: a page always opens with them off. Exports leave them out unless
 // "print FX" is on, and then print the filter as it is set (a throw is a moment, not part of the pattern). ----
@@ -274,11 +274,11 @@ function filterSay(v) {
   return `${v < 0 ? 'low-pass' : 'high-pass'} ${hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`}`;
 }
 /** P5: the auto MIDI out offset = when a hit leaves the speakers: the output's latency (known once the context runs)
- *  + the master's look-ahead (measured once per rate, like the exports'). */
-function setAutoLatency() {
-  const raw = T.getContext().rawContext, sr = raw.sampleRate, show = () => { if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs); };
-  pmidi.autoMs = autoLatencyMs(raw, latencyCache.get(sr)); show();
-  if (!latencyCache.has(sr)) masterLatency(sr).then((s) => { pmidi.autoMs = autoLatencyMs(raw, s); show(); }).catch(() => {});
+ *  + the master's look-ahead (measured once per rate, like the exports': wake waits for it, so the first Play's MIDI
+ *  start has it too; later calls find it measured and set it at once). */
+async function setAutoLatency() {
+  const raw = T.getContext().rawContext, sr = raw.sampleRate, s = latencyCache.has(sr) ? latencyCache.get(sr) : await masterLatency(sr).catch(() => 0);
+  pmidi.autoMs = autoLatencyMs(raw, s); if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs);
 }
 
 // ---- the master clock: 840 ticks per beat drive every lane, MIDI clock, slots and evolve ----
@@ -317,12 +317,13 @@ function onTick(t, time, cyc, ts) {
   // a slot in another meter starts its bars (and lanes) here; P4 with "restart on change" any slot does: step 1, loop 1
   const si = bank.due(t, cyc, bars, m.origin); if (si >= 0) { loadSlot(si, true); if (bank.restart) m.setOrigin(t); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
-  // P2 / P3 on every bar line, Play's downbeat included: queued mutes flip, the fill latch turns on (or off) for the bar
-  if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
   // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
+  // waiting mute lands on the lanes that play from here): queued mutes land, the fill latch turns on (or off) for the bar
+  if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
   jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
   if (pending.size) pending.settle(t, time);   // E6: the early parts of the steps on this tick get the time it came at
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
@@ -348,7 +349,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); }   // MIDI stop when the transport stops: after the clocks it still schedules
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;

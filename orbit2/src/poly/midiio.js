@@ -142,7 +142,7 @@ export class PolyMidi {
     this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60;
     // P5 out offset: every scheduled note and clock goes out this many ms later (− = earlier). null = auto: the audio
     // output's latency (autoMs, set by the app), so notes leave when the speakers play the same hit
-    this.offsetMs = null; this.autoMs = 0; this.lastClock = 0;   // lastClock: when the last clock / start leaves (stop goes after it)
+    this.offsetMs = null; this.autoMs = 0; this.lastClock = 0; this.stopAt = 0;   // when the last clock / start and the last stop leave: a stop goes after the clocks, a start after the stop
     this.inName = ''; this.follow = 'off'; this.input = null; this.onIn = null;
     this.handlers = { tempo: () => {}, start: () => {}, stop: () => {}, tick: () => {} };
     this.extTick = 0;   // incoming clock ticks since start (or since a Song Position Pointer), in MIDI ticks (24 PPQ): the app scales
@@ -173,10 +173,12 @@ export class PolyMidi {
   clock(at) { if (this.out && this.clockOut) this.sendClock(0xF8, at + this.latencyMs); }
   /** Master tick `tick` (any PPQ): a MIDI clock on every MIDI_DIV-th, so 24 per quarter. */
   clockAt(tick, at) { if (tick % MIDI_DIV === 0) this.clock(at); }
-  start(at) { if (this.out && this.clockOut) this.sendClock(0xFA, at + this.latencyMs); }
+  /** Start at `at` + the P5 offset (ahead of the first clock), never before a stop still on its way: a quick stop → start
+   *  (a master's, passed on) would start the gear and then stop it. */
+  start(at) { if (this.out && this.clockOut) this.sendClock(0xFA, Math.max(at + this.latencyMs, this.stopAt + 1)); }
   /** Stop at `at` (the transport's stop, a Web MIDI timestamp) + the P5 offset like the clocks, and never before a clock
    *  already scheduled: the transport stops a look-ahead after the press and clocks until then. */
-  stop(at = 0) { if (this.out && this.clockOut) this.send([0xFC], Math.max(at + this.latencyMs, this.lastClock)); }
+  stop(at = 0) { if (this.out && this.clockOut) { this.stopAt = Math.max(at + this.latencyMs, this.lastClock); this.send([0xFC], this.stopAt); } }
   sendClock(s, at) { this.lastClock = Math.max(this.lastClock, at); this.send([s], at); }
   /** Follow mode change: the ticks heard before (or while 'off') say nothing about now. */
   setFollow(mode) { this.follow = FOLLOW_MODES.includes(mode) ? mode : 'off'; this.follower.reset(); }

@@ -544,6 +544,10 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   the live-mode settings next to `perfAt`, `perfKey`, `pfx`, `barPerf`); the origin is handled two ways (`Machine.tick`
   hands `Lane.at` the absolute tick plus `origin`, `liveTick` a relative tick), so a caller passing a relative tick and
   an origin would subtract twice.
+- **Evolve's way home resets the mutes** (ORBIT2-11 round 2, architect; pre-existing, the same at `be25191`): going home
+  is `m.assign(evoSnap, { keep: true })`, which brings back the snapshot's `muted`, so a mute pressed at once in the bar
+  before a home line is undone on it (a mute waiting for that line now lands after it). Mutes are performance state
+  everywhere else (`perfKey`, undo's `keepPerf`); keeping them on the way home too would match.
 - **Live-mode cues on screen** (ORBIT2-11 round 1, greta; taste): the "live mode" chip is a quiet toggle next to a big
   Connect button ("live: on" in words would say more for a safety setting); a one-line legend of the button states
   (cyan, white, magenta) in the help; on a phone the transport strip takes three rows before the status line
