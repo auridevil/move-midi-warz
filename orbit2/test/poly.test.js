@@ -1542,10 +1542,47 @@ test('ORBIT2-10 r2 / r3: a ring-out goes by when each step was due: the next dow
   assert.ok(early.length > 0 && early.every(e => e.tick === P && e.t < P), 'early parts are tagged with their step (tick P), played before it');
   // wiring: the scheduler passes when each hit's step is due, the log keeps it, every posted end is remembered and decides
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
-  assert.match(app, /for \(const h of soon\) play\(li, lane, h, time \+ \(h\.tick - t\) \* ts\)/); assert.match(app, /for \(const h of hits\) play\(li, lane, h, time\)/);
+  assert.match(app, /for \(const h of soon\) \{ const e = play\(li, lane, h, time \+ \(h\.tick - t\) \* ts\)/); assert.match(app, /for \(const h of hits\) play\(li, lane, h, time\)/);
   assert.match(app, /step: step \?\? time,/); assert.match(app, /renderRing\(jam\.log, Math\.round\(jam\.startTime \* jam\.sr\) \+ data\.frames, jam\.endTime\)/);
   assert.equal((app.match(/jam\.endTime = [^;]+; jam\.node\.port\.postMessage\(\{ end: (jam\.endTime|time) \}\)/g) || []).length, 3, 'all three ends are remembered: a stop, the clock on the stop tick, the cap');
   assert.doesNotMatch(app, /postMessage\(\{ end: (?!jam\.endTime|time)/, 'no end is posted without being remembered');
   assert.match(app, /headroomGain\(shots\.flatMap\(s => s\.chans\), exp\.bits\)/, 'the kit gain follows the chosen bits (32f: as rendered)');
   assert.match(app, /clearTimeout\(timer\)/, 'the download timeout is cleared');
+});
+test('ORBIT2-10 r4: an early part\'s step gets the time its tick really came at: a tempo move while a take closes keeps the next downbeat out', async () => {
+  const { ringPlan, pendingSteps } = await import('../src/poly/jam.js'), { liveTick } = await import('../src/poly/export.js');
+  // hits wait by their step's tick and get its time when it comes; a tick passed without coming drops its hits
+  const pd = pendingSteps(), a = { step: 1 }, b = { step: 2 }, c = { step: 3 }, d = { step: 4 };
+  pd.add(50, a); pd.add(100, b); pd.add(100, c); pd.add(200, d); pd.settle(50, 1.5);
+  assert.deepEqual([a.step, pd.size], [1.5, 2], 'tick 50 came: its hit gets the time it came at');
+  pd.settle(150, 9); assert.deepEqual([b.step, c.step, pd.size], [2, 3, 1], 'tick 100 never came (a clock snap jumped it): its hits keep their estimate and go');
+  pd.clear(); pd.settle(200, 9); assert.deepEqual([d.step, pd.size], [4, 0], 'a restart from tick 0 clears it: the old ticks never come');
+  // the scheduler as app.js runs it: a kick pushed 30 ms early on every bar line, a snare pushed 30 ms early on beat 4;
+  // the take ends on the bar-2 line (tick E); the tempo drops 86 → 80 bpm after the kick's early part, before its tick
+  const m = new Machine(); m.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); });
+  m.lanes[0].hits[0] = true; m.lanes[1].hits[3] = true; m.lanes[0].setOffset(-30); m.lanes[1].setOffset(-30);
+  const E = 4 * P, sr = 48000, ahead = [], log = [], est = [], pend = pendingSteps(), tsAt = (t) => 60 / (t < E - 20 ? 86 : 80) / P;
+  let time = 0, endTime = null;
+  for (let t = 0; t <= E + 40; t++) {
+    const ts = tsAt(t); if (t === E) endTime = time;   // the clock posts the end on the stop tick, at the time it came at
+    pend.settle(t, time);
+    liveTick(m, t, ahead, { tickSec: ts }).forEach(({ ev, hits, early }, li) => {
+      for (const h of early) { const e = { li, lane: m.lanes[li], time: time + h.dt, step: time + (h.tick - t) * ts }; log.push(e); est.push({ ...e }); pend.add(h.tick, e); }
+      if (ev) for (const h of hits) { const e = { li, lane: m.lanes[li], time: time + h.dt, step: time }; log.push(e); est.push({ ...e }); }
+    });
+    time += ts;
+  }
+  const opts = { endFrame: Math.round(endTime * sr), endTime, sampleRate: sr, reach: () => 2 }, kick = (p) => p.hits.filter(h => h.li === 0 && h.time > endTime - 0.05);
+  assert.ok(est.some(h => h.li === 0 && h.step < endTime - 1e-3), 'the kick\'s step estimated at 86 bpm lands over 1 ms before the end that came at 80');
+  assert.equal(kick(ringPlan(est, opts)).length, 1, 'by the estimate alone the next bar\'s downbeat would ring out');
+  const plan = ringPlan(log, opts);
+  assert.equal(kick(plan).length, 0, 'settled: the downbeat due on the end is the next bar\'s, out of the ring-out');
+  assert.ok(plan.hits.some(h => h.li === 1), 'the take\'s own snare, pushed early on beat 4, rings on');
+  // wiring: the scheduler settles every tick (before a quiet tick returns), hands each early part to `pending`, clears it
+  // on a restart from tick 0 (Play, reset); hitSound returns the entry it logged
+  const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  assert.match(app, /if \(pending\.size\) pending\.settle\(t, time\);[^]*if \(liveQuiet\(/);
+  assert.match(app, /const e = play\(li, lane, h, time \+ \(h\.tick - t\) \* ts\); if \(e\) pending\.add\(h\.tick, e\);/);
+  assert.equal((app.match(/early\.length = 0; pending\.clear\(\);/g) || []).length, 2, 'Play and the reset button restart the ticks');
+  assert.match(app, /return logged;\n\}/);
 });

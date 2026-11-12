@@ -7,7 +7,7 @@ import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from '.
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
-import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, ringPlan, ringOut, joinRing } from './jam.js';
+import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, pendingSteps, ringPlan, ringOut, joinRing } from './jam.js';
 import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
@@ -194,13 +194,14 @@ function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k
 /** Seconds of live hits a jam take keeps for its ring-out (E6): the delay's tail plus a long sample at half speed. */
 const RING_KEEP = 48;
 /** slice: the slice of a set this hit plays (Lane.sliceAt; null = the lock's, else the first). step: when the step it
- *  plays is due on the grid, before swing, nudge, push or humanize (the scheduler's; a pad or an audition: its time). */
+ *  plays is due on the grid, before swing, nudge, push or humanize (the scheduler's; a pad or an audition: its time).
+ *  Returns the jam log entry it made (E6), if any. */
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null, step = null) {
   const li = lanesOf(k).indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing),
   // with when its step was due: a downbeat humanized or nudged before the take's end is still the next bar's. A time,
   // not a tick: Play, reset and a MIDI clock's snap all count the ticks from 0 again
-  if (k === kit && jam.log) logHit(jam.log, { li, lane, time, step: step ?? time, accent, lock, vel, slice }, RING_KEEP);
+  const logged = k === kit && jam.log ? { li, lane, time, step: step ?? time, accent, lock, vel, slice } : null; if (logged) logHit(jam.log, logged, RING_KEEP);
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
   const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
@@ -212,6 +213,7 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = 
   const dark = viaDsp ? 0 : p.dark;
   try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {}
   try { if (c.voice === 'sample') playSample(c, lane, p, time, lock, slice ?? lane.sliceAt(0, lock)); else if (viaDsp) c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p).map(x => p.dark ? { ...x, dark: p.dark } : x) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
+  return logged;
 }
 /** Live MIDI out for a hit: the note of the stroke it plays (L3). The one path to pmidi.note, for the clock and the pads. */
 function midiHit(li, lane, vel, at, lock) { pmidi.note(li, vel, at, lane.strokeAt(lock)); }
@@ -237,6 +239,7 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
+const pending = pendingSteps();   // E6: the jam log's early parts, by their step's tick: given its real time when it comes
 /** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
  *  starts on the next bar line of the old one, so a bar is never cut short, and the lanes start there on step 1
  *  (m.setOrigin); a restart counts from tick 0 in the pattern's meter. barN: bar lines since Play, in any meter. */
@@ -253,7 +256,7 @@ const tickAt = (time) => clockRef.tick + (time - clockRef.time) / tickSec();
 const heardTick = () => { const raw = T.getContext().rawContext; return tickAt(raw.currentTime - (raw.outputLatency || 0)); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
-  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); }   // both are keyed on the old ticks; loops count from 0 again
+  if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); }   // all keyed on the old ticks; loops count from 0 again
   const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clockAt(t0, perfAt(time));   // a block starts on the 24-PPQ grid: one clock, 24 per quarter
@@ -269,16 +272,18 @@ function onTick(t, time, cyc, ts) {
   const line = t > 0 && onBar(t, bars); if (line) barN++;
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
+  if (pending.size) pending.settle(t, time);   // E6: the early parts of the steps on this tick get the time it came at
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); };
+  const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt), e = hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); return e; };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip).
-  // step: when the hit's own step is due (this tick, or the later one an early part belongs to)
+  // step: when the hit's own step is due (this tick; for an early part the later tick it belongs to, estimated at this
+  // tempo until that tick comes: pending)
   liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
-    const lane = m.lanes[li]; for (const h of soon) play(li, lane, h, time + (h.tick - t) * ts);
+    const lane = m.lanes[li]; for (const h of soon) { const e = play(li, lane, h, time + (h.tick - t) * ts); if (e) pending.add(h.tick, e); }
     if (!ev) return;
     for (const h of hits) play(li, lane, h, time);
     // drawn at its time: by then the lane may be gone (6 → 4 lanes, an undo, a slot with fewer lanes)
@@ -291,7 +296,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;

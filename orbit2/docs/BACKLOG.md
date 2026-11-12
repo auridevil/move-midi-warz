@@ -487,12 +487,26 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   ~1 ms at humanize 0.08 (−33 dBFS on boombap), up to 92 ms with a −30 ms push and nudge −½ (the take ends with that hit
   at full level; the ring-out leaves it out as the next bar's and `joinRing` bends the cut away within 2 ms); a downbeat
   before the start begins mid-attack on sample 0. A short fade at the take's edges, or gating each lane's early
-  next-bar hit out of the recording, would clean them.
+  next-bar hit out of the recording, would clean them. Also (round 4): a `start` that reaches the recorder late loses
+  the take's first frames (it starts at the current block while `frames` reports the whole take: 95916 frames for 2 bars
+  once, with two Chromes running; verifier), and `jam.endTime` is the last end posted, so a big tempo drop while closing
+  could post the stop tick's end after the recorder already stopped on stopJam's (a race of a few ms; the recorder's own
+  end, start + frames, would decide then; architect, read, not measured).
 - **A gentler ring-out join on noise** (ORBIT2-10 round 2, sound): `joinRing` bends the ring-out's first 2 ms onto the
   line the take ends on, right for a smooth tail; on a noise tail that line is random (a dsp snare at 24 kHz: +4.9 dB
-  for 5 ms over the live continuation; inaudible). A shorter bend or a value-only join on noisy lanes.
+  for 5 ms over the live continuation; inaudible). A shorter bend or a value-only join on noisy lanes. Also (round 4):
+  the crackle's ring-out can open with a dust click far over the take's last 10 ms (−78.3 → −27.0 dBFS: the offline
+  dust is not the live dust; verifier), and on the synth engine a take hit due a few ms before the end puts the 2 ms
+  bend inside a kick attack (a slope turn at −21.7 dBFS; dsp is smooth; sound).
+- **Seeded noise in offline renders** (ORBIT2-10 round 4, sound; pre-existing): the synth noise voices start at random
+  points (`Math.random`, 284 calls a render), so two exports of one locked roll differ in the noise (snare up to 9786
+  LSB; 9810 at `1005992`), and in export all the mastered mix and the stems carry different noise; seeding the noise
+  from the dice seed during offline renders would repeat a locked roll byte for byte.
 - **A jam module** (ORBIT2-10 round 2, architect): the jam take logic plus `renderRing` is ~110 lines of app.js and
-  `jam` grows through `Object.assign`; its own module would shrink app.js and give the wiring unit seams.
+  `jam` grows through `Object.assign`; its own module would shrink app.js and give the wiring unit seams. The same for
+  the scheduler (round 4, architect): `onTick` lives in app.js, so its wiring (when each hit's step is due, the early
+  parts handed to `pendingSteps`) is checked by regexes on the source; the r4 test replays its sequence over `liveTick`,
+  a module would let the real one run in Node.
 - **Kit options** (ORBIT2-10 round 1, sound, architect; round 2, sound): one-shots carry the lane's pan (a Drum Rack pad
   usually wants them centred: a "centred" option), kit files are named `orbits-kit-<lane>-<voice>` without the export's
   base, so two kits clash in one DAW folder (the zip's folder has the time), and one hot lane lowers the whole kit (a

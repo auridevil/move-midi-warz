@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-10
 title: ORBIT2-10 export for producers (E1–E6), review panel
 date: 2026-11-12
-round: 3
+round: 4
 stalled: 0
 result: IN PROGRESS
 reviewers:
-  verifier: NOT HAPPY
+  verifier: HAPPY
   architect: NOT HAPPY
-  sound: NOT HAPPY
+  sound: HAPPY
   dex: HAPPY
   kai: HAPPY
 tags: [orbit2, review]
@@ -302,3 +302,66 @@ files are bit-identical to `45b1319` (stems, kits 16 / 44.1 and 24 / 48, export 
   `npm test` 165 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both
   stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted; the page ran at 24 kHz): the checks above, 0 page
   errors. `app.js` 1522 → 1525 lines.
+
+## Round 4 (re-check): 2 of 3 HAPPY, the round-3 item closed, one NEW item
+
+The same three reviewers (verifier, architect, sound, default model), fresh sub-agents in one message, own ports 5401 /
+5402 / 5403 (+ 940x; the phase start `1005992` on +100, the code before the round-3 fix `1054ef9` on +200). Brief as
+before, `git diff --stat 1005992..HEAD` (9 files, +859/−101) and the round-3 fix alone (`1054ef9..8adb2c0`, 5 files,
++130/−48), each one's own round-3 MUST-FIX and "Changes after round 3", confirm first, then nearby, new only in scope
+and marked NEW. Pre-checks on `8adb2c0`: `npm run check` clean, `npm test` 165 + 9. `stalled: 0`: the open MUST-FIX (a
+reset while a take closes put new hits in its ring-out) is closed for all three.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | (2) FIXED: boombap, 240 bpm, humanize 0.08, ring-out on, stopJam at ~1.38 s with the pattern playing on, `#btn-reset` 200 / 350 / 500 ms later (9 takes) and 30–34 ms before the line (2): 0 of 11 takes keep a hit starting at or after the end, 0 kept hits due at or after it; the new Play's hits due +10.4 to +42 ms after the end out, those due before it kept and carried across the seam (−14.0 → −14.9 dBFS); shaker ring-outs −33.7 to −37.8 dBFS after 20 ms (round 3: a new shaker at −16); `1054ef9`, same script: 7 of 11 keep hits starting +30 to +88 ms after the end (a whole new kick at −11.0 dBFS, −8.6 for a reset 33 ms before the line). Nearby clean: the early downbeat stays out (4 takes + a grace stop), Play stopped and started while closing, the grace stop ring off (5 files, 48000 frames) and on, ring off, `jam.endTime` = the recorder's end in all 20 takes, a download / discard / new take during the render; check, test 165 + 9, smoke 10/10, 0 page errors. |
+| architect | NOT HAPPY | (1) FIXED (reset 30.8–32.6 ms before the closing line, 86 bpm, 48 kHz: the new Play's kick, shaker, crackle due +29 / +58 / +58 ms after the end left out, kick ring-out −26.3 dB re the take peak at 75 ms, an echo; `1054ef9`: kept, 0.0 / 0.0 / −0.2 dB). (2) NEW, E6, from the round-3 change: a tempo move while a take closes puts the next bar's downbeat back in the ring-out when it is played early. An early part's `step` is an estimate at the tempo of the moment (`time + (h.tick − t) · ts`, `app.js:281`); the transport then ramps to the new bpm (`bpm.rampTo(tempo, 0.1)`, `app.js:290`), the stop tick comes later, jamTick remembers that later time as `jam.endTime` (`app.js:1109`), and the estimate lands before `cut` (`jam.js:132–133`). Boombap, 86 bpm, ring-out on, kick push −30 ms, stopJam mid-bar, `applyTempo(80)` once the kick's early part is logged and the stop tick's block is not yet scheduled: the end moves +153.9 / +229.9 µs, the kick's step −0.154 / −0.230 ms before it, kept: kick ring-out −4.6 / −4.7 dB re the take peak at 10 ms, 3.97 s long (a third take moved only +9.6 µs, under half a frame: clean, 3.12 s); `1054ef9` (tick rule): out. The MIDI clock's phase lock trims the transport while `ts` follows `tempo`, so the estimate drifts there too (read, not measured). Expected: a step due on the end is the end's, whatever the tempo does. |
+| sound | HAPPY | (2) FIXED: boombap, 240 bpm, seed 7, reset while 'finishing' at end −486 … −33 ms (synth), −81 / −59 (dsp), −59 with every lane pushed late: the restarted hits due +20.8 to +41.7 ms after the end are out; synth kick ring-outs sample-identical to the no-reset take after the 2 ms join, mix-raw rises at most +1.0 to +2.4 dB over the take's end, no attack; dsp: all 5 ring-outs sample-identical to the no-reset take; `1054ef9`: a new kick at −8.5 dBFS (+18.8 dB over the take's last 10 ms), crackle +54.5 dB, mix-raw −8.1 dBFS, +16067 frames. Nearby: the early downbeat stays out (−27.9 dBFS, dsp −37.9), steps pushed past the end ring out in full (×4 ratchet, +½ nudge, +30 ms), early parts out, Play stopped and started, `jam.endTime` on the bar line to 0.00 µs; exports byte-identical to `1054ef9` (one-track MIDI, kick stems and kit files in every format, every dsp stem, the dsp 24 / 48 kit); 0 page errors. |
+
+SHOULD items recorded (never block): the crackle's ring-out can open with a dust click far over the take's last 10 ms
+(−78.3 → −27.0 dBFS; the offline render's random dust is not the live dust; only kept hits are involved) (verifier); the
+recorder loses a take's first frames when its `start` reaches the worklet late (`jam-worklet.js:22` starts at the current
+block while `frames` reports e − s: 95916 frames for 2 bars once, on `1054ef9` with two Chromes running; pre-existing)
+(verifier); `jam.endTime` is the last end posted, not necessarily the one the recorder used (a big tempo drop while
+closing could post the stop tick's end after the recorder stopped on stopJam's; read, not measured) (architect); the
+wiring tests pin code shape with regexes, not values (architect); offline renders don't repeat: the synth noise voices
+start at random points (284 `Math.random` calls a render), so two exports of one locked roll differ in the noise (snare up
+to 9786 LSB; 9810 at `1005992`; pre-existing) (sound); on the synth engine a take hit due a few ms before the end puts the
+2 ms join inside a kick attack (a slope turn at −21.7 dBFS; dsp smooth) (sound).
+
+GOOD: one time axis that Play, reset and a restart can't renumber (0 kept hits due at or after the end in 20 takes;
+7 of 11 leaked on `1054ef9`) (verifier, sound); every other way to close a take stays clean, and the reset case is
+covered by the suite (a time-only mutation of `ringPlan` fails "r2 / r3") (verifier, architect); the fix left the export
+paths alone: every repeatable file byte-identical to `1054ef9` (sound).
+
+### Changes after round 4
+
+- **An early part's step gets the time its tick really comes at** (architect 2, NEW): the estimate is still logged when
+  the early part plays (its tick hasn't come yet), and the scheduler now keeps each such log entry by its step's master
+  tick (`pendingSteps` in jam.js: `add(tick, h)`, `settle(t, time)`, `clear()`; `hitSound` returns the entry it logged);
+  when that tick comes, `onTick` gives the entry the tick's own time, before a quiet tick returns. A step due on the
+  take's end then has exactly the end's time (the clock posts the end on the same tick, from the same block), whatever
+  the tempo did in between: a knob, the bpm ramp, a MIDI clock's trim. Keyed on the master tick like the scheduler's
+  early decisions: Play and the reset button (ticks from 0 again) clear it, a tick that passes without coming (a clock
+  snap jumped it) drops its entries; both keep the estimate, which is right without a tempo move. Page (5400/9400,
+  48 kHz), the architect's repro (fresh pattern: kick on the bar line pushed −30 ms, 86 bpm, ring-out on, stopJam
+  mid-bar, `applyTempo` the moment the clock waits at the stop tick): at `8adb2c0` 2 of 3 in-window takes kept the kick
+  (the end moved +83.6 / +152.1 µs, the kick's step that much before it; kick ring-out −15.5 dBFS at 2–20 ms, 3.93 s
+  long; clean takes −68 dBFS, 1.14 s); now 86 → 80 and 86 → 60 (the end moved up to +376 µs): the kick's step equals the
+  end to 0 µs every take, ring-outs −68 / −90.3 dBFS at 2–20 ms, as long as the clean ones; 0 page errors. Regression on
+  the round-2 / round-3 repros (boombap, 240 bpm, stopJam at 1.31 s, plain and with a reset 200 ms later): 0 kept hits
+  due at or after the end, 0 sounding after it; kick ring-outs −43 dBFS plain, −20 after a reset (the tail of the
+  restarted kick due ~480 ms before the end, as in round 4).
+- **Not changed:** `jam.endTime` vs the recorder's end (a race of a few ms that needs a tempo drop over the look-ahead
+  while closing; read, not measured); the dust click, the synth join in an attack, offline noise → [[BACKLOG]] Later
+  ("A gentler ring-out join on noise", "Seeded noise in offline renders", "Jam take edges"); the recorder's late start
+  is pre-existing → Later "Jam take edges"; the scheduler's wiring stays a source check (the r4 test replays its
+  sequence over `liveTick`) → Later "A jam module".
+- Tests (166 + 9; 1 new, 1 updated): "ORBIT2-10 r4" (`pendingSteps`: a tick that comes settles its hits, one jumped keeps
+  the estimate and goes, a clear; the scheduler's sequence over a real `liveTick` run with a kick and a snare pushed 30 ms
+  early and the tempo dropping 86 → 80 bpm between the kick's early part and its tick: by the estimate alone the next
+  bar's downbeat rings out, settled it is out, the take's own early snare rings on; wiring: the settle comes before a quiet
+  tick returns, every early part is handed over, Play and reset clear it, `hitSound` returns its entry); the r2 / r3
+  wiring check follows the scheduler's new early-part loop. `npm run check` clean, `npm test` 166 + 9,
+  `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both stopped). `app.js`
+  1525 → 1530 lines.

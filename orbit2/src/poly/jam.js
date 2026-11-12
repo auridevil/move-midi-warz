@@ -138,6 +138,21 @@ export function ringPlan(log, { endFrame, sampleRate: sr, endTime = endFrame / s
   const lead = Math.ceil((end - first + pre) * sr);
   return { lead, frames: Math.max(1, Math.ceil((last - end) * sr)), lanes, hits: hits.map(h => ({ ...h, at: (lead + h.time * sr - endFrame) / sr })) };
 }
+/** The early part of a later step is logged before that step's tick comes, so when the step is due is an estimate at the
+ *  tempo of that moment (time + ticks · tickSec). The tempo can move before the tick comes (a knob, the bpm ramp, a MIDI
+ *  clock's trim), and a step due on a take's end must stay the end's: the scheduler keeps those hits here by the step's
+ *  master tick, and settle(t, time) gives them the time their tick really came at (`step`). Keyed on the master tick
+ *  like the scheduler's early decisions: a restart from tick 0 (Play, the reset button) clears it, a tick that passes
+ *  without coming (a clock snap jumped it) drops its hits; both keep their estimate. */
+export function pendingSteps() {
+  const wait = new Map();
+  return {
+    add(tick, h) { const a = wait.get(tick); if (a) a.push(h); else wait.set(tick, [h]); },
+    settle(tick, time) { for (const [k, a] of wait) if (k <= tick) { if (k === tick) for (const h of a) h.step = time; wait.delete(k); } },
+    clear() { wait.clear(); },
+    get size() { return wait.size; },
+  };
+}
 /** A ring-out render's lane pairs (float [L, R]) from frame `from` → 16-bit lanes in a jam take's shape ([[L], [R]], one
  *  chunk each), rounded and clamped like the recorder, all cut after the last sample over -90 dBFS on any lane. */
 export function ringOut(pairs, from, frames) {
