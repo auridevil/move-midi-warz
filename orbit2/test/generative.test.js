@@ -2,7 +2,7 @@
 // masks (V3), ratchet curves (V4), timbre modulation, timbre dice and scale snap (V5).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS, PPQ, ratchetTimes, modValue, snapTune, SCALES } from '../src/poly/lanes.js';
+import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS, PPQ, RATIOS, ratchetTimes, ratchetGains, modValue, snapTune, SCALES } from '../src/poly/lanes.js';
 import { mulberry32, Dice } from '../src/poly/dice.js';
 import { collectHits, expandHits } from '../src/poly/export.js';
 
@@ -27,16 +27,28 @@ test('V3 euclid masks: replace / AND / XOR with the hand pattern; the knob moves
 });
 
 test('V4 ratchet curves: times, spacing, up to ×8, pitch ramp', () => {
+  const r4 = (a) => a.map(x => +x.toFixed(4));
   assert.deepEqual(ratchetTimes(4), [0, 0.25, 0.5, 0.75]);
-  assert.deepEqual(ratchetTimes(4, 'up'), [0, 0.4375, 0.75, 0.9375], 'speed up: gaps shrink');
-  assert.deepEqual(ratchetTimes(4, 'down'), [0, 0.0625, 0.25, 0.5625], 'slow down: gaps grow');
-  for (const c of ['even', 'up', 'down']) { const t = ratchetTimes(8, c); assert.equal(t[0], 0); assert.ok(t.every(x => x < 1)); assert.ok(t.every((x, k) => !k || x > t[k - 1])); }
+  assert.deepEqual(r4(ratchetTimes(4, 'up')), [0, 0.375, 0.625, 0.75], 'speed up: gaps between the repeats shrink (3/8 → 1/8), the last where the even one is');
+  assert.deepEqual(r4(ratchetTimes(4, 'down')), [0, 0.125, 0.3333, 0.625], 'slow down: gaps grow (1/8 → 3/8, the last to the next step)');
+  assert.deepEqual([ratchetTimes(2, 'down'), ratchetTimes(2, 'up')], [[0, 0.25], [0, 0.5]], '×2 speed up has one gap: even');
+  assert.deepEqual(r4(ratchetGains(8, 'up')), [1, 1, 1, 1, 0.8333, 0.6667, 0.5, 0.5]); assert.deepEqual(ratchetGains(8), Array(8).fill(1), 'even: all at 1');
+  // r1 (sound): no two repeats closer than half the even gap; a speed-up ends a whole even gap before the next step;
+  // a repeat closer than the even gap to a neighbour is softer by as much (the curve keeps the even ratchet's energy)
+  for (let n = 1; n <= 8; n++) for (const c of ['even', 'up', 'down']) {
+    const t = ratchetTimes(n, c), gaps = t.map((x, k) => (k + 1 < n ? t[k + 1] : 1) - x), g = ratchetGains(n, c), inner = gaps.slice(0, -1);
+    assert.equal(t[0], 0); assert.ok(gaps.every(x => x >= 1 / (2 * n) - 1e-12), `×${n} ${c}: gaps ${r4(gaps)}`); assert.ok(Math.abs(gaps.reduce((a, b) => a + b, 0) - 1) < 1e-12);
+    if (c === 'up') { assert.ok(Math.abs(gaps.at(-1) - 1 / n) < 1e-12, 'the last a whole even gap before the next step'); if (n > 2) assert.ok(inner.every((x, k) => !k || x < inner[k - 1]), `×${n} up: shrinking`); }
+    if (c === 'down' && n > 1) assert.ok(gaps.every((x, k) => !k || x > gaps[k - 1]), `×${n} down: growing`);
+    assert.equal(g[0], 1); g.forEach((x, k) => { if (k) assert.ok(Math.abs(x - Math.min(1, n * Math.min(gaps[k - 1], gaps[k]))) < 1e-12 && x >= 0.5 - 1e-12); });
+  }
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(5); l.hits[0] = true; l.tune = 0.25;
   l.setTrig(0, { ratchet: 8, curve: 'up', ramp: 0.5 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false, curve: 'up', ramp: 0.5 });
   l.setTrig(0, { curve: 'even', ramp: 0 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false }, 'defaults are not stored');
   l.setTrig(0, { ratchet: 4, curve: 'up', ramp: 0.5 });
   const hits = collectHits(m, { to: PPQ, tempo: 120 }); assert.equal(hits.length, 4);
-  assert.deepEqual(hits.map(h => +(h.time / 0.5).toFixed(4)), [0, 0.4375, 0.75, 0.9375], 'at the curve\'s times (a step = 0.5 s)');
+  assert.deepEqual(hits.map(h => +(h.time / 0.5).toFixed(4)), [0, 0.375, 0.625, 0.75], 'at the curve\'s times (a step = 0.5 s)');
+  assert.deepEqual(hits.map(h => +h.vel.toFixed(4)), [0.7, 0.7, 0.35, 0.35], 'the two repeats ⅛ apart (half the even gap) at half (ratchetGains)');
   assert.deepEqual(hits.map(h => +(h.lock?.tune ?? l.tune).toFixed(4)), [0.25, 0.4167, 0.5833, 0.75], 'tune ramps from the lane\'s to + 0.5');
   const one = expandHits({ hit: true, step: 0, swung: 0, ratchet: 1, ramp: 0.5, lock: null }, l, 0, { tickSec: 1 / PPQ }); assert.equal(one[0].lock, null, 'one hit: no ramp, no lock');
 });
@@ -91,12 +103,18 @@ test('V1 evolve with gravity 1 returns home, then holds still', () => {
   assert.deepEqual(m.evolve({ scope: 'all', amount: 1, weights: w, gravity: 1, home }, rng), [], 'at home nothing moves');
 });
 
-test('V1 max cycle guard holds over 500 seeded evolves (gravity 0 and 0.5)', () => {
+test('V1 max cycle guard holds over 500 seeded evolves (gravity 0 and 0.5; a step home is never held)', () => {
   for (const gravity of [0, 0.5]) {
     const m = groove(), home = JSON.parse(JSON.stringify(m)), rng = new Dice().fromJSON({ locked: true, seed: 42 }).stream(3), max = 32 * BAR_TICKS;
-    assert.ok(m.cycleTicks() <= max); let held = 0;
-    for (let n = 0; n < 500; n++) { held += m.evolve({ scope: 'all', amount: 0.7, gravity, home, maxBars: 32, weights: { ...EVOLVE_WEIGHTS, prob: 1, tune: 1 } }, rng).filter(c => c.held).length; assert.ok(m.cycleTicks() <= max, `step ${n}: ${m.cycleTicks() / BAR_TICKS} bars`); }
-    assert.ok(held > 0, 'the guard had to step in');
+    assert.ok(m.cycleTicks() <= max); let held = 0, homes = 0;
+    for (let n = 0; n < 500; n++) {
+      const c0 = m.cycleTicks(), ch = m.evolve({ scope: 'all', amount: 0.7, gravity, home, maxBars: 32, weights: { ...EVOLVE_WEIGHTS, prob: 1, tune: 1 } }, rng);
+      held += ch.filter(c => c.held).length; homes += ch.filter(c => c.home).length; assert.ok(!ch.some(c => c.held && c.home), 'a step home is never held');
+      // a random move never takes the cycle past the limit (or past where it already was); only the way home may, for a while
+      if (!ch.some(c => c.home)) assert.ok(m.cycleTicks() <= Math.max(max, c0), `step ${n}: ${m.cycleTicks() / BAR_TICKS} bars`);
+      if (!gravity) assert.ok(m.cycleTicks() <= max, `step ${n}: ${m.cycleTicks() / BAR_TICKS} bars`);
+    }
+    assert.ok(held > 0, 'the guard had to step in'); assert.equal(homes > 0, gravity > 0);
   }
 });
 
@@ -144,4 +162,84 @@ test('ORBIT2-12: live play = the render with every new feature on (locked dice: 
   const render = collectHits(build(), { to, tempo, dice }).map(h => ({ li: h.li, time: h.time, vel: h.vel, lock: h.lock ?? null }));
   const sort = (a) => a.map(key).sort();
   assert.ok(render.length > 200, `${render.length} hits`); assert.deepEqual(sort(live), sort(render));
+});
+
+test('ORBIT2-12 r1 V2: the lift follows the hits that play; a pushed or nudged coupled lane plays live what the render has', async () => {
+  const { liveTick, liveQuiet } = await import('../src/poly/export.js');
+  // the app's clock: quiet ticks skipped, no slot queued (cut ∞); hits compared up to a beat before the end
+  const live = (m, { to, tempo, dice }) => { const tickSec = 60 / tempo / PPQ, ahead = [], out = []; for (let t = 0; t < to; t++) { if (liveQuiet(m, t, ahead, { humanize: m.humanize, tickSec })) continue; liveTick(m, t, ahead, { dice, tickSec }).forEach((r, li) => { for (const h of [...r.early, ...r.hits]) out.push({ li, time: t * tickSec + h.dt }); }); } return out; };
+  const keys = (hs, end) => hs.filter(h => h.time < end).map(h => `${h.li}@${h.time.toFixed(6)}`).sort();
+  // verifier: lane 2 pushed −30 ms at 30 %, lifted 70 % by lane 1 (matrix); architect: lane 2 nudged −0.4 on every step
+  // at 0 %, lifted 100 % by lane 1's one hit a loop at ×¾ (at fac4c1d: 192 live vs 208 rendered; 8 vs 12)
+  const a = () => { const m = new Machine(); m.lanes.forEach(l => l.clear()); const x = m.lanes[0], y = m.lanes[1]; x.setRatio(RATIOS.indexOf(3)); x.setLength(6); x.setEuclid(6); y.setRatio(RATIOS.indexOf(4)); y.setLength(16); y.setEuclid(16); y.prob = 0.3; y.setOffset(-30); m.couple.mode = 'matrix'; m.couple.matrix[0][1] = 0.7; return m; };
+  const b = () => { const m = new Machine(); m.lanes.forEach(l => l.clear()); const x = m.lanes[0], y = m.lanes[1]; x.setRatio(RATIOS.indexOf(0.75)); x.setLength(1); x.setEuclid(1); y.setRatio(RATIOS.indexOf(1)); y.setLength(4); y.setEuclid(4); y.prob = 0; for (let i = 0; i < 4; i++) y.setLock(i, 'nudge', -0.4); m.couple.mode = 'matrix'; m.couple.matrix[0][1] = 1; return m; };
+  for (const [mk, tempo, bars] of [[a, 200, 16], [b, 120, 4]]) {
+    const dice = new Dice().fromJSON({ locked: true, seed: 5, repeat: 1 }), to = bars * BAR_TICKS, end = (to - PPQ) * 60 / tempo / PPQ;
+    const render = keys(collectHits(mk(), { to, tempo, dice }), end); assert.deepEqual(keys(live(mk(), { to, tempo, dice }), end), render);
+    assert.ok(render.filter(k => k.startsWith('1@')).length > 4, 'the lifted lane plays');
+  }
+  // free dice: lane 2 (0 %, lifted 100 % by lane 1's step before) sounds exactly after lane 1's heard hits, pushed or not
+  for (const push of [0, -30]) {
+    const m = new Machine(); m.lanes.forEach(l => l.clear()); const x = m.lanes[0], y = m.lanes[1];
+    for (const l of [x, y]) { l.setRatio(RATIOS.indexOf(1)); l.setLength(4); l.setEuclid(4); } x.prob = 0.5; y.prob = 0; x.setOffset(push); m.couple.mode = 'next'; m.couple.amount = 1;
+    const tickSec = 60 / 120 / PPQ, ahead = [], s = [new Set(), new Set()], st = x.stepTicks();
+    for (let t = 0; t < 32 * BAR_TICKS; t++) { if (liveQuiet(m, t, ahead, { tickSec })) continue; liveTick(m, t, ahead, { tickSec }).forEach((r, li) => { if (li > 1) return; for (const h of r.early) s[li].add(Math.round(h.tick / st)); if (r.ev && r.hits.length) s[li].add(r.ev.step); }); }
+    let bad = 0; for (let k = 1; k < 127; k++) if (s[1].has(k) !== s[0].has(k - 1)) bad++;
+    assert.equal(bad, 0, `push ${push}: lane 2 follows the hits of lane 1 that played`); assert.ok(s[0].size > 30 && s[0].size < 100);
+  }
+});
+
+test('ORBIT2-12 r1 V1: gravity brings a pattern home under the max cycle guard, also when home\'s own cycle is longer', () => {
+  const m = new Machine(); m.lanes.forEach((l, i) => { l.setLength([7, 9, 11, 13][i]); l.setEuclid([3, 4, 5, 6][i]); });
+  const home = JSON.parse(JSON.stringify(m)), w = { rotate: 1, hits: 1, length: 1, ratio: 1, prob: 1, tune: 1 }, same = (k) => JSON.stringify(shape(k)) === JSON.stringify(shape(Machine.from(home)));
+  assert.ok(m.cycleTicks() > 32 * BAR_TICKS, 'home repeats after more than 32 bars');
+  for (const seed of [7, 8, 9]) {   // at fac4c1d: not home after 3000 evolves, ~9000 moves held "(too long)"
+    const k = Machine.from(home), rng = mulberry32(seed); for (let n = 0; n < 60; n++) k.evolve({ scope: 'all', amount: 0.8, weights: w, maxBars: 32, home }, rng);
+    assert.ok(!same(k), 'it wandered');
+    let n = 0; while (!same(k) && n < 300) { k.evolve({ scope: 'all', amount: 1, weights: w, gravity: 1, home, maxBars: 32 }, rng); n++; }
+    assert.ok(same(k), `seed ${seed}: home after ${n} evolves`);
+  }
+});
+
+test('ORBIT2-12 r1 V1: evolve never deletes a step\'s accent, locks or condition; they wait on their step and come back with the hit', () => {
+  const data = (l) => JSON.stringify([l.accents, l.locks, l.trigs]);
+  // E(4,8) with tune locks and accents on every hit and 1:2 on step 5, down to E(3,8) and back (fac4c1d: 0,4,6 left, no 1:2)
+  const p = new Lane('kick', { length: 8 }); p.setEuclid(4); [0, 2, 4, 6].forEach(i => { p.accents[i] = true; p.setLock(i, 'tune', i / 10); }); p.setTrig(4, { cond: '1:2' });
+  const before = data(p); p.evolveHits(-1, mulberry32(1)); assert.equal(p.euclidK, 3); assert.ok(p.isEuclid()); p.evolveHits(1, mulberry32(2)); assert.equal(data(p), before, 'E4 → E3 → E4: all back');
+  // a hand lane's step toggled off and on by evolve (fac4c1d: back as a plain hit)
+  const h = new Lane('perc', { length: 8 }); h.hits.fill(false); h.hits[2] = h.hits[5] = true; h.accents[2] = true; h.setLock(2, 'tone', 0.2); h.setTrig(2, { ratchet: 3 });
+  const at2 = () => 2.5 / 8, d0 = data(h); h.evolveHits(-1, at2); assert.equal(h.hits[2], false); assert.equal(data(h), d0, 'off: the data waits'); h.evolveHits(1, at2); assert.ok(h.hits[2]); assert.equal(data(h), d0);
+  // a hand-edited euclid lane: E(3,8) + a hand hit with data on 8, taken away and added back
+  const e = new Lane('hat', { length: 8 }); e.setEuclid(3); e.toggle(7); e.setLock(7, 'decay', 0.9); e.setLock(3, 'tone', 0.1); const d1 = data(e);
+  for (let s = 0; s < 8; s++) { const c = Lane.from(JSON.parse(JSON.stringify(e))); c.evolveHits(-1, mulberry32(s)); c.evolveHits(1, mulberry32(s + 50)); assert.equal(data(c), d1, `seed ${s}`); }
+  // a dropped hit's data goes to the nearest new hit without data of its own, round the loop; none free: it waits
+  const r = new Lane('kick', { length: 8 }); r.hits.fill(false); r.hits[7] = true; r.euclidK = 1; r.setLock(7, 'tune', 0.5); r.refill(2);   // E(2,8) = x...x...
+  assert.deepEqual(r.locks.map((l, i) => (l ? i : -1)).filter(i => i >= 0), [0], 'step 8 → step 1 (1 away round the loop), not step 5');
+  const q = new Lane('kick', { length: 8 }); q.hits.fill(false); q.hits[0] = q.hits[7] = true; q.euclidK = 2; q.setLock(0, 'tone', 0.4); q.setLock(7, 'tune', 0.5); q.refill(2);
+  assert.equal(q.locks[0].tone, 0.4); assert.equal(q.locks[4]?.tune, 0.5, 'step 1 has its own data: step 5 takes it');
+  const z = new Lane('kick', { length: 8 }); z.setEuclid(2); z.setLock(0, 'tone', 0.4); z.setLock(4, 'tune', 0.5); z.refill(1); assert.equal(z.locks[4]?.tune, 0.5, 'no free hit: it waits on step 5');
+  // 64 default evolves (scope hits, 40 %) keep every entry (fac4c1d: 5,4,11,4 → 3,2,3,3)
+  const m = new Machine(); m.lanes.forEach((l, i) => { l.setLength([8, 8, 16, 5][i]); l.setEuclid([3, 2, 7, 2][i]); for (let s = 0; s < l.length; s++) if (l.hits[s]) { l.accents[s] = s % 2 === 0; l.setLock(s, 'tune', 0.1); } }); m.lanes[3].toggle(1); m.lanes[3].setLock(1, 'tone', 0.3);
+  const count = (k) => k.lanes.map(l => l.locks.filter(Boolean).length + l.accents.filter(Boolean).length + l.trigs.filter(Boolean).length).join();
+  const c0 = count(m), rng = mulberry32(11); for (let n = 0; n < 64; n++) m.evolve({ scope: 'hits', amount: 0.4 }, rng); assert.equal(count(m), c0);
+});
+
+test('ORBIT2-12 r1 V1: evolve\'s home is a copy, so gravity brings back the hits and data evolve changed (the app takes it with m.snapshot())', async () => {
+  const { readFileSync } = await import('node:fs');
+  const m = groove(), shared = m.toJSON(), home = m.snapshot(); m.lanes[0].hits[1] = !m.lanes[0].hits[1]; m.lanes[0].setLock(0, 'tune', 0.9);
+  assert.equal(shared.lanes[0].hits[1], m.lanes[0].hits[1], 'toJSON shares the step arrays: a home taken with it moves with every edit');
+  assert.notEqual(home.lanes[0].hits[1], m.lanes[0].hits[1]); assert.equal(home.lanes[0].locks[0].tune, 0.5, 'the snapshot keeps its own');
+  const k = groove(), h = k.snapshot(), w = { rotate: 1, hits: 1, length: 1, ratio: 1, prob: 1, tune: 1 }, rng = mulberry32(3);
+  for (let n = 0; n < 40; n++) k.evolve({ scope: 'all', amount: 0.8, weights: w }, rng);
+  let n = 0; while (JSON.stringify(shape(k)) !== JSON.stringify(shape(Machine.from(h))) && n < 500) { k.evolve({ scope: 'all', amount: 1, weights: w, gravity: 1, home: h }, rng); n++; }
+  assert.deepEqual(shape(k), shape(Machine.from(h)), `home after ${n}`);
+  // the page took home with m.toJSON() (fac4c1d): its hits moved with evolve and gravity only ever restored lengths and speeds
+  const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  assert.ok(!/evoSnap\s*=\s*m\.toJSON\(\)/.test(src) && (src.match(/evoSnap\s*=\s*m\.snapshot\(\)/g) || []).length === 4, 'every home is m.snapshot() (bank.get hands out its own copy)');
+});
+
+test('ORBIT2-12 r1: a chance lock on a step only the euclid mask plays counts as a roll in the cycle', () => {
+  const x = new Lane('hat', { length: 4 }); x.hits.fill(false); x.setEuclidMode('xor'); x.setEuclid(1);   // XOR with no hand hits: the mask plays step 1
+  assert.ok(x.played(0) && !x.hits[0]); assert.equal(x.loopsPerCycle({ repeat: 4 }), 1, 'no roll yet');
+  x.setLock(0, 'prob', 0.5); assert.equal(x.loopsPerCycle({ repeat: 4 }), 4, 'with locked dice repeat 4 it repeats every 4 loops (fac4c1d: 1)');
 });

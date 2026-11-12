@@ -144,9 +144,23 @@ const setsPrev = (cond) => !!cond && cond !== 'always' && cond !== 'pre' && cond
 export const MAX_RATCHET = 8;
 /** V4 ratchet spacing: even, speed-up (the gaps shrink), slow-down (they grow). */
 export const RATCHET_CURVES = ['even', 'up', 'down'];
-/** V4: where repeat k of n starts, as a fraction of the step (0 = on it, always < 1): even k/n, speed-up 1 − (1 − k/n)²,
- *  slow-down (k/n)². The first is always on the step, the last always inside it. */
-export const ratchetTimes = (n, curve = 'even') => Array.from({ length: n }, (_, k) => { const x = k / n; return curve === 'up' ? 1 - (1 - x) * (1 - x) : curve === 'down' ? x * x : x; });
+/** V4: where repeat k of n starts, as a fraction of the step (0 = on it, always < 1). Even: k/n. Slow-down: the n gaps
+ *  (the last runs to the next step) grow evenly from ½ to 1½ of the even gap. Speed-up: the n − 1 gaps between the
+ *  repeats shrink evenly from 1½ to ½ of it, and the last repeat sits where the even one does, a whole even gap before
+ *  the next step (closer, it piled onto that step's hit). So no two repeats come closer than 1 / (2n) of a step: at ×8
+ *  every repeat is still its own hit (a quadratic curve put two ×8 repeats 1/64 step apart: +9 dB on a kick).
+ *  ×2: slow-down 0, ¼; speed-up has one gap, so it is even. */
+export const ratchetTimes = (n, curve = 'even') => Array.from({ length: n }, (_, k) => {
+  if (curve === 'down' && n > 1) return (k + (k * (k - 1)) / (n - 1)) / (2 * n);   // gap j = (1 + 2j / (n − 1)) / 2n
+  if (curve === 'up' && n > 2) return (3 * k - (k * (k - 1)) / (n - 2)) / (2 * n);   // gap j = (3 − 2j / (n − 2)) / 2n, j < n − 1
+  return k / n;
+});
+/** V4: the velocity factor of each repeat. A repeat closer than the even gap to its neighbour (the one before, or the one
+ *  after: for the last that is the next step) plays softer by as much (n × the shorter gap, down to ½), so a curve
+ *  carries the even ratchet's energy: the curve shapes the timing, not the level (without it, ×8 curves piled up over ×8
+ *  even and a speed-up's last repeat stacked onto the next step's hit, pushing a busy dsp mix over full scale). The
+ *  step's own hit (the first) and even repeats stay at 1. */
+export const ratchetGains = (n, curve = 'even') => { const t = ratchetTimes(n, curve), gap = (k) => (k + 1 < n ? t[k + 1] : 1) - t[k]; return t.map((_, k) => (k ? Math.min(1, n * Math.min(gap(k - 1), gap(k))) : 1)); };
 /** V3 euclid combine modes: replace = the fill is the pattern (the classic euclid knob, hand edits on top); and = only the
  *  hand hits the fill also has play; xor = the hand pattern flips the fill (a hand hit on a fill hit rests, one off it
  *  plays). With and / xor the hand pattern stays as you set it: the euclid knob moves only the mask. */
@@ -437,27 +451,25 @@ export class Lane {
     for (let i = 0; i < this.length; i++) { if (!this.played(i)) continue; any = true; const ab = /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
     if (!any) return 1;
     if (this.swing > 0) n = lcm(n, lcm(this.length, this.swingPeriod()) / this.length);
-    const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.hits[i] && lk?.prob != null && lk.prob < 1) || TIMBRE_KEYS.some(k => this.tdice?.[k] > 0);
+    const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.played(i) && lk?.prob != null && lk.prob < 1) || TIMBRE_KEYS.some(k => this.tdice?.[k] > 0);
     if (this.mod?.depth > 0 && this.mod.loops > 0) n = lcm(n, this.mod.loops);   // V5: the modulator's period, in loops
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
   /** V1: is the lane exactly its euclid fill (no hand edits on the steps it loops over)? */
-  isEuclid() { if (!this.euclidK) return false; const e = euclid(this.euclidK, this.length); return e.every((h, i) => h === this.hits[i]); }
+  isEuclid() { if (!this.euclidK) return false; const e = this.mask(); return e.every((h, i) => h === this.hits[i]); }
   /** Move stored step i's accent, locks and condition to stored step j (V1: they travel with their hit). */
   moveStepData(i, j) { for (const k of STEP_DATA) { this[k][j] = this[k][i]; this[k][i] = k === 'accents' ? false : null; } }
-  /** Clear stored step i's accent, locks and condition: a hit evolve takes away leaves nothing behind, one it adds is plain. */
-  plainStep(i) { this.accents[i] = false; this.locks[i] = null; this.trigs[i] = null; }
   /**
-   * V1: a new euclid fill that keeps each hit's accent, locks and condition: every old hit the new fill drops hands its
-   * data to the nearest new hit that has none of its own (none free within the loop: it goes).
+   * V1: a new euclid fill that keeps each hit's accent, locks and condition: an old hit the new fill drops hands its data
+   * to the nearest new hit (round the loop) that has none of its own. With none free the data waits on its step, as a
+   * hand toggle leaves it, and plays again when a hit comes back there; nothing is ever deleted.
    */
   refill(k) {
-    const was = this.hits.slice(); this.setEuclid(k); const n = this.length, mine = (j) => this.hits[j] && was[j];
-    const taken = new Set(); for (let j = 0; j < n; j++) if (mine(j)) taken.add(j);
-    for (let i = 0; i < MAX_STEPS; i++) {
-      if (!was[i] || this.hits[i]) continue; if (!STEP_DATA.some(x => this[x][i])) continue;
-      let to = -1; for (let d = 1; d < n && to < 0; d++) for (const j of [i + d, i - d]) if (to < 0 && j >= 0 && j < n && this.hits[j] && !taken.has(j)) to = j;
-      if (to >= 0) { this.moveStepData(i, to); taken.add(to); } else this.plainStep(i);
+    const was = this.hits.slice(); this.setEuclid(k); const n = this.length, has = (j) => STEP_DATA.some(x => this[x][j]);
+    for (let i = 0; i < n; i++) {
+      if (!was[i] || this.hits[i] || !has(i)) continue;
+      let to = -1; for (let d = 1; d < n && to < 0; d++) for (const j of [(i + d) % n, (i - d + n) % n]) if (to < 0 && this.hits[j] && !has(j)) to = j;
+      if (to >= 0) this.moveStepData(i, to);
     }
     return this.euclidK;
   }
@@ -465,6 +477,7 @@ export class Lane {
    * V1: evolve's 'hits' move. A pure euclid lane steps its fill (k ± 1, refill: the classic move, data kept with the
    * hits); a hand-edited euclid lane keeps your edits and adds (dir +1) a hit where the k + 1 fill has one, or takes away
    * (−1) a hit the k − 1 fill doesn't have; a hand lane toggles one random step, as evolve always did. Never the last hit.
+   * A step whose hit goes keeps its accent, locks and condition (as a hand toggle does): they come back with the hit.
    */
   evolveHits(dir, rng) {
     const n = this.length, count = this.hits.slice(0, n).filter(Boolean).length;
@@ -474,10 +487,10 @@ export class Lane {
       const k = clamp(this.euclidK + dir, 1, n), e = euclid(k, n), idx = [...Array(n).keys()];
       if (dir < 0 && count <= 1) return 0;
       let c = idx.filter(i => (dir > 0 ? e[i] && !this.hits[i] : !e[i] && this.hits[i])); if (!c.length) c = idx.filter(i => (dir > 0 ? !this.hits[i] : this.hits[i]));
-      if (!c.length) return 0; const i = c[Math.floor(rng() * c.length)]; this.plainStep(i); this.hits[i] = dir > 0; this.euclidK = k; return dir;
+      if (!c.length) return 0; const i = c[Math.floor(rng() * c.length)]; this.hits[i] = dir > 0; this.euclidK = k; return dir;
     }
     const i = Math.floor(rng() * n); if (this.hits[i] && count <= 1) return 0;
-    this.plainStep(i); this.hits[i] = !this.hits[i]; return this.hits[i] ? 1 : -1;
+    this.hits[i] = !this.hits[i]; return this.hits[i] ? 1 : -1;
   }
   /** V1: one random evolve move of `kind` in direction dir (±1). */
   mutate(kind, dir, rng) {
@@ -490,8 +503,9 @@ export class Lane {
     if (kind === 'prob') this.prob = Math.round(clamp(this.prob + dir * 0.1, Math.min(0.3, this.prob), 1) * 100) / 100;
     if (kind === 'tune') this.tune = clamp(Math.round(this.tune * 12 + dir) / 12, -1, 1);   // a semitone (on a voice tuned ±12)
   }
-  /** Stored steps where this lane differs from lane `h` (its home): the hit, or the data of a hit both have. */
-  diffSteps(h) { const out = []; for (let i = 0; i < MAX_STEPS; i++) if (this.hits[i] !== h.hits[i] || (this.hits[i] && STEP_DATA.some(k => JSON.stringify(this[k][i]) !== JSON.stringify(h[k][i])))) out.push(i); return out; }
+  /** Stored steps where this lane differs from lane `h` (its home): the hit, or the step's data (also data waiting on a
+   *  step without its hit: it would come back with a hit, so home has its own there too). */
+  diffSteps(h) { const out = []; for (let i = 0; i < MAX_STEPS; i++) if (this.hits[i] !== h.hits[i] || STEP_DATA.some(k => JSON.stringify(this[k][i]) !== JSON.stringify(h[k][i]))) out.push(i); return out; }
   /** V1 gravity: does `kind` still differ from home lane h? Rotation waits for the length when home's doesn't fit yet. */
   awayFrom(h, kind) {
     if (kind === 'rotate') return this.rotation !== h.rotation && (this.length === h.length || h.rotation < this.length);
@@ -529,12 +543,15 @@ export class Machine {
   coupleAmount(a, b) { const c = this.couple, n = this.lanes.length; return c.mode === 'next' ? (b === (a + 1) % n && a !== b ? c.amount : 0) : c.mode === 'matrix' ? c.matrix[a]?.[b] || 0 : 0; }
   /** V2, runtime (not saved): the lift waiting for lane li's next step. */
   boostOf(li) { return this.couple.mode === 'off' ? 0 : this.boost[li] || 0; }
-  /** V2 after one master tick: every lane that stepped used up its lift, then each hit lifts the lanes it is coupled to.
-   *  A lane stepping on the same tick as the hit gets it on its following step, so the lane order never matters. */
-  coupleAfter(evs) {
-    const b = this.boost, n = this.lanes.length; evs.forEach((ev, li) => { if (ev) b[li] = 0; });
-    evs.forEach((ev, a) => { if (ev?.hit) for (let k = 0; k < n; k++) { const x = this.coupleAmount(a, k); if (x) b[k] = Math.min(1, (b[k] || 0) + x); } });
+  /** V2 after one master tick: the lanes in `used` used up their lift (Machine.tick: every lane that stepped), then each
+   *  lane that sounded (`hit[li]`) lifts the lanes it is coupled to. A lane stepping on the same tick as the hit gets it
+   *  on its following step, so the lane order never matters. Live play (export.js liveTick) passes the hits it plays. */
+  coupleAfter(hit, used) {
+    const b = this.boost, n = this.lanes.length; used.forEach((u, li) => { if (u) b[li] = 0; });
+    hit.forEach((h, a) => { if (h) for (let k = 0; k < n; k++) { const x = this.coupleAmount(a, k); if (x) b[k] = Math.min(1, (b[k] || 0) + x); } });
   }
+  /** V2: lane li's waiting lift, used up now (a step decided before its tick takes the lift it has then). */
+  takeBoost(li) { const x = this.boostOf(li); if (x) this.boost[li] = 0; return x; }
   setMeter(meter) { if (METERS.includes(meter)) this.meter = meter; return this.meter; }
   /**
    * L2: 4 or 6 lanes. Lanes 5–6 come in empty, with the voices and sounds of the kit the pattern still plays (else
@@ -568,13 +585,14 @@ export class Machine {
   /** Master ticks until every lane lines up again: in whole ticks (a ×5/4 loop is not a whole number of 12ths of a beat). */
   cycleTicks({ repeat = 1 } = {}) { return Math.max(1, this.lanes.reduce((acc, l) => lcm(acc, l.length * l.stepTicks() * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1)); }
   /** Every lane's event at master tick `tick` (null where a lane doesn't step), its steps counted from `origin`. */
-  /** ctx: { fill, dice } — solo silences every lane that isn't soloed. */
+  /** ctx: { fill, dice, cycle, couple } — solo silences every lane that isn't soloed. couple: false leaves V2's lift
+   *  bookkeeping to the caller (liveTick, which knows the steps decided early and what really sounded). */
   tick(tick, rng = Math.random, ctx = {}) {
     const solo = this.lanes.some(l => l.solo), r = tick - this.origin, cp = this.couple.mode !== 'off';
     // V5: a modulator over the whole cycle needs its length (the clock passes the one it has; else worked out here)
     const cycle = ctx.cycle ?? (this.lanes.some(l => l.mod?.depth > 0 && !(l.mod.loops > 0)) && this.steps(tick) ? this.cycleTicks() : 0);
     const evs = this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin, boost: cp ? this.boost[li] || 0 : 0, cycle }));   // most ticks step no lane: nothing allocated
-    if (cp && evs.some(Boolean)) this.coupleAfter(evs); return evs;
+    if (cp && ctx.couple !== false && evs.some(Boolean)) this.coupleAfter(evs.map(e => !!e?.hit), evs.map(Boolean)); return evs;
   }
   /** Does any lane step at master tick `tick`? */
   steps(tick) { const r = tick - this.origin; return r >= 0 && this.lanes.some(l => r % l.stepTicks() === 0); }
@@ -596,7 +614,9 @@ export class Machine {
    * step back toward its lane in `home` (a Machine JSON) instead of a random one, so a pattern wanders and comes back
    * without a hard reset (gravity 1: every nudge goes home; once home, the lane holds still); maxBars = the longest cycle
    * a move may make (bars of this meter; 0 = no limit): a move that goes past it (or past the cycle the pattern already
-   * had, if that was longer) is put back. repeat: the locked dice repeat (the cycle counts it, as cycleTicks does).
+   * had, if that was longer) is put back. A step home never is: home is a pattern you made, and the way back to it can
+   * pass a longer cycle for a while (7/7/7/7 → 8/8/8/8 goes through 8/7/7/7), so a guard on it could keep it away for
+   * good. repeat: the locked dice repeat (the cycle counts it, as cycleTicks does).
    */
   evolve({ scope = 'hits', amount = 0.4, weights = EVOLVE_WEIGHTS, gravity = 0, home = null, maxBars = 0, repeat = 1 } = {}, rng = Math.random) {
     const changes = [], w = (k) => weights[k] ?? EVOLVE_WEIGHTS[k], kinds = (SCOPE_KINDS[scope] || SCOPE_KINDS.hits).filter(k => w(k) > 0);
@@ -607,7 +627,7 @@ export class Machine {
       const h = homes[li], pull = !!h && rng() < gravity; let kind, dir;
       if (pull) { const away = kinds.filter(k => l.awayFrom(h, k)); if (!away.length) return; kind = pickWeighted(away, w, rng()); }
       else { kind = pickWeighted(kinds, w, rng()); dir = rng() < 0.5 ? -1 : 1; }
-      const before = limit < Infinity ? JSON.parse(JSON.stringify(l)) : null, cyc0 = before ? this.cycleTicks({ repeat }) : 0;
+      const before = limit < Infinity && !pull ? JSON.parse(JSON.stringify(l)) : null, cyc0 = before ? this.cycleTicks({ repeat }) : 0;
       if (pull) dir = l.homeStep(h, kind, rng); else l.mutate(kind, dir, rng);
       if (before && this.cycleTicks({ repeat }) > Math.max(limit, cyc0)) { l.restore(before); changes.push({ lane: li, kind, dir, held: true }); return; }
       changes.push({ lane: li, kind, dir, ...(pull ? { home: true } : {}) });
@@ -645,6 +665,9 @@ export class Machine {
     // a 4-lane pattern matches the kit's first four lanes
     return Object.keys(KITS).find(key => this.lanes.every((l, i) => { const k = KITS[key].lanes[i]; if (!k || l.voice !== k.voice) return false; const s = { ...DEFAULT_SOUND, ...(k.sound || {}) }; return SOUND_KEYS.every(sk => same(l.sound[sk], s[sk])); })) ?? null;
   }
+  /** A copy of the pattern that shares nothing with the lanes (toJSON hands out their step arrays): evolve's home, which
+   *  must not move with evolve's own edits, or gravity could never bring a hit or its data back. */
+  snapshot() { return structuredClone(this.toJSON()); }
   toJSON() { return { lanes: this.lanes.map(l => l.toJSON()), selected: this.selected, humanize: this.humanize, kit: this.kit, meter: this.meter, ...(this.couple.mode !== 'off' || this.couple.matrix.some(r => r.some(Boolean)) || this.couple.amount !== 0.5 ? { couple: this.couple } : {}) }; }
   static from(o) {
     // L2: the data keeps its lane count (4, or 6); a link edited to some other count is cut, or filled up with the lanes

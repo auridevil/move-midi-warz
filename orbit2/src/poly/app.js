@@ -1,6 +1,6 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, ratchetGains, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
@@ -53,7 +53,7 @@ const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest' }
 // home: return to the snapshot after N mutations (0 = never). V1: weights per kind (lanes.js EVOLVE_WEIGHTS), gravity %
 // (pull back toward home instead of the hard reset), maxBars = the longest cycle a move may make (0 = no limit)
 const evo = { on: false, every: 4, amount: 40, scope: 'hits', home: 0, gravity: 0, maxBars: 32, weights: { ...EVOLVE_WEIGHTS } };
-let evoSnap = null, evoCount = 0;
+let evoSnap = null, evoCount = 0;   // evoSnap: evolve's home, always m.snapshot() (a copy: gravity pulls toward it)
 const bank = new SlotBank(localStorage);
 const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
 // E1–E3, E6 export format: bit depth (16 / 24 / 32 float), sample rate of offline renders, jam ring-out files, dry
@@ -411,19 +411,19 @@ const INFO = {
   'evolve scope': 'What evolve may touch: rotation only; rotation + the hits; or everything with a weight (also length, speed, chance and tune). A euclid lane you edited by hand keeps your edits: evolve adds or takes away one hit. Accents, locks and conditions travel with their hits.',
   'evolve weight': 'How often evolve picks this kind of change, against the others (0 = never). Chance and tune start at 0.',
   'evolve gravity': 'Gravity: the chance a nudge goes back toward home instead of somewhere new. 0 = wander freely, 100 % = every nudge heads home, then the lane holds still. Home = the pattern when you switched evolve on, loaded or saved a slot, or pressed "home = now".',
-  'evolve max cycle': 'The longest the whole pattern may take to repeat, in bars: a change that would make it longer is not made. Off = no limit.',
+  'evolve max cycle': 'The longest the whole pattern may take to repeat, in bars: a change that would make it longer is not made. Off = no limit. Gravity\'s way home is never held back: home is your own pattern, and a step on the way to it can repeat later for a while.',
   coupling: 'Coupling: a hit on one lane makes another lane more likely to play its next step (it adds to that step\'s chance; steps at 100 % already play). "next lane": lane 1 lifts lane 2, 2 lifts 3 … the last lifts lane 1. Matrix: pick who lifts whom (row = the lane that hits, column = the lane it lifts; tap a cell to step 0 → 25 → 50 → 75 → 100 %). Saved with the pattern. Locked dice play it the same every time.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
   'midi offset': 'MIDI out offset, −50…+50 ms: notes and clock leave this much later (+) or earlier (−) than the hit is scheduled here. Auto = the audio output\'s latency, so a drum machine on MIDI sounds with the speakers; turn it down when the other device is slow itself.',
   'clock out':'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
   condition: 'Per step: play only on some loops (1:2 = first of every two, 3:4 = third of every four), only while Fill is held (keyboard: hold 0), never while it is, only/never on the first loop after Play, or only if the last conditional step on the lane passed / failed its condition (PRE / not PRE).',
   repeats: 'Per step ratchet: the hit repeats 2–8 times inside its own step; "fade" makes each repeat quieter.',
-  'ratchet curve': 'How the repeats are spaced inside the step: evenly, speeding up (the gaps get shorter, a roll into the next beat) or slowing down (a bouncing ball).',
-  'ratchet ramp': 'Pitch ramp: the last repeat plays this many semitones above (+) or below (−) the first, the ones between in steps (on voices tuned ±24 it is twice as far).',
+  'ratchet curve': 'How the repeats are spaced inside the step: evenly, speeding up (the gaps get shorter, like a bouncing ball coming to rest; the last repeat lands where an even one would) or slowing down (the gaps get longer, into the next step). Repeats that come closer together play softer by as much, so a curve is as loud as an even roll.',
+  'ratchet ramp': 'Pitch ramp: the last repeat plays this many semitones above (+) or below (−) the first, the ones between in steps. The knob shows the lane voice\'s own semitones (voices tuned ±24 move twice as far).',
   'euclid mode': 'How the euclid hits combine with the steps you set. Replace: the euclid knob writes the steps (as always). AND: only your steps that are also euclid hits play. XOR: euclid hits play, and each step you set flips one (on an euclid hit it rests, off it it plays). With AND / XOR your steps stay as you set them: the knob moves only the mask. (These are the even "floor" fills: E(5,8) is x.x.xx.x; Bjorklund\'s cinquillo x.xx.xx. is the same with rotation 6.)',
   modulate: 'A slow wave on one sound knob of this lane (tone, color or decay): it rises and falls by ± half the depth around where the knob (or a step lock) is, once every N loops of this lane, or once over the whole cycle.',
   'timbre dice': 'Every hit rolls its tone, color or decay within this range around where it is (± half the range). Lock the dice to make the rolls repeat.',
-  scale: 'Snap this lane\'s tune (and its tune locks, pitch ramps and the evolve tune moves) to a scale from the voice\'s own note: major, minor, pentatonic, or just intonation (pure ratios like 3/2 and 5/4 instead of equal steps). Pitched voices only.',
+  scale: 'Snap this lane\'s tune (and its tune locks, pitch ramps and the evolve tune moves) to a scale from the voice\'s own note: major, minor, pentatonic, or just intonation (pure ratios like 3/2 and 5/4 instead of equal steps). Pitched voices only. On marimba, conga and bongo the color knob bends the pitch too, so a color modulator or color dice takes them off the scale.',
   solo: 'Solo: only soloed lanes play (several can be).',
   'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back; a slot coming in on that line gets it too). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
@@ -579,7 +579,9 @@ function buildLockGauges() {
   ui.fade = mount('trig-fade', toggleChip({ label: 'fade repeats', title: 'Each repeat quieter', onChange: (v) => setTrig({ fade: v }) }));
   // V4: how the repeats are spaced, and a pitch ramp across them
   ui.curve = mount('trig-curve', segmented({ options: [['even', 'even', INFO['ratchet curve']], ['up', 'speed up', INFO['ratchet curve']], ['down', 'slow down', INFO['ratchet curve']]], value: 'even', onChange: (c) => setTrig({ curve: c }) }));
-  sliders.ramp = makeGauge({ label: 'pitch ramp', min: -12, max: 12, value: 0, fmt: v => (v > 0 ? '+' : '') + v, say: v => `${v} semitones`, title: INFO['ratchet ramp'], color: 'var(--signal-cyan)', onChange: (v) => setTrig({ ramp: v / 12 }) });
+  // the value is 12ths of the tune range: shown in the lane voice's own semitones (×2 on voices tuned ±24)
+  const rampSt = (v) => (v * (TUNE_SEMIS[m.lane.voice] || 12)) / 12;
+  sliders.ramp = makeGauge({ label: 'pitch ramp', min: -12, max: 12, value: 0, fmt: v => (v > 0 ? '+' : '') + rampSt(v), say: v => `${rampSt(v)} semitones`, title: INFO['ratchet ramp'], color: 'var(--signal-cyan)', onChange: (v) => setTrig({ ramp: v / 12 }) });
   $('trig-ramp').replaceChildren(sliders.ramp.el);
   $('lock-close').onclick = () => editLocks(lockStep);
   // L3 stroke: 'lane' = no artic lock (the lane's own sound); the options follow the lane's voice (renderLocks)
@@ -644,8 +646,8 @@ function renderTrig(tg) {
 }
 function auditionLock() {
   if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
-  const at = ratchetTimes(n, tg?.curve), lk = lane.lockAt(lockStep);
-  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, lane.accentAt(lockStep) && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), tg?.fade ? v * Math.pow(0.72, k) : v, kit, lane.sliceAt(lane.stepIndex(lockStep), lk));
+  const at = ratchetTimes(n, tg?.curve), g = ratchetGains(n, tg?.curve), lk = lane.lockAt(lockStep);
+  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, lane.accentAt(lockStep) && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), (tg?.fade ? v * Math.pow(0.72, k) : v) * g[k], kit, lane.sliceAt(lane.stepIndex(lockStep), lk));
 }
 
 // ---- pattern slots & chains ----
@@ -663,7 +665,7 @@ function setLaneCount(n) {
   const was = m.lanes.length; m.setLaneCount(n); if (m.lanes.length === was) return;
   rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve();
 }
-function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.toJSON(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
+function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
 function recallSlot(i) { if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
 function chainSlots(list) { bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
@@ -825,7 +827,7 @@ function flushPerf() { flushMutes(); latch.clear(); fill = fillHold; renderFill(
 /** The waiting mutes land now (stop, or "mute on next bar" switched off). */
 function flushMutes() { if (!muteQ.size) return; muteQ.apply(m.lanes); sync(); }
 function evolveNow(bar = 0, fromClock = false) {
-  if (!evoSnap) evoSnap = m.toJSON();
+  if (!evoSnap) evoSnap = m.snapshot();
   if (evo.home && evoCount >= evo.home) { m.assign(evoSnap, { keep: true, selected: m.selected }); rebuildVoices(); evoCount = 0; lastEvolve = 'back home'; }
   else {
     const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100, weights: evo.weights, gravity: evo.gravity / 100, home: evoSnap, maxBars: evo.maxBars, repeat: cycleOpts().repeat }, dice.stream(1000 + bar)); evoCount++;
@@ -833,7 +835,7 @@ function evolveNow(bar = 0, fromClock = false) {
   }
   offClock(fromClock, sync);
 }
-function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
+function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
   m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
@@ -874,7 +876,7 @@ function renderCouple() {
   }
 }
 function buildEvolveUI() {
-  $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = 'home set'; readout(); };
+  $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = 'home set'; readout(); };
   const g = $('evo-gauges');
   sliders.evoEvery = makeGauge({ label: 'every · bars', min: 1, max: 32, value: evo.every, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { evo.every = v; saveSettings(); readout(); } });
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });

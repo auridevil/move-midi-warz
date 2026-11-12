@@ -1,6 +1,6 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
-import { Machine, PPQ, meterParts, ratchetTimes, snapTune, TIMBRE_KEYS } from './lanes.js';
+import { Machine, PPQ, meterParts, ratchetTimes, ratchetGains, snapTune, TIMBRE_KEYS } from './lanes.js';
 import { TUNE_SEMIS } from './voices.js';
 import { trackBars } from './slots.js';
 import { KITS } from './kits.js';
@@ -22,9 +22,10 @@ export function expandHits(ev, lane, li, { humanize = 0, dice = null, tickSec })
   // G3 velocity humanize: symmetric, up to ±20 % of the hit's own velocity at 100 % (a ghost wobbles as much in dB as an
   // accent), its own dice salt (locked dice repeat it); never over 1
   const vh = lane.velHuman || 0, v0 = hitVel(ev.accent, ev.lock), v = vh ? Math.min(1, v0 * (1 + ((dice ? dice.at(li, ev.step, lane.length, 3) : Math.random()) - 0.5) * 0.4 * vh)) : v0;
-  // V4: repeats spaced by the step's curve, tune ramping from the hit's own to + ramp on the last; V5 timbre on the lock
-  const lock = timbreLock(ev, lane, li, dice), at = ratchetTimes(n, ev.curve), ramp = n > 1 ? ev.ramp || 0 : 0;
-  return Array.from({ length: n }, (_, k) => ({ dt: base + at[k] * stepSec, vel: ev.fade ? v * Math.pow(0.72, k) : v, accent: ev.accent && k === 0, lock: tuneLock(lane, lock, ramp * (k / Math.max(1, n - 1))), slice: ev.slice }));
+  // V4: repeats spaced by the step's curve (closer ones softer: ratchetGains), tune ramping from the hit's own to + ramp
+  // on the last; V5 timbre on the lock
+  const lock = timbreLock(ev, lane, li, dice), at = ratchetTimes(n, ev.curve), g = ratchetGains(n, ev.curve), ramp = n > 1 ? ev.ramp || 0 : 0;
+  return Array.from({ length: n }, (_, k) => ({ dt: base + at[k] * stepSec, vel: (ev.fade ? v * Math.pow(0.72, k) : v) * g[k], accent: ev.accent && k === 0, lock: tuneLock(lane, lock, ramp * (k / Math.max(1, n - 1))), slice: ev.slice }));
 }
 /**
  * V5: the step lock a hit plays with its timbre moves on top: the slow modulator's offset (ev.mod) and the timbre dice
@@ -78,27 +79,36 @@ const decided = (pre, lane, step, tick) => pre?.tick === tick && (pre.played || 
  * early part nor the own hits of what steps there sound; a key goes at its tick.
  * The lanes count their steps from `m.origin` (bar 1 of the pattern's meter); `ahead`, `skip` and `cut` stay on the
  * master tick. The origin only moves on a cut (a new meter's first bar line), so no decision spans a move.
+ * V2 coupling is done here, not in Machine.tick: the lift follows the hits that play (a step decided early plays that
+ * decision, not the tick's own roll; a pad's recorded hit counts), and a step decided early takes the lift waiting
+ * when it is decided, this tick's hits included; a hit after that lifts the lane's following step.
  */
 export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null, cycle }) {
-  const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec }, o0 = m.origin;
-  return m.tick(t, rng, { fill, dice, cycle }).map((ev, li) => {
+  const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec }, o0 = m.origin, cp = m.couple.mode !== 'off', hit = cp ? [] : null, used = cp ? [] : null;
+  const outs = m.tick(t, rng, { fill, dice, cycle, couple: false }).map((ev, li) => {
     const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] }, due = (ahead[li] ??= new Map());
     const pre = due.get(t), padded = !!skip?.size && skip.delete(`${li}:${t}`);
     for (const k of due.keys()) if (k <= t) due.delete(k);   // its tick has come (or passed with no step on it)
     if (ev) {
+      const early = decided(pre, lane, ev.step, t);
       if (padded) ev.hit = false;   // played live from a pad a moment ago: don't double it
-      else if (!decided(pre, lane, ev.step, t)) out.hits = expandHits(ev, lane, li, o);
+      else if (!early) out.hits = expandHits(ev, lane, li, o);
       else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }
-    }
-    const step = earlyStep(lane, t - o0, { ...o, cut: cut - o0 }), at = o0 + step * lane.stepTicks();
-    if (step >= 0 && !decided(due.get(at), lane, step, at)) {
-      // V2: a coupled lane's early step takes the lift waiting now (hits between now and its tick lift the step after)
-      const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced, boost: m.boostOf(li), cycle: cycle ?? (lane.mod ? m.cycleTicks() : 0) }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
-      if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt, tick: at }));   // tick: its step's (a jam take's end goes by steps)
-      due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
+      if (cp) { hit[li] = padded || ev.hit; used[li] = !early; }   // an early step used its lift when it was decided
     }
     return out;
   });
+  if (cp && hit.length) m.coupleAfter(hit, used);
+  // the steps that start sounding before their tick are decided now (after this tick's hits lifted their lanes)
+  outs.forEach((out, li) => {
+    const lane = m.lanes[li], silenced = solo && !lane.solo, due = ahead[li];
+    const step = earlyStep(lane, t - o0, { ...o, cut: cut - o0 }), at = o0 + step * lane.stepTicks();
+    if (step < 0 || decided(due.get(at), lane, step, at)) return;
+    const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced, boost: m.takeBoost(li), cycle: cycle ?? (lane.mod ? m.cycleTicks() : 0) }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
+    if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt, tick: at }));   // tick: its step's (a jam take's end goes by steps)
+    due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
+  });
+  return outs;
 }
 
 /**
@@ -112,11 +122,20 @@ export function liveQuiet(m, t, ahead, { humanize = 0, tickSec, cut = Infinity }
 
 /** Every hit between master ticks [from, to): [{ li, time (s from tick 0), vel, accent, lock }], the lanes counting from
  *  `origin` (bar 1 of the pattern). Renders a copy of the machine, so its runtime counters (playhead, loop count) are
- *  the render's own and the live ones are left alone. */
+ *  the render's own and the live ones are left alone. It runs live play's own path (liveTick, skipping the quiet ticks
+ *  as the clock does), so every step is decided where live play decides it (V2: a coupled lane's lift depends on when)
+ *  and a render holds what plays. A step from `to` on is left alone (live play leaves it to a queued slot: the cut). */
 export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false, origin = 0 }) {
-  const tickSec = 60 / tempo / PPQ, out = []; m = Machine.from(m.toJSON()); m.origin = origin;
+  const tickSec = 60 / tempo / PPQ, out = [], ahead = []; m = Machine.from(m.toJSON()); m.origin = origin;
   const cycle = m.cycleTicks({ repeat: dice?.locked && Number.isFinite(dice.repeat) ? dice.repeat : 1 });   // V5: as the clock has it
-  for (let t = from; t < to; t++) m.tick(t, Math.random, { dice, fill, cycle }).forEach((ev, li) => { for (const h of expandHits(ev, m.lanes[li], li, { humanize: m.humanize, dice, tickSec })) out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, slice: h.slice, artic: m.lanes[li].strokeAt(h.lock) }); });
+  const o = { fill, dice, tickSec, cut: to, cycle }, q = { humanize: m.humanize, tickSec, cut: to };
+  for (let t = from; t < to; t++) {
+    if (liveQuiet(m, t, ahead, q)) continue;
+    liveTick(m, t, ahead, o).forEach(({ early, hits }, li) => {
+      const add = (h) => out.push({ li, time: t * tickSec + h.dt, vel: h.vel, accent: h.accent, lock: h.lock, slice: h.slice, artic: m.lanes[li].strokeAt(h.lock) });
+      early.forEach(add); hits.forEach(add);
+    });
+  }
   return out.sort((a, b) => a.time - b.time);
 }
 

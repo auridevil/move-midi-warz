@@ -558,3 +558,24 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   Connect button ("live: on" in words would say more for a safety setting); a one-line legend of the button states
   (cyan, white, magenta) in the help; on a phone the transport strip takes three rows before the status line
   (verifier, greta). Check on the real Move that the guarded buttons' red blink reads from the stage (kai).
+- **A brickwall at the master** (ORBIT2-12 round 1, sound; pre-existing): `makeMaster` is a compressor (−18 dB, 3:1)
+  into Tone's `Limiter(-2)`, which lets fast transients through: a busy dsp mix with ×8 ratchets on three lanes in
+  unison reaches 0 dBFS (even spacing too) and a 16-bit export clamps the overs. A look-ahead / true-peak limiter, or a
+  soft clip before the encoder.
+- **The modulator at the knob ends** (ORBIT2-12 round 1, sound): the V5 sine (± depth / 2) around tone 0.9 at depth
+  100 % sits clamped at 1 for 13 of 32 steps; fold it back, or limit the depth to the room left so the wave keeps its
+  shape.
+- **Scale snap and color-bent voices** (ORBIT2-12 round 1, sound): on marimba, conga and bongo the color knob moves the
+  pitch (×12, ×5, ×7 semitones in both engines), so a color modulator or color dice takes a snapped lane off the scale
+  (the scale tooltip says so); snapping after color would keep them on it.
+- **One semitone table** (ORBIT2-12 round 1, architect, ines): `TUNE_SEMIS` (voices.js) is kept by hand next to each
+  voice's `hit()` in both engines; the span could live on the voice definitions (or a test could check it against
+  both), and the pure `export.js` imports `voices.js` only for it. Evolve's tune move is 1/12 of the range, a whole tone
+  on the ±24 voices.
+- **app.js after phase 12** (ORBIT2-12 round 1, architect): 1671 → 1738 lines; `buildGenUI`, `renderGen` and
+  `renderCouple` could be a small UI module, and `auditionLock` still lays out the ratchet itself (with `ratchetTimes`,
+  `ratchetGains`, `tuneLock`) instead of asking `expandHits`.
+- **Generative hints on screen** (ORBIT2-12 round 1, ines, tomi): coupling shows nothing on a lane at 100 % until its
+  chance is lowered (the tooltip says so; a hint next to the control would); "(too long)" repeats in the status line
+  while a pattern sits at the max cycle; AND / XOR on a hand clave can surprise (XOR of a tresillo with E(5,8) is dense,
+  AND can leave only the downbeat): a line under the mask control.
