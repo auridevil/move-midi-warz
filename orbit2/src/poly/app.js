@@ -14,7 +14,7 @@ import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt } from './voices.js';
-import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops } from './perform.js';
+import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -57,11 +57,12 @@ const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => mo
 // E1–E3, E6 export format: bit depth (16 / 24 / 32 float), sample rate of offline renders, jam ring-out files, dry
 // stems + delay return, MIDI as one Drum-Rack track. Older settings have none of it: the defaults are the old formats
 // (16-bit, 44.1 kHz, wet stems, a track per lane); 16-bit stems now share one gain with their raw mix (stemFiles).
-const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false };
+// printFx (P6): the mix WAV goes through the performance filter as it is set (off: exports ignore performance FX)
+const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false, printFx: false };
 // P1 / P2 live performance: live = the Move's pads play instead of writing steps, Capture / Delete need Shift or a hold
 // (on by default: it only changes what the Move does); muteBar = mutes wait for the next bar line while playing
 const perf = { live: true, muteBar: false };
-const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
+const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf })); } catch {} };
 
@@ -71,8 +72,21 @@ let kit = null, loop = null;
 //                                                          └→ send → its own delay ┴→ lane bus → master
 // One delay per lane (instead of a shared one) sounds the same — a delay is linear — but keeps each lane's echoes on
 // its own bus, so stems and jam recordings carry them. raw = no master compressor/limiter (stems for a DAW).
-/** The master glue: compressor → limiter → out. Both look ahead, so the chain delays everything (masterLatency). */
-function makeMaster(gain) { const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter); return new T.Gain(gain).connect(comp); }
+/** The master glue: compressor → limiter → out. Both look ahead, so the chain delays everything (masterLatency).
+ *  fx (P6 performance FX, the live kit; an export only with "print FX"): the filter before the compressor (low-pass →
+ *  high-pass, both open at the centre), and the delay throw: a send from the master input into its own dotted-eighth
+ *  delay that feeds the filter, so its echoes follow the knob too. The input node carries them as `.fx`. */
+function makeMaster(gain, fx = null) {
+  const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter), input = new T.Gain(gain);
+  if (!fx) return input.connect(comp);
+  const raw = T.getContext().rawContext, f = fxFreqs(fx.filter, raw.sampleRate), lp = raw.createBiquadFilter(), hp = raw.createBiquadFilter();
+  lp.type = 'lowpass'; hp.type = 'highpass'; lp.Q.value = hp.Q.value = FX_Q; lp.frequency.value = f.lp; hp.frequency.value = f.hp;
+  T.connect(input, lp); lp.connect(hp); T.connect(hp, comp);
+  const delay = new T.FeedbackDelay({ delayTime: 60 / tempo * 0.75, maxDelay: 2, feedback: THROW.rest, wet: 1 }), send = new T.Gain(0).connect(delay); T.connect(delay, lp); input.connect(send);
+  input.fx = { lp, hp, delay, send }; return input;
+}
+/** P6: filter resonance (a touch over flat, so a sweep is heard), and the throw: send and feedback while held, at rest. */
+const FX_Q = 0.9, THROW = { send: 0.7, fb: 0.55, rest: 0.3 };
 /** One more lane chain on kit k (L2: a kit grows when the pattern goes to 6 lanes; it never shrinks, a spare chain is
  *  silent). The live kit's new bus also feeds the jam recorder. */
 function addChain(k) {
@@ -86,8 +100,8 @@ function addChain(k) {
 }
 /** A kit plays the pattern's lanes, or its own `lanes` (a jam take's ring-out plays the lanes the take ended with). */
 const lanesOf = (k) => k?.lanes || m.lanes;
-function makeKit({ raw = false, lanes = null } = {}) {
-  const master = raw ? new T.Gain(1).toDestination() : makeMaster(vol);
+function makeKit({ raw = false, lanes = null, fx = null } = {}) {
+  const master = raw ? new T.Gain(1).toDestination() : makeMaster(vol, fx);
   const kit = { master, chains: [], tc: T.getContext(), lanes }; rebuildVoices(kit); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
@@ -235,7 +249,29 @@ function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelec
 function cycleKit(dir) { const cur = m.kitKey() ?? KIT_KEYS.find(k => KITS[k].name === m.kit) ?? KIT_KEYS[0]; const i = KIT_KEYS.indexOf(cur); applyKit(KIT_KEYS[((i + dir) % KIT_KEYS.length + KIT_KEYS.length) % KIT_KEYS.length]); }
 // stopped + idle: nothing moves, so the canvas skips frames once the fading trails have settled (~1.5 s)
 let busyUntil = 0; function poke() { busyUntil = performance.now() + 1500; }
-async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit(); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); setAutoLatency(); }
+async function wake() { if (awake) return; await T.start(); if (engine === 'dsp') await ensureDsp(T.getContext()).catch(() => {}); kit = makeKit({ fx: pfx }); awake = true; T.getTransport().bpm.value = tempo; buildLoops(); setAutoLatency(); }
+// ---- P6 performance FX on the live master: the filter (Move wheel, the transport strip's knob) and the delay throw
+// (hold + on the Move, or "throw"). Not saved: a page always opens with them off. Exports leave them out unless
+// "print FX" is on, and then print the filter as it is set (a throw is a moment, not part of the pattern). ----
+const pfx = { filter: 0, throw: false };
+/** A param glides to v (time constant `tc` s): no zipper noise however fast the knob turns, every move takes over from where the last one is. */
+function glide(param, v, tc = 0.03) { const now = T.getContext().rawContext.currentTime; param.cancelScheduledValues(now); param.setTargetAtTime(v, now, tc); }
+function setFilter(x) {
+  pfx.filter = Math.max(-1, Math.min(1, Math.round(x * 100) / 100)); const f = kit?.master.fx;
+  if (f) { const { lp, hp } = fxFreqs(pfx.filter, T.getContext().rawContext.sampleRate); glide(f.lp.frequency, lp); glide(f.hp.frequency, hp); }
+  sliders.fxFilter?.set(Math.round(pfx.filter * 100)); readout();
+}
+function setThrow(on) {
+  if (pfx.throw === on) return; pfx.throw = on; const f = kit?.master.fx;
+  // in fast so the hit you throw on is caught; out a little slower; the echoes ring on at the resting feedback
+  if (f) { glide(f.send.gain, on ? THROW.send : 0, on ? 0.005 : 0.02); glide(f.delay.feedback, on ? THROW.fb : THROW.rest, on ? 0.01 : 0.08); }
+  $('btn-throw').classList.toggle('armed', on); $('btn-throw').setAttribute('aria-pressed', on); paintLeds(); readout();
+}
+/** The filter knob's words: "off", "low-pass 1.2 kHz", "high-pass 340 Hz". */
+function filterSay(v) {
+  if (!v) return 'off'; const { lp, hp } = fxFreqs(v / 100), hz = v < 0 ? lp : hp;
+  return `${v < 0 ? 'low-pass' : 'high-pass'} ${hz >= 1000 ? `${(hz / 1000).toFixed(1)} kHz` : `${Math.round(hz)} Hz`}`;
+}
 /** P5: the auto MIDI out offset = the audio output's latency, known once the context runs. */
 function setAutoLatency() { pmidi.autoMs = (T.getContext().rawContext.outputLatency || 0) * 1000; if (pmidi.offsetMs == null) sliders.midiLat?.set(pmidi.latencyMs); }
 
@@ -302,7 +338,7 @@ function onTick(t, time, cyc, ts) {
   return cyc;
 }
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
-function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); }
+function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
@@ -372,7 +408,8 @@ const INFO = {
   solo: 'Solo: only soloed lanes play (several can be).',
   'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
-  'fill latch': 'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
+  'fx filter': 'Performance filter on the whole mix, before the master compressor: left = low-pass (darker, down to 200 Hz), right = high-pass (thinner, up to 6 kHz), centre = off. Glides, so a fast turn doesn\'t crackle. Move: the jog wheel (it stops at the centre on the way across; push it = off; Shift + wheel = humanize). Exports leave it out unless "print FX" is on.',
+  'fill latch':'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
   chokes: 'Choke group: when this lane hits it cuts off the lane picked here, like a closed hat stopping an open hat.',
   sample: 'Load a file, record up to 4 s from the mic, take a slice Unassembler sent (or all of them as a slice set), load a whole break and cut it into 8 or 16 slices, or drop an audio file on a ring. On a sample: tune = speed (±1 octave), decay = how much plays, snap = soft attack (left) or skip into the sample (right), color = a pitch swoop into the hit. A slice set plays slice N on step N; lock a step to another slice in its lock panel (Move: hold the step, turn knob 7).',
   trim: 'Start and end: the part of the sample (of each slice) that plays, from 0 to 100 % of it. With backwards it plays from the end to the start.',
@@ -981,7 +1018,7 @@ const exportHits = (ticks = renderTicks().ticks) => collectHits(m, { from: 0, to
  *  pairs plus the return still add up to the wet stems' sum. hits: a hit list already rolled (E5: export all renders
  *  the mix and the stems from one). */
 async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
-  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate;
+  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate, fx = !stems && exp.printFx && pfx.filter !== 0;   // P6: the mix only (stems stay raw)
   hits ??= exportHits(ticks);
   // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
   const lead = renderLead(hits);
@@ -989,7 +1026,7 @@ async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
   const lat = stems ? 0 : await masterLatency(rate);
   const b = await offline(({ transport }) => {
     transport.bpm.value = tempo;
-    const k = makeKit({ raw: stems });   // a fresh kit in the offline context, same voices and sounds
+    const k = makeKit({ raw: stems, fx: fx ? { filter: pfx.filter } : null });   // a fresh kit in the offline context, same voices and sounds (P6: the filter only with "print FX")
     if (stems) routeStems(k, dry);
     // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
     for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k, h.slice);
@@ -997,7 +1034,7 @@ async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
   }, lead + sec + tailSec(), stems ? 2 * m.lanes.length + (dry ? 2 : 0) : 2, rate);   // stems: a stereo pair per lane (8 or 12 channels, + the return)
   const sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
   const chans = loop ? raw.map(d => foldLoop(d, sr, sec, pre)) : oneShot(raw, sr, sec, pre, barSec);
-  return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / m.barTicks(), hits, capped, loop };
+  return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / m.barTicks(), hits, capped, loop, fx };
 }
 const nBars = (n) => `${n} bar${n === 1 ? '' : 's'}`;
 const fmtNote = () => `${exp.bits === 32 ? '32-bit float' : `${exp.bits}-bit`} ${exp.rate / 1000} kHz`;
@@ -1006,7 +1043,7 @@ const renderTags = (r) => ({ acid: acidOf(tempo, r.bars), smpl: r.loop });
 const mixWav = (r) => tagWav(encodeWav(r.chans, r.sr, { bits: exp.bits }), r.sr, renderTags(r));
 /** File names carry tempo and length; a one-shot names the pattern and its ring-out ("4bars+2tail-oneshot"). */
 const fileBase = (kind, r, bpm = tempo) => `orbits-${kind ? `${kind}-` : ''}${bpm}bpm-${r.loop ? nBars(r.bars).replace(' ', '') : `${nBars(r.patternBars).replace(' ', '')}+${r.bars - r.patternBars}tail-oneshot`}-${stamp()}`;
-const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}`;
+const renderNote = (r) => `${r.loop ? nBars(r.bars) : `${nBars(r.patternBars)} + ${nBars(r.bars - r.patternBars)} ring-out`} at ${tempo} bpm, ${r.loop ? 'loops seamlessly' : 'one-shot'}${r.capped ? ' · the cycle is longer than 64 bars: cut at 64, so the loop point falls mid-cycle' : ''}${r.fx ? ` · performance filter printed (${filterSay(Math.round(pfx.filter * 100))})` : ''}`;
 // One take, one hit list: free dice still roll, but from a per-take seed, so WAV, stems and MIDI made while this roll
 // is current hold the same hits (count and times). "new roll" draws another take; locked dice use their own seed.
 const newRoll = () => 1 + Math.floor(Math.random() * 99999);
@@ -1094,6 +1131,7 @@ function buildExportUI() {
   ui.expRate = mount('exp-rate', segmented({ options: [[44100, '44.1'], [48000, '48', '48 kHz (video, most interfaces)']], value: exp.rate, onChange: (v) => { exp.rate = v; saveSettings(); } }));
   ui.expRing = mount('exp-ring', toggleChip({ label: 'jam ring-out', on: exp.ring, title: 'jam takes add each lane\'s ring-out, the echoes and decays their last bar line cut, as "-ringout" files: place them right after the take. Made from the hits the take played, so they hold no new hits even when the pattern plays on.', onChange: (v) => { exp.ring = v; saveSettings(); } }));
   ui.expDry = mount('exp-dry', toggleChip({ label: 'dry stems', on: exp.dry, title: 'stems without their delay: every lane\'s echoes go to one more stem pair, "delay return", so you can treat them in the DAW. The stems plus the return still add up to the mix.', onChange: (v) => { exp.dry = v; saveSettings(); } }));
+  ui.expPrintFx = mount('exp-print-fx', toggleChip({ label: 'print FX', on: exp.printFx, title: 'on: the WAV mix (and the mix in export all) goes through the performance filter as it is set now. Stems, the kit and jam takes never do; a delay throw is a moment, never printed. off: exports ignore the performance FX.', onChange: (v) => { exp.printFx = v; saveSettings(); } }));
   ui.expMidiOne = mount('exp-midi-one', segmented({ options: [[false, 'per lane', 'a MIDI track per lane, each on its own channel'], [true, 'one track', 'one track for a Drum Rack: every lane on its note from the MIDI drawer, on lane 1\'s channel']], value: exp.midiOne, onChange: (v) => { exp.midiOne = v; saveSettings(); } }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-kit').onclick = () => exportKit().catch(e => { $('exp-status').textContent = `kit: ${e.message}`; }); $('exp-all').onclick = () => exportAll().catch(e => { $('exp-status').textContent = `export all: ${e.message}`; }); $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
@@ -1106,6 +1144,11 @@ function buildEditUI() {
   $('btn-undo').onclick = undo; $('btn-redo').onclick = redo;
   const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
   $('btn-latch').onclick = armLatch; $('btn-latch').title = INFO['fill latch'];
+  // P6: the filter knob (double-click = off) and the hold-to-throw button, beside fill in the transport strip
+  sliders.fxFilter = makeGauge({ label: 'filter', min: -100, max: 100, value: 0, fmt: (v) => (v ? `${v < 0 ? 'LP' : 'HP'} ${Math.abs(v)}` : 'off'), say: filterSay, title: INFO['fx filter'], color: 'var(--signal-cyan)', onChange: (v) => setFilter(v / 100) });
+  $('fx-gauge').replaceChildren(sliders.fxFilter.el);
+  const th = $('btn-throw'); th.onpointerdown = () => { wake(); setThrow(true); }; for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) th.addEventListener(ev, () => setThrow(false));
+  th.addEventListener('keydown', (e) => { if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); setThrow(true); } }); th.addEventListener('keyup', (e) => { if (e.key === ' ' || e.key === 'Enter') setThrow(false); }); th.addEventListener('blur', () => setThrow(false));
 }
 
 // ---- jam: record what you play (edits, mutes, evolve, slots, knobs) as a track per lane (4 or 6), up to 256 beats ----
@@ -1335,7 +1378,7 @@ function paintLeds() {
   // Shift held: track 4 / 3 = lanes 5 / 6. Mute held: the track buttons show the mutes (lane colour = playing, off = muted, cyan = changes on the next bar)
   for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, mute.held ? (muteQ.has(li) ? CYAN_LED : m.lanes[li].muted ? 0 : LANE_LED[li]) : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   const blinkLed = (name, idle) => { const b = blink.get(name); move.setButtonColor(name, b ? (b.on ? REC_LED : 0) : idle); };
-  move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); blinkLed('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : latch.state === 'armed' ? CYAN_LED : 16); blinkLed('delete', 16); move.setButtonColor('minus', evo.on ? MAGENTA_LED : 16);
+  move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); blinkLed('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : latch.state === 'armed' ? CYAN_LED : 16); blinkLed('delete', 16); move.setButtonColor('minus', evo.on ? MAGENTA_LED : 16); move.setButtonColor('plus', pfx.throw ? COLOR.WHITE : 16);
   move.setButtonColor('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
   move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
@@ -1383,9 +1426,11 @@ move.addEventListener('wheel', (e) => {
     const lane = m.lane; for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); lockStep = i; }
     stepEdited(); return;
   }
-  m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });
+  if (!shift) return setFilter(stepFilter(pfx.filter, e.detail.delta));   // P6: the wheel = the performance filter (it stops at "off" on the way across)
+  m.humanize = Math.max(0, Math.min(1, m.humanize + e.detail.delta * 0.03)); sliders.humanize?.set(Math.round(m.humanize * 100)); readout(); save(); });   // Shift + wheel = humanize
 // L3: hold step(s) + push the jog wheel = the next stroke (open → mute → slap → lane sound) on voices that have them
 move.addEventListener('wheelPush', (e) => {
+  if (e.detail.pressed && !held.size) return setFilter(0);   // P6: push the wheel with no step held = filter off
   if (!e.detail.pressed || !held.size || !ARTICS[m.lane.voice]) return; const lane = m.lane;
   for (const h of held.values()) { h.used = true; lane.cycleArtic(lane.stepIndex(h.step)); lockStep = h.step; }
   auditionLock(); stepEdited();
@@ -1400,6 +1445,7 @@ move.addEventListener('button', (e) => {
   // hold = fill; P3 Shift + Layout = fill for the next bar (its release is not the end of a held fill)
   if (name === 'layout') { if (pressed && shift) { latchPress = true; armLatch(); } else if (!pressed && latchPress) latchPress = false; else setFill(pressed); return; }
   if (name === 'sampling' && pressed) { toggleJam(); return; }
+  if (name === 'plus') { setThrow(pressed); return; }   // P6: hold + = delay throw
   // P2 Mute: a tap (on release) mutes the selected lane, Shift + Mute = solo; held, a track button or a pad row mutes that lane instead
   if (name === 'mute') {
     if (pressed) { mute.held = true; mute.used = shift; if (shift) toggleSolo(); paintLeds(); }
@@ -1523,7 +1569,7 @@ function readout() {
   poke();
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
   $('readout').textContent = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? 'rec ●' : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
-    ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
+    ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(pfx.filter ? [filterSay(Math.round(pfx.filter * 100))] : []), ...(pfx.throw ? ['THROW'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
     const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
       ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}%${l.swingTpl !== 'mpc' ? ` ${SWING_TEMPLATES[l.swingTpl].name}` : ''}${l.offsetMs ? ` ${l.offsetMs > 0 ? '+' : ''}${l.offsetMs}ms` : ''} prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
@@ -1606,5 +1652,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();

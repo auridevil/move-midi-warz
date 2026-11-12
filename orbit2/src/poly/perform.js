@@ -13,6 +13,23 @@ export function condLoops(cond, n = 16) {
   return Array.from({ length: n }, (_, loop) => (live ? null : condPasses(cond, loop)));
 }
 
+/**
+ * P6 master filter, one knob x in −1…1: left = low-pass from the top of the band (Nyquist: the biquad is a plain wire
+ * there) down to 200 Hz, right = high-pass from 20 Hz up to 6 kHz, centre = both open (high-pass at 0 Hz: a wire too),
+ * so "off" colours nothing. Exponential, so equal turns sound like equal steps. → { lp, hp } in Hz.
+ */
+export const FX_LP_MIN = 200, FX_HP_MIN = 20, FX_HP_MAX = 6000;
+export function fxFreqs(x, sampleRate = 44100) {
+  const nyq = sampleRate / 2;
+  return { lp: x < 0 ? nyq * Math.pow(FX_LP_MIN / nyq, -x) : nyq, hp: x > 0 ? FX_HP_MIN * Math.pow(FX_HP_MAX / FX_HP_MIN, x) : 0 };
+}
+/** One click of the Move wheel on the filter: 4 % per click, and a stop at the centre on the way across (turning
+ *  through "off" lands on it first, so it is easy to find on stage). Rounded to 1 %. */
+export function stepFilter(x, delta, per = 0.04) {
+  const n = Math.max(-1, Math.min(1, Math.round((x + delta * per) * 100) / 100));
+  return x !== 0 && Math.sign(n) !== Math.sign(x) ? 0 : n;
+}
+
 /** P1: how long Capture / Delete must be held to act without Shift. */
 export const HOLD_MS = 600;
 

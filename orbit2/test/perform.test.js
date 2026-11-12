@@ -87,3 +87,12 @@ test('P7 condition loops for the step buttons', async () => {
   assert.equal(s('first'), 'x.......'); assert.equal(s('not first'), '.xxxxxxx'); assert.equal(s('fill'), '????????'); assert.equal(s('not pre'), '????????');
   assert.equal(condLoops('2:3').length, 16);
 });
+
+test('P6 filter knob: centre is a wire, each side exponential, the wheel stops at the centre', async () => {
+  const { fxFreqs, stepFilter, FX_LP_MIN, FX_HP_MIN, FX_HP_MAX } = await import('../src/poly/perform.js');
+  assert.deepEqual(fxFreqs(0, 48000), { lp: 24000, hp: 0 }, 'off: low-pass at Nyquist, high-pass at 0 Hz (both pass everything)');
+  assert.equal(Math.round(fxFreqs(-1).lp), FX_LP_MIN); assert.equal(Math.round(fxFreqs(1).hp), FX_HP_MAX); assert.equal(fxFreqs(-1).hp, 0); assert.equal(fxFreqs(1).lp, 22050);
+  assert.ok(Math.abs(fxFreqs(-0.5).lp - Math.sqrt(22050 * FX_LP_MIN)) < 1, 'half way = the geometric middle'); assert.ok(fxFreqs(0.01).hp >= FX_HP_MIN);
+  assert.equal(stepFilter(0, -1), -0.04); assert.equal(stepFilter(-0.04, 3), 0, 'crossing the centre stops on it'); assert.equal(stepFilter(0, 3), 0.12, 'and goes on from there');
+  assert.equal(stepFilter(0.98, 5), 1); assert.equal(stepFilter(-1, -2), -1, 'clamped'); assert.equal(stepFilter(0.04, -1), 0, 'landing on the centre');
+});

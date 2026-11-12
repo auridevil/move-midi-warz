@@ -30,6 +30,8 @@
       <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z)">redo</button>
       <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill (hold)</button>
       <button id="btn-latch" class="small" type="button" aria-pressed="false">fill next bar</button>
+      <div id="fx-gauge" class="tstrip-fx"></div>
+      <button id="btn-throw" class="small" type="button" aria-pressed="false" title="Hold: delay throw on the whole mix (send and feedback up while held, back on release; Move: hold +)">throw (hold)</button>
       <button id="btn-jam" class="jam-btn" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
       <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
@@ -151,6 +153,7 @@
       </div>
       <div class="row-ctl">
         <div id="exp-dry"></div>
+        <div id="exp-print-fx"></div>
       </div>
       <div class="row-ctl">
         <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
@@ -222,7 +225,8 @@
         <tr><th>Record</th><td>arm live record · Shift = tap tempo</td></tr>
         <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
         <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
-        <tr><th>Wheel</th><td>humanize</td></tr>
+        <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
+        <tr><th>Hold +</th><td>delay throw: the whole mix into a dotted-eighth delay, feedback up, while held; let go and the echoes ring out</td></tr>
         <tr><th>Volume</th><td>volume</td></tr>
       </table>
     </details>

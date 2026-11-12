@@ -217,8 +217,11 @@ body.chaos::before { display: none; }
 /* C1: the transport strip, in the header between the title and the Move */
 .tstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .tstrip .big-btn { padding: 8px 18px; font-size: 14px; min-width: 96px; }
-.tstrip-tempo .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
+.tstrip-tempo .gauge, .tstrip-fx .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
 .tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; font-size: 13px; white-space: nowrap; } .tstrip-tempo .g-label { display: none; }
+/* P6: the performance filter knob, the tempo's shape; its value says "off" / "LP 40" / "HP 25" */
+.tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: 12px; white-space: nowrap; min-width: 3.4em; } .tstrip-fx .g-label { display: none; }
+#btn-throw.armed { background: var(--ember-magenta); border-color: var(--ember-magenta); color: var(--void-black); }
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
 .hud { position: fixed; right: 24px; top: var(--hud-top, 74px); bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; width: 400px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
