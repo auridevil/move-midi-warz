@@ -96,3 +96,16 @@ test('P6 filter knob: centre is a wire, each side exponential, the wheel stops a
   assert.equal(stepFilter(0, -1), -0.04); assert.equal(stepFilter(-0.04, 3), 0, 'crossing the centre stops on it'); assert.equal(stepFilter(0, 3), 0.12, 'and goes on from there');
   assert.equal(stepFilter(0.98, 5), 1); assert.equal(stepFilter(-1, -2), -1, 'clamped'); assert.equal(stepFilter(0.04, -1), 0, 'landing on the centre');
 });
+
+test('P2 mute on next bar: a mute queued mid-bar silences the lane from the bar line on, not before', async () => {
+  const { Machine, BAR_TICKS: B, PPQ } = await import('../src/poly/lanes.js'); const { onBar } = await import('../src/poly/slots.js');
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); m.lanes[1].setLength(4); m.lanes[1].setEuclid(4);   // a hit on every beat
+  const q = new MuteQueue(), bars = { at: 0, len: B }, heard = [];
+  // the app's clock order: bar-line work (barPerf) before the lanes step on that tick
+  for (let t = 0; t < 3 * B; t++) {
+    if (t === B + PPQ + 5) q.toggle(1);   // pressed during bar 2, just after beat 2
+    if (q.size && onBar(t, bars)) for (const li of q.bar()) m.lanes[li].muted = !m.lanes[li].muted;
+    const ev = m.tick(t, () => 0)[1]; if (ev?.hit) heard.push(t / PPQ);
+  }
+  assert.deepEqual(heard, [0, 1, 2, 3, 4, 5, 6, 7], 'bar 2 plays out whole; bar 3 is silent from its downbeat');
+});

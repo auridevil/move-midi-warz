@@ -506,6 +506,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
 #btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
 #btn-mute.armed { background: var(--star-white); border-color: var(--star-white); color: var(--void-black); }
+#live-mode, #btn-latch, #btn-throw { white-space: nowrap; }   /* P1 / P3 / P6: one line each, also on a phone */
 #btn-latch.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
 .lane-tab.pend { border-style: dashed; border-color: var(--signal-cyan); }   /* P2: a mute waits for the next bar line */
 #btn-fill.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
@@ -612,7 +613,7 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .help .gtable.keys th { width: 30%; white-space: normal; }
 /* C5: the ring legend (colour dot, voice, length × speed) */
 .ring-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 400 11px/1.6 var(--font-display); letter-spacing: .12em; text-transform: lowercase; color: rgba(236,233,247,.72); pointer-events: none; z-index: 3; }
-.ring-legend li { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.ring-legend li { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; } .ring-legend li[hidden] { display: none; }   /* a 4-lane pattern: no dots for lanes 5–6 */
 .ring-legend li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 8px var(--lane); }
 .ring-legend li.sel { color: var(--lane); }
 .ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
