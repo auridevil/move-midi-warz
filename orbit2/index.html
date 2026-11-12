@@ -124,8 +124,13 @@
       <div class="row-ctl"><div class="ctl" title="What evolve may change"><span class="ctl-lbl">touches</span><div id="evo-scope"></div></div>
       </div>
       <div id="evo-gauges" class="gauges three"></div>
+      <div id="evo-more" class="gauges two"></div>
+      <details class="evo-sub"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
       <div id="evo-lanes" class="evo-lanes"></div>
-      <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady.</p>
+      <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady. Gravity pulls them back home.</p>
+      <div class="row-ctl"><div class="ctl" title="A hit on one lane makes another lane more likely to play its next step"><span class="ctl-lbl">coupling</span><div id="couple-mode"></div></div></div>
+      <div id="couple-gauges" class="gauges two"></div>
+      <div id="couple-matrix" class="couple-matrix" hidden></div>
     </details>
     <details class="drawer">
       <summary>Dice</summary>

@@ -1,6 +1,6 @@
 import { Midi } from '../midi.js';
 import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
-import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES } from './lanes.js';
+import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, COUPLE_MODES } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
@@ -50,7 +50,9 @@ const lib = new Library(localStorage); let libCurrent = null;   // named setups;
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
 const SETTINGS = 'midi-warz.orbit2.settings.v1';
 const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest' };
-const evo = { on: false, every: 4, amount: 40, scope: 'hits', home: 0 };   // home: return to the snapshot after N mutations (0 = never)
+// home: return to the snapshot after N mutations (0 = never). V1: weights per kind (lanes.js EVOLVE_WEIGHTS), gravity %
+// (pull back toward home instead of the hard reset), maxBars = the longest cycle a move may make (0 = no limit)
+const evo = { on: false, every: 4, amount: 40, scope: 'hits', home: 0, gravity: 0, maxBars: 32, weights: { ...EVOLVE_WEIGHTS } };
 let evoSnap = null, evoCount = 0;
 const bank = new SlotBank(localStorage);
 const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
@@ -63,7 +65,7 @@ const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false, pr
 // (on by default: it only changes what the Move does); muteBar = mutes wait for the next bar line while playing
 const perf = { live: true, muteBar: false };
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf })); } catch {} };
 
 // ---- sounds ----
@@ -406,7 +408,11 @@ const INFO = {
   'pitch pads': 'Live record: the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
   'evolve every': 'Evolve mode: how many bars between two mutations.',
   'evolve amount': 'Evolve mode: chance per lane of being nudged at each mutation.',
-  'evolve scope': 'What evolve may touch: rotation only; rotation + the euclid fill (or one step for hand-made lanes); or also length and speed.',
+  'evolve scope': 'What evolve may touch: rotation only; rotation + the hits; or everything with a weight (also length, speed, chance and tune). A euclid lane you edited by hand keeps your edits: evolve adds or takes away one hit. Accents, locks and conditions travel with their hits.',
+  'evolve weight': 'How often evolve picks this kind of change, against the others (0 = never). Chance and tune start at 0.',
+  'evolve gravity': 'Gravity: the chance a nudge goes back toward home instead of somewhere new. 0 = wander freely, 100 % = every nudge heads home, then the lane holds still. Home = the pattern when you switched evolve on, loaded or saved a slot, or pressed "home = now".',
+  'evolve max cycle': 'The longest the whole pattern may take to repeat, in bars: a change that would make it longer is not made. Off = no limit.',
+  coupling: 'Coupling: a hit on one lane makes another lane more likely to play its next step (it adds to that step\'s chance; steps at 100 % already play). "next lane": lane 1 lifts lane 2, 2 lifts 3 … the last lifts lane 1. Matrix: pick who lifts whom (row = the lane that hits, column = the lane it lifts; tap a cell to step 0 → 25 → 50 → 75 → 100 %). Saved with the pattern. Locked dice play it the same every time.',
   'return home': 'After this many mutations evolve snaps back to the home pattern (set when you enable evolve, load or save a slot, or press "home = now"). 0 = drift forever.',
   'midi offset': 'MIDI out offset, −50…+50 ms: notes and clock leave this much later (+) or earlier (−) than the hit is scheduled here. Auto = the audio output\'s latency, so a drum machine on MIDI sounds with the speakers; turn it down when the other device is slow itself.',
   'clock out':'Sends MIDI clock (24 per beat, from the master clock) plus start/stop to the MIDI out port, so a DAW or a drum machine follows Orbits.',
@@ -810,13 +816,34 @@ function flushMutes() { if (!muteQ.size) return; muteQ.apply(m.lanes); sync(); }
 function evolveNow(bar = 0, fromClock = false) {
   if (!evoSnap) evoSnap = m.toJSON();
   if (evo.home && evoCount >= evo.home) { m.assign(evoSnap, { keep: true, selected: m.selected }); rebuildVoices(); evoCount = 0; lastEvolve = 'back home'; }
-  else { const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100 }, dice.stream(1000 + bar)); evoCount++; lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still'; }
+  else {
+    const ch = m.evolve({ scope: evo.scope, amount: evo.amount / 100, weights: evo.weights, gravity: evo.gravity / 100, home: evoSnap, maxBars: evo.maxBars, repeat: cycleOpts().repeat }, dice.stream(1000 + bar)); evoCount++;
+    lastEvolve = ch.map(c => `${voiceLabel(m.lanes[c.lane])} ${c.kind}${c.held ? ' (too long)' : c.home ? ' ↺' : c.dir > 0 ? '+' : '−'}`).join(', ') || 'held still';
+  }
   offClock(fromClock, sync);
 }
 function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
   m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
+  renderCouple();
+}
+/** V2 coupling (part of the pattern: a slot, undo or link brings its own): the mode, the "next lane" amount, the matrix. */
+function renderCouple() {
+  const c = m.couple, n = m.lanes.length; ui.coupleMode?.set(c.mode); sliders.coupleAmount?.set(Math.round(c.amount * 100));
+  if (sliders.coupleAmount) sliders.coupleAmount.el.hidden = c.mode !== 'next';
+  const g = $('couple-matrix'); g.hidden = c.mode !== 'matrix'; if (g.hidden) return; g.innerHTML = ''; g.style.setProperty('--n', n + 1);
+  const cell = (txt, cls = 'cm-head') => { const s = document.createElement('span'); s.className = cls; s.textContent = txt; return s; };
+  g.append(cell('hit ↓ lifts →'), ...m.lanes.map((_, b) => cell(String(b + 1))));
+  for (let a = 0; a < n; a++) {
+    g.append(cell(String(a + 1)));
+    for (let b = 0; b < n; b++) {
+      const v = c.matrix[a][b], btn = document.createElement('button'); btn.type = 'button'; btn.className = 'cm-cell'; btn.textContent = v ? `${Math.round(v * 100)}` : '·';
+      btn.style.setProperty('--a', v); btn.style.setProperty('--chip', LANE_HEX[a]); btn.setAttribute('aria-label', `a hit on lane ${a + 1} lifts lane ${b + 1} by ${Math.round(v * 100)} percent`);
+      btn.onclick = () => { c.matrix[a][b] = (Math.round(v * 4) + 1) % 5 / 4; sync(); renderCouple(); };
+      g.append(btn);
+    }
+  }
 }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.toJSON(); evoCount = 0; lastEvolve = 'home set'; readout(); };
@@ -825,7 +852,17 @@ function buildEvolveUI() {
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
   sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', say: v => v ? `${v} mutation${v === 1 ? '' : 's'}` : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
   g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
-  ui.evoScope = mount('evo-scope', segmented({ options: [['rotate', 'rotation'], ['hits', '+ hits'], ['all', 'everything', 'rotation, fill, length and speed']], value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
+  ui.evoScope = mount('evo-scope', segmented({ options: [['rotate', 'rotation'], ['hits', '+ hits'], ['all', 'everything', 'rotation, hits, length, speed, chance and tune (whatever has a weight)']], value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
+  // V1: gravity, the max cycle guard, and how often each kind of change comes up
+  sliders.evoGravity = makeGauge({ label: 'gravity', min: 0, max: 100, value: evo.gravity, fmt: v => v + '%', title: INFO['evolve gravity'], color: 'var(--nebula-purple)', onChange: (v) => { evo.gravity = v; saveSettings(); } });
+  sliders.evoMax = makeGauge({ label: 'max cycle', min: 0, max: 64, value: evo.maxBars, fmt: v => v ? `${v} bars` : 'off', say: v => v ? `${v} bars` : 'no limit', title: INFO['evolve max cycle'], color: 'var(--nebula-purple)', onChange: (v) => { evo.maxBars = v; saveSettings(); } });
+  $('evo-more').append(sliders.evoGravity.el, sliders.evoMax.el);
+  const KIND_LABEL = { rotate: 'rotation', hits: 'hits', length: 'length', ratio: 'speed', prob: 'chance', tune: 'tune' };
+  for (const k of EVOLVE_KINDS) { sliders['evoW:' + k] = makeGauge({ label: `${KIND_LABEL[k]} weight`, min: 0, max: MAX_WEIGHT, value: evo.weights[k], fmt: v => v ? `×${v}` : 'never', title: INFO['evolve weight'], color: 'var(--nebula-purple)', onChange: (v) => { evo.weights[k] = v; saveSettings(); } }); $('evo-weights').append(sliders['evoW:' + k].el); }
+  // V2: coupling
+  ui.coupleMode = mount('couple-mode', segmented({ options: [['off', 'off'], ['next', 'next lane', 'a hit lifts the next lane'], ['matrix', 'matrix', 'pick who lifts whom']], value: m.couple.mode, onChange: (v) => { m.couple.mode = v; sync(); renderCouple(); } }));
+  sliders.coupleAmount = makeGauge({ label: 'lift', min: 0, max: 100, value: Math.round(m.couple.amount * 100), fmt: v => v + '%', title: INFO.coupling, color: 'var(--nebula-purple)', onChange: (v) => { m.couple.amount = v / 100; sync(); } });
+  $('couple-gauges').append(sliders.coupleAmount.el);
   renderLanesEvolve();
 }
 

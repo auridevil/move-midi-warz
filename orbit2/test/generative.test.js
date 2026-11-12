@@ -1,0 +1,62 @@
+// ORBIT2-12 steerable generative: evolve weights / gravity / max cycle / euclid hand edits (V1), coupling (V2).
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS } from '../src/poly/lanes.js';
+import { mulberry32, Dice } from '../src/poly/dice.js';
+import { collectHits } from '../src/poly/export.js';
+
+const shape = (m) => m.lanes.map(l => ({ hits: l.hits.join(''), accents: l.accents.join(''), locks: JSON.stringify(l.locks), trigs: JSON.stringify(l.trigs), rotation: l.rotation, length: l.length, ratioIndex: l.ratioIndex, prob: l.prob, tune: l.tune }));
+const groove = () => { const m = new Machine(); m.lanes.forEach((l, i) => { l.setLength([8, 8, 16, 5][i]); l.setEuclid([3, 2, 7, 2][i]); }); m.lanes[0].toggle(5); m.lanes[0].setLock(0, 'tune', 0.5); m.lanes[2].setTrig(0, { cond: '1:2' }); m.lanes[1].accents[0] = true; return m; };
+
+test('V1 default weights pick what the old uniform evolve picked (old seeded evolves keep their kinds)', () => {
+  const kinds = [];
+  for (let s = 1; s < 40; s++) { const m = groove(); for (const c of m.evolve({ scope: 'all', amount: 1 }, mulberry32(s))) kinds.push(c.kind); }
+  assert.ok(kinds.length > 100); assert.ok(kinds.every(k => ['rotate', 'hits', 'length', 'ratio'].includes(k)), 'chance and tune start at weight 0');
+  const only = groove(); for (let n = 0; n < 30; n++) for (const c of only.evolve({ scope: 'all', amount: 1, weights: { rotate: 0, hits: 0, length: 0, ratio: 0, prob: 1, tune: 0 } }, mulberry32(n))) assert.equal(c.kind, 'prob');
+  assert.deepEqual(weightsFrom({ rotate: 9, hits: -2, prob: 'x' }), { ...EVOLVE_WEIGHTS, rotate: 4, hits: 0 }, 'saved weights clamp, junk falls back');
+});
+
+test('V1 evolve with gravity 1 returns home, then holds still', () => {
+  const m = groove(), home = JSON.parse(JSON.stringify(m)), rng = mulberry32(7), w = { rotate: 1, hits: 1, length: 1, ratio: 1, prob: 1, tune: 1 };
+  for (let n = 0; n < 60; n++) m.evolve({ scope: 'all', amount: 0.8, weights: w }, rng);
+  assert.notDeepEqual(shape(m), shape(Machine.from(home)), 'it wandered');
+  let n = 0; while (JSON.stringify(shape(m)) !== JSON.stringify(shape(Machine.from(home))) && n < 2000) { m.evolve({ scope: 'all', amount: 1, weights: w, gravity: 1, home }, rng); n++; }
+  assert.deepEqual(shape(m), shape(Machine.from(home)), `home after ${n} nudges`);
+  assert.deepEqual(m.evolve({ scope: 'all', amount: 1, weights: w, gravity: 1, home }, rng), [], 'at home nothing moves');
+});
+
+test('V1 max cycle guard holds over 500 seeded evolves (gravity 0 and 0.5)', () => {
+  for (const gravity of [0, 0.5]) {
+    const m = groove(), home = JSON.parse(JSON.stringify(m)), rng = new Dice().fromJSON({ locked: true, seed: 42 }).stream(3), max = 32 * BAR_TICKS;
+    assert.ok(m.cycleTicks() <= max); let held = 0;
+    for (let n = 0; n < 500; n++) { held += m.evolve({ scope: 'all', amount: 0.7, gravity, home, maxBars: 32, weights: { ...EVOLVE_WEIGHTS, prob: 1, tune: 1 } }, rng).filter(c => c.held).length; assert.ok(m.cycleTicks() <= max, `step ${n}: ${m.cycleTicks() / BAR_TICKS} bars`); }
+    assert.ok(held > 0, 'the guard had to step in');
+  }
+});
+
+test('V1 a hand-edited euclid lane keeps its edits; a pure one refills and its accents / locks / conditions move with the hits', () => {
+  const l = new Lane('hat', { length: 8 }); l.setEuclid(3); l.toggle(7);   // E(3,8) + a hand hit on 8
+  for (let s = 0; s < 20; s++) { const c = Lane.from(JSON.parse(JSON.stringify(l))); c.evolveHits(1, mulberry32(s)); assert.ok(c.hits[7], 'hand hit kept'); assert.equal(c.hits.filter(Boolean).length, 5); }
+  const d = Lane.from(JSON.parse(JSON.stringify(l))); d.evolveHits(-1, mulberry32(1)); assert.equal(d.hits.filter(Boolean).length, 3); assert.equal(d.euclidK, 2);
+  const p = new Lane('kick', { length: 8 }); p.setEuclid(3); p.accents[3] = true; p.setLock(3, 'tune', 0.25); p.setTrig(6, { cond: '1:2' });   // E(3,8) = x..x..x.
+  assert.deepEqual(euclid(3, 8).map(Number), [1, 0, 0, 1, 0, 0, 1, 0]);
+  p.evolveHits(1, mulberry32(0)); assert.ok(p.isEuclid()); assert.equal(p.euclidK, 4);   // E(4,8) = x.x.x.x.
+  assert.ok(p.locks.some((lk, i) => lk?.tune === 0.25 && p.hits[i]), 'the tune lock sits on a hit'); assert.ok(p.accents.some((a, i) => a && p.hits[i]), 'the accent too');
+  assert.ok(p.trigs.some((t, i) => t?.cond === '1:2' && p.hits[i]), 'and the condition'); assert.equal(p.locks.filter(Boolean).length, 1);
+});
+
+test('V2 coupling: a hit lifts the next lane\'s next step; deterministic with locked dice; saved with the pattern', () => {
+  const make = (mode) => { const m = new Machine(); m.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(5); }); m.lanes[0].setEuclid(4); m.lanes[1].setEuclid(4); m.lanes[1].prob = 0.2; m.couple.mode = mode; m.couple.amount = 0.6; return m; };
+  const dice = new Dice().fromJSON({ locked: true, seed: 9, repeat: 1 });
+  const count = (m) => collectHits(m, { to: 840 * 64, tempo: 120, dice }).filter(h => h.li === 1).length;
+  const off = count(make('off')), on = count(make('next'));
+  assert.ok(on > off + 10, `lane 2 plays more when lane 1 lifts it (${off} → ${on})`);
+  assert.equal(count(make('next')), on, 'locked dice: the same every time');
+  const a = make('next'); a.couple.mode = 'matrix'; a.couple.matrix[0][1] = 0.6; assert.equal(count(a), on, 'matrix 1 → 2 at 60 % = next lane at 60 % here');
+  const j = Machine.from(JSON.parse(JSON.stringify(a))); assert.equal(j.couple.mode, 'matrix'); assert.equal(j.couple.matrix[0][1], 0.6);
+  assert.equal(Machine.from({ lanes: a.toJSON().lanes }).couple.mode, 'off', 'older saves are uncoupled');
+  assert.equal(new Machine().toJSON().couple, undefined, 'an uncoupled pattern saves as before');
+  // the lift is for the next step only, and a lane stepping on the same tick gets it on its following step
+  const m = make('next'); m.lanes[1].prob = 0; const r = () => 0.5; m.tick(0, r); assert.equal(m.boostOf(1), 0.6); const ev = m.tick(840, r); assert.equal(ev[1].hit, true); assert.equal(m.boostOf(1), 0.6, 'lane 1 hit again on that tick');
+  m.lanes[0].clear(); m.tick(1680, r); assert.equal(m.boostOf(1), 0, 'used up'); assert.equal(m.tick(2520, r)[1].hit, false);
+});
