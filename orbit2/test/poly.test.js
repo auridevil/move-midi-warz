@@ -1449,3 +1449,26 @@ test('ORBIT2-10 E6: a jam take with a ring-out splits at the take, and the zip g
   assert.deepEqual([a.frames, a.chunks.join()], [4, 'fmt ,acid,smpl,data']); assert.deepEqual([r.frames, r.chunks.join()], [1, 'fmt ,data'], 'ring-out: untagged');
   assert.equal(unzipStored(stemsZip(head, ['k', 's'], 44100, 'take', null, { ring: splitChunks([lane(), lane()], 5).tail })).length, 3, 'no ring-out recorded: no files');
 });
+test('ORBIT2-10 E3: one Drum-Rack track holds every lane on its own note, one channel', async () => {
+  const { hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
+  const lanes = [{ note: 36, ch: 10 }, { note: 38, ch: 3 }, { note: 42, ch: 10 }, { note: 39, ch: 5 }];
+  const hits = [0, 1, 2, 3].flatMap(li => [{ li, time: li * 0.125, vel: 1 }, { li, time: 1 + li * 0.125, vel: 0.7 }]);
+  const one = readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: ['k', 's', 'h', 'c'], bars: 1, merge: true })), notes = one.tracks.flatMap(t => t.notes);
+  assert.equal(one.tracks.filter(t => t.notes.length).length, 1, 'one note track'); assert.equal(notes.length, 8, 'every hit');
+  assert.deepEqual([...new Set(notes.map(n => n.ch))], [10], 'lane 1\'s channel'); assert.deepEqual([...new Set(notes.map(n => n.p ?? n.note))].sort(), [36, 38, 39, 42]);
+  const per = readMidi(hitsToMidi(hits, { tempo: 120, lanes, names: ['k', 's', 'h', 'c'], bars: 1 }));
+  assert.equal(per.tracks.filter(t => t.notes.length).length, 4, 'off: a track per lane, as before'); assert.deepEqual(per.tracks.flatMap(t => t.notes).map(n => n.on).sort(), notes.map(n => n.on).sort(), 'same times');
+});
+test('ORBIT2-10 E2: dry stems + the delay return add up to the wet mix; stemFiles names and scales them together', async () => {
+  const { sumStems, stemFiles } = await import('../src/poly/jam.js'); const { parseWav } = await import('../tools/cdp.mjs');
+  // a rendered fixture, in miniature: each lane = its dry sound + its echoes; the echoes of every lane on one return
+  const N = 64, sig = (f, a) => Float32Array.from({ length: N }, (_, i) => a * Math.sin(i * f)), echo = (d, k, g) => Float32Array.from(d, (_, i) => i >= k ? d[i - k] * g : 0);
+  const dry = [0.3, 0.5, 0.7, 1.1].map((f, i) => [sig(f, 0.4 + i * 0.1), sig(f * 1.3, 0.3)]), echoes = dry.map(([L, R], i) => [echo(L, 5 + i, 0.3), echo(R, 7, 0.3)]);
+  const wet = dry.map(([L, R], i) => [L.map((x, j) => x + echoes[i][0][j]), R.map((x, j) => x + echoes[i][1][j])]), ret = sumStems(echoes);
+  const a = sumStems(wet), b = sumStems([...dry, ret]); for (let c = 0; c < 2; c++) for (let i = 0; i < N; i++) assert.ok(Math.abs(a[c][i] - b[c][i]) < 1e-6, `sample ${i}`);
+  const { files, gain } = stemFiles(dry, ['kick', 'snare', 'hat', 'clap'], 48000, 'x/all', { bits: 24, ret, acid: { bpm: 120, beats: 4 }, smpl: true });
+  assert.deepEqual(files.map(f => f.name), ['x/all/all-1-kick.wav', 'x/all/all-2-snare.wav', 'x/all/all-3-hat.wav', 'x/all/all-4-clap.wav', 'x/all/all-delay-return.wav', 'x/all/all-mix-raw.wav']);
+  const p = parseWav(files[5].data); assert.deepEqual([p.bits, p.sampleRate, p.frames, p.chunks.join()], [24, 48000, N, 'fmt ,acid,smpl,data']);
+  assert.ok(gain < 1 && gain > 0, 'the summed mix peaks over 0.98: everything scaled by one gain');
+  assert.equal(stemFiles(dry, ['a', 'b', 'c', 'd'], 48000, 'f', { bits: 32, ret }).gain, 1, 'float: as rendered');
+});

@@ -123,7 +123,9 @@ export const chainSixteenths = (slotStates, bars) => slotStates.reduce((n, json)
  */
 // L3: a hit's stroke (`artic`) plays its lane's stroke note (midiio.js strokeNotes, as live out), worked out over `map`
 // (the whole note map, all lanes, when the file has fewer tracks)
-export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null }) {
+// E3 merge: every lane on ONE track, on the first lane's channel, each lane (and stroke) on its own note from the MIDI
+// settings: a Drum Rack in one clip. Off: a track per lane, as before.
+export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null, merge = false }) {
   const { num, den } = meterParts(meter), toSteps = (sec) => sec / (60 / tempo / 4), len = sixteenths ?? bars * 16 * num / den, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
   const place = (sec) => {
     if (!loop || !len) return { s: Math.max(0, toSteps(sec)), d: gate };
@@ -131,7 +133,9 @@ export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0
     return { s, d: Math.min(gate, len - s) };
   };
   const strokes = strokeNotes(map);
-  const parts = lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(h => ({ p: strokes[li][h.artic || 0], ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true })) }));
+  const note = (h) => ({ p: strokes[h.li][h.artic || 0], ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true });
+  const parts = merge ? [{ name: 'drum rack', ch: lanes[0]?.ch ?? 10, notes: hits.filter(h => h.li < lanes.length).map(note) }]
+    : lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(note) }));
   const sigs = meters?.map(({ s, meter: k }) => { const p = meterParts(k); return { s, num: p.num, den: p.den }; });
   return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den], meters: sigs });   // the clip is the full N bars, not up to the last note
 }
