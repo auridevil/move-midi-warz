@@ -1415,3 +1415,37 @@ test('ORBIT2-09 r2: what a pad hit plays, the padded slice audio, a new break ke
   assert.deepEqual([l.sound.decay, l.sound.snap, l.sound.color, l.sample.slices.join()], [0.4, 0.7, 0.6, 'e,f']);
   l.clear(); l.loadBreak({ name: 'b3', slices: ['g', 'h'], sec: 1, bpm: 120 }); assert.deepEqual([l.sound.decay, l.sound.snap, l.sound.color], [1, 0.5, 0.5], 'laid out: the sample defaults');
 });
+test('ORBIT2-10 E1: 24-bit and 32-bit float WAVs round-trip through parseWav; tags land before data in any header', async () => {
+  const { encodeWav } = await import('../src/unasm/wav.js'); const { parseWav } = await import('../tools/cdp.mjs'); const { tagWav, wavFrames } = await import('../src/poly/jam.js');
+  const L = Float32Array.of(0, 0.5, -0.25, 1.5, -1), R = Float32Array.of(0, -0.5, 0.25, 0.75, 0.125);
+  const read = (w, bits, f, ch) => { const v = new DataView(w.buffer), o = w.length - 5 * 2 * (bits / 8); return bits === 32 ? v.getFloat32(o + (f * 2 + ch) * 4, true) : (v.getUint8(o + (f * 2 + ch) * 3) | v.getUint8(o + (f * 2 + ch) * 3 + 1) << 8 | v.getInt8(o + (f * 2 + ch) * 3 + 2) << 16) / 8388608; };
+  const w24 = encodeWav([L, R], 48000, { bits: 24 }), p24 = parseWav(w24);
+  assert.deepEqual([p24.format, p24.bits, p24.channels, p24.sampleRate, p24.frames, p24.firstOnset], [1, 24, 2, 48000, 5, 1]);
+  assert.ok(Math.abs(read(w24, 24, 1, 0) - 0.5) < 1e-6 && Math.abs(read(w24, 24, 2, 1) - 0.25) < 1e-6, '24-bit keeps the value'); assert.ok(read(w24, 24, 3, 0) <= 1, 'PCM clips at full scale');
+  const w32 = encodeWav([L, R], 44100, { bits: 32 }), p32 = parseWav(w32);
+  assert.deepEqual([p32.format, p32.bits, p32.frames, p32.chunks.join()], [3, 32, 5, 'fmt ,fact,data'], 'float: format 3 + fact');
+  assert.equal(read(w32, 32, 3, 0), 1.5, 'float keeps over 0 dBFS'); assert.equal(new DataView(w32.buffer).getUint32(w32.indexOf(0x66, 36) + 8, true), 5, 'fact = frames');
+  assert.equal(new DataView(w24.buffer).getUint32(4, true), w24.length - 8); assert.equal(wavFrames(w32), 5);
+  const t = tagWav(w32, 44100, { acid: { bpm: 120, beats: 8 }, smpl: true }), pt = parseWav(t);
+  assert.deepEqual(pt.chunks, ['fmt ', 'fact', 'acid', 'smpl', 'data']); assert.equal(pt.acid.bpm, 120); assert.equal(pt.frames, 5); assert.equal(new DataView(t.buffer).getUint32(4, true), t.length - 8);
+  const odd = encodeWav([Float32Array.of(0.1)], 44100, { bits: 24 }); assert.equal(odd.length % 2, 0, 'an odd data chunk is padded');
+});
+test('ORBIT2-10 E6: smpl chunk = one forward loop over the whole file', async () => {
+  const { encodeWav, withSmpl } = await import('../src/unasm/wav.js');
+  const w = withSmpl(encodeWav([new Float32Array(100), new Float32Array(100)], 48000), { frames: 100, sampleRate: 48000 }), v = new DataView(w.buffer), id = (o) => String.fromCharCode(...w.slice(o, o + 4));
+  assert.equal(id(36), 'smpl'); assert.equal(v.getUint32(40, true), 60, '36-byte header + one 24-byte loop');
+  assert.equal(v.getUint32(44 + 8, true), Math.round(1e9 / 48000), 'sample period ns'); assert.equal(v.getUint32(44 + 12, true), 60, 'unity note');
+  assert.equal(v.getUint32(44 + 28, true), 1, 'one loop'); assert.equal(v.getUint32(44 + 40, true), 0, 'forward');
+  assert.deepEqual([v.getUint32(44 + 44, true), v.getUint32(44 + 48, true), v.getUint32(44 + 56, true)], [0, 99, 0], 'start 0, end last frame (inclusive), forever');
+  assert.equal(id(104), 'data'); assert.equal(v.getUint32(4, true), w.length - 8);
+});
+test('ORBIT2-10 E6: a jam take with a ring-out splits at the take, and the zip gets -ringout files', async () => {
+  const { splitChunks, stemsZip } = await import('../src/poly/jam.js'); const { unzipStored, parseWav } = await import('../tools/cdp.mjs');
+  const lane = () => [[Int16Array.of(1, 2, 3), Int16Array.of(4, 5)], [Int16Array.of(1, 2, 3), Int16Array.of(4, 5)]];
+  const { head, tail } = splitChunks([lane(), lane()], 4); assert.deepEqual(head[0][0].map(c => [...c]), [[1, 2, 3], [4]]); assert.deepEqual(tail[1][1].map(c => [...c]), [[5]]);
+  const files = unzipStored(stemsZip(head, ['kick', 'snare'], 44100, 'take', { bpm: 120, beats: 4 }, { smpl: true, ring: tail }));
+  assert.deepEqual(files.map(f => f.name), ['take/take-1-kick.wav', 'take/take-2-snare.wav', 'take/take-mix-raw.wav', 'take/take-1-kick-ringout.wav', 'take/take-2-snare-ringout.wav', 'take/take-mix-raw-ringout.wav']);
+  const [a, r] = [parseWav(files[0].bytes), parseWav(files[3].bytes)];
+  assert.deepEqual([a.frames, a.chunks.join()], [4, 'fmt ,acid,smpl,data']); assert.deepEqual([r.frames, r.chunks.join()], [1, 'fmt ,data'], 'ring-out: untagged');
+  assert.equal(unzipStored(stemsZip(head, ['k', 's'], 44100, 'take', null, { ring: splitChunks([lane(), lane()], 5).tail })).length, 3, 'no ring-out recorded: no files');
+});

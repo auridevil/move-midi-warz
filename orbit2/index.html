@@ -143,6 +143,10 @@
         <div id="exp-loop"></div>
       </div>
       <div class="row-ctl">
+        <div class="ctl" title="export format of every WAV rendered here: bit depth and sample rate (jam takes record at the page's own rate, 16-bit)"><span class="ctl-lbl">format</span><div id="exp-bits"></div><div id="exp-rate"></div></div>
+        <div id="exp-ring"></div>
+      </div>
+      <div class="row-ctl">
         <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
       </div>
       <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + their raw sum (no master compressor), all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button><button id="exp-roll" class="small" title="Free dice: WAV, stems and MIDI share one roll of the probability and humanize dice, so they hold the same hits. New roll = a different take.">new roll</button></div>

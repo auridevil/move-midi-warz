@@ -1,6 +1,7 @@
 // Jam takes and stems → WAV files. Pure helpers (no audio graph): the page records 16-bit chunks per lane (the
 // worklet) or renders floats offline; this turns them into equal-length WAVs, a mix, and one zip.
 import { zipStored } from '../punch/ablbundle.js';
+import { encodeWav, insertChunk, withSmpl } from '../unasm/wav.js';
 
 export const JAM_BEATS = 256;
 
@@ -67,28 +68,82 @@ export function trimChunks(lanes, frames) {
  * u16 root note, u16 0x8000, f32 0, u32 beats, u16 meter denominator, u16 numerator, f32 tempo.
  */
 export function withAcid(wav, { bpm, beats, loop = true, num = 4, den = 4 }) {
-  const out = new Uint8Array(wav.length + 32), v = new DataView(out.buffer);
-  out.set(wav.subarray(0, 36)); out.set(wav.subarray(36), 68);
-  v.setUint32(4, out.length - 8, true); out.set([0x61, 0x63, 0x69, 0x64], 36); v.setUint32(40, 24, true);
-  v.setUint32(44, loop ? 4 : 1, true); v.setUint16(48, 60, true); v.setUint16(50, 0x8000, true); v.setFloat32(52, 0, true);
-  v.setUint32(56, Math.round(beats), true); v.setUint16(60, den, true); v.setUint16(62, num, true); v.setFloat32(64, bpm, true);
-  return out;
+  const body = new Uint8Array(24), v = new DataView(body.buffer);   // before 'data' in any header (PCM 44 bytes: at 36)
+  v.setUint32(0, loop ? 4 : 1, true); v.setUint16(4, 60, true); v.setUint16(6, 0x8000, true); v.setFloat32(8, 0, true);
+  v.setUint32(12, Math.round(beats), true); v.setUint16(16, den, true); v.setUint16(18, num, true); v.setFloat32(20, bpm, true);
+  return insertChunk(wav, 'acid', body);
 }
+/** Frames in a WAV's 'data' chunk (any header). */
+export function wavFrames(wav) {
+  const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength); let at = 12, bpf = 0;
+  while (at + 8 <= wav.length) {
+    const id = String.fromCharCode(...wav.subarray(at, at + 4)), sz = v.getUint32(at + 4, true);
+    if (id === 'fmt ') bpf = v.getUint16(at + 20, true); if (id === 'data') return bpf ? sz / bpf : 0; at += 8 + sz + (sz & 1);
+  }
+  return 0;
+}
+/** The DAW tags of an export: `acid` ({ bpm, beats, … }, withAcid) and, for a loop, E6's 'smpl' loop over the whole
+ *  file. Kit one-shots and ring-out files get neither (tempo-free). */
+export const tagWav = (wav, sampleRate, { acid = null, smpl = false } = {}) => {
+  let w = acid ? withAcid(wav, acid) : wav; if (smpl) w = withSmpl(w, { frames: wavFrames(wav), sampleRate }); return w;
+};
 /** Float stems (one [L, R] per lane, same length) → Int16 chunks, scaled together so the loudest never clips. */
 export function floatStemsToInt16(stems) {
   let peak = 0; for (const [L, R] of stems) for (const d of [L, R]) for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
   const g = peak > 0.98 ? 0.98 / peak : 1, q = (d) => { const s = new Int16Array(d.length); for (let i = 0; i < d.length; i++) s[i] = Math.round(d[i] * g * 32767); return s; };
   return { lanes: stems.map(([L, R]) => [[q(L)], [q(R)]]), gain: g };
 }
+export const safeName = (s) => s.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'lane';
 /**
- * lanes: [[L chunks], [R chunks]] per lane, names per lane → zip with one WAV per lane + mix-raw.wav (their plain sum,
- * no master compressor), all the same length. Every file is named after the folder (tempo, bars, time) so stems of
- * different exports never clash in a DAW's browser; `acid` ({ bpm, beats, loop }) tags each WAV with the tempo.
+ * lanes: [[L chunks], [R chunks]] per lane (a jam take, 16-bit), names per lane → zip with one WAV per lane + mix-raw.wav
+ * (their plain sum, no master compressor), all the same length. Every file is named after the folder (tempo, bars,
+ * time) so stems of different exports never clash in a DAW's browser; `acid` ({ bpm, beats, loop }) tags each WAV with
+ * the tempo, `smpl` adds the loop chunk. ring (E6): the same per lane past the take's end (splitChunks), as
+ * "…-ringout.wav" files, untagged: drop each right after its lane's take to hear the echoes and decays it cut.
  */
-export function stemsZip(lanes, names, sampleRate, folder = 'orbits', acid = null) {
-  const safe = (s) => s.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 24) || 'lane';
-  const tag = (w) => (acid ? withAcid(w, acid) : w), base = folder.split('/').pop();
-  const files = lanes.map(([L, R], i) => ({ name: `${folder}/${base}-${i + 1}-${safe(names[i])}.wav`, data: tag(wavFromInt16(L, R, sampleRate)) }));
-  const [mL, mR] = mixInt16(lanes); files.push({ name: `${folder}/${base}-mix-raw.wav`, data: tag(wavFromInt16(mL, mR, sampleRate)) });
+export function stemsZip(lanes, names, sampleRate, folder = 'orbits', acid = null, { smpl = false, ring = null } = {}) {
+  const base = folder.split('/').pop(), files = [];
+  const add = (set, sfx, tags) => {
+    set.forEach(([L, R], i) => files.push({ name: `${folder}/${base}-${i + 1}-${safeName(names[i])}${sfx}.wav`, data: tagWav(wavFromInt16(L, R, sampleRate), sampleRate, tags) }));
+    const [mL, mR] = mixInt16(set); files.push({ name: `${folder}/${base}-mix-raw${sfx}.wav`, data: tagWav(wavFromInt16(mL, mR, sampleRate), sampleRate, tags) });
+  };
+  add(lanes, '', { acid, smpl }); if (ring?.[0]?.[0]?.some(c => c.length)) add(ring, '-ringout', {});
   return zipStored(files);
+}
+/** A jam recording that ran past the take (the ring-out) → { head: the take, `frames` long, tail: the rest }, per lane. */
+export function splitChunks(lanes, frames) {
+  const cut = (chunks) => { const head = [], tail = []; let left = frames; for (const c of chunks) { if (left >= c.length) head.push(c); else if (left <= 0) tail.push(c); else { head.push(c.slice(0, left)); tail.push(c.slice(left)); } left -= c.length; } return [head, tail]; };
+  const parts = lanes.map(lane => lane.map(cut));
+  return { head: parts.map(l => l.map(([h]) => h)), tail: parts.map(l => l.map(([, t]) => t)) };
+}
+/** E2: the sum of float stems ([L, R] each, same length): the raw mix, and the check that dry stems plus the delay
+ *  return add up to the wet mix. */
+export function sumStems(stems) {
+  const n = stems[0]?.[0].length || 0, out = [new Float32Array(n), new Float32Array(n)];
+  for (const st of stems) for (let c = 0; c < 2; c++) { const d = st[c], o = out[c]; for (let i = 0; i < n; i++) o[i] += d[i]; }
+  return out;
+}
+/**
+ * Offline stems (float [L, R] per lane, + `ret`, the delay return pair, for dry stems) → WAV files in `bits` (16 / 24 /
+ * 32 float) named after `folder`, + mix-raw.wav (their plain sum: sumStems). 16 and 24-bit share one gain that keeps the
+ * loudest stem and the mix under 0.98 (32-bit float keeps the levels as rendered: nothing clips). Returns
+ * { files: [{ name, data }], gain }.
+ */
+export function stemFiles(stems, names, sampleRate, folder = 'orbits', { bits = 16, acid = null, smpl = false, ret = null } = {}) {
+  const base = folder.split('/').pop(), all = ret ? [...stems, ret] : stems, mix = sumStems(all);
+  let peak = 0; for (const d of [...all.flat(), ...mix]) for (let i = 0; i < d.length; i++) { const a = Math.abs(d[i]); if (a > peak) peak = a; }
+  const g = bits !== 32 && peak > 0.98 ? 0.98 / peak : 1, sc = (d) => g === 1 ? d : d.map(x => x * g);
+  const file = (name, [L, R]) => ({ name: `${folder}/${base}-${name}.wav`, data: tagWav(encodeWav([sc(L), sc(R)], sampleRate, { bits }), sampleRate, { acid, smpl }) });
+  const files = stems.map((st, i) => file(`${i + 1}-${safeName(names[i])}`, st));
+  if (ret) files.push(file('delay-return', ret)); files.push(file('mix-raw', mix));
+  return { files, gain: g };
+}
+/** E4: a one-shot render → from its onset (`pre` s in) to the last sample above -90 dBFS, at most `maxSec`; a cut that
+ *  lands on sound fades out over 10 ms instead of clicking. Returns [ch…]. */
+export function trimOneShot(channels, sampleRate, { pre = 0, maxSec = 2 } = {}) {
+  const p = Math.round(pre * sampleRate), cap = Math.round(maxSec * sampleRate), floor = 10 ** (-90 / 20); let last = -1;
+  for (const d of channels) for (let i = Math.min(d.length, p + cap) - 1; i > p + last; i--) if (Math.abs(d[i]) > floor) { last = i - p; break; }
+  const len = Math.max(1, last + 1), out = channels.map(d => d.slice(p, p + len)), cut = len >= cap;
+  if (cut) { const f = Math.min(len, Math.round(0.01 * sampleRate)); for (const d of out) for (let i = 0; i < f; i++) d[len - 1 - i] *= i / f; }
+  return out;
 }

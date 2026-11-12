@@ -1,12 +1,13 @@
 // Jam recorder: one stereo input per lane bus (as many as the node was made with: 6 for L2). Records from `start` to
 // `end` (audio-context seconds, so the take starts and ends exactly on master-clock ticks), as 16-bit samples, posted to
-// the page in batches.
+// the page in batches. ring (E6, seconds, sent with `start`): it goes on recording that long past `end`, so the page can
+// keep each lane's ring-out (the echoes and decays the bar line cut) as a file of its own.
 const BATCH = 16384;
 class JamRec extends AudioWorkletProcessor {
   constructor(options) {
-    super(); this.lanes = options?.numberOfInputs || 4; this.start = Infinity; this.end = Infinity; this.fresh();
+    super(); this.lanes = options?.numberOfInputs || 4; this.start = Infinity; this.end = Infinity; this.ring = 0; this.fresh();
     this.port.onmessage = ({ data }) => {
-      if (data.start != null) { this.start = data.start; this.end = Infinity; this.fresh(); }
+      if (data.start != null) { this.start = data.start; this.end = Infinity; this.ring = Math.max(0, data.ring || 0); this.fresh(); }
       if (data.end != null) this.end = Math.max(data.end, this.start);
       if (data.cancel) { this.start = this.end = Infinity; this.fresh(); }
     };
@@ -15,9 +16,10 @@ class JamRec extends AudioWorkletProcessor {
   flush() { if (this.n) this.port.postMessage({ lanes: this.blk.map(([l, r]) => [l.slice(0, this.n), r.slice(0, this.n)]) }); this.fresh(); }
   process(inputs, outputs) {
     // whole frames: the take is round((end - start) · sampleRate) long, so N bars at a tempo are exactly N bars of samples;
-    // an end already passed (stop just after a bar line) finishes at once and `frames` tells the page where to cut
-    const N = 128, f0 = currentFrame, s = Math.round(this.start * sampleRate), e = s + Math.round((this.end - this.start) * sampleRate);
-    if (f0 >= e) { this.flush(); this.port.postMessage({ done: true, frames: e - s }); this.start = this.end = Infinity; return true; }
+    // an end already passed (stop just after a bar line) finishes at once and `frames` tells the page where to cut (the
+    // ring-out, when asked for, is what lies past `frames`)
+    const N = 128, f0 = currentFrame, s = Math.round(this.start * sampleRate), e0 = s + Math.round((this.end - this.start) * sampleRate), e = e0 + Math.round(this.ring * sampleRate);
+    if (f0 >= e) { this.flush(); this.port.postMessage({ done: true, frames: e0 - s }); this.start = this.end = Infinity; return true; }
     if (f0 + N <= s) return true;
     const a = Math.max(0, s - f0), b = Math.min(N, e - f0);
     for (let f = a; f < b; f++) {
