@@ -3,12 +3,12 @@ type: review
 phase: ORBIT2-10
 title: ORBIT2-10 export for producers (E1–E6), review panel
 date: 2026-11-12
-round: 4
+round: 5
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
   verifier: HAPPY
-  architect: NOT HAPPY
+  architect: HAPPY
   sound: HAPPY
   dex: HAPPY
   kai: HAPPY
@@ -365,3 +365,36 @@ paths alone: every repeatable file byte-identical to `1054ef9` (sound).
   wiring check follows the scheduler's new early-part loop. `npm run check` clean, `npm test` 166 + 9,
   `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both stopped). `app.js`
   1525 → 1530 lines.
+
+## Round 5 (re-check): the architect HAPPY, the whole panel HAPPY
+
+Only the architect (NOT HAPPY after round 4), a fresh sub-agent on the default model, ports 5402 / 9402 (the phase start
+`1005992` on 5502, the code before the round-4 fix `8adb2c0` on 5602). Brief as before, `git diff --stat 1005992..HEAD`
+(9 files, +995/−103) and the round-4 fix alone (`8adb2c0..d32aac5`, 5 files, +149/−15), the architect's round-4 MUST-FIX
+and "Changes after round 4", confirm first, then nearby, new only in scope and marked NEW. Pre-checks on `d32aac5`:
+`npm run check` clean, `npm test` 166 + 9. `stalled: 0`: the open MUST-FIX is closed and everyone is HAPPY.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| architect | HAPPY | (2) FIXED: the round-4 repro (a fresh pattern, the kick on step 1 pushed −30 ms, 86 bpm, ring-out on, stopJam mid-bar, the tempo moved once the kick's early part is logged and the stop tick's block is not yet scheduled; 48 kHz): 86 → 80, 6 takes: the end moved +4 to +288 µs, the kick's step equal to the end to 0 µs every take, kick out (ring-out −68.0 / −68.7 dBFS at 2–20 ms, 1.14 s, as a clean take); `8adb2c0`: the end moved +5.6 to +789 µs, the kick kept in 4 of 6 (−15.5 dBFS, 3.93 s), clean only under half a frame. 86 → 60: +3856 µs, step 0, out (`8adb2c0`: kept, −16.0 dBFS, 5.24 s). The MIDI clock's phase-lock trim (`pmidi.handlers.tick` with a +2 MIDI-tick drift, trim 0.96): the end moved +370 µs, step 0, out (`8adb2c0`: +1419 µs, kept, −15.5 dBFS); the transport left at that trim with `tempo` at 86 (the clock's end 59.4 ms after stopJam's estimate): step 0, out (`8adb2c0`: kept). Nearby on HEAD, 0 page errors: the r2 repro (the next downbeat's early part, −0.12 ms, has step = end: out; kick ring-out −42.6 dBFS), the r3 repro (restarted hits due +10.4 ms after the end: out; −21.1 dBFS, the restarted kick due before it), a take's steps pushed past the end (ratio 6 at 240 bpm, +30 ms, a +½ nudge, a ×3 ratchet: +2.2 to +16.1 ms past the end, kept, as on `8adb2c0`), Play stopped mid-take and started 300 ms later (rings on), ring-out off (nothing logged, nothing pending), the recorder's frames = `jam.endTime` to 0 frames; check clean, 166 + 9. Cost: a Node bench of `pendingSteps` (6 lanes, an early part every 20 / 5 ticks, 36 ticks ahead) 38 / 75 ns a tick, at most 2 / 8 ticks waiting; nothing outside a ring-out take (`pending.size`). Code: settled after `jamTick` from the same `time` as the clock's end, before the quiet-tick return; cleared where the ticks restart (Play, reset); a clock snap renumbers without clearing (like `early`); dropping the settle, moving it after the quiet return, a clear or the add each fails an r4 assertion (through the source checks). |
+
+SHOULD items recorded (never block): the scheduler's wiring of `pending` is checked by source regexes, not by behaviour
+(architect; Later "A jam module"); stopJam's estimate of the end ignores a phase-lock trim (`tickSec()` follows `tempo`,
+the transport runs at `tempo × trim`: 59.4 ms early with a 0.96 trim and ~1.4 s to the line, corrected by the clock's
+end on the stop tick; read, not measured: an error over the ~0.1 s look-ahead would let the recorder stop short of the bar
+line, e.g. a stop 2.5 s or more before the line at a 4 % trim; pre-existing formula) (architect); the comment in
+`hitSound` said a MIDI clock's snap counts the ticks from 0 again: it renumbers them (architect).
+
+GOOD: a small, pure, unit-tested `pendingSteps` in jam.js, settled from the same tick and time the clock posts the end
+with: a step due on the end equals the end to 0 µs whatever moves the tempo (a knob's ramp, a MIDI trim, a transport left
+trimmed); cheap and narrow (only filled during a ring-out take, guarded, 38–75 ns a tick at worst, 5 lines of app.js);
+cleared exactly where the tick numbering restarts, its estimate fallback documented and right when the tempo didn't
+move, and the r4 test replays a real `liveTick` through an 86 → 80 drop showing both outcomes (architect).
+
+### Changes after round 5
+
+- **Quick SHOULD done:** the `hitSound` comment says Play and reset count the ticks from 0 again and a MIDI clock's snap
+  renumbers them (architect). No code change.
+- **Not changed:** stopJam's end estimate under a phase-lock trim (the formula is the phase start's; the clock's end on
+  the stop tick corrects it) → [[BACKLOG]] Later "Jam take edges"; the wiring's source checks → Later "A jam module".
+- `npm run check` clean, `npm test` 166 + 9. **Phase 10 review: `result: HAPPY`.**

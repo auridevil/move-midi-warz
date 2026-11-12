@@ -491,7 +491,11 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   the take's first frames (it starts at the current block while `frames` reports the whole take: 95916 frames for 2 bars
   once, with two Chromes running; verifier), and `jam.endTime` is the last end posted, so a big tempo drop while closing
   could post the stop tick's end after the recorder already stopped on stopJam's (a race of a few ms; the recorder's own
-  end, start + frames, would decide then; architect, read, not measured).
+  end, start + frames, would decide then; architect, read, not measured). Round 5 (architect): stopJam's estimate of the
+  end uses `tickSec()` (from `tempo`) while a MIDI clock's phase lock runs the transport at `tempo × trim` (59.4 ms early
+  with a 0.96 trim and ~1.4 s to the line; the clock's end on the stop tick corrects it, but an error over the ~0.1 s
+  look-ahead, e.g. a stop 2.5 s or more before the line at a 4 % trim, would let the recorder stop short of the bar line;
+  read, not measured): the transport's own bpm in the estimate.
 - **A gentler ring-out join on noise** (ORBIT2-10 round 2, sound): `joinRing` bends the ring-out's first 2 ms onto the
   line the take ends on, right for a smooth tail; on a noise tail that line is random (a dsp snare at 24 kHz: +4.9 dB
   for 5 ms over the live continuation; inaudible). A shorter bend or a value-only join on noisy lanes. Also (round 4):

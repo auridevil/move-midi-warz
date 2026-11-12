@@ -200,7 +200,7 @@ function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = 
   const li = lanesOf(k).indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing),
   // with when its step was due: a downbeat humanized or nudged before the take's end is still the next bar's. A time,
-  // not a tick: Play, reset and a MIDI clock's snap all count the ticks from 0 again
+  // not a tick: Play and reset count the ticks from 0 again, a MIDI clock's snap renumbers them
   const logged = k === kit && jam.log ? { li, lane, time, step: step ?? time, accent, lock, vel, slice } : null; if (logged) logHit(jam.log, logged, RING_KEEP);
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
   const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
