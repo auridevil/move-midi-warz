@@ -168,13 +168,14 @@ test('clock phase lock: trims small drift, snaps big jumps; SPP and start reset 
   p.receive([0xFA], 0); p.receive([0xF8], 1); p.receive([0xF8], 2); p.receive([0xF2, 4, 0], 3); p.receive([0xF8], 4); assert.deepEqual(ticks, [0, 1, 24], 'SPP 4 sixteenths = tick 24');
 });
 test('jam / stems: equal-length WAVs per lane + mix in one zip, no clipping', async () => {
-  const { wavFromInt16, mixInt16, floatStemsToInt16, stemsZip } = await import('../src/poly/jam.js');
+  const { wavFromInt16, mixInt16, headroomGain, stemsZip } = await import('../src/poly/jam.js');
   const w = wavFromInt16([Int16Array.of(1, 2), Int16Array.of(3)], [Int16Array.of(-1, -2), Int16Array.of(-3)], 48000);
   const v = new DataView(w.buffer); assert.equal(String.fromCharCode(...w.slice(0, 4)), 'RIFF'); assert.equal(v.getUint32(40, true), 12, '3 frames × 4 bytes'); assert.equal(v.getInt16(44 + 8, true), 3); assert.equal(v.getInt16(44 + 10, true), -3);
   const lane = (x) => [[Int16Array.of(x, x)], [Int16Array.of(-x, -x)]];
   const mix = mixInt16([lane(20000), lane(20000), lane(1), lane(0)]); assert.equal(mix[0][0][0], 32767, 'clipped, not wrapped'); assert.equal(mix[1][0][1], -32768);
-  const { lanes, gain } = floatStemsToInt16([[Float32Array.of(2, 0), Float32Array.of(0, 0)], [Float32Array.of(0.5, 0), Float32Array.of(0, 0)]]);
-  assert.ok(Math.abs(gain - 0.49) < 1e-9, 'loudest lane scaled to 0.98'); assert.equal(lanes[1][0][0][0], Math.round(0.5 * 0.49 * 32767), 'same gain on every stem');
+  const gain = headroomGain([Float32Array.of(2, 0), Float32Array.of(0, 0), Float32Array.of(0.5, 0), Float32Array.of(0, 0)]);
+  assert.ok(Math.abs(gain - 0.49) < 1e-9, 'loudest lane scaled to 0.98'); assert.equal(headroomGain([Float32Array.of(0.5)]), 1, 'under 0.98: untouched');
+  assert.equal(headroomGain([Float32Array.of(2)], 32), 1, '32-bit float: as rendered');
   const zip = stemsZip([lane(5), lane(6), lane(7), lane(8)], ['kick', 'snare', 'hat/x', '♪ demo'], 44100, 'take');
   const names = []; for (let i = 0; i < zip.length - 4; i++) if (zip[i] === 0x50 && zip[i + 1] === 0x4B && zip[i + 2] === 3 && zip[i + 3] === 4) { const n = zip[i + 26] | (zip[i + 27] << 8); names.push(new TextDecoder().decode(zip.slice(i + 30, i + 30 + n))); }
   assert.deepEqual(names, ['take/take-1-kick.wav', 'take/take-2-snare.wav', 'take/take-3-hat-x.wav', 'take/take-4-demo.wav', 'take/take-mix-raw.wav']);
@@ -1416,7 +1417,7 @@ test('ORBIT2-09 r2: what a pad hit plays, the padded slice audio, a new break ke
   l.clear(); l.loadBreak({ name: 'b3', slices: ['g', 'h'], sec: 1, bpm: 120 }); assert.deepEqual([l.sound.decay, l.sound.snap, l.sound.color], [1, 0.5, 0.5], 'laid out: the sample defaults');
 });
 test('ORBIT2-10 E1: 24-bit and 32-bit float WAVs round-trip through parseWav; tags land before data in any header', async () => {
-  const { encodeWav } = await import('../src/unasm/wav.js'); const { parseWav } = await import('../tools/cdp.mjs'); const { tagWav, wavFrames } = await import('../src/poly/jam.js');
+  const { encodeWav, wavFrames } = await import('../src/unasm/wav.js'); const { parseWav } = await import('../tools/cdp.mjs'); const { tagWav } = await import('../src/poly/jam.js');
   const L = Float32Array.of(0, 0.5, -0.25, 1.5, -1), R = Float32Array.of(0, -0.5, 0.25, 0.75, 0.125);
   const read = (w, bits, f, ch) => { const v = new DataView(w.buffer), o = w.length - 5 * 2 * (bits / 8); return bits === 32 ? v.getFloat32(o + (f * 2 + ch) * 4, true) : (v.getUint8(o + (f * 2 + ch) * 3) | v.getUint8(o + (f * 2 + ch) * 3 + 1) << 8 | v.getInt8(o + (f * 2 + ch) * 3 + 2) << 16) / 8388608; };
   const w24 = encodeWav([L, R], 48000, { bits: 24 }), p24 = parseWav(w24);
@@ -1439,15 +1440,15 @@ test('ORBIT2-10 E6: smpl chunk = one forward loop over the whole file', async ()
   assert.deepEqual([v.getUint32(44 + 44, true), v.getUint32(44 + 48, true), v.getUint32(44 + 56, true)], [0, 99, 0], 'start 0, end last frame (inclusive), forever');
   assert.equal(id(104), 'data'); assert.equal(v.getUint32(4, true), w.length - 8);
 });
-test('ORBIT2-10 E6: a jam take with a ring-out splits at the take, and the zip gets -ringout files', async () => {
-  const { splitChunks, stemsZip } = await import('../src/poly/jam.js'); const { unzipStored, parseWav } = await import('../tools/cdp.mjs');
+test('ORBIT2-10 E6: a jam take\'s zip gets -ringout files (untagged) only when it has a ring-out', async () => {
+  const { trimChunks, ringOut, stemsZip } = await import('../src/poly/jam.js'); const { unzipStored, parseWav } = await import('../tools/cdp.mjs');
   const lane = () => [[Int16Array.of(1, 2, 3), Int16Array.of(4, 5)], [Int16Array.of(1, 2, 3), Int16Array.of(4, 5)]];
-  const { head, tail } = splitChunks([lane(), lane()], 4); assert.deepEqual(head[0][0].map(c => [...c]), [[1, 2, 3], [4]]); assert.deepEqual(tail[1][1].map(c => [...c]), [[5]]);
-  const files = unzipStored(stemsZip(head, ['kick', 'snare'], 44100, 'take', { bpm: 120, beats: 4 }, { smpl: true, ring: tail }));
+  const take = trimChunks([lane(), lane()], 4), ring = ringOut([[Float32Array.of(0.5, 0.25), Float32Array.of(0, 0)], [Float32Array.of(0, 0), Float32Array.of(0, 0)]], 0, 2);
+  const files = unzipStored(stemsZip(take, ['kick', 'snare'], 44100, 'take', { bpm: 120, beats: 4 }, { smpl: true, ring }));
   assert.deepEqual(files.map(f => f.name), ['take/take-1-kick.wav', 'take/take-2-snare.wav', 'take/take-mix-raw.wav', 'take/take-1-kick-ringout.wav', 'take/take-2-snare-ringout.wav', 'take/take-mix-raw-ringout.wav']);
   const [a, r] = [parseWav(files[0].bytes), parseWav(files[3].bytes)];
-  assert.deepEqual([a.frames, a.chunks.join()], [4, 'fmt ,acid,smpl,data']); assert.deepEqual([r.frames, r.chunks.join()], [1, 'fmt ,data'], 'ring-out: untagged');
-  assert.equal(unzipStored(stemsZip(head, ['k', 's'], 44100, 'take', null, { ring: splitChunks([lane(), lane()], 5).tail })).length, 3, 'no ring-out recorded: no files');
+  assert.deepEqual([a.frames, a.chunks.join()], [4, 'fmt ,acid,smpl,data']); assert.deepEqual([r.frames, r.chunks.join()], [2, 'fmt ,data'], 'ring-out: untagged');
+  assert.equal(unzipStored(stemsZip(take, ['k', 's'], 44100, 'take', null, { ring: null })).length, 3, 'no ring-out: no files');
 });
 test('ORBIT2-10 E3: one Drum-Rack track holds every lane on its own note, one channel', async () => {
   const { hitsToMidi } = await import('../src/poly/export.js'); const { readMidi } = await import('../src/punch/smf.js');
@@ -1481,5 +1482,39 @@ test('ORBIT2-10 E4: a kit one-shot starts at its onset, ends where it falls sile
   assert.equal(trimOneShot([new Float32Array(50)], sr, { pre: 0.1 })[0].length, 1, 'silence: one sample, not an empty file');
   const late = new Float32Array(400); late[10] = 1e-5; late[14] = 0.8; late[20] = 0.1; const [c] = trimOneShot([late], sr, { pre: 0.1 }); assert.deepEqual([c.length, c[0]], [7, Math.fround(0.8)], 'a voice that speaks late still starts on sample 0 (under -80 dBFS before it is dropped)');
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), kit = app.slice(app.indexOf('async function exportKit('), app.indexOf('/** Open a #p= link'));
-  assert.match(kit, /orbits-kit-\$\{li \+ 1\}-\$\{voice\}/); assert.match(kit, /c\.send\.gain\.value = 0/, 'no delay'); assert.doesNotMatch(kit, /tagWav|withAcid|withSmpl/, 'tempo-free');
+  assert.match(kit, /orbits-kit-\$\{li \+ 1\}-\$\{safeName\(names\[li\]\)\}/, 'named like the stems'); assert.match(kit, /c\.send\.gain\.value = 0/, 'no delay'); assert.doesNotMatch(kit, /tagWav|withAcid|withSmpl/, 'tempo-free');
+});
+test('ORBIT2-10 r1: a jam ring-out is the take\'s own tails (no new hits), one-shots fade at any cut, the kit keeps headroom', async () => {
+  const { ringPlan, ringOut, joinRing, logHit, trimOneShot, headroomGain } = await import('../src/poly/jam.js');
+  // which hits ring past the end: sr 100, the take ends on frame 1000 (10 s); lane 1 holds a long sample (reach 5 s)
+  const reach = (li) => (li === 1 ? 5 : 2), log = [{ li: 0, time: 7 }, { li: 1, time: 6 }, { li: 2, time: 7.5 }, { li: 0, time: 9.503 }, { li: 0, time: 10 }, { li: 3, time: 10.5 }];
+  const plan = ringPlan(log, { endFrame: 1000, sampleRate: 100, reach });
+  assert.deepEqual(plan.hits.map(h => [h.li, h.time]), [[1, 6], [0, 9.503]], 'silent by the end (7 + 2, 7.5 + 2): out; on the end or after it: the music going on, out');
+  assert.ok(plan.lead >= 405 && plan.lead <= 406, 'the render starts 50 ms before the first one'); assert.equal(plan.frames, 151, 'as far past the end as the longest can sound (9.503 + 2: 150.3 frames, rounded up)');
+  for (const h of plan.hits) assert.ok(Math.abs(h.at * 100 - (plan.lead - (1000 - h.time * 100))) < 1e-9, 'placed on the take\'s frame grid: the end on frame `lead`');
+  assert.ok(Math.abs(((plan.hits[1].at * 100) % 1) - 0.3) < 1e-6, 'a hit keeps its sub-sample place');
+  assert.equal(ringPlan([{ li: 0, time: 3 }, { li: 0, time: 10 }], { endFrame: 1000, sampleRate: 100, reach }), null, 'nothing rings past the end: no ring-out');
+  // the render → 16-bit lanes like a take: rounded and clamped as the recorder does, all cut after the last sound
+  const r = ringOut([[Float32Array.of(9, 9, 0.5, 0.25, 1e-6, 0, 0), Float32Array.of(0, 0, 1.5, -1.5, 0, 0, 0)], [new Float32Array(7), Float32Array.of(0, 0, 0, 0, 0.001, 0, 0)]], 2, 5);
+  assert.deepEqual(r.map(l => l.map(c => [...c[0]])), [[[16384, 8192, 0], [32767, -32768, 0]], [[0, 0, 0], [0, 0, 33]]], 'from frame 2, three frames: the last over -90 dBFS on any lane');
+  assert.deepEqual(ringOut([[new Float32Array(4), new Float32Array(4)]], 1, 3).map(l => l.map(c => c[0].length)), [[1, 1]], 'silence: one frame');
+  // the seam: the ring-out's first frames bent onto the line the take ends on (120 after 110 → 130), the rest untouched
+  const rg = joinRing([[[Int16Array.of(100, 110), Int16Array.of(120)], [Int16Array.of(0)]]], [[[Int16Array.of(200, 200, 200, 200, 50)], [Int16Array.of(0, 0, 0)]]], 4);
+  assert.deepEqual(rg.map(l => l.map(c => [...c[0]])), [[[130, 148, 165, 183, 50], [0, 0, 0]]], 'no step at the join, the offset gone after n frames');
+  // the hit log keeps every hit within `keep` of the newest, in bounded size
+  const hl = []; for (let t = 0; t < 300; t++) logHit(hl, { li: 0, time: t }, 10);
+  assert.ok(hl.length < 300 && hl.at(-1).time === 299 && hl.some(h => h.time === 289), 'old hits go, the last 10 s stay');
+  // E4: a voice that speaks late (onset 5 samples after pre) and is still going where the render ends: faded, no click
+  const late = new Float32Array(200); late.fill(0.5, 15); const [c] = trimOneShot([late], 100, { pre: 0.1, maxSec: 2 });
+  assert.deepEqual([c.length, c[0], c[c.length - 1]], [185, 0.5, 0], 'cut by the render\'s end: faded out');
+  assert.ok(Math.abs(headroomGain([Float32Array.of(0.4, -1.2), Float32Array.of(0.9)], 24) - 0.98 / 1.2) < 1e-6, 'a kit over 0 dBFS: one gain for all its one-shots');
+  // wiring: the recorder keeps exactly the take (ring-out off: no tail, as before the phase), a ring-out is rendered only
+  // for a take that asked for one; every offline render goes through offline() (no Tone global swap across awaits)
+  const { readFileSync } = await import('node:fs'), src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8'), app = src('../src/poly/app.js');
+  assert.doesNotMatch(src('../src/poly/jam-worklet.js'), /ring/, 'the recorder records the take, nothing past its end');
+  assert.match(app, /if \(data\.frames != null\) jam\.chunks = trimChunks\(jam\.chunks, data\.frames\);/); assert.match(app, /jam\.log = exp\.ring \? \[\] : null/); assert.match(app, /if \(any && jam\.log && data\.frames != null\)/);
+  assert.doesNotMatch(app, /T\.Offline\(/, 'one render path'); assert.match(app, /headroomGain\(shots\.flatMap/); assert.match(app, /KIT_PRE \+ KIT_SEC \+ 0\.1/);
+  // a chain's static params are set at time 0, not at now + look-ahead (lost on a silent chain: the live lane played the
+  // constructor values while the exports and the ring-out played the settings)
+  for (const p of ['c\\.drive\\.wet', 'c\\.pan\\.pan', 'c\\.level\\.gain', 'c\\.send\\.gain']) assert.match(app, new RegExp(`holdParam\\(${p},`));
 });

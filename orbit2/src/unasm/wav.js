@@ -12,8 +12,8 @@ export function encodeWav(channels, sampleRate, { bits = 16 } = {}) {
   for (let i = 0; i < n; i++) for (let c = 0; c < ch; c++) {
     const x = channels[c][i];
     if (float) { v.setFloat32(o, x, true); o += 4; continue; }
-    const s = Math.max(-1, Math.min(1, x));
-    if (B === 2) { v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true); o += 2; }
+    const s = Math.max(-1, Math.min(1, x));   // rounded: setInt16 alone truncates toward zero, half an LSB of bias
+    if (B === 2) { v.setInt16(o, Math.round(s < 0 ? s * 0x8000 : s * 0x7FFF), true); o += 2; }
     else { const q = Math.round(s < 0 ? s * 0x800000 : s * 0x7FFFFF); v.setUint8(o, q & 255); v.setUint8(o + 1, (q >> 8) & 255); v.setInt8(o + 2, q >> 16); o += 3; }
   }
   return new Uint8Array(b);
@@ -27,6 +27,15 @@ export function insertChunk(wav, id, body) {
   out.set(wav.subarray(0, at)); for (let k = 0; k < 4; k++) out[at + k] = id.charCodeAt(k);
   w.setUint32(at + 4, body.length, true); out.set(body, at + 8); out.set(wav.subarray(at), at + 8 + body.length + pad);
   w.setUint32(4, out.length - 8, true); return out;
+}
+/** Frames in a WAV's 'data' chunk (any header). */
+export function wavFrames(wav) {
+  const v = new DataView(wav.buffer, wav.byteOffset, wav.byteLength); let at = 12, bpf = 0;
+  while (at + 8 <= wav.length) {
+    const id = String.fromCharCode(...wav.subarray(at, at + 4)), sz = v.getUint32(at + 4, true);
+    if (id === 'fmt ') bpf = v.getUint16(at + 20, true); if (id === 'data') return bpf ? sz / bpf : 0; at += 8 + sz + (sz & 1);
+  }
+  return 0;
 }
 /**
  * E6: a 'smpl' chunk with one forward loop over the whole file (frames 0 … frames − 1, inclusive, as the spec counts),

@@ -469,3 +469,23 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **One buffer a slice set** (ORBIT2-09 round 2, architect): a 16-slice set keeps 32 buffers in the page (its slices and
   their padded copies), 48 when something plays backwards (~18 MB for a 16 s stereo 48 kHz break); one break buffer plus
   cut offsets would need no padded copies (one source plays through any cut) and one reversed copy.
+- **Dither and one stem headroom** (ORBIT2-10 round 1, sound): 16-bit files are rounded now, not dithered (TPDF would
+  decorrelate the error); stems take one peak gain with their raw mix, so the same pattern's stems move with format and
+  rate (24-bit −2.19 dB under 32f on hot lanes; boombap's export-all stems −1.27 dB at 48 kHz, 0 at 44.1, noise peaks):
+  a fixed headroom (e.g. always −6 dB at 16 / 24-bit) would keep stems of different exports level-matched.
+- **Float jam recorder** (ORBIT2-10 round 1, sound, kai): jam takes stay 16-bit at the page's rate whatever the export
+  format says (the recorder posts Int16), and the jam raw mix (and its ring-out) is summed with a clamp; a Float32
+  recorder could write the take in the chosen bits (see also "Jam raw-mix headroom").
+- **Kit options** (ORBIT2-10 round 1, sound, architect): one-shots carry the lane's pan (a Drum Rack pad usually wants
+  them centred: a "centred" option), and kit files are named `orbits-kit-<lane>-<voice>` without the export's base, so
+  two kits clash in one DAW folder (the zip's folder has the time).
+- **Export-all memory** (ORBIT2-10 round 1, architect; estimated): both renders, the summed mix, the scaled copies, every
+  WAV and the zip are alive at once (~2.5–3 GB for a 64-bar cycle of 6 lanes at 60 bpm, 48 kHz, 32f); encoding and
+  dropping one stem at a time would cut the peak.
+- **Stems routing without a browser** (ORBIT2-10 round 1, architect): the dry + return routing (`routeStems`) is checked
+  in the page (dry + return = wet raw mix to 6e-8), not by a unit test; a Tone stub would let one run in Node.
+- **Voices that set filters with `.value` in `hit()`** (ORBIT2-10 round 1, implementer; pre-existing): six voices in
+  `voices.js` set a filter frequency with `.value =` per hit instead of at the hit's time: offline every hit of a render
+  gets the last one's value (all land at time 0), live it lands at now + look-ahead (and, like the chain params before
+  `holdParam`, can be lost on a silent chain); `setValueAtTime(v, t)` would put each where its hit is (`voices.js` lines
+  45, 50, 52, 59, 117: filter frequencies; 119: an auto-filter's rate).

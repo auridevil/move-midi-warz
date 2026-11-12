@@ -7,7 +7,7 @@ import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, padPages, trackLane } from '.
 import { hitVel, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
-import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, splitChunks, tagWav, trimOneShot, safeName } from './jam.js';
+import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, ringPlan, ringOut, joinRing } from './jam.js';
 import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
@@ -53,7 +53,8 @@ let evoSnap = null, evoCount = 0;
 const bank = new SlotBank(localStorage);
 const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
 // E1–E3, E6 export format: bit depth (16 / 24 / 32 float), sample rate of offline renders, jam ring-out files, dry
-// stems + delay return, MIDI as one Drum-Rack track. Older settings have none of it: the defaults are the old exports.
+// stems + delay return, MIDI as one Drum-Rack track. Older settings have none of it: the defaults are the old formats
+// (16-bit, 44.1 kHz, wet stems, a track per lane); 16-bit stems now share one gain with their raw mix (stemFiles).
 const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false };
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
@@ -78,13 +79,15 @@ function addChain(k) {
   k.chains.push({ v: null, voice: null, choke, drive, tone, pan, level, send, delay, bus });
   if (k === kit && jam.node) bus.connect(jam.node, 0, k.chains.length - 1);
 }
-function makeKit({ raw = false } = {}) {
+/** A kit plays the pattern's lanes, or its own `lanes` (a jam take's ring-out plays the lanes the take ended with). */
+const lanesOf = (k) => k?.lanes || m.lanes;
+function makeKit({ raw = false, lanes = null } = {}) {
   const master = raw ? new T.Gain(1).toDestination() : makeMaster(vol);
-  const kit = { master, chains: [], tc: T.getContext() }; rebuildVoices(kit); return kit;
+  const kit = { master, chains: [], tc: T.getContext(), lanes }; rebuildVoices(kit); return kit;
 }
 /** (Re)build a lane's voice nodes from the library, disposing the previous ones. */
 function buildVoice(li, k = kit) {
-  if (!k) return; while (k.chains.length <= li) addChain(k); const lane = m.lanes[li], c = k.chains[li];
+  if (!k) return; while (k.chains.length <= li) addChain(k); const lane = lanesOf(k)[li], c = k.chains[li];
   const key = lane.voice === 'sample' && lane.sample ? 'sample' : VOICES[lane.voice] ? lane.voice : 'kick';
   if (key === 'sample') ensureSample(lane);   // also on a chain that already plays a sample: a recalled slot, an undo or a setup can bring a set this page never loaded
   const eng = engine === 'dsp' && key !== 'sample' && DSP_VOICES[key] && dspReady(k.tc) ? 'dsp' : 'synth';
@@ -96,7 +99,7 @@ function buildVoice(li, k = kit) {
   } else c.v = key === 'sample' ? {} : VOICES[key].make(T, c.choke);   // samples make their nodes per hit
   c.voice = key; c.engine = eng;
   // the dsp engine is wanted but its module is not in this context yet: load it, then move every lane over
-  if (engine === 'dsp' && eng === 'synth' && key !== 'sample' && !dspReady(k.tc)) ensureDsp(k.tc).then(() => { m.lanes.forEach((_, i) => buildVoice(i, k)); }).catch(() => {});
+  if (engine === 'dsp' && eng === 'synth' && key !== 'sample' && !dspReady(k.tc)) ensureDsp(k.tc).then(() => { lanesOf(k).forEach((_, i) => buildVoice(i, k)); }).catch(() => {});
 }
 // ---- engines: 'synth' = the Tone.js voices in voices.js, 'dsp' = the AudioWorklet drum models in dsp-voices.js ----
 const ENGINE_KEY = 'midi-warz.orbit2.engine';
@@ -174,18 +177,27 @@ function padBuf(lane, k, rev) {
   const r = toAudioBuffer({ sampleRate: a.sampleRate, channels: padChannels(ch(a), ch(b), Math.round(PAD_SEC * a.sampleRate), rev) }, T.getContext().rawContext);
   sampleBufs.set(key, r); return r;
 }
+/** A chain param that holds still between knob moves, set at once: one event at time 0. Tone's `.value =` puts it at
+ *  now + look-ahead, and Chrome drops that event on a lane chain that is silent when it comes due (a kit built before
+ *  its first hit, a knob turned on a lane that isn't sounding): the lane went on with its constructor value (send 0.15,
+ *  level 0.8) while every export, rendered from time 0, had the setting, so a jam take and its ring-out disagreed. */
+const holdParam = (param, v) => { param.cancelScheduledValues(0); param.setValueAtTime(v, 0); };
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
 function applySound(li, k = kit) {
-  if (!k) return; const s = m.lanes[li].sound, c = k.chains[li];
-  c.drive.distortion = s.drive * 0.9; c.drive.wet.value = s.drive > 0.02 ? 0.3 + s.drive * 0.7 : 0;
-  c.tone.frequency.value = 200 * Math.pow(60, s.tone);              // 200 Hz .. 12 kHz
-  c.pan.pan.value = s.pan * 2 - 1; c.level.gain.value = s.level * s.level * 1.2; c.send.gain.value = s.send * 0.8;
+  if (!k) return; const s = lanesOf(k)[li].sound, c = k.chains[li];
+  c.drive.distortion = s.drive * 0.9; holdParam(c.drive.wet, s.drive > 0.02 ? 0.3 + s.drive * 0.7 : 0);
+  c.tone.frequency.value = 200 * Math.pow(60, s.tone);              // 200 Hz .. 12 kHz (every hit sets it again at its time)
+  holdParam(c.pan.pan, s.pan * 2 - 1); holdParam(c.level.gain, s.level * s.level * 1.2); holdParam(c.send.gain, s.send * 0.8);
 }
 /** Every lane's voice and sound on kit k: after a load, an undo, a kit or a lane-count change. */
-function rebuildVoices(k = kit) { m.lanes.forEach((_, i) => { buildVoice(i, k); applySound(i, k); }); }
+function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); }); }
+/** Seconds of live hits a jam take keeps for its ring-out (E6): the delay's tail plus a long sample at half speed. */
+const RING_KEEP = 48;
 /** slice: the slice of a set this hit plays (Lane.sliceAt; null = the lock's, else the first). */
 function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null) {
-  const li = m.lanes.indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
+  const li = lanesOf(k).indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
+  // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing)
+  if (k === kit && jam.log) logHit(jam.log, { li, lane, time, accent, lock, vel, slice }, RING_KEEP);
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
   const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
@@ -871,14 +883,35 @@ const acidOf = (bpm, nBarsLong, meter = m.meter, loop = true) => { const { num, 
 // The stereo WAV goes through the master compressor + limiter, which look ahead and so delay the sound: the measured
 // latency is taken off, so the first downbeat is on sample 0 like the (raw) stems.
 const tailSec = () => Math.max(2.5, 60 / tempo * 0.75 * 9 + 1.5);   // 9 dotted-eighth echoes at 0.3 feedback ≈ -94 dB, plus decay
+/**
+ * Every offline render (exports, the kit, a jam ring-out) → an AudioBuffer. Like T.Offline, except Tone's global context
+ * is the offline one only while `build(ctx)` runs, synchronously: T.Offline keeps it global across the build's awaits
+ * (the dsp module, the worklet flush), and a live hit scheduled meanwhile (the pattern playing on) would make its nodes
+ * there and be lost. build returns the kit it made (its worklets are flushed before the render starts), or null.
+ */
+async function offline(build, sec, channels, sr, { dsp = engine === 'dsp' } = {}) {
+  const live = T.getContext(), ctx = new T.OfflineContext(channels, sec, sr);
+  if (dsp) await ensureDsp(ctx);
+  T.setContext(ctx); let k; try { k = build(ctx); } finally { T.setContext(live); }
+  if (k) await dspFlush(k);   // the worklets must hold every hit before the render starts
+  return (await ctx.render()).get();
+}
+/** Stems on an offline kit: each lane bus to its own channel pair, nothing through the master; dry (E2): every lane's
+ *  delay leaves its bus for one more pair, the delay return. */
+function routeStems(k, dry = false) {
+  const ctx = T.getContext().rawContext, n = k.chains.length, merger = ctx.createChannelMerger(2 * n + (dry ? 2 : 0)); merger.connect(ctx.destination); k.master.disconnect();
+  const pair = (node, i) => { const sp = ctx.createChannelSplitter(2); node.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); };
+  const ret = dry ? new T.Gain(1) : null; if (ret) pair(ret, n);
+  k.chains.forEach((c, i) => { c.bus.disconnect(); pair(c.bus, i); if (ret) { c.delay.disconnect(); c.delay.connect(ret); } });
+}
 const latencyCache = new Map();   // per sample rate: the look-ahead is counted in samples
 async function masterLatency(sr) {
   if (latencyCache.has(sr)) return latencyCache.get(sr);
-  const at = 0.01, out = await T.Offline(() => {
+  const at = 0.01, b = await offline(() => {
     const ctx = T.getContext().rawContext, g = makeMaster(1), buf = ctx.createBuffer(1, 1, ctx.sampleRate), src = ctx.createBufferSource();
-    buf.getChannelData(0)[0] = 0.5; src.buffer = buf; T.connect(src, g); src.start(at);
-  }, 0.2, 1, sr);
-  const d = out.get().getChannelData(0), i = d.findIndex(x => Math.abs(x) > 1e-4), lat = i < 0 ? 0 : Math.max(0, i / sr - at);
+    buf.getChannelData(0)[0] = 0.5; src.buffer = buf; T.connect(src, g); src.start(at); return null;
+  }, 0.2, 1, sr, { dsp: false });
+  const d = b.getChannelData(0), i = d.findIndex(x => Math.abs(x) > 1e-4), lat = i < 0 ? 0 : Math.max(0, i / sr - at);
   latencyCache.set(sr, lat); return lat;
 }
 /** The pattern's hit list for an export (one roll: exportDice), `ticks` long. */
@@ -894,20 +927,15 @@ async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
   const lead = renderLead(hits);
   for (const l of m.lanes) await ensureSample(l);
   const lat = stems ? 0 : await masterLatency(rate);
-  const out = await T.Offline(async ({ transport }) => {
-    if (engine === 'dsp') await ensureDsp(T.getContext()); transport.bpm.value = tempo;
+  const b = await offline(({ transport }) => {
+    transport.bpm.value = tempo;
     const k = makeKit({ raw: stems });   // a fresh kit in the offline context, same voices and sounds
-    if (stems) {
-      const ctx = T.getContext().rawContext, n = k.chains.length, merger = ctx.createChannelMerger(2 * n + (dry ? 2 : 0)); merger.connect(ctx.destination); k.master.disconnect();
-      const pair = (node, i) => { const sp = ctx.createChannelSplitter(2); node.connect(sp); sp.connect(merger, 0, 2 * i); sp.connect(merger, 1, 2 * i + 1); };
-      const ret = dry ? new T.Gain(1) : null; if (ret) pair(ret, n);
-      k.chains.forEach((c, i) => { c.bus.disconnect(); pair(c.bus, i); if (ret) { c.delay.disconnect(); c.delay.connect(ret); } });
-    }
+    if (stems) routeStems(k, dry);
     // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
     for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k, h.slice);
-    await dspFlush(k);   // the worklets must hold every hit before the offline render starts
+    return k;
   }, lead + sec + tailSec(), stems ? 2 * m.lanes.length + (dry ? 2 : 0) : 2, rate);   // stems: a stereo pair per lane (8 or 12 channels, + the return)
-  const b = out.get(), sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
+  const sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
   const chans = loop ? raw.map(d => foldLoop(d, sr, sec, pre)) : oneShot(raw, sr, sec, pre, barSec);
   return { chans, sr, bars: Math.round(chans[0].length / sr / barSec), patternBars: ticks / m.barTicks(), hits, capped, loop };
 }
@@ -965,31 +993,29 @@ async function exportAll() {
   files.unshift({ name: `${base}/${base}-mix.wav`, data: mixWav(mix) });
   files.push({ name: `${base}/${base}.mid`, data: midiOf(hits, { bars: ticks / m.barTicks() }) });
   download(zipStored(files), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}`;
+  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}${ui.expWhat.value === 'chain' ? ' · this pattern only: a chain exports as MIDI' : ''}`;
 }
 /**
  * E4 kit: each lane's sound as one-shot WAVs to load into Simpler or a Drum Rack, an accent and a normal hit (velocity
  * 1 and 0.7, as the pattern plays them), with the lane's current voice, knobs, drive, tone and pan, but no delay (a
  * rack has its own sends) and no master. 2 s at most, cut where it falls silent, the onset on sample 0. Tempo-free:
- * no ACID, no smpl. One offline render per hit, so no lane chokes or bleeds into another.
+ * no ACID, no smpl. One offline render per hit, so no lane chokes or bleeds into another. Named like the stems.
  */
-const KIT_PRE = 0.05;
+const KIT_PRE = 0.05, KIT_SEC = 2;
 async function exportKit() {
-  await wake(); const n = m.lanes.length, rate = exp.rate, files = [], base = `orbits-kit-${stamp()}`;
+  await wake(); const n = m.lanes.length, rate = exp.rate, shots = [], base = `orbits-kit-${stamp()}`, names = laneNames(n);
   for (const l of m.lanes) await ensureSample(l);
   for (let li = 0; li < n; li++) for (const accent of [true, false]) {
     $('exp-status').textContent = `rendering the kit: lane ${li + 1} of ${n}…`;
-    const out = await T.Offline(async () => {
-      if (engine === 'dsp') await ensureDsp(T.getContext());
-      const k = makeKit({ raw: true }); for (const c of k.chains) c.send.gain.value = 0;
-      hitSound(m.lanes[li], KIT_PRE, accent, null, null, k); await dspFlush(k);
-    }, KIT_PRE + 2, 2, rate);
-    const b = out.get(), lane = m.lanes[li], voice = lane.voice === 'sample' ? safeName((lane.sample?.name || 'sample').replace(/\.[^.]+$/, '')) : lane.voice;
-    const chans = trimOneShot([b.getChannelData(0), b.getChannelData(1)], rate, { pre: KIT_PRE, maxSec: 2 });
-    files.push({ name: `${base}/orbits-kit-${li + 1}-${voice}-${accent ? 'accent' : 'normal'}.wav`, data: encodeWav(chans, rate, { bits: exp.bits }) });
+    // 0.1 s past the longest one-shot: a voice that speaks a few ms after its hit still has its whole 2 s to the cut
+    const b = await offline(() => { const k = makeKit({ raw: true }); for (const c of k.chains) c.send.gain.value = 0; hitSound(m.lanes[li], KIT_PRE, accent, null, null, k); return k; }, KIT_PRE + KIT_SEC + 0.1, 2, rate);
+    shots.push({ name: `${base}/orbits-kit-${li + 1}-${safeName(names[li])}-${accent ? 'accent' : 'normal'}.wav`, chans: trimOneShot([b.getChannelData(0), b.getChannelData(1)], rate, { pre: KIT_PRE, maxSec: KIT_SEC }) });
   }
+  // no master: a raw hit can go over 0 dBFS, which PCM would clip. One gain for the whole kit keeps the lanes' balance
+  // and each accent / normal pair as it plays (32-bit float keeps the levels as rendered)
+  const g = headroomGain(shots.flatMap(s => s.chans), exp.bits), files = shots.map(s => ({ name: s.name, data: encodeWav(g === 1 ? s.chans : s.chans.map(d => d.map(x => x * g)), rate, { bits: exp.bits }) }));
   download(zipStored(files), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `kit: ${n} lanes × accent + normal · one-shots, no delay · ${fmtNote()}`;
+  $('exp-status').textContent = `kit: ${n} lanes × accent + normal · one-shots, no delay · ${fmtNote()}${g < 1 ? ` · all scaled ${(20 * Math.log10(g)).toFixed(1)} dB to avoid clipping` : ''}`;
 }
 /** Open a #p= link (once: it leaves the address bar). first = a first visit: there is no beat of yours behind it, so
  *  history starts at the link and play pulses, like the demo. */
@@ -1006,7 +1032,7 @@ function buildExportUI() {
   ui.expLoop = mount('exp-loop', toggleChip({ label: 'render as loop', on: true, title: 'on: the ring-out wraps onto the start, so the file is exactly N bars and loops seamlessly (Session clips). off: one-shot that starts on the downbeat and keeps its ring-out, rounded up to whole bars (place it once in a song). MIDI follows it: a note nudged or pushed before the downbeat wraps to the end (on) or starts on the downbeat (off).' }));
   ui.expBits = mount('exp-bits', segmented({ options: [[16, '16'], [24, '24'], [32, '32f', '32-bit float: nothing clips, levels as rendered']], value: exp.bits, onChange: (v) => { exp.bits = v; saveSettings(); } }));
   ui.expRate = mount('exp-rate', segmented({ options: [[44100, '44.1'], [48000, '48', '48 kHz (video, most interfaces)']], value: exp.rate, onChange: (v) => { exp.rate = v; saveSettings(); } }));
-  ui.expRing = mount('exp-ring', toggleChip({ label: 'jam ring-out', on: exp.ring, title: 'jam takes record a few seconds past their last bar line and add each lane\'s ring-out (the echoes and decays the bar line cut) as a "-ringout" file: place it right after the take', onChange: (v) => { exp.ring = v; saveSettings(); } }));
+  ui.expRing = mount('exp-ring', toggleChip({ label: 'jam ring-out', on: exp.ring, title: 'jam takes add each lane\'s ring-out, the echoes and decays their last bar line cut, as "-ringout" files: place them right after the take. Made from the hits the take played, so they hold no new hits even when the pattern plays on.', onChange: (v) => { exp.ring = v; saveSettings(); } }));
   ui.expDry = mount('exp-dry', toggleChip({ label: 'dry stems', on: exp.dry, title: 'stems without their delay: every lane\'s echoes go to one more stem pair, "delay return", so you can treat them in the DAW. The stems plus the return still add up to the mix.', onChange: (v) => { exp.dry = v; saveSettings(); } }));
   ui.expMidiOne = mount('exp-midi-one', segmented({ options: [[false, 'per lane', 'a MIDI track per lane, each on its own channel'], [true, 'one track', 'one track for a Drum Rack: every lane on its note from the MIDI drawer, on lane 1\'s channel']], value: exp.midiOne, onChange: (v) => { exp.midiOne = v; saveSettings(); } }));
   ui.expWhat = mount('exp-what', segmented({ options: [['pattern', 'this pattern'], ['chain', 'the chain', 'each slot of the running chain for its bars']], value: 'pattern' }));
@@ -1025,6 +1051,9 @@ function buildEditUI() {
 // The recorder taps each lane bus (pre-master), starts on a bar line and ends on one (stop rounds up to the next
 // bar), so the four files are sample-aligned, the same length and whole bars long: a DAW lines them up at this tempo.
 const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, lanes: 4, sr: 44100, bar: BAR_TICKS, meter: '4/4' };   // idle → armed → rec → finishing → done; bar / meter: the take's, from its first bar line
+// E6 ring-out: log = the live hits while a take that wants one runs (hitSound), ring = its rendered tails (renderRing),
+// ringJob = that render while it runs, take = which take a render belongs to (a discard or a new take drops a late one)
+Object.assign(jam, { startTime: 0, log: null, ring: null, ringJob: null, take: 0 });
 async function ensureJamNode() {
   // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
   if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
@@ -1035,8 +1064,15 @@ async function ensureJamNode() {
   jam.node.port.onmessage = ({ data }) => {
     if (data.lanes) data.lanes.forEach(([L, R], i) => { jam.chunks[i][0].push(L); jam.chunks[i][1].push(R); });
     if (data.done) {   // cut to the exact take (a stop in the grace window ends on a bar line already recorded past)
-      if (data.frames != null) { const { head, tail } = splitChunks(jam.chunks, data.frames); jam.chunks = head; jam.ring = tail; }
-      const any = jam.chunks[0][0].length; jam.state = any ? 'done' : 'idle'; renderJam(); paintLeds();
+      if (data.frames != null) jam.chunks = trimChunks(jam.chunks, data.frames);
+      const any = jam.chunks[0][0].length; jam.state = any ? 'done' : 'idle';
+      // E6: the ring-out renders now, from the hits the take played; its end on the recorder's clock = start + frames
+      if (any && jam.log && data.frames != null) {
+        const take = jam.take;
+        jam.ringJob = renderRing(jam.log, Math.round(jam.startTime * jam.sr) + data.frames).then((r) => { if (jam.take === take) jam.ring = r && joinRing(jam.chunks, r, Math.round(0.002 * jam.sr)); }, (e) => console.error('jam ring-out:', e))
+          .finally(() => { if (jam.take === take) { jam.ringJob = null; renderJam(); } });
+      }
+      jam.log = null; renderJam(); paintLeds();
     }
   };
 }
@@ -1045,11 +1081,11 @@ async function toggleJam() {
   if (jam.state === 'finishing') return;   // the take is closing on its bar line: a press now would mix two takes
   try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
   // lanes: the most the take played (L2)
-  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.ring = null; jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
+  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.take++; jam.ring = jam.ringJob = null; jam.log = exp.ring ? [] : null; jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
   if (!playing) togglePlay();
 }
 function stopJam() {
-  if (jam.state === 'armed') { jam.state = 'idle'; jam.node?.port.postMessage({ cancel: true }); }
+  if (jam.state === 'armed') { jam.state = 'idle'; jam.log = null; jam.node?.port.postMessage({ cancel: true }); }
   else if (jam.state === 'rec') {
     // The take ends on a bar line, like Live's record quantize: the next one, or the one just passed if the stop came
     // within a 16th of it (late by a hair shouldn't cost a whole bar). "Now" is the audible tick, not the last
@@ -1067,27 +1103,47 @@ function jamTick(t, time) {
   if (jam.state === 'finishing' && t === jam.stopTick) jam.node.port.postMessage({ end: time });
   if (jam.state === 'finishing' && t % PPQ === 0) T.getDraw().schedule(renderJam, time);
   if (jam.state === 'finishing' && t < jam.stopTick && tempo !== jam.tempo) jam.tempoMoved = true;   // still inside the take
-  if (jam.state === 'armed' && onBar(t, bars)) { jam.bar = bars.len; jam.meter = m.meter; jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.node.port.postMessage({ start: time, ring: exp.ring ? tailSec() : 0 }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
+  if (jam.state === 'armed' && onBar(t, bars)) { jam.bar = bars.len; jam.meter = m.meter; jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.startTime = time; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
   if (jam.state !== 'rec') return;
   jam.lastTick = t; jam.lastTime = time; if (tempo !== jam.tempo) jam.tempoMoved = true; jam.lanes = Math.max(jam.lanes, m.lanes.length); const el = t - jam.startTick; jam.beats = el / PPQ;
   // the cap: the last whole bar within 256 beats (a 7/8 bar is 3.5)
   if (el >= Math.floor(JAM_BEATS * PPQ / jam.bar) * jam.bar) { jam.stopTick = t; jam.node.port.postMessage({ end: time }); jam.state = 'finishing'; T.getDraw().schedule(renderJam, time); }
   else if (el % PPQ === 0) T.getDraw().schedule(renderJam, time);
 }
+/** How long a hit can sound from its lane's sample (a reach for the ring-out): its longest buffer at half speed (tune an
+ *  octave down); 0 on a drum voice, whose decay and echoes tailSec covers. */
+const sampleSec = (lane) => (lane?.voice === 'sample' && lane.sample ? 2 * Math.max(0, ...(lane.sample.slices || [lane.sample.id]).map(id => sampleBufs.get(id)?.duration || 0)) : 0);
+/**
+ * E6: a take's ring-out, rendered offline from the hits it played (jam.log) on a raw kit with the lanes it ended with:
+ * the tails of those hits past the take's end (`endFrame`, on the context's frame clock), as if the music stopped on
+ * that bar line, whether or not the pattern played on. Same sample grid, rate and 16-bit shape as the take, a pair per
+ * lane; null when nothing rings past the end.
+ */
+async function renderRing(log, endFrame) {
+  const sr = jam.sr, tail = tailSec(), last = [];
+  for (const h of log) if (h.time * sr < endFrame - 0.5) last[h.li] = h.lane;   // each lane as it played its last hit in the take
+  const lanes = Array.from({ length: Math.max(jam.lanes, last.length) }, (_, i) => last[i] || m.lanes[i] || m.lanes[0]);
+  const plan = ringPlan(log, { endFrame, sampleRate: sr, reach: (li) => tail + sampleSec(lanes[li]) }); if (!plan) return null;
+  for (const l of new Set(lanes)) await ensureSample(l);
+  const b = await offline(() => { const k = makeKit({ raw: true, lanes }); routeStems(k); for (const h of plan.hits) hitSound(lanes[h.li], h.at, h.accent, h.lock, h.vel, k, h.slice); return k; }, (plan.lead + plan.frames) / sr + 0.01, 2 * lanes.length, sr);
+  return ringOut(Array.from({ length: jam.lanes }, (_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]), plan.lead, plan.frames);
+}
 function renderJam() {
   const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam'), panel = $('jam-panel');
   btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next bar…' : st === 'finishing' ? '◌ jam: closing…' : '● jam';
   panel.hidden = st === 'idle'; $('jam-fill').style.width = `${Math.min(100, (jam.beats / JAM_BEATS) * 100)}%`;
   const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
-  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(jam.beats * PPQ / jam.bar) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : exp.ring ? ' · recording the ring-out…' : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lanes + raw mix${jam.ring?.[0]?.[0]?.length ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
+  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(jam.beats * PPQ / jam.bar) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lanes + raw mix${jam.ringJob ? ' · rendering the ring-out…' : jam.ring ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
-function downloadJam() {
+async function downloadJam() {
+  if (jam.state !== 'done') return; await jam.ringJob;   // a ring-out still rendering goes in the same zip
   if (jam.state !== 'done') return; const n = Math.round(jam.beats * PPQ / jam.bar), base = fileBase('jam', { loop: true, bars: n }, jam.tempo);
-  download(stemsZip(jam.chunks.slice(0, jam.lanes), laneNames(jam.lanes), jam.sr, base, acidOf(jam.tempo, n, jam.meter), { smpl: true, ring: jam.ring?.slice(0, jam.lanes) }), `${base}.zip`, 'application/zip');
+  download(stemsZip(jam.chunks.slice(0, jam.lanes), laneNames(jam.lanes), jam.sr, base, acidOf(jam.tempo, n, jam.meter), { smpl: true, ring: jam.ring }), `${base}.zip`, 'application/zip');
 }
 function buildJamUI() {
-  $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = downloadJam; $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = jam.ring = null; renderJam(); paintLeds(); };
+  $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = () => downloadJam().catch(e => { $('jam-text').textContent = `jam: ${e.message}`; });
+  $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = jam.ring = jam.ringJob = jam.log = null; jam.take++; renderJam(); paintLeds(); };
   renderJam();
 }
 
