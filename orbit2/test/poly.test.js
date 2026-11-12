@@ -1518,3 +1518,26 @@ test('ORBIT2-10 r1: a jam ring-out is the take\'s own tails (no new hits), one-s
   // constructor values while the exports and the ring-out played the settings)
   for (const p of ['c\\.drive\\.wet', 'c\\.pan\\.pan', 'c\\.level\\.gain', 'c\\.send\\.gain']) assert.match(app, new RegExp(`holdParam\\(${p},`));
 });
+test('ORBIT2-10 r2: a ring-out goes by the take\'s steps: the next downbeat played early stays out, a pushed last step stays in', async () => {
+  const { ringPlan } = await import('../src/poly/jam.js'), { liveTick } = await import('../src/poly/export.js');
+  // the take ends on frame 1000 (10 s at sr 100) = master tick 4000 of Play 1; reach 2 s, the lane's own (a sample) 5 s
+  const A = { name: 'a' }, B = { name: 'b', r: 5 }, B2 = { name: 'b2', r: 5 }, C = { name: 'c' }, reach = (li, lane) => lane?.r ?? 2;
+  const log = [{ li: 2, lane: B, tick: 3000, run: 1, time: 7.5 }, { li: 2, lane: B2, tick: 3500, run: 1, time: 8.75 }, { li: 1, lane: A, tick: 3990, run: 1, time: 10.02 },
+    { li: 0, lane: A, tick: 4000, run: 1, time: 9.995 }, { li: 0, lane: A, tick: 120, run: 2, time: 10.2 }, { li: 3, lane: C, tick: 60, run: 2, time: 9.8 }];
+  const plan = ringPlan(log, { endFrame: 1000, endTick: 4000, endRun: 1, sampleRate: 100, reach });
+  assert.deepEqual(plan.hits.map(h => [h.li, h.tick]), [[2, 3000], [2, 3500], [1, 3990], [3, 60]],
+    'the downbeat on the end tick, played 5 ms early, is the next bar: out; a step of the take pushed 20 ms past the end: in; another Play: by time');
+  assert.deepEqual([plan.lanes[0], plan.lanes[1], plan.lanes[2], plan.lanes[3]], [undefined, A, B2, C], 'each index as it played its last hit of the take');
+  assert.ok(Math.abs(plan.hits[2].at * 100 - (plan.lead + 2)) < 1e-9, 'the pushed step lands 2 frames past the end in the render');
+  assert.equal(plan.frames, 375, 'the longest reach is the sample lane\'s own: 8.75 s + 5 s = 3.75 s past the end');
+  assert.equal(ringPlan([{ li: 0, lane: A, tick: 4000, run: 1, time: 9.9 }], { endFrame: 1000, endTick: 4000, endRun: 1, sampleRate: 100, reach }), null, 'only the next bar: no ring-out');
+  // the scheduler hands every early part its own step's tick (a lane pushed 20 ms early: its step on tick P sounds from ~P - 34)
+  const m = new Machine(); m.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); const l = m.lanes[0]; l.hits[1] = true; l.setOffset(-20);
+  const early = [], ahead = []; for (let t = 0; t < P + 8; t++) liveTick(m, t, ahead, { tickSec: TICK }).forEach((r, li) => { for (const h of r.early) early.push({ li, t, tick: h.tick }); });
+  assert.ok(early.length > 0 && early.every(e => e.tick === P && e.t < P), 'early parts are tagged with their step (tick P), played before it');
+  // wiring: the scheduler passes each hit's step tick, the log keeps tick and Play, the ring-out is cut by the take's end tick and Play
+  const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  assert.match(app, /for \(const h of soon\) play\(li, lane, h, h\.tick\)/); assert.match(app, /for \(const h of hits\) play\(li, lane, h, t\)/);
+  assert.match(app, /tick: step \?\? tickAt\(time\), run,/); assert.match(app, /\{ tick: jam\.stopTick, run: jam\.run \}/); assert.match(app, /jam\.startTime = time; jam\.run = run;/);
+  assert.match(app, /headroomGain\(shots\.flatMap\(s => s\.chans\), exp\.bits\)/, 'the kit gain follows the chosen bits (32f: as rendered)');
+});

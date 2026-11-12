@@ -114,26 +114,35 @@ export function logHit(log, h, keep) {
   if (log.length > 256 && log[0].time < h.time - keep) { let i = 0; while (i < log.length && log[i].time < h.time - keep) i++; log.splice(0, i); }
   return log;
 }
+/** The last frame in [from, to) where any channel is over `floor` (from − 1 when none is). */
+const lastAbove = (channels, from, to, floor) => { let last = from - 1; for (const d of channels) for (let i = Math.min(d.length, to) - 1; i > last; i--) if (Math.abs(d[i]) > floor) { last = i; break; } return last; };
+/** A sample value in LSB → 16-bit, rounded and clamped as the jam recorder does (jam-worklet.js keeps its own copy). */
+const toInt16 = (x) => Math.max(-32768, Math.min(32767, Math.round(x)));
 /**
- * The ring-out render of a take: of the logged hits ({ li, time, … }, context seconds), those that start before the
- * take's end (`endFrame`, a frame on the context's clock; a hit on the end itself is the music going on) and can still
- * sound past it (time + reach(li) s). The render starts `lead` frames before the end on the same sample grid (whole
- * frames: a hit keeps its sub-sample place, so the tails go on from the take's last samples); `at` = a hit's time in
- * it, `frames` = how far past the end the longest one can sound. null: nothing rings past the end.
+ * The ring-out render of a take: of the logged hits ({ li, lane, tick, run, time, … }; tick = the master tick of the step
+ * it plays in Play number `run`, time = context seconds), those of the take's own steps (tick < endTick in the take's
+ * run: a step on the end, even humanized or nudged a hair before it, is the next bar, the music going on; a hit of
+ * another Play, or without ticks: a time before `endFrame`) that can still sound past the end (time + reach(li, lane)
+ * s; a step of the take pushed past the end sounds only here). The render starts `lead` frames before the end on the
+ * same sample grid (whole frames: a hit keeps its sub-sample place, so the tails go on from the take's last samples);
+ * `at` = a hit's time in it, `frames` = how far past the end the longest can sound, `lanes[li]` = the lane each index
+ * played the take's last hit with. null: nothing rings past the end.
  */
-export function ringPlan(log, { endFrame, sampleRate: sr, reach, pre = 0.05 }) {
-  const end = endFrame / sr, hits = log.filter(h => h.time * sr < endFrame - 0.5 && h.time + reach(h.li) > end);
+export function ringPlan(log, { endFrame, endTick = null, endRun, sampleRate: sr, reach, pre = 0.05 }) {
+  const end = endFrame / sr, ours = (h) => endTick != null && h.tick != null && h.run === endRun, lanes = [];
+  const mine = log.filter(h => (ours(h) ? h.tick < endTick : h.time * sr < endFrame - 0.5));
+  for (const h of mine) lanes[h.li] = h.lane;
+  const hits = mine.filter(h => h.time + reach(h.li, lanes[h.li]) > end);
   if (!hits.length) return null;
-  let first = Infinity, last = -Infinity; for (const h of hits) { first = Math.min(first, h.time); last = Math.max(last, h.time + reach(h.li)); }
+  let first = Infinity, last = -Infinity; for (const h of hits) { first = Math.min(first, h.time); last = Math.max(last, h.time + reach(h.li, lanes[h.li])); }
   const lead = Math.ceil((end - first + pre) * sr);
-  return { lead, frames: Math.max(1, Math.ceil((last - end) * sr)), hits: hits.map(h => ({ ...h, at: (lead + h.time * sr - endFrame) / sr })) };
+  return { lead, frames: Math.max(1, Math.ceil((last - end) * sr)), lanes, hits: hits.map(h => ({ ...h, at: (lead + h.time * sr - endFrame) / sr })) };
 }
 /** A ring-out render's lane pairs (float [L, R]) from frame `from` → 16-bit lanes in a jam take's shape ([[L], [R]], one
  *  chunk each), rounded and clamped like the recorder, all cut after the last sample over -90 dBFS on any lane. */
 export function ringOut(pairs, from, frames) {
-  const floor = 10 ** (-90 / 20); let last = 0;
-  for (const p of pairs) for (const d of p) for (let i = Math.min(d.length, from + frames) - 1; i > from + last; i--) if (Math.abs(d[i]) > floor) { last = i - from; break; }
-  const q = (d) => { const s = new Int16Array(last + 1); for (let i = 0; i <= last; i++) s[i] = Math.max(-32768, Math.min(32767, Math.round((d[from + i] || 0) * 32767))); return s; };
+  const last = Math.max(0, lastAbove(pairs.flat(), from, from + frames, 10 ** (-90 / 20)) - from);
+  const q = (d) => { const s = new Int16Array(last + 1); for (let i = 0; i <= last; i++) s[i] = toInt16((d[from + i] || 0) * 32767); return s; };
   return pairs.map(([L, R]) => [[q(L)], [q(R)]]);
 }
 /** A chunk list's last two samples ([last, the one before], 0 where there are none). */
@@ -145,7 +154,7 @@ const lastTwo = (chunks) => { const o = [0, 0]; let k = 0; for (let c = chunks.l
 export function joinRing(take, ring, n = 96) {
   ring.forEach((lane, li) => lane.forEach(([d], c) => {
     const [last, prev] = lastTwo(take[li]?.[c] || []), off = 2 * last - prev - d[0], m = Math.min(n, d.length);
-    for (let i = 0; i < m; i++) d[i] = Math.max(-32768, Math.min(32767, Math.round(d[i] + off * (1 - i / m))));
+    for (let i = 0; i < m; i++) d[i] = toInt16(d[i] + off * (1 - i / m));
   }));
   return ring;
 }
@@ -175,8 +184,7 @@ export function stemFiles(stems, names, sampleRate, folder = 'orbits', { bits = 
 export function trimOneShot(channels, sampleRate, { pre = 0, maxSec = 2 } = {}) {
   const p0 = Math.round(pre * sampleRate), cap = Math.round(maxSec * sampleRate), floor = 10 ** (-90 / 20), on = 1e-4, n = channels[0]?.length || 0;
   let p = p0; while (p < n && !channels.some(d => Math.abs(d[p]) > on)) p++; if (p >= n) p = p0;
-  let last = -1;
-  for (const d of channels) for (let i = Math.min(d.length, p + cap) - 1; i > p + last; i--) if (Math.abs(d[i]) > floor) { last = i - p; break; }
+  const last = lastAbove(channels, p, p + cap, floor) - p;
   const len = Math.max(1, last + 1), out = channels.map(d => d.slice(p, p + len)), cut = len >= Math.min(cap, n - p);
   if (cut) { const f = Math.min(len, Math.round(0.01 * sampleRate)); for (const d of out) for (let i = 0; i < f; i++) d[len - 1 - i] *= i / f; }
   return out;

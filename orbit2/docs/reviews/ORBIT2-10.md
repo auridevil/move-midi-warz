@@ -3,7 +3,7 @@ type: review
 phase: ORBIT2-10
 title: ORBIT2-10 export for producers (E1–E6), review panel
 date: 2026-11-12
-round: 1
+round: 2
 stalled: 0
 result: IN PROGRESS
 reviewers:
@@ -163,3 +163,74 @@ byte-identical, default audio within 1 LSB of the phase start) (verifier, archit
   export all at 48 / 24 dry + one track (7 WAVs of 535814 frames, ACID + smpl, one MIDI track on channel 10), dry + return
   = wet raw mix at 32f (6e-8), settings through a reload and from before the phase, 0 page errors on desktop and phone,
   no sideways overflow; screenshots looked at. `app.js` 1461 → 1517 lines.
+
+## Round 2 (re-check): 0 of 3 HAPPY, one item left (narrowed)
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `1005992` on +100, the code before the round-1 fixes
+`fa0409f` on +200). Brief as in round 1 (goal, E1–E6, the spec, the "where" table, the must-fix rule with the later ids
+and the Later items), `git diff --stat 1005992..HEAD` (9 files, +644/−90) and the round-1 fixes alone (`fa0409f..45b1319`,
+7 files, +421/−107), each one's own round-1 MUST-FIX and "Changes after round 1", with the instruction to confirm their
+items first with the same repro, then check nearby, anything new only in scope and marked NEW. Pre-checks on `45b1319`:
+`npm run check` clean, `npm test` 164 + 9, smoke 10/10. `stalled: 0`: four round-1 MUST-FIX are closed (verifier 2,
+architect 2 and 3, sound 2).
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | NOT HAPPY | (1) STILL OPEN, narrowed: the ring-out no longer holds the bars that follow (every ring-out decays, 1.39 s; was 3.19 s with a kick a bar), but often starts with the next bar's downbeat at full level. Boombap, 240 bpm, ring-out on, stopJam at beat 5.5, 8 takes at the groove's humanize (0.08): 6 of 8 kick ring-outs open at −8.4 / −8.5 dBFS (a whole new kick; first 10 ms +21.3 dB over the take's last 10 ms, shaker +26.5, crackle +35.2), exactly the takes where the next downbeat was logged 0.07–0.92 ms before the end; the 2 where it landed after the end open at −34.1 dBFS; humanize 0: 6 of 6 clean. Cause: `ringPlan` (`jam.js:125`) keeps every hit with `time · sr < endFrame − 0.5`, and the log has only the humanized time (`app.js:200`). Expected: only the tails of the take's own hits (the chip, the fix note). (2) FIXED: ring off, stop 30 ticks after the bar-1 line: 5 files, 24000 frames, no "+ ring-out files" (`fa0409f`: 10 files with five 428-frame ring-outs; `1005992`: 5). |
+| architect | NOT HAPPY | (1) STILL OPEN, narrowed, the same cause: the bars after the end are gone (ring-outs 138318 frames, 2.9 s, was 298047; kick −27 → −82 dB re the take's kick peak, no attacks after 20 ms, seams 0–2 LSB where no end hit gets in), but 7 of 11 boombap takes (mid-bar and grace stops, synth and dsp) opened with a full new hit (kick first 20 ms 0.0 / 0.0 / +0.1 dB re its take peak; mix-raw +0.8 dB), its hit logged 5–23 frames before the end while the take holds only its first samples; humanize 0: 4 of 4 start at −43 to −65 dB. Fix direction: decide by the step's tick (`< jam.stopTick`), with a test of an end hit a few frames early. (2) FIXED: ring off, grace stop 11 ms after the line: 5 files, 133953 frames (1 bar at 86 bpm / 48 kHz); a ring-off case is in the tests (breaking `jam.log = exp.ring ? [] : null` fails the suite). (3) FIXED: the 4 s sine kit at 48 / 24: 96000 frames, −31.3 dBFS 20–30 ms before the end, the last 10 samples at −84.2 dBFS; putting back `len >= cap` fails the new test. NEW: none. |
+| sound | NOT HAPPY | (1) STILL OPEN, the same cause: free dice, 4 takes: take 1's kick ring-out −8.4 dBFS in its first 20 ms (the take's kick peak −7.8; that kick logged 4.0 frames before `endFrame`), takes 2 and 4 clean kicks but mix-raw ring-outs at −15.5 / −17.4 dBFS (another lane's new hit); dice locked (seed 7): every take ending on a kick bar line −8.3 to −8.5 dBFS (2- and 3-bar takes, a grace stop, synth and dsp, 24 / 44.1 / 48 kHz), the kick on that line logged 23.83 frames (0.5 ms) early, then −28 −41 −51 −71 −84 dB per 250 ms; a take ended by stopping the transport: −47.1 dBFS, no attack. Expected: hits on or after the stop tick stay out whatever their nudge. (2) FIXED: a sample lane at +1.58 dBFS raw (107 float samples over 1.0): 24 / 48 and 16 / 44.1 kits peak at −0.18 dBFS, 0 full-scale samples, "all scaled −1.8 dB to avoid clipping"; every deterministic file exactly −1.76 dB under its 32f file; accent over normal 3.09–3.10 dB in every format; 32f keeps +1.58 dBFS; the kick at 32f bit-identical to `fa0409f`. |
+
+SHOULD items recorded (never block): a take ended by stopJam can run past its bar line (48023 / 48058 frames for 2 bars
+at 24 kHz, both posted ends agree: the clock's bar-line time; `1005992` too) (verifier); a downbeat humanized early leaves
+its first ~1 ms at the very end of the take (its last 10 ms at −33.4 dBFS against ~−43), and one before the take's start
+begins mid-attack on sample 0 (−41.6 dBFS step) (verifier, sound; pre-existing, same root); jam takes and ring-outs come
+out at the page's own rate (24 kHz in a headless page) (verifier, sound; documented); the app wiring is checked by
+grepping app.js: a ring-out placed off the take's grid, rendered on `m.lanes`, or a kit gain never scaling would pass
+(architect); `downloadJam` waits on a render with no timeout (architect); the "last sample over −90 dBFS" scan written
+twice and the 16-bit round-and-clamp three times (architect); a jam module would shrink app.js (architect; taste);
+`holdParam` is an audible change to live play and deserves a changelog line (architect); `joinRing` bends a random
+offset into a noise tail's first 2 ms (a dsp snare at 24 kHz: +4.9 dB over the live continuation for 5 ms; at 48 kHz
+the seam's high band matches live) (sound); one hot lane lowers the whole kit (sound; as designed).
+
+GOOD: every other way to end a take is clean (the jam button, Play / stop, the 256-beat cap: 1536000 frames, ACID 256;
+a discard or a new take during a ring-out render drops it, a download during it waits) and a ring-out without the
+downbeat continues its take (within ±2 dB over 10 ms, joins 2–4 LSB; a 4 s sample lane rings out in full) (verifier,
+architect, sound); `holdParam`: live takes match 32f stems of the same roll within 0.3 dB a lane with the same L / R
+(`1005992`: +3.4 / +0.1 / −1.8 / −3.2 dB), a knob turned while playing lands where expected (−27.8 dB for −28.0)
+(verifier, sound); one render path, unchanged sound (with dice locked mix and stems within 1 LSB of `1005992`, the 32f
+kick stem bit-identical to `fa0409f`, the dsp engine's export all and kit during a take lose no live hits: per-bar RMS
+identical) (verifier, architect, sound).
+
+### Changes after round 2
+
+- **A ring-out goes by the take's steps** (verifier 1, architect 1, sound 1): every live hit is logged with the master
+  tick of the step it plays (the scheduler hands it over: `play(li, lane, h, t)`, and an early part of a later step
+  carries that step's tick, `liveTick` tags it `tick: at`) and the Play it belongs to (`run`: ticks count from 0 again on
+  each Play); a pad or an audition gets the tick at its time (`tickAt`, which `heardTick` now uses too). `ringPlan` keeps
+  the take's own steps, `tick < jam.stopTick` in the take's Play, whatever humanize, nudge or push did to their time: the
+  next bar's downbeat played a hair before the end stays out, a last step of the take pushed past the end stays in (it
+  sounds only in the ring-out); a hit of another Play (Play stopped and started again while the take closes) goes by its
+  time. `ringPlan` also returns the lane each index played the take's last hit with (`lanes`, was app.js code). Page, the
+  reviewers' repro (boombap, 240 bpm, humanize 0.08, stopped at beat ~5.5 with the pattern playing on), 8 takes: 6 with
+  free dice, 2 with the dice locked at seed 7 (every one leaked before): the kick ring-out's first 20 ms at −24.5 to −38.9
+  dBFS against a take peak of −7.6 to −8.5 (was −8.4: a whole kick), its first 10 ms within −1.6…+2.7 dB of the take's
+  last 10 ms (a new hit was +21 to +35 dB), shaker and mix-raw the same way. Also: the grace path (ring off 5 files, ring
+  on the 5 rendered ring-outs), the seam on a kick tail (take −55 −52 −49 → ring −46 −38 −29), and Play stopped and
+  started again 60 ms later during a take: its ring-out decays (−16 → −90 dB per 250 ms), no attacks.
+- **Quick SHOULDs done:** `downloadJam` gives a hung render 15 s, then zips the take without it (architect); one
+  `lastAbove` scan (ringOut, trimOneShot) and one `toInt16` (ringOut, joinRing; the recorder worklet keeps its own copy:
+  it can't import, and stays byte-identical to `1005992`) (architect); the lane choice is pure and tested (`ringPlan`'s
+  `lanes`) and the kit-gain wiring check now pins `exp.bits` (architect); `holdParam` gets a BACKLOG line as a port-back
+  item (architect).
+- **Not changed:** the take's own edges (a hit humanized across the take's start or end leaves its first ms there: the
+  recorder records what sounded), the stopJam end past the bar line and the jam rate are pre-existing; `joinRing` keeps
+  the linear join (a step at a smooth tail's seam clicks; on noise the bend is masked, inaudible in sound's own words); the
+  kit gain stays one for the kit (as designed). → [[BACKLOG]] Later.
+- Tests (165 + 9; 1 new): "ORBIT2-10 r2" (`ringPlan` by steps: the end step played 5 ms early out, a take step pushed
+  20 ms past the end in and placed 2 frames past it, another Play by time, the lane choice, the sample lane's reach, only
+  the next bar → no ring-out; a real `liveTick` run: a lane pushed 20 ms early hands its early part its step's tick;
+  wiring: the scheduler's step ticks, tick + run in the log, the end by `jam.stopTick` + `jam.run`, the kit gain on
+  `exp.bits`). `npm run check` clean, `npm test` 165 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py
+  5400 + headless Chrome 9222, both stopped). Browser (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks
+  above, 0 page errors. `app.js` 1517 → 1522 lines.

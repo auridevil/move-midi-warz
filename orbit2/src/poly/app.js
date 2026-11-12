@@ -193,11 +193,13 @@ function applySound(li, k = kit) {
 function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); }); }
 /** Seconds of live hits a jam take keeps for its ring-out (E6): the delay's tail plus a long sample at half speed. */
 const RING_KEEP = 48;
-/** slice: the slice of a set this hit plays (Lane.sliceAt; null = the lock's, else the first). */
-function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null) {
+/** slice: the slice of a set this hit plays (Lane.sliceAt; null = the lock's, else the first). step: the master tick of
+ *  the step it plays (the scheduler's; a pad or an audition: the tick at its time). */
+function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null, step = null) {
   const li = lanesOf(k).indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
-  // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing)
-  if (k === kit && jam.log) logHit(jam.log, { li, lane, time, accent, lock, vel, slice }, RING_KEEP);
+  // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing),
+  // with the step each hit belongs to: a downbeat humanized or nudged before the take's end is still the next bar's
+  if (k === kit && jam.log) logHit(jam.log, { li, lane, time, tick: step ?? tickAt(time), run, accent, lock, vel, slice }, RING_KEEP);
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
   const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
@@ -233,6 +235,7 @@ async function wake() { if (awake) return; await T.start(); if (engine === 'dsp'
 // the modulo bookkeeping on every tick, the lanes only on ticks where something can happen (liveQuiet).
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
+let run = 0;   // which Play this is: ticks count from 0 again on each, so a tick means something only with its run
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
 /** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
  *  starts on the next bar line of the old one, so a bar is never cut short, and the lanes start there on step 1
@@ -244,8 +247,10 @@ const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
+/** The master tick (fractional) at audio-context time `time`, from the clock's latest block. */
+const tickAt = (time) => clockRef.tick + (time - clockRef.time) / tickSec();
 /** The master tick being heard right now (fractional): the scheduler runs ahead of the speakers, which lag a little. */
-const heardTick = () => { const raw = T.getContext().rawContext, heard = raw.currentTime - (raw.outputLatency || 0); return clockRef.tick + (heard - clockRef.time) / tickSec(); };
+const heardTick = () => { const raw = T.getContext().rawContext; return tickAt(raw.currentTime - (raw.outputLatency || 0)); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
   if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); }   // both are keyed on the old ticks; loops count from 0 again
@@ -268,13 +273,13 @@ function onTick(t, time, cyc, ts) {
   const cut = Math.min(bank.nextSwitch(t, cyc, bars), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); };
+  const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt); hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip)
   liveTick(m, t, early, { fill, dice: dice.locked ? dice : null, tickSec: ts, cut, skip }).forEach(({ ev, hits, early: soon }, li) => {
-    const lane = m.lanes[li]; for (const h of soon) play(li, lane, h);
+    const lane = m.lanes[li]; for (const h of soon) play(li, lane, h, h.tick);
     if (!ev) return;
-    for (const h of hits) play(li, lane, h);
+    for (const h of hits) play(li, lane, h, t);
     // drawn at its time: by then the lane may be gone (6 → 4 lanes, an undo, a slot with fewer lanes)
     T.getDraw().schedule(() => { if (li >= m.lanes.length) return; scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
@@ -285,7 +290,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { tick = 0; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
+  if (playing) { tick = 0; run++; resetPending = false; skip.clear(); early.length = 0; resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); T.getTransport().stop(); pmidi.stop(); }
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
 }
 $('btn-play').onclick = togglePlay;
@@ -1053,7 +1058,7 @@ function buildEditUI() {
 const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, lanes: 4, sr: 44100, bar: BAR_TICKS, meter: '4/4' };   // idle → armed → rec → finishing → done; bar / meter: the take's, from its first bar line
 // E6 ring-out: log = the live hits while a take that wants one runs (hitSound), ring = its rendered tails (renderRing),
 // ringJob = that render while it runs, take = which take a render belongs to (a discard or a new take drops a late one)
-Object.assign(jam, { startTime: 0, log: null, ring: null, ringJob: null, take: 0 });
+Object.assign(jam, { startTime: 0, run: 0, log: null, ring: null, ringJob: null, take: 0 });   // run: the Play the take was recorded in
 async function ensureJamNode() {
   // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
   if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
@@ -1069,7 +1074,7 @@ async function ensureJamNode() {
       // E6: the ring-out renders now, from the hits the take played; its end on the recorder's clock = start + frames
       if (any && jam.log && data.frames != null) {
         const take = jam.take;
-        jam.ringJob = renderRing(jam.log, Math.round(jam.startTime * jam.sr) + data.frames).then((r) => { if (jam.take === take) jam.ring = r && joinRing(jam.chunks, r, Math.round(0.002 * jam.sr)); }, (e) => console.error('jam ring-out:', e))
+        jam.ringJob = renderRing(jam.log, Math.round(jam.startTime * jam.sr) + data.frames, { tick: jam.stopTick, run: jam.run }).then((r) => { if (jam.take === take) jam.ring = r && joinRing(jam.chunks, r, Math.round(0.002 * jam.sr)); }, (e) => console.error('jam ring-out:', e))
           .finally(() => { if (jam.take === take) { jam.ringJob = null; renderJam(); } });
       }
       jam.log = null; renderJam(); paintLeds();
@@ -1103,7 +1108,7 @@ function jamTick(t, time) {
   if (jam.state === 'finishing' && t === jam.stopTick) jam.node.port.postMessage({ end: time });
   if (jam.state === 'finishing' && t % PPQ === 0) T.getDraw().schedule(renderJam, time);
   if (jam.state === 'finishing' && t < jam.stopTick && tempo !== jam.tempo) jam.tempoMoved = true;   // still inside the take
-  if (jam.state === 'armed' && onBar(t, bars)) { jam.bar = bars.len; jam.meter = m.meter; jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.startTime = time; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
+  if (jam.state === 'armed' && onBar(t, bars)) { jam.bar = bars.len; jam.meter = m.meter; jam.startTick = jam.lastTick = t; jam.lastTime = time; jam.stopTick = -1; jam.tempo = tempo; jam.tempoMoved = false; jam.startTime = time; jam.run = run; jam.node.port.postMessage({ start: time }); jam.state = 'rec'; T.getDraw().schedule(() => { renderJam(); paintLeds(); }, time); }
   if (jam.state !== 'rec') return;
   jam.lastTick = t; jam.lastTime = time; if (tempo !== jam.tempo) jam.tempoMoved = true; jam.lanes = Math.max(jam.lanes, m.lanes.length); const el = t - jam.startTick; jam.beats = el / PPQ;
   // the cap: the last whole bar within 256 beats (a 7/8 bar is 3.5)
@@ -1119,11 +1124,10 @@ const sampleSec = (lane) => (lane?.voice === 'sample' && lane.sample ? 2 * Math.
  * that bar line, whether or not the pattern played on. Same sample grid, rate and 16-bit shape as the take, a pair per
  * lane; null when nothing rings past the end.
  */
-async function renderRing(log, endFrame) {
-  const sr = jam.sr, tail = tailSec(), last = [];
-  for (const h of log) if (h.time * sr < endFrame - 0.5) last[h.li] = h.lane;   // each lane as it played its last hit in the take
-  const lanes = Array.from({ length: Math.max(jam.lanes, last.length) }, (_, i) => last[i] || m.lanes[i] || m.lanes[0]);
-  const plan = ringPlan(log, { endFrame, sampleRate: sr, reach: (li) => tail + sampleSec(lanes[li]) }); if (!plan) return null;
+async function renderRing(log, endFrame, end) {
+  const sr = jam.sr, tail = tailSec(), plan = ringPlan(log, { endFrame, endTick: end.tick, endRun: end.run, sampleRate: sr, reach: (li, lane) => tail + sampleSec(lane) }); if (!plan) return null;
+  // each lane as it played its last hit in the take (a lane that played none: a placeholder, it stays silent)
+  const lanes = Array.from({ length: Math.max(jam.lanes, plan.lanes.length) }, (_, i) => plan.lanes[i] || m.lanes[i] || m.lanes[0]);
   for (const l of new Set(lanes)) await ensureSample(l);
   const b = await offline(() => { const k = makeKit({ raw: true, lanes }); routeStems(k); for (const h of plan.hits) hitSound(lanes[h.li], h.at, h.accent, h.lock, h.vel, k, h.slice); return k; }, (plan.lead + plan.frames) / sr + 0.01, 2 * lanes.length, sr);
   return ringOut(Array.from({ length: jam.lanes }, (_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]), plan.lead, plan.frames);
@@ -1137,7 +1141,8 @@ function renderJam() {
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
 async function downloadJam() {
-  if (jam.state !== 'done') return; await jam.ringJob;   // a ring-out still rendering goes in the same zip
+  // a ring-out still rendering goes in the same zip; one that hangs (a worklet that never answers) doesn't hold the take
+  if (jam.state !== 'done') return; await Promise.race([jam.ringJob, new Promise(r => setTimeout(r, 15000))]);
   if (jam.state !== 'done') return; const n = Math.round(jam.beats * PPQ / jam.bar), base = fileBase('jam', { loop: true, bars: n }, jam.tempo);
   download(stemsZip(jam.chunks.slice(0, jam.lanes), laneNames(jam.lanes), jam.sr, base, acidOf(jam.tempo, n, jam.meter), { smpl: true, ring: jam.ring }), `${base}.zip`, 'application/zip');
 }

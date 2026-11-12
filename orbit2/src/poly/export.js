@@ -71,7 +71,7 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
     const step = earlyStep(lane, t - o0, { ...o, cut: cut - o0 }), at = o0 + step * lane.stepTicks();
     if (step >= 0 && !decided(due.get(at), lane, step, at)) {
       const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
-      if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt }));
+      if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt, tick: at }));   // tick: its step's (a jam take's end goes by steps)
       due.set(at, { lane, step, tick: at, hit: pev.hit, accent: pev.accent, hits, played: out.early.length > 0 });
     }
     return out;

@@ -473,12 +473,27 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   decorrelate the error); stems take one peak gain with their raw mix, so the same pattern's stems move with format and
   rate (24-bit −2.19 dB under 32f on hot lanes; boombap's export-all stems −1.27 dB at 48 kHz, 0 at 44.1, noise peaks):
   a fixed headroom (e.g. always −6 dB at 16 / 24-bit) would keep stems of different exports level-matched.
-- **Float jam recorder** (ORBIT2-10 round 1, sound, kai): jam takes stay 16-bit at the page's rate whatever the export
-  format says (the recorder posts Int16), and the jam raw mix (and its ring-out) is summed with a clamp; a Float32
-  recorder could write the take in the chosen bits (see also "Jam raw-mix headroom").
-- **Kit options** (ORBIT2-10 round 1, sound, architect): one-shots carry the lane's pan (a Drum Rack pad usually wants
-  them centred: a "centred" option), and kit files are named `orbits-kit-<lane>-<voice>` without the export's base, so
-  two kits clash in one DAW folder (the zip's folder has the time).
+- **Float jam recorder** (ORBIT2-10 round 1, sound, kai; round 2, verifier, sound): jam takes stay 16-bit at the page's
+  rate whatever the export format says (the recorder posts Int16; a headless page ran at 24 kHz), and the jam raw mix
+  (and its ring-out) is summed with a clamp; a Float32 recorder could write the take in the chosen bits (see also "Jam
+  raw-mix headroom").
+- **Port back: live chain params at time 0** (ORBIT2-10 round 1; pre-existing in the shipped Orbits): `applySound` set
+  level / send / pan / drive with Tone's `.value =`, which Chrome loses on a chain that is silent when it comes due, so a
+  lane played its constructor values (send 0.15, level 0.8) until a knob moved while it sounded; orbit2's `holdParam`
+  fixes it. An audible change to live play (a send-0.6 lane: ~10 dB more echo than before, now = the export).
+- **Jam take edges** (ORBIT2-10 round 2, verifier, sound; pre-existing): a take ended by stopJam can end up to ~2 ms past
+  its bar line (48023 / 48058 frames for 2 bars at 24 kHz: the clock's bar-line time itself), and a hit humanized across
+  a take's start or end leaves part of its attack there (the next downbeat's first ~1 ms at the end, −33 dBFS on
+  boombap; a downbeat before the start begins mid-attack on sample 0).
+- **A gentler ring-out join on noise** (ORBIT2-10 round 2, sound): `joinRing` bends the ring-out's first 2 ms onto the
+  line the take ends on, right for a smooth tail; on a noise tail that line is random (a dsp snare at 24 kHz: +4.9 dB
+  for 5 ms over the live continuation; inaudible). A shorter bend or a value-only join on noisy lanes.
+- **A jam module** (ORBIT2-10 round 2, architect): the jam take logic plus `renderRing` is ~110 lines of app.js and
+  `jam` grows through `Object.assign`; its own module would shrink app.js and give the wiring unit seams.
+- **Kit options** (ORBIT2-10 round 1, sound, architect; round 2, sound): one-shots carry the lane's pan (a Drum Rack pad
+  usually wants them centred: a "centred" option), kit files are named `orbits-kit-<lane>-<voice>` without the export's
+  base, so two kits clash in one DAW folder (the zip's folder has the time), and one hot lane lowers the whole kit (a
+  per-lane headroom option).
 - **Export-all memory** (ORBIT2-10 round 1, architect; estimated): both renders, the summed mix, the scaled copies, every
   WAV and the zip are alive at once (~2.5–3 GB for a 64-bar cycle of 6 lanes at 60 bpm, 48 kHz, 32f); encoding and
   dropping one stem at a time would cut the peak.
