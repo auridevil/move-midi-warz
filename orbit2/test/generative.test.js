@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Machine, Lane, euclid, EVOLVE_WEIGHTS, weightsFrom, BAR_TICKS, PPQ, RATIOS, ratchetTimes, ratchetGains, modValue, snapTune, SCALES } from '../src/poly/lanes.js';
 import { mulberry32, Dice } from '../src/poly/dice.js';
-import { collectHits, expandHits } from '../src/poly/export.js';
+import { collectHits, expandHits, liveTick } from '../src/poly/export.js';
 
 const bits = (l) => Array.from({ length: l.length }, (_, i) => (l.hitAt(i) ? 'x' : '.')).join('');
 
@@ -40,8 +40,10 @@ test('V4 ratchet curves: times, spacing, up to ×8, pitch ramp', () => {
     assert.equal(t[0], 0); assert.ok(gaps.every(x => x >= 1 / (2 * n) - 1e-12), `×${n} ${c}: gaps ${r4(gaps)}`); assert.ok(Math.abs(gaps.reduce((a, b) => a + b, 0) - 1) < 1e-12);
     if (c === 'up') { assert.ok(Math.abs(gaps.at(-1) - 1 / n) < 1e-12, 'the last a whole even gap before the next step'); if (n > 2) assert.ok(inner.every((x, k) => !k || x < inner[k - 1]), `×${n} up: shrinking`); }
     if (c === 'down' && n > 1) assert.ok(gaps.every((x, k) => !k || x > gaps[k - 1]), `×${n} down: growing`);
-    assert.equal(g[0], 1); g.forEach((x, k) => { if (k) assert.ok(Math.abs(x - Math.min(1, n * Math.min(gaps[k - 1], gaps[k]))) < 1e-12 && x >= 0.5 - 1e-12); });
+    assert.equal(g[0], 1); g.forEach((x, k) => { if (k) assert.ok(Math.abs(x - Math.min(1, n * Math.min(gaps[k - 1], gaps[k]))) < 1e-9 && x >= 0.5); });
+    if (c === 'even') assert.ok(g.every(x => x === 1), `×${n} even: exactly 1`);
   }
+  assert.deepEqual(ratchetGains(3, 'up'), [1, 0.5, 0.5], 'r2: the floor is exactly ½');
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setRatio(5); l.hits[0] = true; l.tune = 0.25;
   l.setTrig(0, { ratchet: 8, curve: 'up', ramp: 0.5 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false, curve: 'up', ramp: 0.5 });
   l.setTrig(0, { curve: 'even', ramp: 0 }); assert.deepEqual(l.trigs[0], { cond: 'always', ratchet: 8, fade: false }, 'defaults are not stored');
@@ -140,9 +142,12 @@ test('V2 coupling: a hit lifts the next lane\'s next step; deterministic with lo
   const j = Machine.from(JSON.parse(JSON.stringify(a))); assert.equal(j.couple.mode, 'matrix'); assert.equal(j.couple.matrix[0][1], 0.6);
   assert.equal(Machine.from({ lanes: a.toJSON().lanes }).couple.mode, 'off', 'older saves are uncoupled');
   assert.equal(new Machine().toJSON().couple, undefined, 'an uncoupled pattern saves as before');
-  // the lift is for the next step only, and a lane stepping on the same tick gets it on its following step
-  const m = make('next'); m.lanes[1].prob = 0; const r = () => 0.5; m.tick(0, r); assert.equal(m.boostOf(1), 0.6); const ev = m.tick(840, r); assert.equal(ev[1].hit, true); assert.equal(m.boostOf(1), 0.6, 'lane 1 hit again on that tick');
-  m.lanes[0].clear(); m.tick(1680, r); assert.equal(m.boostOf(1), 0, 'used up'); assert.equal(m.tick(2520, r)[1].hit, false);
+  // the lift is for the next step only, and a lane stepping on the same tick gets it on its following step (live play's
+  // liveTick keeps the lifts; Machine.tick only reads them, and alone leaves them as they are)
+  const m = make('next'), ahead = [], r = () => 0.5, at = (t) => liveTick(m, t, ahead, { rng: r, tickSec: 60 / 120 / PPQ }).map(o => o.ev);
+  m.lanes[1].prob = 0; at(0); assert.equal(m.boostOf(1), 0.6); const ev = at(840); assert.equal(ev[1].hit, true); assert.equal(m.boostOf(1), 0.6, 'lane 1 hit again on that tick');
+  m.lanes[0].clear(); at(1680); assert.equal(m.boostOf(1), 0, 'used up'); assert.equal(at(2520)[1].hit, false);
+  m.lanes[0].setEuclid(4); m.tick(3360, r); assert.equal(m.boostOf(1), 0, 'Machine.tick alone lifts nothing');
 });
 
 test('ORBIT2-12: live play = the render with every new feature on (locked dice: coupling, masks, ratchet curves + ramp, modulator, timbre dice, scale)', async () => {

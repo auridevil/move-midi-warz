@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-12
 title: ORBIT2-12 steerable generative (V1–V5), review panel
 date: 2026-11-12
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
   ines: HAPPY
   tomi: HAPPY
 tags: [orbit2, review]
@@ -142,3 +142,54 @@ scale snap exact in the audio on both engines (just 3.156 / 7.020 / 10.883 semit
   (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks above, coupling with a pushed lane while playing (stress
   0, headroom 70 ms), the lock panel at ×8 (spacing shown), 0 page errors on desktop (1440×900) and phone (390×844), no
   sideways scroll; screenshots looked at. `app.js` 1736 → 1738 lines.
+
+## Round 2 (re-check): verifier, architect and sound HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `5656860` on +100, the code before the round-1 fixes
+`fac4c1d` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, V1–V5, the spec, the "where"
+table, the must-fix rule with the later ids and the Later items, the page), `git diff --stat 5656860..115bb9f` (10 files,
++834/−74) and the round-1 fixes alone (`fac4c1d..115bb9f`, 6 files, +374/−67), each one's own round-1 MUST-FIX and
+"Changes after round 1", with the instruction to confirm their items first with the same repro, then check nearby,
+anything new only in scope and marked NEW. `stalled: 0`: every round-1 MUST-FIX is closed and everyone is HAPPY.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | (1) FIXED: the round-1 repro, lane 2 236 live / 236 rendered up to a beat before the end, every hit the same (`fac4c1d` 192 / 208); the stark variant 47 / 47 (`fac4c1d` 32 / 47); lane B at 0 % lifted 100 % plays exactly after lane A's heard hits in five setups (B pushed, B nudged, both pushed in triplets, only A pushed, nothing early): 0 wrong (`fac4c1d` up to 58 of 125); 40 random 4- and 6-lane patterns (coupling, pushes, nudges, ×2–×8 curved ratchets, conditions, humanize, locked dice): clock loop = `collectHits` in 40 of 40 (`fac4c1d` 35). (2) FIXED: lengths 7/9/11/13, max 32: home after 15 / 18 / 20 evolves (seeds 7 / 8 / 9), 0 held, still home 40 evolves later (`fac4c1d`: not after 3000); page (240 bpm, dice 42, wandered to 6/9/12/11): home ~11 bars after gravity 100 % and staying (`fac4c1d`: not after 45 bars); the guard at gravity 0: 500 evolves, 0 over, longest 30 bars. (3) FIXED: E4 → E3 → E4 all back; the hand hit comes back with accent, lock, ×3; default evolve, 64 evolves × 10 seeds: 390 entries before and after (`fac4c1d` 208); scope all, 300 × 5: 195 / 195 (`fac4c1d` 91); "return home" three times lands exactly; `m.snapshot()` = `toJSON()` sharing no arrays. Nearby: old pattern, slot and settings load; an old share code decodes; new links round-trip coupling, curves and the modulator; WAV, MIDI and stems export; check clean, 196 + 9, smoke 10/10, 0 page errors. |
+| architect | HAPPY | (1) FIXED: repro A, free dice, 255 lane-2 steps vs lane 1's heard hits: 0 in every case on HEAD, live and rendered (on time, lane 1 pushed, lane 1 nudged, lane 2 nudged, all at once; `fac4c1d` live 122–129 of 255); mixed speeds (lane 1 ×2, lane 2 ×1 nudged: lane 2 plays iff lane 1 hit between its decisions): 0; repro B (315 setups): live ≠ render 0 (`fac4c1d` 110); every V feature on, locked dice: 0 of 60 patterns differ (13,630 hits; `fac4c1d` 2). (2) FIXED: lengths 5/7/9/11, home 866 bars, max 32: home after 16 evolves, nothing held, data exactly home (`fac4c1d`: not after 3000, 4777 held). Nearby: 80 phase-start patterns render as at the phase start (0 of 80, 13,208 hits), 20 chains with restart on / off the same; the clock loop 46.1 ms (`fac4c1d`) vs 46.7 for 64 busy bars; 6 s live with matrix coupling, a push, nudges, evolve every bar (gravity 50, max 32): 0 errors, stress 0, headroom ~75 ms; check clean, 196 + 9. |
+| sound | HAPPY | (1) FIXED: no two repeats closer than half the even gap (×8 on 16ths at 120: 7.81 ms, `fac4c1d` 1.95), speed-up's last a whole even gap before the next step, gains 0.5–1. dsp, ×8 on step 9 with a hit on step 10, dB over one hit, even / slow-down / speed-up: kick first 30 ms +3.81 / +3.64 / +3.89, whole step +7.66 / +7.47 / +6.95 (`fac4c1d` +9.19 / +9.75 for the curves), next step's hit +7.60 / +6.10 / +5.70 (`fac4c1d` speed-up +9.65); blip step +2.16 / +2.28 / +2.33 (RMS +10.39 / +8.20 / +7.71). Mix (dsp blip, kick, snare, default sounds): ×4 even −3.33 dBFS (as at `fac4c1d` and the phase start), ×8 even −1.76, slow-down / speed-up / even −2.03 with 0 samples ≥ 0.999 (`fac4c1d` +0.11, 12), all speed-up −3.23 (`fac4c1d` −0.67), all slow-down −1.71 (`fac4c1d` +0.53, 32); kick alone ×8 curves −3.27 vs even −3.24 (`fac4c1d` −1.56); the synth demo groove, every hit ×8, even / speed-up / slow-down −5.28 / −6.35 / −5.51 (`fac4c1d` −5.05 / −3.92 / −5.23). Nearby: ×8 even hits identical to `fac4c1d`, ×4 even with fade identical to the phase start; fade × gain, the ramp and the accent on the first repeat right; live 5.4 s on dsp with ×8 curves: stress 0, headroom ≥ 69 ms, 0 errors; MIDI: no two notes on one tick (`fac4c1d`: 12 same-tick collisions), velocities follow the gains; check clean, 196 + 9. |
+
+SHOULD items recorded (never block): NEW, at partial gravity a step home can push the cycle far past the max and the
+random moves then keep to that longer cycle (home 4 bars, max 32: over 32 bars in 13.3 % of evolves at gravity 20 %,
+longest 630 bars; 3.4 % at 50 %; 0.1 % at 80 %; `fac4c1d` never) (verifier; architect: home 12 bars, 382 / 120 / 25 of
+3000 evolves at 25 / 50 / 75 %; a trial that picks a step home within max(limit, the cycle before, home's cycle), else
+the shortest: 81 / 68 / 9, worst still 420 bars); NEW, `Machine.tick` still coupled on its own unless told not to, a
+path only the tests used, with rules live play no longer follows (architect); the round-1 note's "render cost
+unchanged": a busy coupled 6-lane pattern renders 64 bars in 45.4 ms against 35.2 at `fac4c1d` (`liveQuiet` on every
+tick; negligible next to the synthesis) (architect); `ratchetGains` rounding (an even ×7 at 0.9999999999999998, a floor
+at 0.49999999999999994) (sound); the softening also applies where nothing stacks (a ×2 slow-down's second hit at half,
+×3 speed-up full, half, half), and speed-up's last even gap reads as a pause before the downbeat (sound; taste).
+
+GOOD: one hit path: renders run the clock's own `liveQuiet` / `liveTick`, so live = render follows from the code and
+old patterns render exactly as at the phase start (verifier, architect); the coupling rule is exact and written down (an
+early step takes the lift waiting when it is decided, later hits lift the lane's next step), home is a real copy and
+gravity's way home always finishes (verifier, architect); one spacing rule with a half-even-gap floor plus a gain table,
+used by live, WAV, stems, MIDI and the audition: even ratchets unchanged, curves no louder, no MIDI notes on one tick
+(sound).
+
+### Changes after round 2
+
+- **Quick SHOULDs done:** `Machine.tick` only reads the lifts; `liveTick` alone keeps them (its `couple: false` and the
+  test-only coupling path are gone; the V2 test now drives `liveTick` and checks `Machine.tick` alone lifts nothing)
+  (architect); `ratchetGains` rounds to 1e-9, so an even ratchet is exactly 1 and the floor exactly ½ (sound); the max
+  cycle tooltip says what the verifier and architect measured: "Gravity's steps home are never held back (home is your
+  own pattern): on the way there the whole can repeat later than this, and with low gravity for a good while, since the
+  other changes then keep to the longer cycle." The round-1 render-cost note stands corrected by the architect's
+  numbers (45.4 vs 35.2 ms for 64 busy coupled bars; 33.6 vs 33.2 on the implementer's pattern).
+- **Not changed** → [[BACKLOG]] Later: "Gravity's excursions past the max cycle" (both ideas, with the measurements) and
+  "Ratchet curve feel at low counts" (sound's taste notes).
+- Tests (196 + 9): "V4 ratchet curves" pins the exact gains (even 1, ×3 speed-up 1 / ½ / ½); "V2 coupling" runs on
+  `liveTick`. `npm run check` clean, `npm test` 196 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py
+  5400 + headless Chrome 9222, both stopped). Model repros (`/tmp/orbit2-impl/`, deleted) unchanged (239 / 239 live /
+  render, 0 of 254, home in 14, data kept); page (5400/9400, silent): gravity home 13 bars after 100 %, the ×8 lock panel,
+  coupling with a pushed lane while playing, 0 page errors desktop and phone. **Phase 12 review: `result: HAPPY`.**

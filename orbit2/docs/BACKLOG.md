@@ -579,3 +579,16 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   chance is lowered (the tooltip says so; a hint next to the control would); "(too long)" repeats in the status line
   while a pattern sits at the max cycle; AND / XOR on a hand clave can surprise (XOR of a tresillo with E(5,8) is dense,
   AND can leave only the downbeat): a line under the mask control.
+- **Gravity's excursions past the max cycle** (ORBIT2-12 round 2, verifier, architect): steps home are never held
+  (round 1: a guard on them could keep a pattern away for good), so at partial gravity a step home can push the cycle far
+  past the max and the random moves then keep to that longer cycle (the tooltip says so). Home 4 bars, max 32, amount
+  100 %: over 32 bars in 13.3 % of evolves at gravity 20 % (longest 630 bars), 3.4 % at 50 %, 0.1 % at 80 % (verifier);
+  home 12 bars: 382 / 120 / 25 of 3000 evolves at 25 / 50 / 75 % (architect). Ideas: hold random moves against
+  max(limit, home's cycle) while a step home has the pattern over the limit (verifier); pick the step home that keeps the
+  cycle within max(limit, the cycle before, home's cycle), else the shortest (architect's trial: 81 / 68 / 9, worst still
+  420 bars; the round-1 repro's way home peaks at home's own 866 bars instead of 3080).
+- **Ratchet curve feel at low counts** (ORBIT2-12 round 2, sound; taste): the softening that keeps a curve at the even
+  level (`ratchetGains`) also applies where nothing stacks: a ×2 slow-down's second hit 31 ms later (16ths at 120 bpm)
+  plays at half and ×3 speed-up is full, half, half, so at low counts a curve changes the accents too (it could start only
+  below a gap in ms). Speed-up ends a whole even gap before the next step (its gaps shrink 1½ → ½ of even, then 1), so the
+  roll pauses before the downbeat; a ¾ gap with the last repeat at half might keep the run-in without stacking.

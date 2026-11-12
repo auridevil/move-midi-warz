@@ -79,13 +79,13 @@ const decided = (pre, lane, step, tick) => pre?.tick === tick && (pre.played || 
  * early part nor the own hits of what steps there sound; a key goes at its tick.
  * The lanes count their steps from `m.origin` (bar 1 of the pattern's meter); `ahead`, `skip` and `cut` stay on the
  * master tick. The origin only moves on a cut (a new meter's first bar line), so no decision spans a move.
- * V2 coupling is done here, not in Machine.tick: the lift follows the hits that play (a step decided early plays that
- * decision, not the tick's own roll; a pad's recorded hit counts), and a step decided early takes the lift waiting
- * when it is decided, this tick's hits included; a hit after that lifts the lane's following step.
+ * V2 coupling is kept here (Machine.tick only reads the lifts): the lift follows the hits that play (a step decided
+ * early plays that decision, not the tick's own roll; a pad's recorded hit counts), and a step decided early takes the
+ * lift waiting when it is decided, this tick's hits included; a hit after that lifts the lane's following step.
  */
 export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = null, tickSec, cut = Infinity, skip = null, cycle }) {
   const solo = m.lanes.some(l => l.solo), o = { humanize: m.humanize, dice, tickSec }, o0 = m.origin, cp = m.couple.mode !== 'off', hit = cp ? [] : null, used = cp ? [] : null;
-  const outs = m.tick(t, rng, { fill, dice, cycle, couple: false }).map((ev, li) => {
+  const outs = m.tick(t, rng, { fill, dice, cycle }).map((ev, li) => {
     const lane = m.lanes[li], silenced = solo && !lane.solo, out = { ev, hits: [], early: [] }, due = (ahead[li] ??= new Map());
     const pre = due.get(t), padded = !!skip?.size && skip.delete(`${li}:${t}`);
     for (const k of due.keys()) if (k <= t) due.delete(k);   // its tick has come (or passed with no step on it)

@@ -160,7 +160,7 @@ export const ratchetTimes = (n, curve = 'even') => Array.from({ length: n }, (_,
  *  carries the even ratchet's energy: the curve shapes the timing, not the level (without it, ×8 curves piled up over ×8
  *  even and a speed-up's last repeat stacked onto the next step's hit, pushing a busy dsp mix over full scale). The
  *  step's own hit (the first) and even repeats stay at 1. */
-export const ratchetGains = (n, curve = 'even') => { const t = ratchetTimes(n, curve), gap = (k) => (k + 1 < n ? t[k + 1] : 1) - t[k]; return t.map((_, k) => (k ? Math.min(1, n * Math.min(gap(k - 1), gap(k))) : 1)); };
+export const ratchetGains = (n, curve = 'even') => { const t = ratchetTimes(n, curve), gap = (k) => (k + 1 < n ? t[k + 1] : 1) - t[k]; return t.map((_, k) => (k ? Math.min(1, Math.round(n * Math.min(gap(k - 1), gap(k)) * 1e9) / 1e9) : 1)); };   // rounded: an even ×7 is 1, not 0.9999999999999998
 /** V3 euclid combine modes: replace = the fill is the pattern (the classic euclid knob, hand edits on top); and = only the
  *  hand hits the fill also has play; xor = the hand pattern flips the fill (a hand hit on a fill hit rests, one off it
  *  plays). With and / xor the hand pattern stays as you set it: the euclid knob moves only the mask. */
@@ -543,9 +543,9 @@ export class Machine {
   coupleAmount(a, b) { const c = this.couple, n = this.lanes.length; return c.mode === 'next' ? (b === (a + 1) % n && a !== b ? c.amount : 0) : c.mode === 'matrix' ? c.matrix[a]?.[b] || 0 : 0; }
   /** V2, runtime (not saved): the lift waiting for lane li's next step. */
   boostOf(li) { return this.couple.mode === 'off' ? 0 : this.boost[li] || 0; }
-  /** V2 after one master tick: the lanes in `used` used up their lift (Machine.tick: every lane that stepped), then each
+  /** V2 after one master tick (export.js liveTick, with what it plays): the lanes in `used` used up their lift, then each
    *  lane that sounded (`hit[li]`) lifts the lanes it is coupled to. A lane stepping on the same tick as the hit gets it
-   *  on its following step, so the lane order never matters. Live play (export.js liveTick) passes the hits it plays. */
+   *  on its following step, so the lane order never matters. */
   coupleAfter(hit, used) {
     const b = this.boost, n = this.lanes.length; used.forEach((u, li) => { if (u) b[li] = 0; });
     hit.forEach((h, a) => { if (h) for (let k = 0; k < n; k++) { const x = this.coupleAmount(a, k); if (x) b[k] = Math.min(1, (b[k] || 0) + x); } });
@@ -585,14 +585,14 @@ export class Machine {
   /** Master ticks until every lane lines up again: in whole ticks (a ×5/4 loop is not a whole number of 12ths of a beat). */
   cycleTicks({ repeat = 1 } = {}) { return Math.max(1, this.lanes.reduce((acc, l) => lcm(acc, l.length * l.stepTicks() * l.loopsPerCycle({ repeat, humanize: this.humanize })), 1)); }
   /** Every lane's event at master tick `tick` (null where a lane doesn't step), its steps counted from `origin`. */
-  /** ctx: { fill, dice, cycle, couple } — solo silences every lane that isn't soloed. couple: false leaves V2's lift
-   *  bookkeeping to the caller (liveTick, which knows the steps decided early and what really sounded). */
+  /** ctx: { fill, dice, cycle } — solo silences every lane that isn't soloed. V2: a coupled lane's step reads the lift
+   *  waiting for it; the lifts themselves are kept by live play (export.js liveTick, which renders run too), since only
+   *  it knows the steps decided early and what really sounded. */
   tick(tick, rng = Math.random, ctx = {}) {
     const solo = this.lanes.some(l => l.solo), r = tick - this.origin, cp = this.couple.mode !== 'off';
     // V5: a modulator over the whole cycle needs its length (the clock passes the one it has; else worked out here)
     const cycle = ctx.cycle ?? (this.lanes.some(l => l.mod?.depth > 0 && !(l.mod.loops > 0)) && this.steps(tick) ? this.cycleTicks() : 0);
-    const evs = this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin, boost: cp ? this.boost[li] || 0 : 0, cycle }));   // most ticks step no lane: nothing allocated
-    if (cp && ctx.couple !== false && evs.some(Boolean)) this.coupleAfter(evs.map(e => !!e?.hit), evs.map(Boolean)); return evs;
+    return this.lanes.map((l, li) => r < 0 || r % l.stepTicks() ? null : l.at(tick, rng, { ...ctx, li, silenced: solo && !l.solo, origin: this.origin, boost: cp ? this.boost[li] || 0 : 0, cycle }));   // most ticks step no lane: nothing allocated
   }
   /** Does any lane step at master tick `tick`? */
   steps(tick) { const r = tick - this.origin; return r >= 0 && this.lanes.some(l => r % l.stepTicks() === 0); }
