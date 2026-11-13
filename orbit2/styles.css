@@ -296,6 +296,10 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .gauge .g-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(103,232,249,.3)); }
 .gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
+/* A4: an automated knob wears a small "A"; the selected lane's automation strip sits under its steps */
+.gauge { position: relative; } .gauge .g-mark { position: absolute; top: 0; right: 2px; font: 700 9px/1 'Space Grotesk', system-ui, sans-serif; font-style: normal; color: var(--void-black, #050208); background: var(--signal-cyan); border-radius: 3px; padding: 1px 2px; }
+.auto-strip { margin: 2px 0 8px; } .auto-cv { display: block; width: 100%; height: 44px; border-radius: 6px; background: rgba(236,233,247,.06); }
+.auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; } .auto-row .hint { margin: 0; } .auto-pick { font-size: 12px; color: var(--muted); }
 
 /* launcher credit */
 .credit { margin: -14px 0 26px; font: 400 12px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(236,233,247,.8); }

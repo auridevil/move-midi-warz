@@ -171,6 +171,16 @@ test('A2 a tone curve is what the V5 modulator moves (timbreLock), not the knob 
   const ev = l.at(P, () => 0), lk = timbreLock(ev, l, 0, null, { tone: 0.2 }); near(lk.tone, 0.2 + ev.mod.d, 1e-12);
   near(expandHits(ev, l, 0, { tickSec: TICK })[0].lock.tone, l.autoAt('tone', 1) + ev.mod.d, 1e-9, 'expandHits passes the curve where the step sounds');
 });
+test('A3 / A6 wiring: the clock writes before the tick\'s steps, the hand rides liveTick and skips its curve, a recording gesture is one undo step, gauges and Move touch start gestures', async () => {
+  const { readFileSync } = await import('node:fs'), src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8'), app = src('../src/poly/app.js'), gauge = src('../src/gauge.js');
+  const at = (re) => app.search(re); assert.ok(at(/if \(knobGest\?\.rec\) autoRecordTick\(t, ts, cut\)/) > 0 && at(/if \(knobGest\?\.rec\) autoRecordTick/) < at(/if \(liveQuiet\(m, t, early/), 'step locks are written before the tick decides its steps');
+  assert.match(app, /liveTick\(m, t, early, \{[^}]*hand: handNow \}\)/); assert.match(app, /if \(handNow\?\.\[r\.li\]\?\.\[r\.k\] == null\) rampAuto\(kit/, 'no ramp under a hand');
+  assert.match(app, /const save = \(\) => \{ if \(knobGest\?\.rec && !restoring\) \{ knobGest\.dirty = true; return; \}/, 'nothing committed while a gesture records');
+  assert.match(app, /ownNext = true; save\(\); offClock\(fromClock, sync\)/, 'its end is one step of its own, committed before a load replaces the pattern');
+  assert.match(app, /move\.addEventListener\('encoderTouch'/); assert.match(gauge, /onStart\?\.\(v\)/); assert.match(gauge, /onEnd\?\.\(v\)/);
+  for (const fn of ['function loadSlot', 'function loadMachine', 'function rollPattern']) assert.match(app.slice(app.indexOf(fn), app.indexOf(fn) + 200), /gestEnd\(true/, `${fn} ends a gesture first`);
+  assert.match(app, /const undo = \(\) => \{ gestEnd\(true\); applyState/);
+});
 test('A2 keys: the curve keys are lane sound keys, the step keys are lock keys', () => {
   assert.deepEqual(AUTO_KEYS, ['tone', 'drive', 'pan', 'send', 'level']); for (const k of ['decay', 'snap', 'color', 'tune', 'prob', 'vel', 'nudge']) assert.ok(LOCK_KEYS.includes(k));
 });

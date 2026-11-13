@@ -133,13 +133,14 @@
       <summary>Record</summary>
       <div class="row-ctl">
         <button id="btn-rec" class="rec-btn">● arm record</button>
+        <div class="ctl" title="Record knob moves into the selected lane while armed and playing"><span class="ctl-lbl">knobs</span><div id="rec-knobs"></div></div>
         <div id="rec-gauges" class="gauges one"></div>
       </div>
       <div class="row-ctl">
         <div class="ctl" title="Where a hit is filed"><span class="ctl-lbl">quantize</span><div id="rec-quant"></div></div>
         <div id="rec-pitch"></div>
       </div>
-      <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents.</p>
+      <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents. Knobs on touch or latch: a knob you hold (a gauge, or a Move knob you touch) records its moves into the selected lane.</p>
     </details>
     <details class="drawer" id="evolve-drawer">
       <summary>Evolve</summary>
@@ -253,7 +254,9 @@
         <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
         <tr><th>−</th><td>evolve on/off</td></tr>
         <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
-        <tr><th>Record</th><td>arm live record · Shift = tap tempo</td></tr>
+        <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
+        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
+        <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
         <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
         <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
         <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
@@ -285,6 +288,18 @@
       <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
       <div id="sliders" class="gauges"></div>
       <div id="stepsui" class="stepsui" role="group" aria-label="steps"></div>
+      <!-- A4: the selected lane's automation: one parameter (picker), its curve or its locks, the playhead -->
+      <div id="auto-strip" class="auto-strip" hidden>
+        <canvas id="auto-cv" class="auto-cv" aria-hidden="true"></canvas>
+        <div class="auto-row">
+          <label class="auto-pick">automation <select id="auto-key"></select></label>
+          <span id="auto-text" class="hint tight"></span>
+          <button id="auto-half" class="small" type="button" title="½: keep the first half of the curve's loops">½</button>
+          <button id="auto-double" class="small" type="button" title="×2: twice as many loops (the curve repeats)">×2</button>
+          <button id="auto-clear" class="small" type="button" title="Clear this parameter's automation on this lane: its curve, or every lock of it (Move: touch the knob + Delete)">clear</button>
+          <button id="auto-clear-lane" class="small" type="button" title="Clear every curve and every recorded lock on this lane (slices, strokes, conditions, repeats and ghost notes stay)">clear lane automation</button>
+        </div>
+      </div>
       <div id="lockpanel" class="lockpanel adv" hidden>
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>
