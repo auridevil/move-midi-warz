@@ -181,6 +181,67 @@ test('A3 / A6 wiring: the clock writes before the tick\'s steps, the hand rides 
   for (const fn of ['function loadSlot', 'function loadMachine', 'function rollPattern']) assert.match(app.slice(app.indexOf(fn), app.indexOf(fn) + 200), /gestEnd\(true/, `${fn} ends a gesture first`);
   assert.match(app, /const undo = \(\) => \{ gestEnd\(true\); applyState/);
 });
+// ---- A5 / A7: exports, links, slots ----
+const midiOpts = (m, extra = {}) => { const lanes = [36, 38, 42, 39, 46, 49].map(note => ({ note, ch: 10 })).slice(0, m.lanes.length).map((l, i) => ({ ...l, ch: i + 1 })); return { tempo: 120, lanes, map: lanes, names: m.lanes.map(l => l.voice), bars: 2, ...extra }; };
+test('A7 MIDI: a lane\'s step values go out as a CC just before each of its notes (the lock, else the lane value), curves as CCs where they change', async () => {
+  const { hitsToMidi, autoCCs } = await import('../src/poly/export.js'), { readMidi } = await import('../src/punch/smf.js'), { AUTO_CC } = await import('../src/poly/midiio.js');
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const k = m.lanes[0], h = m.lanes[1];
+  k.setLength(4); k.setEuclid(4); k.sound.decay = 0.5; k.recordStepValue(1, 'decay', 1); k.recordStepValue(3, 'decay', 0);
+  h.setLength(4); h.setEuclid(1); h.recordCurve('level', 0, 0, 4 - 1 / 8, 1);
+  const ticks = 2 * BAR_TICKS, hits = collectHits(m, { to: ticks, tempo: 120, dice: Dice.take(2) }), ccs = autoCCs(m, hits, autoRamps(m, 0, ticks, 0), { tickSec: TICK });
+  const f = readMidi(hitsToMidi(hits, { ...midiOpts(m), ccs })), kick = f.tracks[1], snare = f.tracks[2];
+  assert.deepEqual(kick.ccs.map(c => [c.t, c.cc, c.v]), kick.notes.map((n, i) => [n.on, AUTO_CC.decay, [64, 127, 64, 0][i % 4]]), 'one decay CC on each kick note: the lock, else the lane value');
+  const lv = snare.ccs.filter(c => c.cc === AUTO_CC.level); assert.ok(lv.length > 20 && lv.every((c, i) => !i || (c.v !== lv[i - 1].v && c.t > lv[i - 1].t)), 'level curve: a CC only where the value changes');
+  assert.equal(lv[0].t, 0); assert.equal(lv[0].v, 0); assert.ok(lv.some(c => c.v === 127)); assert.equal(snare.ccs.filter(c => c.cc === AUTO_CC.decay).length, 0, 'no decay locks on that lane: no decay CC');
+  // the CC comes before the note-on on the same tick (raw track order)
+  const bytes = hitsToMidi(hits.filter(x => x.li === 0).slice(0, 1), { ...midiOpts(m), ccs: ccs.filter(c => c.li === 0).slice(0, 1) }), on = bytes.findIndex((b, i) => b === 0x90 && bytes[i + 1] === 36), cc = bytes.findIndex((b, i) => b === 0xB0 && bytes[i + 1] === AUTO_CC.decay);
+  assert.ok(cc > 0 && cc < on, 'CC first, then the note');
+  const merged = readMidi(hitsToMidi(hits, { ...midiOpts(m), ccs, merge: true })); assert.equal(merged.tracks[1].ccs, undefined, 'one Drum-Rack track: notes only');
+  const off = autoCCs(m, hits, autoRamps(m, 0, ticks, 0), { cc: { ...AUTO_CC, decay: 0, level: 0 }, tickSec: TICK }); assert.equal(off.length, 0, 'CC 0 = left out');
+});
+test('A7 MIDI: a pattern without automation writes the same bytes as before this phase (every groove)', async () => {
+  const { hitsToMidi, autoCCs } = await import('../src/poly/export.js'), h = (b) => createHash('sha256').update(b).digest('hex').slice(0, 16);
+  const BEFORE_MIDI = { boombap: '9712f56339a63ab2', trap: '3a4f746f18ec89f6', house: 'c53b46cbbc98c003', techno: '2cca798685985ee2', dnb: 'cbf83a66525c2969', afro: '62702e8c503cf26f', poly345: '14240472560e8428' };
+  for (const g of GROOVES) {
+    const m = Machine.from(g.m), ticks = 4 * m.barTicks(), hits = collectHits(m, { to: ticks, tempo: g.tempo, dice: Dice.take(5) }), lanes = [36, 38, 42, 39, 46, 49].map(note => ({ note, ch: 10 })).slice(0, m.lanes.length);
+    const ccs = autoCCs(m, hits, autoRamps(m, 0, ticks, 0), { tickSec: 60 / g.tempo / P }); assert.equal(ccs.length, 0, g.key);
+    assert.equal(h(hitsToMidi(hits, { tempo: g.tempo, lanes, map: lanes, names: m.lanes.map(l => l.voice), bars: 4, meter: m.meter, ccs })), BEFORE_MIDI[g.key], g.key);
+  }
+});
+test('A7 MIDI of a chain: each slot\'s own lanes and curves (collectChainAuto)', async () => {
+  const { collectChainAuto, collectChain } = await import('../src/poly/export.js'), { AUTO_CC } = await import('../src/poly/midiio.js');
+  const a = new Machine(); a.lanes.forEach(l => l.clear()); a.lanes[0].setLength(4); a.lanes[0].setEuclid(4); a.lanes[0].recordCurve('pan', 0, 0, 3.9, 0);
+  const b = Machine.from(a.toJSON()); b.lanes[0].clearAuto(); b.lanes[0].recordStepValue(0, 'snap', 1);
+  const { hits, ccs } = collectChainAuto([a.toJSON(), b.toJSON()], { bars: 1, tempo: 120, dice: Dice.take(4), restart: true });
+  assert.deepEqual(hits, collectChain([a.toJSON(), b.toJSON()], { bars: 1, tempo: 120, dice: Dice.take(4), restart: true }), 'the same hits as the chain export');
+  const bar = BAR_TICKS * TICK; assert.ok(ccs.filter(c => c.cc === AUTO_CC.pan).every(c => c.time < bar), 'the pan curve only in slot A'); assert.equal(ccs.filter(c => c.cc === AUTO_CC.snap).length, 4, 'slot B: a snap CC on each of its 4 notes');
+  assert.ok(ccs.filter(c => c.cc === AUTO_CC.snap).every(c => c.time >= bar));
+});
+test('A5 share links carry curves; over the limit at half resolution, then without curves (locks always kept)', async () => {
+  const { encodeShare, encodeShareFit, decodeShare } = await import('../src/poly/export.js');
+  const m = new Machine(6); m.lanes.forEach(l => l.clear()); m.lanes[0].setLength(4); m.lanes[0].setEuclid(4); m.lanes[0].recordStepValue(2, 'decay', 0.9); m.lanes[0].recordCurve('tone', 0, 0.1, 3.9, 0.9);
+  const back = Machine.from((await decodeShare(await encodeShare(m.toJSON(), 120))).m); assert.deepEqual(back.lanes[0].auto, m.lanes[0].auto); assert.equal(back.lanes[0].locks[2].decay, 0.9);
+  assert.equal((await encodeShareFit(m.toJSON(), 120)).curves, 'full');
+  // a busy pattern: noisy curves on every lane and key make a long link
+  let seed = 7; const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (const l of m.lanes) { l.setLength(16); for (const k of AUTO_KEYS) for (let s = 0; s < 16; s += 1 / 8) l.recordCurve(k, s, rnd()); l.spanAuto(1); }
+  const full = await encodeShare(m.toJSON(), 120), half = await encodeShareFit(m.toJSON(), 120, {}, full.length - 1), none = await encodeShareFit(m.toJSON(), 120, {}, 200);
+  assert.ok(full.length > 4000, `a long link (${full.length})`); assert.equal(half.curves, 'half'); assert.ok(half.code.length < full.length); assert.equal(none.curves, 'none');
+  const h = Machine.from((await decodeShare(half.code)).m).lanes[0], n = Machine.from((await decodeShare(none.code)).m).lanes[0];
+  assert.equal(h.auto.tone.length, m.lanes[0].auto.tone.length, 'back at full resolution'); for (let s = 0; s < 32; s += 2) near(h.autoAt('tone', s), m.lanes[0].autoAt('tone', s), 1e-9, `kept points at step ${s}`);
+  assert.equal(n.auto, null); assert.equal(n.locks[2].decay, 0.9, 'the locks stay');
+  const fit = await encodeShareFit(m.toJSON(), 120); assert.ok(fit.code.length <= 4000, 'the default limit holds');
+});
+test('A5 a slot holds its own copy of the curves; evolve never touches them; a musical roll keeps them and clears the locks', async () => {
+  const { SlotBank } = await import('../src/poly/slots.js');
+  const m = new Machine(); const l = m.lanes[0]; l.recordCurve('send', 0, 0.3, 2, 0.6); l.recordStepValue(0, 'color', 0.2);
+  const bank = new SlotBank(null); bank.save(0, m.toJSON()); l.recordCurve('send', 0, 1, 2, 1); l.auto.loops = 4;
+  const s = Machine.from(bank.get(0)).lanes[0]; assert.equal(s.auto.loops, 1); near(s.autoAt('send', 1), 0.45, 1 / 63, 'the slot keeps the curve it was saved with');
+  const e = Machine.from(bank.get(0)), before = JSON.stringify(e.lanes.map(x => x.auto)); let seed = 3; const rng = () => ((seed = (seed * 48271) % 2147483647) / 2147483647);
+  for (let i = 0; i < 60; i++) e.evolve({ scope: 'all', amount: 1, weights: { rotate: 1, hits: 1, length: 1, ratio: 1, prob: 1, tune: 1 } }, rng);
+  assert.equal(JSON.stringify(e.lanes.map(x => x.auto)), before, 'evolve moves length, speed, rotation: never the curves');
+  e.randomizeMusical(rng); assert.equal(JSON.stringify(e.lanes.map(x => x.auto)), before, 'a roll keeps the curves (sound stays)'); assert.ok(e.lanes.every(x => x.locks.every(lk => lk == null)), 'and clears the steps with their locks');
+});
 test('A2 keys: the curve keys are lane sound keys, the step keys are lock keys', () => {
   assert.deepEqual(AUTO_KEYS, ['tone', 'drive', 'pan', 'send', 'level']); for (const k of ['decay', 'snap', 'color', 'tune', 'prob', 'vel', 'nudge']) assert.ok(LOCK_KEYS.includes(k));
 });

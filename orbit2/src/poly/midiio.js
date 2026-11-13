@@ -7,6 +7,13 @@ import { MIDI_DIV } from './lanes.js';
 import { ARTIC_MAX } from './voices.js';
 
 export const DEFAULT_NOTES = [36, 38, 42, 39, 46, 49];   // GM drums: kick, snare, closed hat, clap, open hat, crash (L2 lanes 5–6)
+/** A7: the CC each automated key is exported on (0 = not exported): tone = filter cutoff (74), snap = attack (73), color
+ *  = timbre (71), decay = release-ish (75), tune 16 and drive 17 (general purpose), level = volume (7), pan (10), send =
+ *  effects depth (91). Editable in the MIDI drawer. */
+export const AUTO_CC = { tone: 74, decay: 75, snap: 73, color: 71, tune: 16, drive: 17, level: 7, pan: 10, send: 91 };
+export const AUTO_CC_KEYS = Object.keys(AUTO_CC);
+/** Saved CC numbers back in range: whole numbers 0..119 (120+ are channel mode messages), the default for anything missing. */
+export const ccFrom = (o) => Object.fromEntries(AUTO_CC_KEYS.map(k => [k, Number.isFinite(+o?.[k]) && o?.[k] !== null ? Math.max(0, Math.min(119, Math.round(+o[k]))) : AUTO_CC[k]]));
 /**
  * L3 strokes on MIDI: a lane's first stroke plays its own note, the others the next notes up that no lane's note and no
  * earlier stroke takes on the same channel (at the top of the range, the next free ones down), so a conga slap never
@@ -139,7 +146,7 @@ export class PolyMidi {
   constructor({ getAccess, isMovePort = () => false }) {
     this.getAccess = getAccess; this.isMovePort = isMovePort;
     this.out = null; this.outName = ''; this.clockOut = false;
-    this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60;
+    this.lanes = DEFAULT_NOTES.map((note) => ({ note, ch: 10 })); this.gateMs = 60; this.cc = { ...AUTO_CC };   // cc: A7 export CC per automated key
     // P5 out offset: every scheduled note and clock goes out this many ms later (− = earlier). null = auto: the audio
     // output's latency (autoMs, set by the app), so notes leave when the speakers play the same hit
     this.offsetMs = null; this.autoMs = 0; this.lastClock = 0; this.stopAt = 0;   // when the last clock / start and the last stop leave: a stop goes after the clocks, a start after the stop
@@ -195,10 +202,11 @@ export class PolyMidi {
       if (s === 0xFC) this.handlers.stop(); else { if (s === 0xFA) this.extTick = 0; this.handlers.start(); }
     } else if (s === 0xF2) this.extTick = ((data[2] << 7) | data[1]) * 6;   // Song Position Pointer: sixteenths → 24 PPQ ticks
   }
-  toJSON() { const { outName, clockOut, lanes, gateMs, inName, follow, offsetMs } = this; return { outName, clockOut, lanes, gateMs, inName, follow, offsetMs }; }
+  toJSON() { const { outName, clockOut, lanes, gateMs, inName, follow, offsetMs, cc } = this; return { outName, clockOut, lanes, gateMs, inName, follow, offsetMs, cc }; }
   fromJSON(o) {
     if (!o) return; Object.assign(this, { outName: o.outName || '', clockOut: !!o.clockOut, gateMs: o.gateMs || 60, inName: o.inName || '', follow: FOLLOW_MODES.includes(o.follow) ? o.follow : 'off' });
     this.offsetMs = Number.isFinite(o.offsetMs) ? Math.max(-LATENCY_MAX, Math.min(LATENCY_MAX, Math.round(o.offsetMs))) : null;   // older settings: auto
     if (Array.isArray(o.lanes)) this.lanes = DEFAULT_NOTES.map((n, i) => ({ note: o.lanes[i]?.note ?? n, ch: o.lanes[i]?.ch ?? 10 }));
+    this.cc = ccFrom(o.cc);   // older settings: the defaults
   }
 }

@@ -4,7 +4,7 @@ import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
-import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare, autoRamps } from './export.js';
+import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, chainSixteenths, chainMeters, hitsToMidi, encodeShareFit, decodeShare, autoRamps, autoCCs, collectChainAuto, LINK_MAX } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, pendingSteps, ringPlan, ringOut, joinRing } from './jam.js';
@@ -12,7 +12,7 @@ import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
-import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs } from './midiio.js';
+import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs, AUTO_CC_KEYS } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt, TUNE_SEMIS } from './voices.js';
 import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, loopWindow, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
@@ -473,6 +473,7 @@ const INFO = {
   'chain bars':'In a chain (song), how many bars each slot plays before the next one comes in. Chains always change on a bar line.',
   'accent above': 'Live record: pad velocity at or above this becomes an accent (keyboard: Shift = accent).',
   quantize: 'Live record: "nearest step" rounds, so a slightly early hit lands on the coming step; "step just played" always files it under the last step.',
+  'automation cc': 'MIDI export: each automated parameter of a lane goes out as this CC on the lane\'s track and channel: step values (locks) just before each note, curves wherever they change. 0 = left out. Defaults: tone 74, decay 75, snap 73, color 71, tune 16, drive 17, level 7, pan 10, send 91. "One Drum-Rack track" has one channel for every lane, so it carries notes only.',
   'record knobs': 'Record knob moves into the selected lane, armed and playing. off = knobs act as always. touch = while you hold a knob (a gauge, or a Move knob you touch) its moves are recorded: chance, tune, decay, snap and color (and the step lock knobs) as step locks on the steps that play, tone, drive, send, pan and level as a smooth curve over the lane\'s loops; let go and it plays back. latch = after you let go the last value goes on until the loop is back where you started. The lane\'s own value stays; each touch is one undo step. The strip under the steps shows it; clear it there (Move: touch the knob + Delete).',
   'pitch pads': 'Live record:the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
   'evolve every': 'Evolve mode: how many bars between two mutations.',
@@ -1164,6 +1165,8 @@ function buildMidiUI() {
   sliders.midiLat = makeGauge({ label: 'out offset', min: -LATENCY_MAX, max: LATENCY_MAX, value: pmidi.latencyMs, fmt: (v) => `${v > 0 ? '+' : ''}${v} ms`, say: (v) => v ? `${Math.abs(v)} ms ${v > 0 ? 'later' : 'earlier'}` : 'no offset', color: 'var(--star-white)', title: INFO['midi offset'], onChange: (v) => { pmidi.offsetMs = v; ui.midiLatAuto.set(false); saveSettings(); } });
   g.appendChild(sliders.midiLat.el);
   ui.midiLatAuto = mount('midi-lat-auto', toggleChip({ label: 'auto offset', on: pmidi.offsetMs == null, title: INFO['midi offset'], onChange: (v) => { pmidi.offsetMs = v ? null : pmidi.latencyMs; sliders.midiLat.set(pmidi.latencyMs); saveSettings(); } }));
+  // A7: the CC each automated parameter goes out on in the MIDI export (0 = left out); no ports needed for that
+  for (const k of AUTO_CC_KEYS) $('midi-cc').appendChild(makeGauge({ label: `${k} CC`, min: 0, max: 119, value: pmidi.cc[k], fmt: (v) => (v ? `CC ${v}` : 'off'), say: (v) => (v ? `CC ${v}` : 'left out'), color: 'var(--star-white)', title: INFO['automation cc'], onChange: (v) => { pmidi.cc[k] = v; saveSettings(); } }).el);
   pmidi.handlers = { tempo: (bpm) => { followClockTempo(bpm); renderMidi(); }, start: () => { if (!playing) togglePlay(); }, stop: () => { if (playing) togglePlay(); },
     // phase lock: compare where our clock is with the incoming tick at the moment it arrived; trim the tempo or snap
     tick: (ext, t) => {
@@ -1374,9 +1377,11 @@ const rollNote = () => dice.locked ? `dice ${dice.seed}` : `roll ${expRoll}`;
 /** What a share is called: the library setup on screen (none: shown as UNTITLED, which is never written into the
  *  link); lineage rides along as `from`. */
 const shareName = () => (libCurrent && lib.get(libCurrent)?.name) || null;
+/** A5: the link stays under LINK_MAX (encodeShareFit: curves at half resolution, else left out); `note` says so. */
 async function shareUrl() {
-  const name = shareName(), code = await encodeShare(m.toJSON(), tempo, { title: name, from: lineage });
-  return { code, title: name || UNTITLED, url: `${location.origin}${location.pathname}#p=${code}` };
+  const name = shareName(), pre = `${location.origin}${location.pathname}#p=`, { code, curves } = await encodeShareFit(m.toJSON(), tempo, { title: name, from: lineage }, LINK_MAX - pre.length);
+  const note = curves === 'none' ? 'the automation curves were left out: the link would be too long' : curves === 'half' ? 'the automation curves at half resolution, to keep the link short' : '';
+  return { code, title: name || UNTITLED, url: pre + code, note };
 }
 // The OS share sheet where it is a phone's habit (touch); on a desktop the clipboard is the one-tap path.
 const touchShare = () => !!navigator.share && matchMedia('(pointer: coarse)').matches;
@@ -1384,10 +1389,10 @@ const touchShare = () => !!navigator.share && matchMedia('(pointer: coarse)').ma
  *  outcome says so in a toast (the export drawer may be closed). The address bar keeps no #p= link otherwise: on a
  *  reload the link would win over the beat you made since. */
 async function shareLink() {
-  const { code, title, url } = await shareUrl();
-  if (touchShare()) { try { await navigator.share({ title: `${title} · orbits`, url }); toast('shared'); return; } catch (e) { if (e.name === 'AbortError') return; } }
-  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; toast('link copied · paste it anywhere'); }
-  catch { history.replaceState(null, '', `#p=${code}`); $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; toast('the link is in the address bar: copy it from there', 4000); }
+  const { code, title, url, note } = await shareUrl(), also = note ? ` · ${note}` : '';
+  if (touchShare()) { try { await navigator.share({ title: `${title} · orbits`, url }); toast(`shared${also}`, note ? 5000 : 2400); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)${also}`; toast(`link copied · paste it anywhere${also}`, note ? 5000 : 2400); }
+  catch { history.replaceState(null, '', `#p=${code}`); $('exp-status').textContent = `link is in the address bar (clipboard blocked)${also}`; toast('the link is in the address bar: copy it from there', 4000); }
 }
 /** A file into the share sheet (with the remix link as its text) when the browser can share files, else a download. */
 async function shareFile(file, what) {
@@ -1465,17 +1470,19 @@ async function exportWav() {
 }
 /** A MIDI file of `hits` (the pattern's, or a chain's: `states`, its slots), a track per lane or one Drum-Rack track
  *  (exp.midiOne, E3). */
-function midiOf(hits, { states = null, bars }) {
+function midiOf(hits, { states = null, bars, ccs = null }) {
   // a chain is as long as its slots' bars in their own meters, with a time signature wherever a slot changes it
   const nl = Math.max(m.lanes.length, ...(states || []).map(s => s?.lanes?.length || 0));   // a track per lane: 4 or 6
-  return hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), map: pmidi.lanes, names: laneNames(nl), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: states ? chainMeters(states, bank.chainBars) : null, sixteenths: states ? chainSixteenths(states, bank.chainBars) : null, merge: exp.midiOne });   // early notes wrap like the loop WAV
+  return hitsToMidi(hits, { tempo, lanes: pmidi.lanes.slice(0, nl), map: pmidi.lanes, names: laneNames(nl), gateSec: pmidi.gateMs / 1000, bars, loop: ui.expLoop.value, meter: m.meter, meters: states ? chainMeters(states, bank.chainBars) : null, sixteenths: states ? chainSixteenths(states, bank.chainBars) : null, merge: exp.midiOne, ccs });   // early notes wrap like the loop WAV
 }
-const midiNote = () => exp.midiOne ? 'one Drum-Rack track' : 'a track per lane';
+/** A7: the pattern's automation (step values, curves) as CCs, `ticks` long, for the hit list of an export. */
+const patternCCs = (hits, ticks) => autoCCs(m, hits, autoRamps(m, 0, ticks, 0), { cc: pmidi.cc, tickSec: tickSec() });
+const midiNote = (ccs = []) => `${exp.midiOne ? 'one Drum-Rack track' : 'a track per lane'}${!ccs.length ? '' : exp.midiOne ? ' · one track holds no per-lane CCs: the automation is left out (a track per lane keeps it)' : ` · automation as ${ccs.length} CC${ccs.length === 1 ? '' : 's'}`}`;
 function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
-  const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice(), restart: bank.restart }) : exportHits(ticks);
-  download(midiOf(hits, { states, bars }), `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars · ${midiNote()}${chain ? ` · chain of ${bank.chain.length}` : ''}`; questEvent({ type: 'export', what: 'midi' });
+  const { hits, ccs } = chain ? collectChainAuto(states, { bars: bank.chainBars, tempo, dice: exportDice(), restart: bank.restart, cc: pmidi.cc }) : (h => ({ hits: h, ccs: patternCCs(h, ticks) }))(exportHits(ticks));
+  download(midiOf(hits, { states, bars, ccs }), `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars · ${midiNote(ccs)}${chain ? ` · chain of ${bank.chain.length}` : ''}`; questEvent({ type: 'export', what: 'midi' });
 }
 /**
  * E5 export all: ONE hit list (this roll) → the mix WAV, the stems (dry + return when "dry stems" is on) with their raw
@@ -1488,9 +1495,9 @@ async function exportAll() {
   const base = fileBase('all', mix), n = m.lanes.length, pairs = Array.from({ length: n }, (_, i) => [st.chans[2 * i], st.chans[2 * i + 1]]);
   const { files, gain } = stemFiles(pairs, laneNames(n), st.sr, base, { bits: exp.bits, ...renderTags(st), ret: exp.dry ? [st.chans[2 * n], st.chans[2 * n + 1]] : null });
   files.unshift({ name: `${base}/${base}-mix.wav`, data: mixWav(mix) });
-  files.push({ name: `${base}/${base}.mid`, data: midiOf(hits, { bars: ticks / m.barTicks() }) });
+  const ccs = patternCCs(hits, ticks); files.push({ name: `${base}/${base}.mid`, data: midiOf(hits, { bars: ticks / m.barTicks(), ccs }) });
   download(zipStored(files), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}${ui.expWhat.value === 'chain' ? ' · this pattern only: a chain exports as MIDI' : ''}`; questEvent({ type: 'export', what: 'all' });
+  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote(ccs)}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}${ui.expWhat.value === 'chain' ? ' · this pattern only: a chain exports as MIDI' : ''}`; questEvent({ type: 'export', what: 'all' });
 }
 /**
  * E4 kit: each lane's sound as one-shot WAVs to load into Simpler or a Drum Rack, an accent and a normal hit (velocity

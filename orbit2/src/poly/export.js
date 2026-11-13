@@ -1,10 +1,10 @@
 // One place that turns lane events into concrete hits (swing, humanize, ratchets), used by live playback, the WAV
 // render and the MIDI export, plus the share-link codec. Pure: no audio, no DOM.
-import { Machine, PPQ, MIDI_DIV, meterParts, ratchetTimes, ratchetGains, snapTune, TIMBRE_KEYS, AUTO_KEYS, LOCK_KEYS } from './lanes.js';
+import { Machine, PPQ, MIDI_DIV, meterParts, ratchetTimes, ratchetGains, snapTune, TIMBRE_KEYS, AUTO_KEYS, LOCK_KEYS, autoHalf } from './lanes.js';
 import { TUNE_SEMIS } from './voices.js';
 import { trackBars } from './slots.js';
 import { KITS } from './kits.js';
-import { strokeNotes } from './midiio.js';
+import { strokeNotes, AUTO_CC } from './midiio.js';
 import { writeMidi } from '../punch/smf.js';
 
 /** Velocity of a hit: a 'vel' lock wins, an accent adds on top. */
@@ -181,6 +181,31 @@ function chainSegments(slotStates, bars, restart) {
 export const collectChain = (slotStates, { bars, tempo, dice = null, restart = false }) => chainSegments(slotStates, bars, restart).flatMap(({ m, from, to, origin }) => collectHits(m, { from, to, tempo, dice, origin }));
 /** A2: the curves of a chain (autoRamps per slot segment, each from its own origin). */
 export const collectChainRamps = (slotStates, { bars, restart = false }) => chainSegments(slotStates, bars, restart).flatMap(({ m, from, to, origin }) => autoRamps(m, from, to, origin));
+/** A7: a chain's hits and its automation as MIDI CC (autoCCs per slot segment: each slot's lanes and curves). */
+export function collectChainAuto(slotStates, { bars, tempo, dice = null, restart = false, cc = AUTO_CC }) {
+  const hits = [], ccs = [], tickSec = 60 / tempo / PPQ;
+  for (const { m, from, to, origin } of chainSegments(slotStates, bars, restart)) { const h = collectHits(m, { from, to, tempo, dice, origin }); hits.push(...h); ccs.push(...autoCCs(m, h, autoRamps(m, from, to, origin), { cc, tickSec })); }
+  return { hits, ccs };
+}
+/** A7: the keys a hit's own value goes out on as a CC before its note (a lock, a modulator, timbre dice or scale snap
+ *  put them on the hit); velocity is the note's, chance and nudge are in which notes there are and when. */
+const STEP_CC_KEYS = ['tone', 'decay', 'snap', 'color', 'tune'];
+const cc7 = (k, v) => Math.max(0, Math.min(127, Math.round((k === 'tune' ? (v + 1) / 2 : v) * 127)));
+/**
+ * A7: the automation of a hit list as MIDI CC on each lane's own track: [{ li, time (s), cc, v (0..127) }]. Step values:
+ * one CC just before each note of a lane whose hits carry that key (`hits` from collectHits: its lock, else the lane
+ * value, so a note without a lock puts the synth back), only for those keys; curves (`ramps`: autoRamps, master ticks) on
+ * the block grid, wherever the 7-bit value changes (the first always). cc: { key: CC number, 0 = left out }. A pattern
+ * without either gives none.
+ */
+export function autoCCs(m, hits, ramps, { cc = AUTO_CC, tickSec }) {
+  const out = [], keys = m.lanes.map((l, li) => STEP_CC_KEYS.filter(k => cc[k] > 0 && hits.some(h => h.li === li && h.lock?.[k] != null)));
+  const base = (l, k) => (k === 'tune' ? l.tune : l.sound[k]);
+  for (const h of hits) for (const k of keys[h.li] || []) out.push({ li: h.li, time: h.time, cc: cc[k], v: cc7(k, h.lock?.[k] ?? h.auto?.[k] ?? base(m.lanes[h.li], k)) });   // a tone curve where the note sounds
+  const last = new Map();
+  for (const r of ramps) { if (!(cc[r.k] > 0)) continue; const v = cc7(r.k, r.v), id = `${r.li}:${r.k}`; if (last.get(id) === v) continue; last.set(id, v); out.push({ li: r.li, time: r.t * tickSec, cc: cc[r.k], v }); }
+  return out;
+}
 /** The time signatures of a chain, `bars` each: [{ s (sixteenth it starts on), meter }], one per change (the MIDI
  *  file's FF 58 events). */
 export const chainMeters = (slotStates, bars) => { const out = []; let s = 0; for (const json of slotStates) { const { num, den } = meterParts(json?.meter), meter = `${num}/${den}`; if (out.at(-1)?.meter !== meter) out.push({ s, meter }); s += bars * 16 * num / den; } return out; };
@@ -199,7 +224,9 @@ export const chainSixteenths = (slotStates, bars) => slotStates.reduce((n, json)
 // (the whole note map, all lanes, when the file has fewer tracks)
 // E3 merge: every lane on ONE track, on the first lane's channel, each lane (and stroke) on its own note from the MIDI
 // settings: a Drum Rack in one clip. Off: a track per lane, as before.
-export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null, merge = false }) {
+// A7 ccs (autoCCs): each lane's automation as CCs on its track and channel, placed like its notes (a loop wraps them).
+// Merge can't hold per-lane CCs on one channel: notes only.
+export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0.06, name = 'orbits', bars = 0, loop = true, meter = '4/4', meters = null, sixteenths = null, merge = false, ccs = null }) {
   const { num, den } = meterParts(meter), toSteps = (sec) => sec / (60 / tempo / 4), len = sixteenths ?? bars * 16 * num / den, gate = Math.max(0.05, toSteps(gateSec));   // writeMidi counts sixteenths (24 ticks)
   const place = (sec) => {
     if (!loop || !len) return { s: Math.max(0, toSteps(sec)), d: gate };
@@ -208,8 +235,9 @@ export function hitsToMidi(hits, { tempo, lanes, map = lanes, names, gateSec = 0
   };
   const strokes = strokeNotes(map);
   const note = (h) => ({ p: strokes[h.li][h.artic || 0], ...place(h.time), v: Math.max(1, Math.min(127, Math.round(h.vel * 127))), g: true });
+  const laneCCs = (li) => { const c = ccs?.filter(x => x.li === li); return c?.length ? { ccs: c.map(x => ({ s: place(x.time).s, cc: x.cc, v: x.v })) } : {}; };
   const parts = merge ? [{ name: 'drum rack', ch: lanes[0]?.ch ?? 10, notes: hits.filter(h => h.li < lanes.length).map(note) }]
-    : lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(note) }));
+    : lanes.map((l, li) => ({ name: names[li] || `lane ${li + 1}`, ch: l.ch, notes: hits.filter(h => h.li === li).map(note), ...laneCCs(li) }));
   const sigs = meters?.map(({ s, meter: k }) => { const p = meterParts(k); return { s, num: p.num, den: p.den }; });
   return writeMidi({ bpm: tempo, name, parts, endStep: len, meter: [num, den], meters: sigs });   // the clip is the full N bars, not up to the last note
 }
@@ -233,6 +261,19 @@ export async function encodeShare(machineJSON, tempo, meta = {}) {
   });
   const title = metaStr(meta.title), from = metaStr(meta.from);
   return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o, ...(title && { title }), ...(from && { from }) })), new CompressionStream('deflate-raw')));
+}
+/** A5: a share link stays under this many characters (chat apps and some browsers cut longer URLs). */
+export const LINK_MAX = 4000;
+/**
+ * A5: encodeShare kept short: curves as they are; over `max` chars, every curve at half resolution (autoHalf, every
+ * second point); still over, without curves (step locks are the pattern: always kept). → { code, curves: 'full' |
+ * 'half' | 'none' } ('full' too when the pattern has none).
+ */
+export async function encodeShareFit(machineJSON, tempo, meta = {}, max = LINK_MAX) {
+  const code = await encodeShare(machineJSON, tempo, meta); if (code.length <= max || !machineJSON.lanes?.some(l => l.auto)) return { code, curves: 'full' };
+  const each = (f) => ({ ...machineJSON, lanes: machineJSON.lanes.map(l => (l.auto ? f(l) : l)) });
+  const half = await encodeShare(each(l => ({ ...l, auto: autoHalf(l.auto) })), tempo, meta); if (half.length <= max) return { code: half, curves: 'half' };
+  return { code: await encodeShare(each(({ auto, ...l }) => l), tempo, meta), curves: 'none' };
 }
 /** → { v, tempo, m, title, from } (title / from null on a link made before lineage, or a bad one). Throws a message
  *  for people: a link cut short or mangled fails in base64, inflate or JSON, a link of something else after that. */

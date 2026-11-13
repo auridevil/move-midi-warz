@@ -20,7 +20,8 @@ function track(events, name, end = 0) {
   return chunk('MTrk', data);
 }
 
-/** parts: [{ name, ch (1–16), notes: [{p, s, d, v}] }] → Uint8Array of a .mid file. markers: [{ s (step), text }] become
+/** parts: [{ name, ch (1–16), notes: [{p, s, d, v}], ccs?: [{ s, cc, v }] }] → Uint8Array of a .mid file (a CC on a
+ *  note's tick comes before its note-on, after the note-offs there). markers: [{ s (step), text }] become
  *  marker meta events on the tempo track (Live shows them as locators). endStep: every track lasts at least this many
  *  steps, so a DAW makes the clip the full pattern length even when the last note comes early. meter: the time signature
  *  [num, den]; meters: [{ s (step), num, den }] when it changes along the file (the first one at step 0 wins over meter). */
@@ -44,13 +45,14 @@ export function writeMidi({ bpm = 120, swing = 50, name = 'punchliner', parts, m
       if (again) off = Math.min(off, stepTicks(again.s, swing));
       ev.push([on, [0x90 | ch, n.p, n.v], 1], [off, [0x80 | ch, n.p, 0], 0]);
     }
+    for (const c of part.ccs || []) ev.push([stepTicks(c.s, swing), [0xB0 | ch, c.cc & 127, Math.max(0, Math.min(127, Math.round(c.v)))], 0.5]);
     tracks.push(track(ev, part.name, end));
   }
   const header = chunk('MThd', [0, 1, 0, tracks.length, (PPQ >> 8) & 255, PPQ & 255]);
   return Uint8Array.from([...header, ...tracks.flat()]);
 }
 
-/** Minimal reader for tests: returns { format, ppq, tracks: [{ name, notes: [{p, on, off, v, ch}] , tempo? }] }. */
+/** Minimal reader for tests: returns { format, ppq, tracks: [{ name, notes: [{p, on, off, v, ch}], ccs?: [{ t, cc, v, ch }], tempo? }] }. */
 export function readMidi(bytes) {
   let i = 0; const b = bytes; const rd32 = () => (b[i++] << 24 | b[i++] << 16 | b[i++] << 8 | b[i++]) >>> 0; const rd16 = () => b[i++] << 8 | b[i++];
   const rvlq = () => { let n = 0, c; do { c = b[i++]; n = (n << 7) | (c & 0x7F); } while (c & 0x80); return n; };
@@ -62,6 +64,7 @@ export function readMidi(bytes) {
       if (s === 0xFF) { i++; const type = b[i++], l = rvlq(); const d = b.slice(i, i + l); i += l; if (type === 0x03) tr.name = new TextDecoder().decode(d); if (type === 0x51) tr.tempo = 60000000 / (d[0] << 16 | d[1] << 8 | d[2]); if (type === 0x06) (tr.markers ??= []).push({ t, text: new TextDecoder().decode(d) }); if (type === 0x58) (tr.meters ??= []).push({ t, num: d[0], den: 2 ** d[1] }); continue; }
       if (s & 0x80) { run = s; i++; } else s = run;
       const hi = s & 0xF0, ch = (s & 15) + 1, d1 = b[i++], d2 = (hi === 0xC0 || hi === 0xD0) ? 0 : b[i++];
+      if (hi === 0xB0) { (tr.ccs ??= []).push({ t, cc: d1, v: d2, ch }); continue; }
       if (hi === 0x90 && d2 > 0) open.set(`${ch}:${d1}`, { p: d1, on: t, v: d2, ch });
       else if (hi === 0x80 || hi === 0x90) { const o = open.get(`${ch}:${d1}`); if (o) { o.off = t; tr.notes.push(o); open.delete(`${ch}:${d1}`); } }
     }
