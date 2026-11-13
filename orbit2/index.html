@@ -95,7 +95,7 @@
   </dialog>
   <div class="hud-left" id="hud-left">
     <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
-    <div class="view-row"><div id="view-mode" class="ctl" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."></div></div>
+    <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
     <details class="drawer">
       <summary>Humanize</summary>
       <div id="global-sliders" class="gauges two"></div>
@@ -230,7 +230,7 @@
         <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
         <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
         <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
-        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
+        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
         <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
         <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
         <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
@@ -244,8 +244,8 @@
         <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
         <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
         <tr><th>Play</th><td>start / stop</td></tr>
-        <tr><th>Knobs 1–4</th><td>length · euclid hits · rotation · speed ratio</td></tr>
-        <tr><th>Knobs 5–7</th><td>swing · probability · tune</td></tr>
+        <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
+        <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
         <tr><th>Knob 8</th><td>master tempo</td></tr>
         <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
         <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
@@ -266,7 +266,7 @@
   <div class="hud">
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
     <!-- I6: the quest you are on (filled by app.js renderQuest) -->
-    <div id="quest" class="quest" role="region" aria-label="quest" hidden><span class="quest-k">quest <b id="quest-n"></b></span><b id="quest-title" class="quest-title"></b><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-skip" class="small" type="button" title="Skip this quest (it stays open in the list of what is left)">skip</button><button id="quest-x" class="small" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span></div>
+    <div id="quest" class="quest" role="region" aria-label="quest" hidden><span class="quest-k">quest <b id="quest-n"></b></span><b id="quest-title" class="quest-title"></b><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-skip" class="small" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button><button id="quest-x" class="small" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span></div>
     <div id="jam-panel" class="jam-panel" hidden>
       <div class="jam-bar"><i id="jam-fill"></i></div>
       <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>

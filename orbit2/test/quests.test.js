@@ -2,16 +2,23 @@
 // otherwise; saved progress tolerates junk; a first visit starts simple; the plain words on the lane knobs.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { Machine } from '../src/poly/lanes.js';
-import { QUESTS, QUESTS_KEY, PLAIN, paramLabel, questsFrom, currentQuest, startView, hintDrawer, threeAgainstFour, snareLanes, onTwoAndFour, sounding, loopQuarters } from '../src/poly/quests.js';
+import { Machine, ratioIndexOf } from '../src/poly/lanes.js';
+import { GROOVES, DEMO_GROOVE, grooveByKey } from '../src/poly/grooves.js';
+import { QUESTS, QUESTS_KEY, PLAIN, paramLabel, questsFrom, currentQuest, startView, hintDrawer, threeAgainstFour, snareLanes, onTwoAndFour, sounding, loopQuarters, backbeatSetup, backbeatLane } from '../src/poly/quests.js';
 
 const quest = (id) => QUESTS.find(q => q.id === id);
 const edit = (k, lane = 0) => ({ type: 'edit', lane, k });
+// the card's words: the knob labels as the app shows them (simple / everything) and a lane as the screen names it
+const FULL = { euclid: 'euclid hits', rotation: 'rotation', ratio: 'speed ×', prob: 'probability' };
+const sayIn = (simple, m) => ({ word: (k) => paramLabel(k, FULL[k] ?? k, simple), lane: (i) => `lane ${i + 1} · ${m.lanes[i].voice}` });
 
-test('I6 the five quests, in order, each with a title, a hint, a drawer and a check', () => {
+test('I6 the five quests, in order, each with a title, a hint, a drawer, the moves that finish it and a check', () => {
   assert.deepEqual(QUESTS.map(q => q.id), ['three-four', 'backbeat', 'evolve', 'slot', 'export']);
   assert.deepEqual(QUESTS.map(q => q.title), ['make 3 against 4', 'rotate the snare onto 2 and 4', 'let it evolve 8 bars', 'save your first slot', 'export a loop']);
-  for (const q of QUESTS) { assert.ok(q.hint.length > 20, q.id); assert.ok(q.drawer.endsWith('-drawer'), q.id); assert.equal(typeof q.check, 'function'); }
+  const m = new Machine();
+  for (const q of QUESTS) { assert.ok(q.hint(m, sayIn(true, m)).length > 20, q.id); assert.ok(q.drawer.endsWith('-drawer'), q.id); assert.equal(typeof q.check, 'function'); }
+  // the app checks right after one of these: a bar line can't finish a knob quest (a later evolve isn't your move)
+  assert.deepEqual(QUESTS.map(q => q.on), [['edit'], ['edit'], ['bar'], ['slot-save'], ['export']]);
   assert.equal(QUESTS_KEY, 'midi-warz.orbit2.quests');
 });
 
@@ -25,6 +32,8 @@ test('I6 "make 3 against 4": lengths 3 and 4, or one length at speeds 4 and 3; n
   assert.equal(q.check(m, [edit('length')]), true);
   assert.equal(q.check(m, []), false, 'a beat that already is 3 against 4 does not tick it by itself');
   assert.equal(q.check(m, [edit('tune')]), false, 'another knob is not the move');
+  assert.equal(q.check(m, [edit('length'), edit('tune')]), false, 'your latest move counts: an old length move does not tick it later');
+  assert.equal(q.check(m, [edit('tune'), { type: 'bar', evolving: false }, edit('length')]), true);
   m.lanes[0].muted = true; assert.equal(q.check(m, [edit('length')]), false, 'a muted lane is not heard');
   // same length, speeds ×4/3 and ×1: loops 3 and 4 quarters long
   const s = new Machine(); s.lanes[0].setEuclid(1); s.lanes[1].setEuclid(1); s.lanes[0].setRatio(7);   // RATIOS[7] = 4/3
@@ -40,7 +49,9 @@ test('I6 "rotate the snare onto 2 and 4": its hits land on beats 2 and 4 only; n
   assert.equal(onTwoAndFour(m, 1), true);
   assert.equal(q.check(m, [edit('rotation', 1)]), true);
   assert.equal(q.check(m, [edit('rotation', 0)]), false, 'shifting the kick is not the move');
+  assert.equal(q.check(m, [edit('rotation', 1), edit('length', 0)]), false, 'the shift has to be the move that just happened');
   assert.equal(q.check(m, []), false, 'no move, no tick');
+  assert.equal(onTwoAndFour(m, 1, 0), false, 'a rotation can be asked for without moving the lane'); assert.equal(sn.rotation, 1);
   sn.setEuclid(4); sn.rotation = 0; assert.equal(onTwoAndFour(m, 1), false, 'every beat is not a backbeat');
   sn.setEuclid(2); sn.rotation = 1; m.meter = '3/4'; assert.equal(q.check(m, [edit('rotation', 1)]), false, 'only in 4/4');
   // 8 steps at ×2 (eighths): hits on steps 2 and 6 = beats 2 and 4, an offbeat ghost on step 3 is fine
@@ -51,6 +62,40 @@ test('I6 "rotate the snare onto 2 and 4": its hits land on beats 2 and 4 only; n
   // a snare voice on another lane counts as the snare
   const v = new Machine(); v.lanes[3].voice = 'clap'; assert.deepEqual(snareLanes(v), [1, 3]);
   v.lanes[1].voice = 'kick'; assert.deepEqual(snareLanes(v), [3], 'the voice decides, not the lane name');
+});
+
+// ORBIT2-16 round 1: the first visit's beat (the 3 vs 4 vs 5 demo) has no snare voice and its lane 2 rim (5 steps at ×4)
+// can't be shifted onto 2 and 4. The hint names the lane as the screen does and what it lacks; doing what it says, in
+// the knobs' own code (Lane.resize = the length knob), then turning shift, finishes the quest.
+/** Do what backbeatSetup lists (in `order`), then turn shift step by step: the rotation that finishes the quest, or -1. */
+function followHint(m, li, order = ['meter', 'mute', 'length', 'ratio', 'euclid']) {
+  const l = m.lanes[li], need = backbeatSetup(m, li), q = quest('backbeat');
+  for (const k of order) {
+    const n = need.find(x => x.k === k); if (!n) continue;
+    if (k === 'meter') m.meter = n.v; else if (k === 'mute') l.muted = n.v; else if (k === 'length') l.resize(n.v); else if (k === 'ratio') l.setRatio(ratioIndexOf(n.v)); else l.setEuclid(n.v);
+  }
+  for (let r = 0; r < l.length; r++) { l.rotation = r; if (q.check(m, [edit('rotation', li)])) return r; }
+  return -1;
+}
+test('I6 the backbeat hint names your snare and what it lacks; doing what it says finishes the quest', () => {
+  const q = quest('backbeat'), demo = () => Machine.from(grooveByKey(DEMO_GROOVE).m);
+  const m = demo(), li = backbeatLane(m);
+  assert.equal(li, 1); assert.equal(m.lanes[1].voice, 'rim');
+  assert.deepEqual(Array.from({ length: 5 }, (_, r) => onTwoAndFour(m, 1, r)), [false, false, false, false, false], 'no shift of the demo rim lands on 2 and 4');
+  assert.deepEqual(backbeatSetup(m, 1), [{ k: 'length', v: 4 }, { k: 'ratio', v: 1 }, { k: 'euclid', v: 2 }]);
+  assert.equal(q.hint(m, sayIn(true, m)), 'Your snare is lane 2 · rim. Pick it, set "length" to 4, "speed" to 1 and "hits" to 2; then turn "shift" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
+  assert.match(q.hint(m, sayIn(false, m)), /"speed ×" to 1 and "euclid hits" to 2; then turn "rotation"/, 'everything: the knobs as they read there');
+  assert.ok(followHint(m, 1) >= 0, 'the demo, as a first visit gets it');
+  const e = demo(); assert.ok(followHint(e, 1, ['euclid', 'ratio', 'length']) >= 0, 'any order of the knobs');
+  const after = demo(); after.lanes[1].resize(3); assert.equal(threeAgainstFour(after), true, 'quest 1 done the obvious way (rim 5 → 3)');
+  assert.ok(followHint(after, backbeatLane(after)) >= 0, 'after quest 1');
+  for (const g of GROOVES) { const gm = Machine.from(g.m), gl = backbeatLane(gm); assert.ok(gl >= 0 && followHint(gm, gl) >= 0, g.key); }
+  // a lane a shift away is told just that; an empty one, the hits it lacks; a muted one, to unmute; 3/4, the meter
+  const f = new Machine(); f.lanes[1].setEuclid(2); f.lanes[1].voice = 'snare';
+  assert.deepEqual(backbeatSetup(f, 1), []); assert.equal(q.hint(f, sayIn(true, f)), 'Your snare is lane 2 · snare: pick it and turn "shift" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
+  const z = new Machine(); z.lanes[1].setLength(4); z.lanes[1].setRatio(ratioIndexOf(1)); assert.deepEqual(backbeatSetup(z, 1), [{ k: 'euclid', v: 2 }]); assert.ok(followHint(z, 1) >= 0);
+  f.lanes[1].muted = true; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'mute', v: false }]); assert.match(q.hint(f, sayIn(true, f)), /Pick it, unmute it; then turn "shift"/);
+  f.lanes[1].muted = false; f.meter = '3/4'; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'meter', v: '4/4' }]); assert.ok(followHint(f, 1) >= 0);
 });
 
 test('I6 "let it evolve 8 bars": 8 bar lines with evolve on, not 7, not with evolve off', () => {
@@ -69,9 +114,10 @@ test('I6 "save your first slot" and "export a loop": the save / the export, noth
 });
 
 test('I6 progress: junk dropped, quests in order, the next quest\'s drawer lit', () => {
-  assert.deepEqual(questsFrom(null), { done: [], view: null, hidden: false });
-  assert.deepEqual(questsFrom({ done: ['slot', 'nope', 'slot', 3], view: 'weird', hidden: 'yes' }), { done: ['slot'], view: null, hidden: false });
-  assert.deepEqual(questsFrom({ done: 'x', view: 'all', hidden: true }), { done: [], view: 'all', hidden: true });
+  assert.deepEqual(questsFrom(null), { done: [], skipped: [], view: null, hidden: false });
+  assert.deepEqual(questsFrom({ done: ['slot', 'nope', 'slot', 3], view: 'weird', hidden: 'yes' }), { done: ['slot'], skipped: [], view: null, hidden: false });
+  assert.deepEqual(questsFrom({ done: 'x', view: 'all', hidden: true }), { done: [], skipped: [], view: 'all', hidden: true });
+  assert.deepEqual(questsFrom({ done: ['three-four', 'backbeat'], skipped: ['backbeat', 'export', 'backbeat', 'nope'] }).skipped, ['backbeat'], 'skipped ones are done ones (the order walks done)');
   assert.equal(currentQuest([]).id, 'three-four');
   assert.equal(currentQuest(['three-four']).id, 'backbeat');
   assert.equal(currentQuest(['three-four', 'slot']).id, 'backbeat', 'the first one not done');

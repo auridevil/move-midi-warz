@@ -1,12 +1,15 @@
 // I6 quests and I7 simple mode: pure data and checks, no DOM (the app draws the card and keeps the event log).
-// A quest is { id, title, hint, drawer, check(machine, events) }. machine = a lanes.js Machine (or anything with its
-// shape: lanes[] with length / ratio / rotation / muted / voice / name, played(), hitAt(), and meter); events = what
-// you did since the quest became the current one, oldest first:
+// A quest is { id, title, on, drawer, hint(machine, say), check(machine, events) }. machine = a lanes.js Machine (or
+// anything with its shape: lanes[] with length / ratio / rotation / muted / voice / name / euclidK / euclidMode,
+// played(), hitAt(), and meter); events = what you did since the quest became the current one, oldest first:
 //   { type: 'edit', lane, k }   a lane knob or gesture you moved (k: 'length' | 'ratio' | 'rotation' | 'euclid' | …)
 //   { type: 'bar', evolving }   a bar line went by while playing (evolving: evolve was on)
 //   { type: 'slot-save', slot } { type: 'export', what }
-// A check needs your own move (an edit, a bar, a save) as well as the result, so a beat that already happens to be
-// "3 against 4" does not tick the quest by itself. drawer: the panel the quest is played in (its hint lights there).
+// A check needs your own move as well as the result, so a beat that already happens to be "3 against 4" does not tick
+// the quest by itself. on: the event types that can finish it; the app checks right after one of them, so a result
+// that evolve, a slot or an undo brings later is not credited to an older move. hint(m, say): the card's words for the
+// beat on screen; say = { word(k): a lane knob's label as shown (plain in simple), lane(i): a lane as the screen names
+// it }. drawer: the panel the quest is played in (its hint lights there).
 import { RATIOS } from './lanes.js';
 
 export const QUESTS_KEY = 'midi-warz.orbit2.quests';
@@ -18,6 +21,8 @@ export const paramLabel = (k, label, simple) => (simple && PLAIN[k]) || label;
 
 const EPS = 1e-9;
 const ratioOf = (l) => (Number.isFinite(l.ratio) ? l.ratio : RATIOS[l.ratioIndex] ?? 1);
+/** Does step i of the loop play, read through rotation `rot` (the lane's own unless given)? As Lane.hitAt. */
+const playsAt = (l, i, rot = l.rotation) => l.played((((i - rot) % l.length) + l.length) % l.length);
 /** A lane you can hear: not muted, and at least one of its steps plays. */
 export const sounding = (l) => !l.muted && Array.from({ length: l.length }, (_, i) => l.hitAt(i)).some(Boolean);
 /** A lane's loop in quarter notes (a step is a quarter at speed ×1). */
@@ -34,43 +39,78 @@ export function snareLanes(m) {
   const by = m.lanes.map((l, i) => i).filter(i => /snare|clap|snap/.test(m.lanes[i].voice || ''));
   return by.length ? by : m.lanes.map((l, i) => i).filter(i => m.lanes[i].name === 'snare');
 }
-/** In 4/4: the lane's hits, over a whole number of bars, land on beats 2 and 4 and never on 1 or 3 (offbeat ghosts are fine). */
-export function onTwoAndFour(m, li) {
-  const l = m.lanes[li]; if (!l || (m.meter && m.meter !== '4/4') || !sounding(l)) return false;
+/** The grid alone (no meter, no mute): through rotation `rot`, over a whole number of bars, the lane's hits land on
+ *  beats 2 and 4 and never on 1 or 3 (offbeat ghosts are fine). */
+function backbeatAt(l, rot) {
   const r = ratioOf(l), loop = loopQuarters(l), whole = (x) => Math.abs(x - Math.round(x)) < EPS;
   let n = 1; while (n < 16 && !whole(loop * n / 4)) n++;   // n loops = a whole number of bars (or 16 loops, enough to tell)
   const span = Math.max(4, loop * n), seen = new Set();
   for (let k = 0; k * (1 / r) < span - EPS; k++) {
-    if (!l.hitAt(k % l.length)) continue; const q = (k / r) % 4, beat = Math.round(q);
+    if (!playsAt(l, k % l.length, rot)) continue; const q = (k / r) % 4, beat = Math.round(q);
     if (Math.abs(q - beat) < EPS) seen.add(beat % 4);
   }
   return seen.has(1) && seen.has(3) && !seen.has(0) && !seen.has(2);
 }
+/** In 4/4, heard: lane li on beats 2 and 4, through rotation `rot` (its own unless given). */
+export function onTwoAndFour(m, li, rot) {
+  const l = m.lanes[li]; return !!l && (!m.meter || m.meter === '4/4') && sounding(l) && backbeatAt(l, rot);
+}
+/**
+ * What lane li needs before turning "shift" can put it on 2 and 4: [] when a shift is all it takes. Else 4/4, an
+ * unmute, and when no shift of its steps lands on 2 and 4, the knobs of a plain backbeat it lacks: 4 steps at speed 1
+ * with 2 hits (beats 1 and 3: a shift away). [{ k: 'meter' | 'mute' | 'length' | 'ratio' | 'euclid', v }], the values
+ * as the knobs show them; the knobs in any order get there (the length knob keeps the hits a hits knob set).
+ */
+export function backbeatSetup(m, li) {
+  const l = m.lanes[li], need = [];
+  if (m.meter && m.meter !== '4/4') need.push({ k: 'meter', v: '4/4' });
+  if (l.muted) need.push({ k: 'mute', v: false });
+  if (Array.from({ length: l.length }, (_, r) => r).some(r => backbeatAt(l, r))) return need;
+  if (l.length !== 4) need.push({ k: 'length', v: 4 });
+  if (Math.abs(ratioOf(l) - 1) > EPS) need.push({ k: 'ratio', v: 1 });
+  if (l.euclidK !== 2 || (l.euclidMode || 'replace') !== 'replace') need.push({ k: 'euclid', v: 2 });
+  return need;
+}
+/** The snare lane the backbeat quest points at: the first that is only a shift away, else the first (-1: none). */
+export function backbeatLane(m) { const s = snareLanes(m); return s.find(li => !backbeatSetup(m, li).length) ?? s[0] ?? -1; }
 
-const edited = (events, keys, lanes = null) => events.some(e => e.type === 'edit' && keys.includes(e.k) && (!lanes || lanes.includes(e.lane)));
+const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a.at(-1)}` : a.join(''));
+/** The words for a backbeat setup (backbeatSetup): 'unmute it, set "length" to 4 and "hits" to 2'. */
+function setupWords(need, say) {
+  const knobs = need.filter(n => n.k === 'length' || n.k === 'ratio' || n.k === 'euclid').map(n => `"${say.word(n.k)}" to ${n.v}`);
+  return and([need.some(n => n.k === 'meter') ? 'set the meter to 4/4 (in "Patterns")' : '', need.some(n => n.k === 'mute') ? 'unmute it' : '', knobs.length ? `set ${and(knobs)}` : ''].filter(Boolean));
+}
+/** Your latest knob or gesture move: the app checks right after an edit, so it is the move that just happened. */
+const lastEdit = (events) => events.findLast(e => e.type === 'edit');
 
 export const QUESTS = [
-  { id: 'three-four', title: 'make 3 against 4', drawer: 'lane-drawer',
-    hint: 'Give one ring 3 steps and another 4 (the "length" knob, or pull a ring outwards). They line up every 12.',
-    check: (m, ev) => edited(ev, ['length', 'ratio']) && threeAgainstFour(m) },
-  { id: 'backbeat', title: 'rotate the snare onto 2 and 4', drawer: 'lane-drawer',
-    hint: 'Pick the snare lane and turn "shift" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.',
-    check: (m, ev) => { const s = snareLanes(m); return edited(ev, ['rotation'], s) && s.some(li => onTwoAndFour(m, li)); } },
-  { id: 'evolve', title: 'let it evolve 8 bars', drawer: 'evolve-drawer',
-    hint: 'Open "Evolve", press ◌ evolve and play: every few bars the rings change by themselves. Listen for 8 bars.',
+  { id: 'three-four', title: 'make 3 against 4', drawer: 'lane-drawer', on: ['edit'],
+    hint: () => 'Give one ring 3 steps and another 4, both at the same speed (the "length" knob, or pull a ring outwards). They line up every 12 steps.',
+    check: (m, ev) => ['length', 'ratio'].includes(lastEdit(ev)?.k) && threeAgainstFour(m) },
+  { id: 'backbeat', title: 'rotate the snare onto 2 and 4', drawer: 'lane-drawer', on: ['edit'],
+    hint: (m, say) => {
+      const li = backbeatLane(m), turn = `turn "${say.word('rotation')}" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3`;
+      if (li < 0) return `Pick the snare lane and ${turn}.`;
+      const set = setupWords(backbeatSetup(m, li), say);
+      return set ? `Your snare is ${say.lane(li)}. Pick it, ${set}; then ${turn}.` : `Your snare is ${say.lane(li)}: pick it and ${turn}.`;
+    },
+    check: (m, ev) => { const e = lastEdit(ev); return e?.k === 'rotation' && snareLanes(m).includes(e.lane) && onTwoAndFour(m, e.lane); } },
+  { id: 'evolve', title: 'let it evolve 8 bars', drawer: 'evolve-drawer', on: ['bar'],
+    hint: () => 'Open "Evolve", press ◌ evolve and play: every few bars the rings change by themselves. Listen for 8 bars.',
     check: (m, ev) => ev.filter(e => e.type === 'bar' && e.evolving).length >= 8 },
-  { id: 'slot', title: 'save your first slot', drawer: 'patterns-drawer',
-    hint: 'Open "Patterns" and long-press a slot (or Shift+click it) to keep this beat there. Tap it later to bring it back.',
+  { id: 'slot', title: 'save your first slot', drawer: 'patterns-drawer', on: ['slot-save'],
+    hint: () => 'Open "Patterns" and long-press a slot (or Shift+click it) to keep this beat there. Tap it later to bring it back.',
     check: (m, ev) => ev.some(e => e.type === 'slot-save') },
-  { id: 'export', title: 'export a loop', drawer: 'export-drawer',
-    hint: 'Open "Export" and press ⤓ WAV (or ⤓ MIDI): a loop you can drop into any music app.',
+  { id: 'export', title: 'export a loop', drawer: 'export-drawer', on: ['export'],
+    hint: () => 'Open "Export" and press ⤓ WAV (or ⤓ MIDI): your beat as a file you can drop into any music app.',
     check: (m, ev) => ev.some(e => e.type === 'export') },
 ];
 
-/** Saved progress: { done: [ids], view: 'simple' | 'all' | null, hidden }. Unknown ids and junk are dropped. */
+/** Saved progress: { done: [ids], skipped: [ids], view: 'simple' | 'all' | null, hidden }. done = finished or skipped
+ *  (the order walks it); skipped = the ones you passed over (a badge is done but not skipped). Junk is dropped. */
 export function questsFrom(o) {
-  const ids = new Set(QUESTS.map(q => q.id));
-  return { done: Array.isArray(o?.done) ? [...new Set(o.done.filter(id => ids.has(id)))] : [], view: VIEWS.includes(o?.view) ? o.view : null, hidden: o?.hidden === true };
+  const ids = new Set(QUESTS.map(q => q.id)), done = Array.isArray(o?.done) ? [...new Set(o.done.filter(id => ids.has(id)))] : [];
+  return { done, skipped: Array.isArray(o?.skipped) ? [...new Set(o.skipped.filter(id => done.includes(id)))] : [], view: VIEWS.includes(o?.view) ? o.view : null, hidden: o?.hidden === true };
 }
 /** The quest to play now: the first one not done, in order (null when all are). */
 export const currentQuest = (done) => QUESTS.find(q => !done.includes(q.id)) || null;

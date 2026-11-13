@@ -696,3 +696,24 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   toast and play over its rows, and the seed chip needs a scroll (the header or the welcome bar?); "…" reads cryptic in
   a crowded transport; after a remix on a first visit, a "make your own" line; the app shows for a moment before the card
   on a slow load (the link decodes after Tone.js loads).
+- **The backbeat you hear** (ORBIT2-16 round 1, sound): the backbeat quest reads the grid, not the sound: swing on a ×1
+  snare moves its 2 and 4 an eighth late (onsets at beats 1.5 / 3.5 at swing 50 %) and the quest still ticks; push / pull
+  the same. Read the heard step (`step + swingAt(step)`, plus the offset) and say "swing 0" in the hint when it is what
+  stands in the way.
+- **Export the whole cycle** (ORBIT2-16 round 1, sound; from before the phase): the export quest sends a beginner to ⤓ WAV,
+  whose 4 bars cut the demo's 5-bar cycle (the rim's gap is 4 sixteenths instead of 5 at the loop point: a hiccup every 4
+  bars when looped in a DAW). Offer the full cycle when it is short, or say "4 bars of a 5-bar cycle" on the status line.
+- **"hits" on a hand-set lane** (ORBIT2-16 round 1, verifier): the plain word reads as a count, but the knob is the euclid
+  fill: a lane whose steps you set by hand (the demo kick `X...`) shows "0 hits" while it plays one. Show the lane's
+  real hit count there, or name the knob "spread" in simple.
+- **Learning on a phone** (ORBIT2-16 round 1, verifier, architect, maya, greta): at 390×844 the fixed ▶ covers the quest
+  card's right end (skip / × under it until you scroll), the card starts near the fold and the lane knobs the quests
+  name sit ~1300 px down, the simple · everything switch ~2400 px down. The card and the switch higher up (or a "show
+  me" that scrolls to the lit drawer) on small screens.
+- **Step locks from the Move in simple** (ORBIT2-16 round 1, architect): simple tucks the lock panel away, but the Move's
+  hold step + knobs still sets locks and `lockStep`, so switching to "everything" opens a lock panel nobody asked for.
+- **Quest badges** (ORBIT2-16 round 1, architect): I6 names badges; the saved progress tells a finished quest from a
+  skipped one (`skipped`, round 1), nothing shows them yet (a row of five marks on the card, or in the help).
+- **The quest card's controls** (ORBIT2-16 round 1, greta): skip 44×32 and × 29×32 px on a desktop (44 px on touch), the
+  bare × beside "skip" (a word, "hide"?), the switch's two radios are two tab stops (the shared `segmented`, no arrow-key
+  roving).

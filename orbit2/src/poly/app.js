@@ -79,7 +79,7 @@ let barWait = null;
 // current quest came up (quests.js events), in memory only
 const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null')); } catch { return questsFrom(null); } })();
 quests.view = startView(quests.view, firstVisit);
-let questLog = [], questTimer = 0;
+let questLog = [], questTimer = 0, cheerTimer = 0;
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage })); } catch {} };
@@ -459,7 +459,7 @@ const INFO = {
 };
 // grid order: swing last, so its template can sit beside it on the same row
 const PARAMS = [
-  { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => { l.setLength(v); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
+  { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => l.resize(v), fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
   { k: 'euclid', label: 'euclid hits', min: 0, max: MAX_STEPS, get: l => l.euclidK, set: (l, v) => l.setEuclid(v), fmt: v => v, say: v => `${v} hit${v === 1 ? '' : 's'}` },
   { k: 'rotation', label: 'rotation', min: 0, max: MAX_STEPS - 1, get: l => l.rotation, set: (l, v) => { l.rotation = ((Math.round(v) % l.length) + l.length) % l.length; }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
   { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
@@ -474,7 +474,7 @@ const sliders = {};   // k -> gauge handle ({ set, value })
 const laneTabs = [];  // the four coloured lane buttons: a touch-friendly alternative to tapping a ring
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
-  for (const p of PARAMS) { const g = makeGauge({ label: paramLabel(p.k, p.label, quests.view === 'simple'), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); } }); sliders[p.k] = g; el.appendChild(g.el); }
+  for (const p of PARAMS) { const g = makeGauge({ label: knobWord(p.k), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); } }); sliders[p.k] = g; el.appendChild(g.el); }
   // G6: the swing template sits right after the swing gauge
   ui.swingTpl = segmented({ options: SWING_KEYS.map(k => [k, SWING_TEMPLATES[k].name, INFO['swing template']]), value: m.lane.swingTpl, onChange: (k) => { m.lane.setSwingTpl(k); sync(); } });
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
@@ -503,7 +503,7 @@ function sync() {
   ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${muteWord(i)} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
   $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
-  renderSteps(); renderLocks(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes();
+  renderSteps(); renderLocks(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes(); renderQuest();
 }
 /** The MIDI drawer names the note of every stroke the lanes can play now (strokeNotes; it follows voices and notes). */
 function renderStrokeNotes() {
@@ -904,6 +904,8 @@ function renderCouple() {
     }
   }
 }
+/** The evolve scope's choices in the view's words (I7: "shift" in simple; "all", so it isn't a second "everything"). */
+function evoScopeOptions() { const rot = knobWord('rotation'); return [['rotate', rot], ['hits', '+ hits'], ['all', 'all', `${rot}, hits, length, speed, chance and tune (whatever has a weight)`]]; }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = 'home set'; readout(); };
   const g = $('evo-gauges');
@@ -911,7 +913,7 @@ function buildEvolveUI() {
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
   sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', say: v => v ? `${v} mutation${v === 1 ? '' : 's'}` : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
   g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
-  ui.evoScope = mount('evo-scope', segmented({ options: [['rotate', 'rotation'], ['hits', '+ hits'], ['all', 'everything', 'rotation, hits, length, speed, chance and tune (whatever has a weight)']], value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
+  ui.evoScope = mount('evo-scope', segmented({ options: evoScopeOptions(), value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
   // V1: gravity, the max cycle guard, and how often each kind of change comes up
   sliders.evoGravity = makeGauge({ label: 'gravity', min: 0, max: 100, value: evo.gravity, fmt: v => v + '%', title: INFO['evolve gravity'], color: 'var(--nebula-purple)', onChange: (v) => { evo.gravity = v; saveSettings(); } });
   sliders.evoMax = makeGauge({ label: 'max cycle', min: 0, max: 64, value: evo.maxBars, fmt: v => v ? `${v} bars` : 'off', say: v => v ? `${v} bars` : 'no limit', title: INFO['evolve max cycle'], color: 'var(--nebula-purple)', onChange: (v) => { evo.maxBars = v; saveSettings(); } });
@@ -1507,10 +1509,11 @@ function toast(txt, ms = 2400) {
 }
 // ---- I6 quests, I7 simple mode (quests.js: the quests, their checks, the plain words) ----
 const saveQuests = () => { try { localStorage.setItem(QUESTS_KEY, JSON.stringify(quests)); } catch {} };
-/** Something you did (quests.js events). Called from the clock too (a bar line), so the check waits for the page. */
+/** Something you did (quests.js events). Called from the clock too (a bar line), so the check waits for the page; only a
+ *  move that can finish the current quest (its `on`) runs it, right after that move. */
 function questEvent(e) {
-  if (!currentQuest(quests.done)) return; questLog.push(e); if (questLog.length > 400) questLog.splice(0, questLog.length - 400);
-  if (!questTimer) questTimer = setTimeout(() => { questTimer = 0; checkQuest(); }, 0);
+  const q = currentQuest(quests.done); if (!q) return; questLog.push(e); if (questLog.length > 400) questLog.splice(0, questLog.length - 400);
+  if (q.on.includes(e.type) && !questTimer) questTimer = setTimeout(() => { questTimer = 0; checkQuest(); }, 0);
 }
 function checkQuest() {
   const q = currentQuest(quests.done); if (!q || !q.check(m, questLog)) return;
@@ -1520,12 +1523,19 @@ function finishQuest(q) { quests.done.push(q.id); questLog = []; saveQuests(); r
 /** A light cheer: the card glows once (a steady glow when motion is reduced, CSS) and a toast names the next quest. */
 function celebrate(q) {
   const c = $('quest'), next = currentQuest(quests.done); c.classList.remove('cheer'); void c.offsetWidth; c.classList.add('cheer');
+  clearTimeout(cheerTimer); cheerTimer = setTimeout(() => c.classList.remove('cheer'), 1500);   // the steady glow goes too
   toast(`quest done: ${q.title} ✓${next ? ` · next: ${next.title}` : ' · that was the last one'}`, 4000);
 }
-/** The card: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or finish. */
+/** A lane knob's word in the view on screen (I7: plain in simple), wherever the page names it. */
+function knobWord(k, simple = quests.view === 'simple') { return paramLabel(k, PARAMS.find(p => p.k === k)?.label ?? k, simple); }
+/** The card: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or finish.
+ *  sync() redraws it: the hint is written for the beat on screen (the backbeat quest names your snare and what it lacks). */
 function renderQuest() {
   const q = currentQuest(quests.done), c = $('quest'); c.hidden = !q || quests.hidden;
-  if (q) { $('quest-n').textContent = `${QUESTS.indexOf(q) + 1} of ${QUESTS.length}`; $('quest-title').textContent = q.title; $('quest-hint').textContent = q.hint; }
+  if (q && !c.hidden) {
+    $('quest-n').textContent = `${QUESTS.indexOf(q) + 1} of ${QUESTS.length}`; $('quest-title').textContent = q.title;
+    const h = $('quest-hint'), t = q.hint(m, { word: knobWord, lane: (i) => `lane ${i + 1} · ${voiceLabel(m.lanes[i])}` }); if (h.textContent !== t) h.textContent = t;
+  }
   // the drawer this quest is played in gets a light (finishing a quest lights the next one's drawer)
   const d = q && !quests.hidden ? hintDrawer(quests.done) : null;
   for (const el of document.querySelectorAll('.quest-lit')) if (el.id !== d) { el.classList.remove('quest-lit'); el.querySelector('summary')?.removeAttribute('data-quest'); }
@@ -1536,14 +1546,18 @@ function setView(v) {
   const simple = v === 'simple'; if (simple && quests.view !== v) quests.hidden = false;   // switching to simple brings hidden quests back
   quests.view = v; saveQuests();
   document.body.classList.toggle('simple', simple); ui.view?.set(v);
-  for (const p of PARAMS) sliders[p.k]?.setLabel(paramLabel(p.k, p.label, simple));
+  // the knobs' words wherever the page names them: the lane gauges, the evolve scope, the Move table ([data-word])
+  for (const p of PARAMS) sliders[p.k]?.setLabel(knobWord(p.k, simple));
+  ui.evoScope?.setOptions(evoScopeOptions());
+  for (const el of document.querySelectorAll('[data-word]')) { el.dataset.full ??= el.textContent; el.textContent = paramLabel(el.dataset.word, el.dataset.full, simple); }
   if (simple && lockStep >= 0) editLocks(lockStep);   // an open lock panel closes with the drawers
   renderQuest();
 }
 /** Simple mode and a reach for the step locks: say where they are instead (nothing opens). */
-function locksTucked() { if (quests.view !== 'simple') return false; toast('step locks are in "everything" (the switch at the top of the left panel)', 3500); return true; }
+function locksTucked() { if (quests.view !== 'simple') return false; toast('step locks are in "everything" (the simple · everything switch)', 3500); return true; }
 ui.view = mount('view-mode', segmented({ options: [['simple', 'simple', 'plain words and the basics'], ['all', 'everything', 'every drawer and knob: dice, MIDI, evolve weights, step locks, generative']], value: quests.view, onChange: (v) => setView(v) }));
-$('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { finishQuest(q); toast(`skipped: ${q.title}`); } };
+ui.view.el.setAttribute('aria-label', 'view: simple or everything');
+$('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { quests.skipped.push(q.id); finishQuest(q); toast(`skipped: ${q.title}`); } };
 $('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
 buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); setView(quests.view);
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no

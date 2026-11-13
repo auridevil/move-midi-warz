@@ -318,6 +318,8 @@ export class Lane {
   setSound(k, v) { if (!(k in this.sound)) return; this.sound[k] = Math.max(0, Math.min(1, v)); return this.sound[k]; }
   get ratio() { return RATIOS[this.ratioIndex]; }
   setLength(n) { this.length = Math.max(1, Math.min(MAX_STEPS, Math.round(n))); if (this.pos >= this.length) this.pos = 0; return this.length; }
+  /** The length knob: a new length, and a euclid lane spreads its hits over it again. */
+  resize(n) { this.setLength(n); if (this.euclidK) this.setEuclid(Math.min(this.euclidK, this.length)); return this.length; }
   setRatio(i) { this.ratioIndex = Math.max(0, Math.min(RATIOS.length - 1, Math.round(i))); return this.ratioIndex; }
   /** The euclid knob: in replace mode a new fill (the hits), in and / xor mode only the mask (the hand hits stay). */
   setEuclid(k) { this.euclidK = Math.max(0, Math.min(this.length, Math.round(k))); if (this.euclidMode !== 'replace') return this.euclidK; const e = euclid(this.euclidK, this.length); for (let i = 0; i < MAX_STEPS; i++) this.hits[i] = i < this.length ? e[i] : false; return this.euclidK; }
