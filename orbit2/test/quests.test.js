@@ -68,11 +68,11 @@ test('I6 "rotate the snare onto 2 and 4": its hits land on beats 2 and 4 only; n
 // can't be shifted onto 2 and 4. The hint names the lane as the screen does and what it lacks; doing what it says, in
 // the knobs' own code (Lane.resize = the length knob), then turning shift, finishes the quest.
 /** Do what backbeatSetup lists (in `order`), then turn shift step by step: the rotation that finishes the quest, or -1. */
-function followHint(m, li, order = ['meter', 'mute', 'length', 'ratio', 'euclid']) {
+function followHint(m, li, order = ['meter', 'mute', 'mode', 'length', 'ratio', 'euclid']) {
   const l = m.lanes[li], need = backbeatSetup(m, li), q = quest('backbeat');
   for (const k of order) {
     const n = need.find(x => x.k === k); if (!n) continue;
-    if (k === 'meter') m.meter = n.v; else if (k === 'mute') l.muted = n.v; else if (k === 'length') l.resize(n.v); else if (k === 'ratio') l.setRatio(ratioIndexOf(n.v)); else l.setEuclid(n.v);
+    if (k === 'meter') m.meter = n.v; else if (k === 'mute') l.muted = n.v; else if (k === 'mode') l.setEuclidMode(n.v); else if (k === 'length') l.resize(n.v); else if (k === 'ratio') l.setRatio(ratioIndexOf(n.v)); else l.setEuclid(n.v);
   }
   for (let r = 0; r < l.length; r++) { l.rotation = r; if (q.check(m, [edit('rotation', li)])) return r; }
   return -1;
@@ -96,6 +96,27 @@ test('I6 the backbeat hint names your snare and what it lacks; doing what it say
   const z = new Machine(); z.lanes[1].setLength(4); z.lanes[1].setRatio(ratioIndexOf(1)); assert.deepEqual(backbeatSetup(z, 1), [{ k: 'euclid', v: 2 }]); assert.ok(followHint(z, 1) >= 0);
   f.lanes[1].muted = true; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'mute', v: false }]); assert.match(q.hint(f, sayIn(true, f)), /Pick it, unmute it; then turn "shift"/);
   f.lanes[1].muted = false; f.meter = '3/4'; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'meter', v: '4/4' }]); assert.ok(followHint(f, 1) >= 0);
+});
+
+// ORBIT2-16 round 2 (architect, verifier): an AND / XOR lane (from a link or a saved beat) is told to go back to replace
+// first, hits set by hand get the hits knob, 2 hits in 4 already need only what's left, and a snare that already plays
+// on 2 and 4 is told to turn it away and back (the quest wants the turn).
+test('I6 the backbeat hint: AND / XOR lanes, hand-set hits, a snare already there', () => {
+  const q = quest('backbeat'), demo = () => Machine.from(grooveByKey(DEMO_GROOVE).m);
+  for (const mode of ['and', 'xor']) {
+    const m = demo(); m.lanes[1].setEuclidMode(mode);
+    assert.deepEqual(backbeatSetup(m, 1), [{ k: 'length', v: 4 }, { k: 'ratio', v: 1 }, { k: 'mode', v: 'replace' }, { k: 'euclid', v: 2 }], mode);
+    assert.match(q.hint(m, sayIn(true, m)), /Pick it, set its "euclid" to "replace" \(under "generative", in "everything"\) and set "length" to 4, "speed" to 1 and "hits" to 2; then/);
+    assert.ok(followHint(m, 1) >= 0, mode);
+  }
+  const h = new Machine(), l = h.lanes[1]; l.setLength(4); l.setRatio(ratioIndexOf(1)); l.setEuclid(2); l.hits[1] = true; l.hits[2] = false;   // x x . .
+  assert.deepEqual(backbeatSetup(h, 1), [{ k: 'euclid', v: 2 }], 'the knob at 2, the steps moved by hand: the hits knob again'); assert.ok(followHint(h, 1) >= 0);
+  const e = new Machine(), s = e.lanes[1]; s.setLength(4); s.setRatio(ratioIndexOf(2)); s.hits[0] = s.hits[2] = true;   // x.x. in eighths
+  assert.deepEqual(backbeatSetup(e, 1), [{ k: 'ratio', v: 1 }], '2 hits in 4 already: only the speed'); assert.ok(followHint(e, 1) >= 0);
+  const a = new Machine(); a.lanes[1].voice = 'snare'; a.lanes[1].setLength(4); a.lanes[1].setRatio(ratioIndexOf(1)); a.lanes[1].setEuclid(2); a.lanes[1].rotation = 1;
+  assert.equal(onTwoAndFour(a, 1), true);
+  assert.equal(q.hint(a, sayIn(true, a)), 'Your snare (lane 2 · snare) already plays on 2 and 4: pick it and turn "shift" away and back (or drag along its ring) to land it there yourself.');
+  assert.equal(q.check(a, [edit('euclid', 1)]), false, 'there without a turn: not yet'); assert.equal(q.check(a, [edit('rotation', 1)]), true);
 });
 
 test('I6 "let it evolve 8 bars": 8 bar lines with evolve on, not 7, not with evolve off', () => {

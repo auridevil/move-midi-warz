@@ -717,3 +717,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **The quest card's controls** (ORBIT2-16 round 1, greta): skip 44×32 and × 29×32 px on a desktop (44 px on touch), the
   bare × beside "skip" (a word, "hide"?), the switch's two radios are two tab stops (the shared `segmented`, no arrow-key
   roving).
+- **Plain words in sentences** (ORBIT2-16 round 2, verifier, sound): tooltips still say "rotation" (`#btn-wild`) and
+  "probability" (`#exp-roll`) in simple (titles from before the phase); in "everything" the backbeat hint reads `set
+  "speed ×" to 1` (the gauge's label, "×" and all, inside a sentence).
+- **The second quest on the demo** (ORBIT2-16 round 2, sound): on the first-visit beat "rotate the snare" is really
+  "build a backbeat, then rotate": three knobs before the shift, undoing quest 1's 3-step rim (the triplet hats keep a
+  cross-rhythm, so it still sounds right). A demo with a real snare, or the quests in another order: a note for the
+  phase 17 pass.
+- **One `hitAt`** (ORBIT2-16 round 2, architect; taste): `quests.js` `playsAt(l, i, rot)` copies `Lane.hitAt` with a
+  rotation argument; an optional rotation on `Lane.hitAt` / `stepIndex` would keep one copy.

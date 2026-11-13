@@ -1550,6 +1550,7 @@ function setView(v) {
   for (const p of PARAMS) sliders[p.k]?.setLabel(knobWord(p.k, simple));
   ui.evoScope?.setOptions(evoScopeOptions());
   for (const el of document.querySelectorAll('[data-word]')) { el.dataset.full ??= el.textContent; el.textContent = paramLabel(el.dataset.word, el.dataset.full, simple); }
+  if (spoken) spoken = speakable();   // the words changed, no value did: the next knob turn is still announced
   if (simple && lockStep >= 0) editLocks(lockStep);   // an open lock panel closes with the drawers
   renderQuest();
 }
@@ -1998,7 +1999,7 @@ function renderLegend() {
 function speakable() {
   const l = m.lane, o = { sel: m.selected, lane: `lane ${m.selected + 1} ${voiceLabel(l)}`, tempo: `tempo ${tempo} bpm`, transport: playing ? 'playing' : 'stopped', humanize: `humanize ${Math.round(m.humanize * 100)}%`,
     mute: l.muted ? 'muted' : 'unmuted', solo: l.solo ? 'solo on' : 'solo off', record: rec.armed ? 'record armed' : 'record off', fill: fill ? 'fill on' : 'fill off', evolve: evo.on ? 'evolve on' : 'evolve off' };
-  for (const p of PARAMS) o[p.k] = `${p.label} ${p.fmt(p.get(l))}`; for (const k of SOUND_KEYS) o['snd:' + k] = `${k} ${Math.round(l.sound[k] * 100)}`;
+  for (const p of PARAMS) o[p.k] = `${knobWord(p.k)} ${p.fmt(p.get(l))}`; for (const k of SOUND_KEYS) o['snd:' + k] = `${k} ${Math.round(l.sound[k] * 100)}`;
   o.kit = `kit ${KITS[m.kitKey()]?.name || 'custom'}`;   // last: "decay 55, kit custom" says what you touched first
   return o;
 }

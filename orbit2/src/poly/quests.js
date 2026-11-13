@@ -47,9 +47,10 @@ function backbeatAt(l, rot) {
   const span = Math.max(4, loop * n), seen = new Set();
   for (let k = 0; k * (1 / r) < span - EPS; k++) {
     if (!playsAt(l, k % l.length, rot)) continue; const q = (k / r) % 4, beat = Math.round(q);
-    if (Math.abs(q - beat) < EPS) seen.add(beat % 4);
+    if (Math.abs(q - beat) >= EPS) continue; const b = beat % 4; if (b === 0 || b === 2) return false;   // a hit on 1 or 3: no
+    seen.add(b);
   }
-  return seen.has(1) && seen.has(3) && !seen.has(0) && !seen.has(2);
+  return seen.has(1) && seen.has(3);
 }
 /** In 4/4, heard: lane li on beats 2 and 4, through rotation `rot` (its own unless given). */
 export function onTwoAndFour(m, li, rot) {
@@ -58,17 +59,21 @@ export function onTwoAndFour(m, li, rot) {
 /**
  * What lane li needs before turning "shift" can put it on 2 and 4: [] when a shift is all it takes. Else 4/4, an
  * unmute, and when no shift of its steps lands on 2 and 4, the knobs of a plain backbeat it lacks: 4 steps at speed 1
- * with 2 hits (beats 1 and 3: a shift away). [{ k: 'meter' | 'mute' | 'length' | 'ratio' | 'euclid', v }], the values
- * as the knobs show them; the knobs in any order get there (the length knob keeps the hits a hits knob set).
+ * with 2 hits (beats 1 and 3: a shift away). [{ k: 'meter' | 'mute' | 'length' | 'ratio' | 'mode' | 'euclid', v }],
+ * the values as the knobs show them; the knobs in any order get there (the length knob re-spreads the hits a hits knob
+ * set), the euclid mode first: in AND / XOR the hits knob only moves a mask over the steps you set.
  */
 export function backbeatSetup(m, li) {
-  const l = m.lanes[li], need = [];
+  const l = m.lanes[li], need = [], mode = l.euclidMode || 'replace';
   if (m.meter && m.meter !== '4/4') need.push({ k: 'meter', v: '4/4' });
   if (l.muted) need.push({ k: 'mute', v: false });
   if (Array.from({ length: l.length }, (_, r) => r).some(r => backbeatAt(l, r))) return need;
   if (l.length !== 4) need.push({ k: 'length', v: 4 });
   if (Math.abs(ratioOf(l) - 1) > EPS) need.push({ k: 'ratio', v: 1 });
-  if (l.euclidK !== 2 || (l.euclidMode || 'replace') !== 'replace') need.push({ k: 'euclid', v: 2 });
+  // the 2 hits: already x.x. / .x.x in 4 steps, or 2 euclid hits the length knob spreads over 4; else the hits knob
+  const two = l.length === 4 && [0, 1, 2, 3].filter(i => l.played(i)).length === 2 && l.played(0) === l.played(2);
+  const spreads = mode === 'replace' && l.euclidK === 2 && l.length !== 4;
+  if (!two && !spreads) { if (mode !== 'replace') need.push({ k: 'mode', v: 'replace' }); need.push({ k: 'euclid', v: 2 }); }
   return need;
 }
 /** The snare lane the backbeat quest points at: the first that is only a shift away, else the first (-1: none). */
@@ -78,7 +83,8 @@ const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a.at(-1)}
 /** The words for a backbeat setup (backbeatSetup): 'unmute it, set "length" to 4 and "hits" to 2'. */
 function setupWords(need, say) {
   const knobs = need.filter(n => n.k === 'length' || n.k === 'ratio' || n.k === 'euclid').map(n => `"${say.word(n.k)}" to ${n.v}`);
-  return and([need.some(n => n.k === 'meter') ? 'set the meter to 4/4 (in "Patterns")' : '', need.some(n => n.k === 'mute') ? 'unmute it' : '', knobs.length ? `set ${and(knobs)}` : ''].filter(Boolean));
+  return and([need.some(n => n.k === 'meter') ? 'set the meter to 4/4 (in "Patterns")' : '', need.some(n => n.k === 'mute') ? 'unmute it' : '',
+    need.some(n => n.k === 'mode') ? 'set its "euclid" to "replace" (under "generative", in "everything")' : '', knobs.length ? `set ${and(knobs)}` : ''].filter(Boolean));
 }
 /** Your latest knob or gesture move: the app checks right after an edit, so it is the move that just happened. */
 const lastEdit = (events) => events.findLast(e => e.type === 'edit');
@@ -92,6 +98,7 @@ export const QUESTS = [
       const li = backbeatLane(m), turn = `turn "${say.word('rotation')}" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3`;
       if (li < 0) return `Pick the snare lane and ${turn}.`;
       const set = setupWords(backbeatSetup(m, li), say);
+      if (!set && onTwoAndFour(m, li)) return `Your snare (${say.lane(li)}) already plays on 2 and 4: pick it and turn "${say.word('rotation')}" away and back (or drag along its ring) to land it there yourself.`;
       return set ? `Your snare is ${say.lane(li)}. Pick it, ${set}; then ${turn}.` : `Your snare is ${say.lane(li)}: pick it and ${turn}.`;
     },
     check: (m, ev) => { const e = lastEdit(ev); return e?.k === 'rotation' && snareLanes(m).includes(e.lane) && onTwoAndFour(m, e.lane); } },
