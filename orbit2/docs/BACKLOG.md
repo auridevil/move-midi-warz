@@ -283,7 +283,9 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   summed) peaked at −0.19 dBFS on the demo groove with dsp; a −1 dBFS ceiling or a limiter on that sum.
 - **Floating play over content** (ORBIT2-04, greta): at the top of a 390 phone the 76 px play sits over the welcome
   bar's "×" and the "wild" button until you scroll; move the welcome bar, or a ~64 px button. Also (ORBIT2-06, verifier)
-  over the right half of the "12/8" meter chip when the Patterns drawer sits near the bottom edge.
+  over the right half of the "12/8" meter chip when the Patterns drawer sits near the bottom edge. Raised again in
+  ORBIT2-17 round 1 (greta, as a MUST-FIX, judged this item): at 390×844 a tap on the welcome bar's × at first paint
+  starts playback; free after a 120 px scroll.
 - **F on screen** (ORBIT2-04, greta): nothing visible names the F key; "focus mode (F)" on the Settings button would.
 - **Status line emphasis** (ORBIT2-04, kai, greta): 11 px Major Mono with wide tracking and the chromatic shadow; the
   live states (queued slot, FILL, rec ●, jam) don't stand out from stage distance: an accent colour or a pill for them,
@@ -709,7 +711,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Learning on a phone** (ORBIT2-16 round 1, verifier, architect, maya, greta): at 390×844 the fixed ▶ covers the quest
   card's right end (skip / × under it until you scroll), the card starts near the fold and the lane knobs the quests
   name sit ~1300 px down, the simple · everything switch ~2400 px down. The card and the switch higher up (or a "show
-  me" that scrolls to the lit drawer) on small screens.
+  me" that scrolls to the lit drawer) on small screens. Again in ORBIT2-17 round 1 (verifier, maya, rio).
 - **Step locks from the Move in simple** (ORBIT2-16 round 1, architect): simple tucks the lock panel away, but the Move's
   hold step + knobs still sets locks and `lockStep`, so switching to "everything" opens a lock panel nobody asked for.
 - **Quest badges** (ORBIT2-16 round 1, architect): I6 names badges; the saved progress tells a finished quest from a
@@ -726,3 +728,36 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   phase 17 pass.
 - **One `hitAt`** (ORBIT2-16 round 2, architect; taste): `quests.js` `playsAt(l, i, rot)` copies `Lane.hitAt` with a
   rotation argument; an optional rotation on `Lane.hitAt` / `stepIndex` would keep one copy.
+- **Links and saves old pages can read** (ORBIT2-17 round 1, verifier, architect; the port-back): `Lane.toJSON` writes
+  `ratioIndex` into R2's 15-entry `RATIOS` under the same link `v: 1` and save keys, and the shipped `Lane.from` reads
+  it into its old 10-entry table: 33 of 40 orbit2 links (66 of 160 lanes) play at the wrong speed in the shipped code,
+  ×2 (index 10) is `undefined` there (a silent lane, "link: Cannot read properties of undefined (reading 'padEnd')").
+  orbit2's reader never uses that index (`ratioFrom` prefers `ratio`). Once ported, a page cached by `sw.js` can meet
+  new data: write the old-table index where the ratio is in `OLD_RATIOS` (the nearest one otherwise), or bump the link
+  `v` and the save key so old code refuses the data instead of playing it wrong.
+- **Port-back notes** (ORBIT2-17 round 1; details in the review file): release notes for B1 (swung lanes at ×¾, ×3/2,
+  ×3 and odd lengths sound different; architect), the `evo.maxBars` 32 that old settings gain (verifier) and
+  `holdParam`'s louder live echo (sound); the port edits root files other pages use (`src/gauge.js`, `src/ui.js`,
+  `src/unasm/wav.js`, `src/punch/smf.js`, `src/samples.js`) and must keep the shared `midi-warz.tempo` (architect); the
+  shipped `Lane.evolve` clamps ratios to old indexes 3–8, and tick-stamped data moves from 24 to 840 PPQ (ines); a
+  hardware pass (the Move, MIDI clock in / out) before P1–P7, B9, R1 (kai); `shareLink` / `shareUrl` names (ines).
+- **Per-hit cost on a phone** (ORBIT2-17 round 1, architect): scheduler callback at 117 bpm 0.223 → 0.308 ms mean
+  (p99 3.2 → 4.8 ms) on the same pattern, 0.67 ms mean / 12.6 ms max on 6 × 32 with ×8 curved ratchets, coupling, a
+  cycle modulator, timbre dice and evolve every bar; the extra is in `hitSound` and the voices (G5, V5, strokes).
+  Measure on a phone before porting G5, V5 and V4's ×8.
+- **Slices in the MIDI export** (ORBIT2-17 round 1, dex): a slice-set lane exports every step on the lane's one note
+  (42: the `hat` kept under a break as `sample.drum`), so an 8-slice break in a Drum Rack plays one pad. Slice N on its
+  own note (base + N, the way Live's "Slice to New MIDI Track" lays a break out from C1), or a slice map beside the file.
+- **Ghosts in the kit export** (ORBIT2-17 round 1, dex): E4 renders accent and normal per lane, no ghost (G4's 0.35,
+  darker and shorter by G5); a ghost one-shot per lane that uses them.
+- **Two tabs** (ORBIT2-17 round 1, rio, tomi; the shipped autosave did the same): two tabs save over each other (a
+  friend's link opened in a new tab replaces `midi-warz.orbit2.v2`, the first tab's beat lives on only in its memory),
+  and slots saved in another tab aren't seen before a reload. A `storage` listener, or "keep yours / take theirs".
+- **The stage captions on a phone** (ORBIT2-17 round 1, maya): at 390×844 the orbit's caption ("five over four") lies
+  over the lane legend at the bottom of the rings, and on a first visit the demo's text box covers the lane captions.
+- **Small targets left** (ORBIT2-17 round 1, rio, greta): 5 controls under 32 px on a phone (72 on the shipped page),
+  phone gauges 25–28 × 44 px.
+- **Plain words on the status line** (ORBIT2-17 round 1, maya): simple still reads "REC o", "EVOLVE OFF", "KIT CUSTOM"
+  in the 11 px mono line (see "Status line emphasis").
+- **Mute on the next bar by default** (ORBIT2-17 round 1, kai; taste): `perf.muteBar` is off until set; a live set
+  wants it on.

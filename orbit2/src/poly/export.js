@@ -191,7 +191,9 @@ async function pipe(bytes, stream) { const out = new Response(new Blob([bytes]).
 /** Samples live in this browser only, so a shared lane that used one falls back to the drum it replaced (its voice and
  *  decay / snap / color, kept by Lane.loadSample), or to the Common kit's voice for that lane.
  *  meta (I5): title = what the beat is called, from = what it was remixed from (lineage, shown on the card). Optional
- *  fields of the same v: 1, so an old link still opens and an old page still opens a new link (it ignores them). */
+ *  fields of the same v: 1, so an old link still opens and an old page still decodes a new link (it ignores them). It
+ *  doesn't play every new link right: `ratioIndex` points into R2's longer table, which an old page reads as its own
+ *  (×2 = 10 is past its end); see "Links and saves old pages can read" in BACKLOG Later. */
 const TITLE_MAX = 60, metaStr = (s) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, TITLE_MAX) : null);
 export async function encodeShare(machineJSON, tempo, meta = {}) {
   const o = JSON.parse(JSON.stringify(machineJSON));
