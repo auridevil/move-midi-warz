@@ -647,3 +647,23 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 .focus-exit[hidden] { display: none; }
 /* a finger: the strip's small buttons 44 px wide too, and the exit pill plain to see (there's no hover) */
 @media (pointer: coarse) { body:has(#hud-left) #transport button, body:has(#hud-left) .focus-exit { min-width: 44px; } .focus-exit { opacity: .9; } }
+/* I2 / I3 share in the transport: the link in one tap, … opens the other ways under it */
+.share-wrap { position: relative; display: inline-flex; }
+.share-wrap #btn-share { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.share-more { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding-left: 7px; padding-right: 7px; }
+.share-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 170px; padding: 6px; border: 1px solid var(--hairline); border-radius: 12px; background: rgb(18, 12, 40); box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+.share-menu[hidden] { display: none; }
+.share-menu button { text-align: left; }
+/* I2: a shared beat opens as a gift: full screen, the rings small, one big tap to hear it */
+.gift { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 24px; box-sizing: border-box; border: 0; background: radial-gradient(circle at 50% 40%, rgba(58, 36, 120, .96), rgba(14, 10, 32, .98) 70%); color: var(--fg); }
+.gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+.gift::backdrop { background: rgba(6, 2, 18, .8); }
+.gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
+.gift-kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.gift-rings { width: min(240px, 60vw); aspect-ratio: 1; }
+.gift h2 { margin: 4px 0 0; font-size: 22px; overflow-wrap: anywhere; }
+.gift-meta, .gift-from { margin: 0; color: var(--muted); font-size: 13px; }
+.gift-from { font-style: italic; }
+.gift-hear { margin-top: 10px; padding: 14px 28px; font-size: 17px; border-radius: 999px; min-height: 52px; }
+.gift-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 44px; align-items: center; }
+@media (pointer: coarse) { .gift-acts button { min-height: 44px; } }

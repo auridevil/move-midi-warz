@@ -22,6 +22,7 @@ import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
+import { shapesOf, drawRings } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -65,9 +66,13 @@ const exp = { bits: 16, rate: 44100, ring: false, dry: false, midiOne: false, pr
 // P1 / P2 live performance: live = the Move's pads play instead of writing steps, Capture / Delete need Shift or a hold
 // (on by default: it only changes what the Move does); muteBar = mutes wait for the next bar line while playing
 const perf = { live: true, muteBar: false };
+// I5 lineage: what the beat on screen was remixed from (a shared link's title, the day's seed), carried into the links
+// and postcards you share, so a remix of a remix still says where it came from. A fresh start (init, groove, roll) drops it.
+let lineage = null;
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); } } catch {}
-const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf })); } catch {} };
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; } } catch {}
+const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage })); } catch {} };
+const setLineage = (from) => { lineage = from || null; saveSettings(); };
 
 // ---- sounds ----
 let kit = null, loop = null;
@@ -767,12 +772,12 @@ function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
 /** Init: every lane empty (as many lanes as now), length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
   const n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
-  loadMachine(n.toJSON());
+  loadMachine(n.toJSON()); setLineage(null);
 }
 /** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
  *  one-liner (the chips' tooltips never show on touch). */
 function loadGroove(key) {
-  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
+  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); setLineage(null); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
 }
 /**
  * Randomize: musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click,
@@ -781,7 +786,7 @@ function loadGroove(key) {
  */
 function randomizeAll(wild = false) {
   if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); }
-  rollPattern(wild);
+  setLineage(null); rollPattern(wild);
 }
 /** A roll, its own undo step, named in a toast. seeded: from the dice seed's first stream (also with free dice, for
  *  "pattern from seed"), so a seed always makes the same groove. */
@@ -1099,9 +1104,9 @@ const exportHits = (ticks = renderTicks().ticks) => collectHits(m, { from: 0, to
 /** The current pattern rendered offline at the export rate: { chans, sr, bars, hits, capped, loop }. stems: raw kit, a
  *  pair per lane; dry (E2): the lanes' delays leave their lane pairs for one more pair, the delay return, so the lane
  *  pairs plus the return still add up to the wet stems' sum. hits: a hit list already rolled (E5: export all renders
- *  the mix and the stems from one). */
-async function renderPattern({ stems = false, dry = false, hits = null } = {}) {
-  const { ticks, capped } = renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate;
+ *  the mix and the stems from one). bars: this many bars instead of the export drawer's length (I3: 4-bar share). */
+async function renderPattern({ stems = false, dry = false, hits = null, bars = null } = {}) {
+  const { ticks, capped } = bars ? { ticks: bars * m.barTicks(), capped: false } : renderTicks(), sec = ticks * tickSec(), barSec = m.barTicks() * tickSec(), loop = ui.expLoop.value, rate = exp.rate;
   const fx = !stems && exp.printFx && pfx.filter !== 0 ? { filter: pfx.filter, sr: T.getContext().rawContext.sampleRate } : null;   // P6: the mix only (stems stay raw), at the cutoffs heard live
   hits ??= exportHits(ticks);
   // a nudge or a push can put a hit well before tick 0: the render starts early enough to hold it (loops wrap it)
@@ -1136,10 +1141,36 @@ const exportDice = () => dice.locked ? dice : Dice.take(expRoll);
 const rollNote = () => dice.locked ? `dice ${dice.seed}` : `roll ${expRoll}`;
 // The address bar keeps no #p= link: on a reload the link would win over the beat you made since. Only when the
 // clipboard is blocked does the link go there, as the one way left to copy it.
+/** What a share is called: the library setup on screen, else a plain "an orbit"; lineage rides along as `from`. */
+const shareTitle = () => (libCurrent && lib.get(libCurrent)?.name) || 'an orbit';
+async function shareUrl() {
+  const title = shareTitle(), code = await encodeShare(m.toJSON(), tempo, { title, from: lineage });
+  return { code, title, url: `${location.origin}${location.pathname}#p=${code}` };
+}
+// The OS share sheet where it is a phone's habit (touch); on a desktop the clipboard is the one-tap path.
+const touchShare = () => !!navigator.share && matchMedia('(pointer: coarse)').matches;
+/** I2: the link. Touch with a share sheet: the sheet; else the clipboard; clipboard blocked: the address bar. Every
+ *  outcome says so in a toast (the export drawer may be closed). */
 async function shareLink() {
-  const code = await encodeShare(m.toJSON(), tempo), url = `${location.origin}${location.pathname}#p=${code}`;
-  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; toast('link copied'); }
-  catch { history.replaceState(null, '', `#p=${code}`); $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; }
+  const { code, title, url } = await shareUrl();
+  if (touchShare()) { try { await navigator.share({ title: `${title} · orbits`, url }); toast('shared'); return; } catch (e) { if (e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)`; toast('link copied · paste it anywhere'); }
+  catch { history.replaceState(null, '', `#p=${code}`); $('exp-status').textContent = 'link is in the address bar (clipboard blocked)'; toast('the link is in the address bar: copy it from there', 4000); }
+}
+/** A file into the share sheet (with the remix link as its text) when the browser can share files, else a download. */
+async function shareFile(file, what) {
+  const { title, url } = await shareUrl();
+  if (navigator.canShare?.({ files: [file] })) {
+    try { await navigator.share({ files: [file], title: `${title} · orbits`, text: `${title} · remix it: ${url}` }); toast(`${what} shared`); return; }
+    catch (e) { if (e.name === 'AbortError') { toast('share cancelled'); return; } }   // NotAllowed (no gesture left after a long render): download
+  }
+  download(file, file.name, file.type); toast(`${what} saved: ${file.name}`, 4000);
+}
+/** I3: one tap → 4 bars of the mix (the export format, loop as set) → share sheet or download. */
+async function shareAudio() {
+  await wake(); toast('rendering 4 bars…', 15000);
+  const r = await renderPattern({ bars: 4 });
+  await shareFile(new File([mixWav(r)], `${fileBase('', r)}.wav`, { type: 'audio/wav' }), '4 bars');
 }
 async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
@@ -1203,10 +1234,34 @@ async function exportKit() {
 async function loadShared({ first = false } = {}) {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return; history.replaceState(null, '', location.pathname + location.search);
   try {
-    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true });
-    if (first) { hist.restart(); $('btn-play').classList.add('pulse'); }
-    $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; toast(first ? 'a beat from a link · press play' : 'loaded from a link · undo brings your beat back', 4000);
+    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true }); libCurrent = null;
+    if (first) hist.restart();
+    $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; showGift(o, first);
   } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`); }
+}
+/**
+ * I2: a shared beat opens as a gift, a full-screen card: its rings drawn small, title, tempo, where it came from, and
+ * one big "▶ tap to hear this orbit" (the tap is also the gesture audio needs). Once it plays, "remix" takes it as
+ * yours (the lineage becomes its title). "back to my beat" (not on a first visit: there is none) undoes the load.
+ * Esc or × keep it, like remix. The pattern is already loaded underneath: the card only frames it.
+ */
+function showGift(o, first) {
+  const d = $('gift'); if (!d.open) d.showModal();   // open first: the canvas has its CSS size only once shown
+  const cv = $('gift-rings'), px = devicePixelRatio || 1, size = cv.clientWidth || 180;
+  cv.width = cv.height = Math.round(size * px); const g = cv.getContext('2d'); g.setTransform(px, 0, 0, px, 0, 0);
+  drawRings(g, shapesOf(o.m), { cx: size / 2, cy: size / 2, r: size / 2 - 4, hex: LANE_HEX });
+  const title = o.title || 'an orbit';
+  $('gift-title').textContent = title;
+  $('gift-meta').textContent = `${Math.round(o.tempo)} bpm · ${o.m.lanes.length} rings${o.m.meter && o.m.meter !== '4/4' ? ` · ${o.m.meter}` : ''}`;
+  $('gift-from').textContent = o.from ? `from “${o.from}”` : ''; $('gift-from').hidden = !o.from;
+  $('gift-hear').hidden = false; $('gift-hear').textContent = '▶ tap to hear this orbit'; $('gift-remix').hidden = true; $('gift-back').hidden = first;
+  const take = (msg) => { setLineage(title === 'an orbit' ? o.from || title : title); if (d.open) d.close(); if (msg) toast(msg, 3500); };
+  $('gift-hear').onclick = async () => { await togglePlay(); $('gift-hear').textContent = playing ? '■ stop' : '▶ play'; $('gift-remix').hidden = false; $('gift-remix').focus(); };
+  $('gift-remix').onclick = () => take('it is yours now · change anything, then share it back');
+  $('gift-back').onclick = () => { if (d.open) d.close(); undo(); toast('back to your beat'); };
+  $('gift-x').onclick = () => take('');
+  d.oncancel = (e) => { e.preventDefault(); take(''); };   // Esc keeps the beat (like remix), it never undoes
+  $('gift-hear').focus();
 }
 function buildExportUI() {
   ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'whole bars that hold whole polyrhythm cycles (max 64 bars)']], value: 4 }));
@@ -1221,6 +1276,15 @@ function buildExportUI() {
   $('exp-link').onclick = shareLink; $('exp-wav').onclick = () => exportWav().catch(e => { $('exp-status').textContent = `WAV: ${e.message}`; }); $('exp-mid').onclick = exportMidi; $('exp-kit').onclick = () => exportKit().catch(e => { $('exp-status').textContent = `kit: ${e.message}`; }); $('exp-all').onclick = () => exportAll().catch(e => { $('exp-status').textContent = `export all: ${e.message}`; }); $('exp-stems').onclick = () => exportStems().catch(e => { $('exp-status').textContent = `stems: ${e.message}`; });
   $('exp-roll').onclick = () => { expRoll = newRoll(); $('exp-status').textContent = dice.locked ? `dice are locked: exports use dice ${dice.seed} (re-roll in the dice drawer)` : `roll ${expRoll}: the next WAV, stems and MIDI share these hits`; };
   addEventListener('hashchange', () => loadShared());
+  // I2 / I3 share in the transport: one tap = the link; … = the other ways (4 bars of audio, …), each a toast when done
+  const fail = (what) => (e) => toast(`${what}: ${e.message}`, 4000), menu = $('share-menu'), more = $('btn-share-more');
+  const setMenu = (open) => { menu.hidden = !open; more.setAttribute('aria-expanded', String(open)); if (open) menu.querySelector('button')?.focus(); };
+  $('btn-share').onclick = () => shareLink().catch(fail('share'));
+  more.onclick = () => setMenu(menu.hidden);
+  $('share-link').onclick = () => { setMenu(false); shareLink().catch(fail('share')); };
+  $('share-audio').onclick = () => { setMenu(false); shareAudio().catch(fail('4 bars')); };
+  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); more.focus(); } });
+  addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target) && e.target !== more) setMenu(false); });
 }
 
 // ---- undo / redo / fill buttons ----
@@ -1380,12 +1444,12 @@ for (const g of GROOVES) {
   b.onclick = () => loadGroove(g.key); $('grooves').appendChild(b);
 }
 // ---- library: named setups in localStorage (patterns + voices + kit + sounds + tempo + volume + dice) ----
-const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON() });
+const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON(), from: lineage });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
 function loadSetup(id) {
   const e = lib.get(id); if (!e?.m) return;
   if (e.vol != null) { vol = e.vol; kit?.master.gain.rampTo(vol, 0.05); } if (e.dice) { dice.fromJSON(e.dice); saveSettings(); renderDice(); }
-  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); renderLib(); flash('btn-load', `“${e.name}” ✓`);
+  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); setLineage(e.from); renderLib(); flash('btn-load', `“${e.name}” ✓`);
 }
 function saveSetup(name) {
   const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }
@@ -1585,7 +1649,7 @@ function controlOwnsKey(e) {
 /** A select picked with the mouse gives the focus back to the page (else the arrow keys would keep changing it). */
 function letGoAfterPointer(el) { if (lastInput === 'pointer') el.blur(); }
 window.addEventListener('keydown', (e) => {
-  if ($('help').open) return;   // the help is modal: keys are its own (Esc closes it)
+  if ($('help').open || $('gift').open) return;   // the help and the shared-beat card are modal: keys are their own (Esc closes them)
   // a held Space repeats: the repeats are the page's too, or the browser presses the button the mouse left focused on
   // release (holding Space to play also toggled the step just clicked)
   if (e.repeat) { if (e.key === ' ' && !controlOwnsKey(e)) e.preventDefault(); return; }
@@ -1852,5 +1916,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();

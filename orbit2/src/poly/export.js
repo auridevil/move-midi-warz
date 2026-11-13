@@ -189,16 +189,22 @@ const b64u = (bytes) => { let s = ''; for (const b of bytes) s += String.fromCha
 const unb64u = (str) => Uint8Array.from(atob(str.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0));
 async function pipe(bytes, stream) { const out = new Response(new Blob([bytes]).stream().pipeThrough(stream)); return new Uint8Array(await out.arrayBuffer()); }
 /** Samples live in this browser only, so a shared lane that used one falls back to the drum it replaced (its voice and
- *  decay / snap / color, kept by Lane.loadSample), or to the Common kit's voice for that lane. */
-export async function encodeShare(machineJSON, tempo) {
+ *  decay / snap / color, kept by Lane.loadSample), or to the Common kit's voice for that lane.
+ *  meta (I5): title = what the beat is called, from = what it was remixed from (lineage, shown on the card). Optional
+ *  fields of the same v: 1, so an old link still opens and an old page still opens a new link (it ignores them). */
+const TITLE_MAX = 60, metaStr = (s) => (typeof s === 'string' && s.trim() ? s.trim().slice(0, TITLE_MAX) : null);
+export async function encodeShare(machineJSON, tempo, meta = {}) {
   const o = JSON.parse(JSON.stringify(machineJSON));
   (o.lanes || []).forEach((l, i) => {
     if (l.voice === 'sample') { const d = l.sample?.drum; l.voice = d?.voice || KITS.common.lanes[i].voice; if (d) for (const k of ['decay', 'snap', 'color']) if (d[k] != null) l.sound[k] = d[k]; }
     l.sample = null;
   });
-  return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o })), new CompressionStream('deflate-raw')));
+  const title = metaStr(meta.title), from = metaStr(meta.from);
+  return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o, ...(title && { title }), ...(from && { from }) })), new CompressionStream('deflate-raw')));
 }
+/** → { v, tempo, m, title, from } (title / from null on a link made before lineage, or a bad one). */
 export async function decodeShare(str) {
   const o = JSON.parse(new TextDecoder().decode(await pipe(unb64u(str), new DecompressionStream('deflate-raw'))));
-  if (o?.v !== 1 || !o.m?.lanes) throw new Error('not an Orbits link'); return o;
+  if (o?.v !== 1 || !o.m?.lanes) throw new Error('not an Orbits link');
+  return { ...o, title: metaStr(o.title), from: metaStr(o.from) };
 }

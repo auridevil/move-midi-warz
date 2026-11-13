@@ -33,6 +33,14 @@
       <div id="fx-gauge" class="tstrip-fx"></div>
       <button id="btn-throw" class="small" type="button" aria-pressed="false" title="Hold: delay throw on the whole mix (send and feedback up while held, back on release; Move: hold +)">throw (hold)</button>
       <button id="btn-jam" class="jam-btn" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
+      <!-- I2 / I3: share in one tap (the link); … = 4 bars of audio and the other ways -->
+      <span class="share-wrap">
+        <button id="btn-share" type="button" title="Share this beat: copies a link anyone can open (on a phone: the share sheet)">share</button><button id="btn-share-more" class="small share-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu" aria-label="more ways to share" title="More ways to share">…</button>
+        <div id="share-menu" class="share-menu" role="group" aria-label="share" hidden>
+          <button id="share-link" type="button" title="A link with the whole pattern in it (not samples)">link</button>
+          <button id="share-audio" type="button" title="Render 4 bars and share the WAV (or download it)">4 bars of audio</button>
+        </div>
+      </span>
       <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
     <div class="status" id="move-status" hidden>
@@ -45,6 +53,20 @@
   </header>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <!-- I2: a shared beat opens as a gift (filled by app.js showGift) -->
+  <dialog id="gift" class="gift" aria-labelledby="gift-title">
+    <button id="gift-x" class="small gift-x" type="button" aria-label="close: keep this beat" title="close (the beat stays)">×</button>
+    <p class="gift-kicker">someone sent you a beat</p>
+    <canvas id="gift-rings" class="gift-rings" aria-hidden="true"></canvas>
+    <h2 id="gift-title">an orbit</h2>
+    <p id="gift-meta" class="gift-meta"></p>
+    <p id="gift-from" class="gift-from" hidden></p>
+    <button id="gift-hear" class="primary gift-hear" type="button">▶ tap to hear this orbit</button>
+    <div class="gift-acts">
+      <button id="gift-remix" class="primary" type="button" title="Keep this beat as yours: change anything, share it back" hidden>remix</button>
+      <button id="gift-back" class="small" type="button" title="Undo the link: your own beat comes back" hidden>back to my beat</button>
+    </div>
+  </dialog>
   <!-- C5: which ring is which (filled by app.js); heads the stage on wide windows, sits under the canvas on narrow ones -->
   <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
   <button id="focus-exit" class="small focus-exit" type="button" hidden title="Show the panels again (F or Esc)">exit focus</button>
