@@ -82,13 +82,13 @@ test('I1 a gesture is one undo step of its own: never folded into the edit befor
   h.commit('d', { now: 2000, key: 'd', own: true }); assert.equal(h.past.length, 2, 'same key (only a selection moved): no step, even for a gesture');
 });
 
-test('I1 r1 a nudged planet is played where it is drawn (G1: its step + its nudge), its bare tick still reaches it', () => {
+test('I1 r1 a nudged planet is played where it is drawn (G1: its step + its nudge); no other step takes its bare tick', () => {
   const l = new Lane('hat', { length: 16 }); l.hits[4] = true; l.setLock(4, 'nudge', 0.25);   // the verifier's repro
   const nd = (i) => planetNudge(l, i), pos = (p, len = 16) => at(p, len);
   assert.equal(planetNudge(l, 4), 0.25); assert.equal(planetNudge(l, 5), 0, 'an empty step sits on its tick');
   l.setLock(7, 'nudge', 0.4); assert.equal(planetNudge(l, 7), 0, 'a nudge lock on an empty step moves nothing (nothing is drawn there)');
   assert.equal(stepAtAngle(...pos(4.25), 16, nd), 4, 'on the planet');
-  assert.equal(stepAtAngle(...pos(4), 16, nd), 4, 'on its faint tick'); assert.equal(stepAtAngle(...pos(4.6), 16, nd), 4, 'nearer the planet than tick 5');
+  assert.equal(stepAtAngle(...pos(4), 16, nd), 4, 'its faint tick: still nearest to the planet (a tap there plays it only within TAP_PX of the planet)'); assert.equal(stepAtAngle(...pos(4.6), 16, nd), 4, 'nearer the planet than tick 5');
   assert.equal(stepAtAngle(...pos(4.7), 16, nd), 5, 'nearer tick 5'); assert.equal(stepAtAngle(...pos(4.25), 16), 4, 'without nudges: the nearest tick');
   assert.equal(stepAtAngle(...pos(4.6), 16), 5);
   // round 12 o'clock both ways, and through a rotation (visible steps, as drawn)

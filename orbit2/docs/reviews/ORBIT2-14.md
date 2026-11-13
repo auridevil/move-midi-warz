@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-14
 title: ORBIT2-14 playing on the canvas (I1), review panel
 date: 2026-11-13
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
   rio: HAPPY
   maya: HAPPY
 tags: [orbit2, review]
@@ -145,3 +145,70 @@ load is heard (sound); the menu reuses the lock panel and the visible step numbe
   `node tools/smoke.mjs http://localhost:5400` 10/10 (serve.py 5400 + headless Chrome 9222, both stopped). Page
   (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks above, 20 of 20, 0 page errors on desktop (1440 × 900)
   and phone (390 × 844); screenshots looked at. `app.js` 1824 → 1845 lines.
+
+## Round 2 (re-check): verifier, architect and sound HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `67bb11d` on +100, the code before the round-1 fixes
+`981f791` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, I1, the spec, the "where" table,
+the must-fix rule with the later ids and the Later items, the page), `git diff --stat 981f791..299b0d9` (the round-1
+fixes alone, 7 files, +291/−52) and the whole phase (`67bb11d..299b0d9`, 9 files, +471/−20), each one's own round-1
+MUST-FIX and "Changes after round 1", with the instruction to confirm their items first with the same repro, then check
+nearby, anything new only in scope and marked NEW. `stalled: 0`: every round-1 MUST-FIX is closed and everyone is HAPPY.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | (1) FIXED: 1440 × 900, lane 4 at 16 steps, step 5 nudged +0.25 (27 px off its tick): `locate` on the planet = lane 4, step 5, off 0; a click accents it (one undo: on), a right-click opens the menu (5 pills, focus on "tune 0"), Esc closes it; at ±0.5 (54 px off) a click accents the planet and the empty tick next to it still adds its own hit; the demo's 2-step ring at +0.15 (130 px): off 0, a click accents it, a right-click opens the menu; phone 390 × 844, 8 steps at +0.25 (29 px) and 16 at +0.4 (23 px): a tap accents, a 650 ms long-press opens the menu, focus on a pill, scrollY 0. (2) FIXED: phone, 8-step outer ring, planets at 3, 9 and 12 o'clock, 650 and 1500 ms: events `pointerdown:cv touchstart:cv pointerup:cv touchend:cv`, no click, no contextmenu; the menu stays, focus on "tune 0", the lock panel closed, scrollY 0; no pill box holds the finger (at 3 o'clock, finger (341, 512): tune x 271–331, condition x 240–361 / y 454–498, the rest farther); a pill tapped afterwards still works ("chance": the lock panel, probability focused). (3) FIXED: the same 250 px swipe scrolls 235 px from the stage's corner, the core and below the stage, as at `67bb11d`; on the outer ring at 3 o'clock scrollY 0 and the ring turns (0 → 7); a tap on an empty tick adds a hit; a pinch 8 → 19 at scrollY 0, one undo back to 8; a ring tap whose `touchstart` is cancelled still counts as a user action (`navigator.userActivation.hasBeenActive` false → true, as at `981f791`). Nearby: check clean, 210 + 9, smoke 10/10, no page errors; focus mode → "chance" leaves it, the lock panel shows, probability focused; arrows, Home, End go round the pills; the inner ring pulled from 12 o'clock past the centre 16 → 7 (one undo: 16); a pull in and back on a lane with an accent, tune and nudge locks and a 1:2 ×3 condition leaves it identical, a pull in plus one undo restores it exactly. |
+| architect | HAPPY | (1) FIXED: 390 × 844, 250 px swipes up, scrollY read after 2.5 s, `67bb11d` / `981f791` / HEAD: stage corner (14, 693) 235 / 0 / 235, the core 235 / 0 / 235, below the stage 235 / 235 / 235; the corner still scrolls after a run of taps, pinches and long-presses. The rings keep the touch: a turn (ring 4 at 16 steps, finger up 120 px at 3 o'clock) 0 → 14 (2 steps), scrollY 0, one undo step; a tap on an empty tick adds the hit, one step, scrollY 0; a pinch 60 → 120 px takes 2 → 4 steps, `visualViewport.scale` 1, scrollY 0, one step; a 750 ms long-press opens the menu with the focus on a pill and it stays after release, scrollY 0, no undo step (at `981f791` the release clicked "chance 100%" and scrolled 1085 px); a tap on the core closes it. Nearby: the inner ring pulled through the centre 16 → 3 in one step (undo: 16); an out-and-back pull (8 → 13 → 8) on a lane with an accent, tune and nudge locks and a 1:2 ×3 condition: JSON byte-identical, no undo step; undo during a pull: the length stays 8, no step recorded, redo kept (2 past / 1 future); the menu keys; the save format unchanged (`save()` writes `JSON.stringify(m)` to the same key, `own` defaults to false); check clean, 210 + 9, no page errors. |
+| sound | HAPPY | (1) FIXED: the same repro (120 bpm, one lane alone, 8 hits in 16 steps, send 0, 16 mouse taps of 90 ms, the master recorded live with an AudioWorklet, every `hitSound` logged with its issue time and origin). Kick at HEAD: 10 of 16 taps landed while the next hit was queued (21–71 ms before it was due): the taps made 0 hits of their own, the queued hits peaked 0.179–0.190 (normal, median 0.184) and 0.259–0.260 (accents), all 96 sequenced hits at full level. Hat: 8 of 16 in the window (14–95 ms): 0 tap hits, the queued hits at their normal level (0.089–0.142), all 71 at full level. The same script still catches it at `981f791`: kick 11 of 16 in the window, every tap played its own hit, queued hits down to 0.025 (−17 dB), 0.057, 0.079, 0.11; hat down to 0.027 / 0.029 (−12 dB). All 16 hits added while playing sounded at full level the next time the head reached them (kick 0.31–1.93 s after the tap, cycle 2.0 s; hat 0.08–2.42 s, cycle 2.67 s). Nearby: the stopped audition at `T.now()` is steady and matches the sequenced hit (kick normal 0.178–0.187, 0.4 dB spread, accent 0.257–0.260; hat 0.117 ×4, accent 0.148 ×4; at `981f791` 1.7 / 1.1 dB and 1.0 / 2.1 dB); a tap to off plays nothing (4 of 4); a ×3 step with ramp 0.5 and fade: 3 hits at 0 / 60 / 120 ms, velocity 0.70 / 0.50 / 0.36, tune 0 / +0.25 / +0.5, the accent on the first only; the lock panel's audition as at the phase start (peak 0.264 vs 0.266); a pull (16 → 21 → 12 → 16) and a quarter turn while playing: no hit doubled, off the grid or lost, the scheduler ≥ 38.7 ms ahead (43.3 at `981f791`), no long tasks, stress 0, back at 16 exactly the starting hits; phone (touch): stopped, each tap plays its step once; playing, a tap and a quick double tap add then accent the hit, no sound of their own, scrollY 0; no page errors. |
+
+SHOULD items recorded (never block): NEW, near the top of a phone screen a pill could still cover the planet: with the
+page scrolled so the 12 o'clock outer planet sits at y 20–50 the menu's centre is held at y 86 and "condition always"
+(121 px) or "condition not first" covers the finger, the release presses nothing (verifier; architect: the gap either
+side of a planet straight above or below the centre, 2·RX·sin 36° ≈ 118 px, is narrower than the widest pill); NEW, a tap
+that misses a pill by a few px can still press it (Chrome's touch adjustment): a tap on the stage's centre 8 px below the
+"nudge" pill pressed it, opened the lock panel and scrolled 1428 px (verifier; ordinary browser behaviour, likelier with
+the menu over the core on a phone); the round-1 note "the faint tick of a nudged planet still reaches it" is wrong for a
+nudge that puts the planet more than `TAP_PX` from its tick (+0.25: 27.2 px, a click there only selects the lane); the
+planets themselves are right (verifier); NEW, a tap on a ring no longer takes the focus out of a text field: the
+cancelled `touchstart` also stops the mouse events that move the focus, so a phone keyboard would stay open (at
+`981f791` the same tap moved the focus to the body) (architect); `app.js` 1845 lines (+21 this round, +125 over the
+phase), "A gestures module" is in Later (architect); `auditionStep` read `T.now()` for each repeat, so the time spent
+starting the first hit pushed the later ones back by whole blocks (0 / 65.3 / 125.3 ms instead of 0 / 60 / 120 in 1 of 3
+ratchet auditions; the phase start's lock panel the same) (sound); a tap on a tick just before the head reaches it (that
+lap's step already scheduled) waits a whole cycle (kick step 7 after 1.93 s, hat step 15 after 2.42 s): it could play at
+its grid time that lap when no later hit of the lane is queued (sound; taste).
+
+GOOD: one rule each: `planetNudge` decides where a planet is for drawing, `locate`, `stepXY` and the burst (even at ±0.5
+the planet is played where you see it and the empty tick next to it keeps its own taps), `outward` serves `dragKind` and
+the pull, `auditionStep` the lock panel and the tap, `pick` is `locate().lane`, `Lane.restore` is reused (verifier,
+architect); the touch split (`touch-action: manipulation` plus a `touchstart` that cancels only on a ring, asking the
+same `scene.locate`) gives back exactly the phase start's scrolling off the rings while the rings keep the touch, and a
+long-press release can no longer press a pill (verifier, architect); a tap on a playing lane can no longer cut a queued
+hit and every added hit sounds on its next turn at full level; stopped, a tap sounds like the step will (within 0.3 dB),
+with its repeats, pitch ramp and fade; turning and pulling while playing is clean (sound).
+
+### Changes after round 2
+
+- **Quick SHOULDs done** (nothing a reviewer confirmed changes):
+  - of the five gaps between its pills, the menu now picks the one with the most room round the planet, from the
+    pills' own sizes at the places they would take (`offsetWidth` / `offsetHeight`: buttons glide between positions, so
+    their boxes on screen can't be read mid-move) (verifier, architect). Page, 390 × 844, the 12 o'clock outer planet with
+    "condition not first" at y 50 / 40 / 30 / 20: 11 px clear each time, between "velocity" and "nudge" (was −5: under
+    "condition"); 3 and 9 o'clock 14 px, 12 o'clock unclamped 28 px; on the desktop round the planet with tune at 12
+    o'clock as before; screenshots looked at.
+  - a touch on a ring takes the focus off a field: the `touchstart` that cancels it blurs the focused element, as a
+    click on the canvas does (architect). Page: the library name field focused, a ring tap adds the hit and the focus
+    goes to the body.
+  - `auditionStep` reads `T.now()` once, so the repeats keep their spacing (sound). Page: an even ×3 tap at 0 / 60 /
+    120 ms four times of four.
+  - the round-1 note on the faint tick, corrected: a nudged planet's tick is still nearest to it (no other step takes
+    it), but a tap there plays it only within `TAP_PX` (22 px) of the planet; farther, the tap selects the lane
+    (verifier). The unit test's wording says so.
+- **Not changed** → [[BACKLOG]] Later: Chrome's touch adjustment pressing a pill a few px away is added to "Rings and the
+  lock menu on a phone" (verifier); a tap just before the head waiting a cycle is added to "The tap's sound and the pads"
+  (sound).
+- Tests (210 + 9). `npm run check` clean, `npm test` 210 + 9, `node tools/smoke.mjs http://localhost:5400` 10/10
+  (serve.py 5400 + headless Chrome 9222, both stopped). Page (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the
+  checks above plus the round-1 ones again (the nudged planet, the side and 12 o'clock menus, the corner swipe, a pinch),
+  16 of 16, 0 page errors on desktop and phone. `app.js` 1845 → 1856 lines. **Phase 14 review: `result: HAPPY`.**

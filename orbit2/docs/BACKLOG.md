@@ -630,10 +630,14 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   tabs select) while the help says "touch a ring to select its lane"; the menu's pills (12 px text, 32 px tall) are small
   and overlap the neighbouring planets; a pill scrolls the page ~1350 px down to the lock panel and the rings are gone
   (a lock sheet over the stage, or a way back); a select-only touch shows little; a fade-in or a dimmed backdrop for the
-  menu (taste).
+  menu (taste). Round 2 (verifier): with the menu over the core, a tap a few px off a pill can still press it (Chrome's
+  touch adjustment snaps a tap onto the nearest button: 8 px below "nudge" it opened the lock panel and scrolled 1428 px).
 - **The tap's sound and the pads** (ORBIT2-14 round 1, sound): stopped, a tap sounds on release plus the look-ahead
   (~100 ms after the touch with a 90 ms hold); an empty tick has no long press, so it could sound on pointerdown. The
   Move pads' `liveHit` plays at `T.immediate()` on the lane's own mono voice while the pattern plays: the case that cut
-  the lane's queued note for canvas taps (not measured for the pads; from before phase 14).
+  the lane's queued note for canvas taps (not measured for the pads; from before phase 14). Round 2 (sound; taste):
+  playing, a tap on a tick just before the head reaches it (that lap's step already scheduled) waits a whole cycle
+  (kick step 7 after 1.93 s, hat step 15 after 2.42 s); it could play at its grid time that lap when no later hit of the
+  lane is queued.
 - **Telling a beginner the rings play** (ORBIT2-14 round 1, maya; I6 in phase 16): a tap on a ghost turns it off with only
   a flash; nothing but the help says the rings can be dragged, pulled or pinched: a first-run line on the canvas.

@@ -650,8 +650,8 @@ function renderTrig(tg) {
  *  on a playing lane's voice would cut the note already queued for its next step. */
 function auditionStep(lane, i) {
   if (!awake || playing) return; const tg = lane.trigAt(i), n = tg?.ratchet || 1, lk = lane.lockAt(i), acc = lane.accentAt(i), v = hitVel(acc, lk);
-  const at = ratchetTimes(n, tg?.curve), g = ratchetGains(n, tg?.curve);
-  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, acc && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), (tg?.fade ? v * Math.pow(0.72, k) : v) * g[k], kit, lane.sliceAt(lane.stepIndex(i), lk));
+  const at = ratchetTimes(n, tg?.curve), g = ratchetGains(n, tg?.curve), t0 = T.now();   // one start: the repeats keep their spacing
+  for (let k = 0; k < n; k++) hitSound(lane, t0 + at[k] * 0.18, acc && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), (tg?.fade ? v * Math.pow(0.72, k) : v) * g[k], kit, lane.sliceAt(lane.stepIndex(i), lk));
 }
 function auditionLock() { if (lockStep >= 0) auditionStep(m.lane, lockStep); }
 
@@ -1695,8 +1695,12 @@ function gestureEnd(e, tap) {
 }
 // touch: a finger that lands on a ring plays it (no scroll, no zoom); off the rings (the core, the corners of a phone's
 // stage) the page scrolls as it always did: touch-action can't tell the rings from the space between them, this can.
-// A long press that opened the lock menu sends no click on release (it would press the pill under the finger)
-cv.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; if (gest || (t && scene.locate(t.clientX, t.clientY).lane >= 0)) e.preventDefault(); }, { passive: false });
+// A long press that opened the lock menu sends no click on release (it would press the pill under the finger). A
+// cancelled touch sends no mouse events either, so it takes the focus off a field itself, as a click there does
+cv.addEventListener('touchstart', (e) => {
+  const t = e.changedTouches[0]; if (!gest && !(t && scene.locate(t.clientX, t.clientY).lane >= 0)) return;
+  e.preventDefault(); const a = document.activeElement; if (a instanceof HTMLElement && a !== document.body) a.blur();
+}, { passive: false });
 cv.addEventListener('touchend', (e) => { if (!ringMenu.hidden) e.preventDefault(); }, { passive: false });
 cv.addEventListener('pointerup', (e) => gestureEnd(e, true));
 cv.addEventListener('pointercancel', (e) => gestureEnd(e, false));
@@ -1711,23 +1715,30 @@ const ringMenu = document.createElement('div'); ringMenu.id = 'ring-menu'; ringM
 let menuBack = null;   // what had the focus before the menu opened: Esc gives it back
 function openRingMenu(li, i) {
   // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide. Kept inside, its
-  // centre can leave the planet (near a side of a phone): then the pills turn so the planet sits in the gap between two
-  // of them, never under one
+  // centre can leave the planet (near a side or the top of a phone): then the pills turn so the planet sits in a gap
+  // between two of them, the gap with the most room round the finger (measured: the pills' widths differ)
   const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), RX = 100, RY = 62, N = RING_ITEMS.length;
   const cx = Math.max(RX + 70, Math.min(innerWidth - RX - 70, at.x)), cy = Math.max(RY + 24, Math.min(innerHeight - RY - 24, at.y));
-  const ex = (at.x - cx) / RX, ey = (at.y - cy) / RY, turn = Math.hypot(ex, ey) > 0.3 ? Math.atan2(ey, ex) + Math.PI / 2 + Math.PI / N : 0;
+  const ex = (at.x - cx) / RX, ey = (at.y - cy) / RY, pills = () => [...ringMenu.children];
+  const pos = (turn, n) => { const a = -Math.PI / 2 + turn + (n / N) * Math.PI * 2; return [Math.cos(a) * RX, Math.sin(a) * RY]; };
+  const place = (turn) => pills().forEach((b, n) => { const [x, y] = pos(turn, n); b.style.left = `${x}px`; b.style.top = `${y}px`; });
+  // px from the finger to the nearest pill with the pills turned by `turn` (< 0: under one); the layout's sizes, not the
+  // boxes on screen (buttons glide between positions)
+  const room = (turn) => Math.min(...pills().map((b, n) => { const [x, y] = pos(turn, n); return Math.max(Math.abs(cx + x - at.x) - b.offsetWidth / 2, Math.abs(cy + y - at.y) - b.offsetHeight / 2); }));
   if (ringMenu.hidden) menuBack = document.activeElement;
   ringMenu.innerHTML = ''; ringMenu.setAttribute('aria-label', `locks of lane ${li + 1} step ${i + 1}`); ringMenu.style.left = `${cx}px`; ringMenu.style.top = `${cy}px`;
-  RING_ITEMS.forEach(([k, label], n) => {
-    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); const a = -Math.PI / 2 + turn + (n / N) * Math.PI * 2;
-    b.style.left = `${Math.cos(a) * RX}px`; b.style.top = `${Math.sin(a) * RY}px`;
+  RING_ITEMS.forEach(([k, label]) => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
     const set = k === 'cond' ? tg && tg.cond !== 'always' : lk[k] != null, v = k === 'cond' ? (tg?.cond ?? 'always') : LOCK_UI[k].fmt?.(Math.round(lockValue(lane, i, k) * 100)) ?? `${Math.round(lockValue(lane, i, k) * 100)}%`;
     b.textContent = `${label} ${v}`; b.classList.toggle('lk', !!set); b.title = `${label} of step ${i + 1}${set ? ' (locked)' : ' (the lane value)'}: open it in the lock panel`;
     // focus mode hides the lane panel the lock panel lives in: picking a lock leaves it
     b.onclick = () => { closeRingMenu(); if (focusMode) setFocusMode(false); if (m.selected !== li) { m.select(li); sync(); } if (lockStep !== i) editLocks(i); (k === 'cond' ? $('cond-every').querySelector('button') : sliders['lock:' + k].el)?.focus(); };
     ringMenu.appendChild(b);
   });
-  ringMenu.hidden = false; ringMenu.querySelector('button').focus({ preventScroll: true });
+  ringMenu.hidden = false;
+  const gaps = RING_ITEMS.map((_, k) => Math.atan2(ey, ex) + Math.PI / 2 + Math.PI / N + (k * 2 * Math.PI) / N);   // the planet in gap k
+  place(Math.hypot(ex, ey) <= 0.3 ? 0 : gaps.reduce((a, t) => (room(t) > room(a) ? t : a)));   // round the planet: tune at 12 o'clock
+  ringMenu.querySelector('button').focus({ preventScroll: true });
 }
 function closeRingMenu(refocus = false) {
   if (ringMenu.hidden) return; ringMenu.hidden = true; ringMenu.innerHTML = '';
