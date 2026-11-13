@@ -91,9 +91,9 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
     for (const k of due.keys()) if (k <= t) due.delete(k);   // its tick has come (or passed with no step on it)
     if (ev) {
       const early = decided(pre, lane, ev.step, t);
-      if (padded) { ev.hit = false; ev.skip = null; }   // played live from a pad a moment ago: don't double it
+      if (padded) { ev.hit = false; ev.miss = null; }   // played live from a pad a moment ago: don't double it (nor ring it as missed)
       else if (!early) out.hits = expandHits(ev, lane, li, o);
-      else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.skip = pre.skip ?? null; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }   // V6: skipped as decided
+      else if (!lane.muted && !silenced) { ev.hit = pre.hit; ev.miss = pre.miss ?? null; ev.accent = pre.accent; out.hits = pre.hits.filter(h => h.dt >= 0); }   // V6: missed as decided
       if (cp) { hit[li] = padded || ev.hit; used[li] = !early; }   // an early step used its lift when it was decided
     }
     return out;
@@ -106,7 +106,7 @@ export function liveTick(m, t, ahead, { rng = Math.random, fill = false, dice = 
     if (step < 0 || decided(due.get(at), lane, step, at)) return;
     const pev = lane.peek(at - o0, rng, { fill, dice, li, silenced, boost: m.takeBoost(li), cycle: cycle ?? (lane.mod ? m.cycleTicks() : 0) }), hits = expandHits(pev, lane, li, o), lead = (at - t) * tickSec;
     if (!skip?.has(`${li}:${at}`)) out.early = hits.filter(h => h.dt < 0).map(h => ({ ...h, dt: lead + h.dt, tick: at }));   // tick: its step's (a jam take's end goes by steps)
-    due.set(at, { lane, step, tick: at, hit: pev.hit, skip: pev.skip, accent: pev.accent, hits, played: out.early.length > 0 });
+    due.set(at, { lane, step, tick: at, hit: pev.hit, miss: pev.miss, accent: pev.accent, hits, played: out.early.length > 0 });
   });
   return outs;
 }

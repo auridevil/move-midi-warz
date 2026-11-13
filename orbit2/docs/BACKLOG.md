@@ -578,7 +578,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Generative hints on screen** (ORBIT2-12 round 1, ines, tomi): coupling shows nothing on a lane at 100 % until its
   chance is lowered (the tooltip says so; a hint next to the control would); "(too long)" repeats in the status line
   while a pattern sits at the max cycle; AND / XOR on a hand clave can surprise (XOR of a tresillo with E(5,8) is dense,
-  AND can leave only the downbeat): a line under the mask control.
+  AND can leave only the downbeat): a line under the mask control. ORBIT2-13 round 1 (sound, ines): a planet is as solid
+  as its programmed chance (`Lane.chanceAt`), not a coupled lane's lift, so a lifted lane plays more often than it looks.
 - **Gravity's excursions past the max cycle** (ORBIT2-12 round 2, verifier, architect): steps home are never held
   (round 1: a guard on them could keep a pattern away for good), so at partial gravity a step home can push the cycle far
   past the max and the random moves then keep to that longer cycle (the tooltip says so). Home 4 bars, max 32, amount
@@ -592,3 +593,28 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   plays at half and ×3 speed-up is full, half, half, so at low counts a curve changes the accents too (it could start only
   below a gap in ms). Speed-up ends a whole even gap before the next step (its gaps shrink 1½ → ½ of even, then 1), so the
   roll pauses before the downbeat; a ¾ gap with the last repeat at half might keep the run-in without stacking.
+- **Scene timing against the sound** (ORBIT2-13 round 1, sound; pre-existing for the flashes and the bloom): `onTick`
+  draws a step at its grid time (`T.getDraw().schedule(…, time)`), so a nudged or swung step's flash, and now its missed
+  ring, lands its nudge late (−0.3 at 120 bpm: 34.8–38.3 ms after the sound; on-grid steps −11.8…+5 ms); drawing at
+  `time + lead` would fix both. The bloom, flashes and rings fire at the scheduled audio time while the cycle arc and the
+  countdown follow `heardTick()` (minus `outputLatency`), so on a high-latency output they would disagree (today
+  `heardTick` reads 0 there, see "`heardTick` reads the wrapper's `outputLatency`"): one latency for all that is drawn.
+- **An early part at Stop** (ORBIT2-13 round 1, sound; pre-existing): the early part of a step nudged before its tick,
+  sent just before Stop, sounds, but its step never draws (1 of 58 notes in a run).
+- **V6 marks on a phone** (ORBIT2-13 round 1, architect, greta, verifier; phase 14 owns the canvas): the a:b arcs sit at
+  a fixed size + 6 px, not scaled to the ring gap, so on the 390 px stage the white current-loop arcs overlap the
+  neighbouring planets, and with b ≥ 4 and a ratchet the 2 px arcs compete with the ratchet dots and the accent flare, the
+  lit loop subtle (greta: a thicker lit arc; that needs the room first); the 1.5 px, 45 % cycle arc is easy to miss and
+  its head dot carries it; the outer lane's a:b arcs (16–21 px) and growing miss rings (to 23 px) cross the cycle track
+  16 px out (14 on a phone; the record ring sits at 26) (verifier); a 0.2-opacity planet looks nearly like an empty step
+  on a phone (greta); dashed and dotted miss rings are hard to tell apart at 1.5 px for 450 ms (greta; ines: a hue; the
+  help names the three since round 1).
+- **The V6 layers under adaptive quality** (ORBIT2-13 round 1, architect): the faint a:b arcs and the miss rings draw at
+  any `quality`; cheap today (6 lanes × 32 a:b steps: +0.04 ms a frame), a guard for weak phones would shed the faint
+  arcs below 0.7.
+- **Long cycles and the other conditions on screen** (ORBIT2-13 round 1, ines): on a cycle of many bars the outer arc
+  reads as static (a position label, or tick marks where lanes realign); fill / first / pre keep the plain dashed halo (a
+  mark saying "only on loop 1" / "only on a fill").
+- **A scene test** (ORBIT2-13 round 1, verifier, architect): the drawing side of V6 (a ring set on a miss, gone after
+  `MISS_MS`, cleared on Stop and `reset()`) is checked in the browser only; `createScene` needs a canvas, so a unit test
+  needs a small 2D-context stub.

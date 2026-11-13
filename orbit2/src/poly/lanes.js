@@ -137,6 +137,9 @@ export const tierOfVel = (v) => v < (GHOST_VEL + 0.7) / 2 ? 'ghost' : 'normal';
  *  NEI; Elektron calls the second /PRE, its NEI reads the neighbour track; appended, so saved conditions keep their
  *  meaning). */
 export const CONDS = ['always', '1:2', '2:2', '1:3', '2:3', '3:3', '1:4', '2:4', '3:4', '4:4', 'fill', 'not fill', 'first', 'not first', 'pre', 'not pre'];
+/** { a, b } of an "a:b" condition (plays on loop a of every b), else null (always, fill, first, pre…): the one parse of
+ *  a:b for what reads a pattern's structure (the cycle, the canvas); whether it plays is condPasses'. */
+export function condParts(cond) { const m = /^(\d+):(\d+)$/.exec(cond || ''); return m && +m[2] > 1 ? { a: +m[1], b: +m[2] } : null; }
 /** Conditions that set what pre / not pre read: every real condition except always and pre / not pre themselves (as on
  *  Elektron boxes, PRE looks past other PRE trigs). The probability roll and mutes don't count: only the condition. */
 const setsPrev = (cond) => !!cond && cond !== 'always' && cond !== 'pre' && cond !== 'not pre';
@@ -375,6 +378,9 @@ export class Lane {
     if (tune != null) this.setLock(i, 'tune', tune);
   }
   lockAt(i) { return this.locks[this.stepIndex(i)]; }
+  /** The chance visible step i plays when it comes round (0..1): its prob lock, else the lane's. at() rolls against it
+   *  (plus a V2 lift); the canvas draws a planet this solid (V6). */
+  chanceAt(i) { return this.lockAt(i)?.prob ?? this.prob; }
   /** The locks to show as "locked" at visible position i: a lone ghost vel lock is the tier, shown as a ghost instead. */
   shownLock(i) { const lk = this.lockAt(i); return lk && !(lk.vel === GHOST_VEL && Object.keys(lk).length === 1) ? lk : null; }
   /** Master-clock ticks per step: ×1 = 840 (a beat), ×4 = 210, ×5/4 = 672, ⅔ = 1260. */
@@ -405,15 +411,15 @@ export class Lane {
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
     // the condition is judged on every active step, muted or not, so a mute doesn't change what pre / not pre read later
     const on = this.hitAt(i), pass = on && condPasses(trig?.cond, loop, ctx.fill, this.lastCond);
-    const hit = pass && !this.muted && !ctx.silenced && r < (lock?.prob ?? this.prob) + (ctx.boost || 0);   // V2: a coupled lane's lift
+    const hit = pass && !this.muted && !ctx.silenced && r < this.chanceAt(i) + (ctx.boost || 0);   // V2: a coupled lane's lift
     if (on && setsPrev(trig?.cond)) this.lastCond = pass;
-    // V6: a programmed step that stayed silent, and why (a mute or a solo elsewhere is your choice, not a skip): the
+    // V6: a programmed step that stayed silent, and why (a mute or a solo elsewhere is your choice, not a miss): the
     // condition said no, or the roll did (a locked dice roll is 'dice', a free one 'prob'). Only drawn, never heard.
-    const skip = on && !hit && !this.muted && !ctx.silenced ? (!pass ? 'cond' : ctx.dice ? 'dice' : 'prob') : null;
+    const miss = on && !hit && !this.muted && !ctx.silenced ? (!pass ? 'cond' : ctx.dice ? 'dice' : 'prob') : null;
     this.pos = (i + 1) % this.length; this.loopN = loop; this.lastTick = tick;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
-    return { index: i, step, hit, skip, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, curve: trig?.curve, ramp: trig?.ramp || 0, loop, slice: this.sliceAt(this.stepIndex(i), lock), mod: hit && this.mod ? this.modAt(step, tick, ctx.cycle) : null };
+    return { index: i, step, hit, miss, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, curve: trig?.curve, ramp: trig?.ramp || 0, loop, slice: this.sliceAt(this.stepIndex(i), lock), mod: hit && this.mod ? this.modAt(step, tick, ctx.cycle) : null };
   }
   /** at() without moving the playhead (pos) or the loop counter: live play looks ahead with it. */
   peek(tick, rng, ctx) { const { pos, loopN, lastTick, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastTick, lastCond }); return ev; }
@@ -451,7 +457,7 @@ export class Lane {
    */
   loopsPerCycle({ repeat = 1, humanize = 0 } = {}) {
     let n = 1, any = false;
-    for (let i = 0; i < this.length; i++) { if (!this.played(i)) continue; any = true; const ab = /^(\d+):(\d+)$/.exec(this.trigs[i]?.cond || ''); if (ab) n = lcm(n, +ab[2]); }
+    for (let i = 0; i < this.length; i++) { if (!this.played(i)) continue; any = true; const ab = condParts(this.trigs[i]?.cond); if (ab) n = lcm(n, ab.b); }
     if (!any) return 1;
     if (this.swing > 0) n = lcm(n, lcm(this.length, this.swingPeriod()) / this.length);
     const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.played(i) && lk?.prob != null && lk.prob < 1) || TIMBRE_KEYS.some(k => this.tdice?.[k] > 0);

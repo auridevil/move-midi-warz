@@ -3,7 +3,7 @@
 // everything else (comet playheads, shockwaves, particles, beams, the core, the cycle bloom).
 
 import { frameLoop } from '../frames.js';
-import { MAX_LANES } from './lanes.js';
+import { MAX_LANES, condParts, condPasses } from './lanes.js';
 
 const TAU = Math.PI * 2;
 const MUTED = '#8b84a8';
@@ -21,12 +21,16 @@ export function alignText(tick, cycle, bar = 96, beat = 24) {
   return `aligns in ${n} ${unit}${n > 1 ? 's' : ''}`;
 }
 
-/** V6: how long a skipped step's ghost ring shows (ms). */
-export const GHOST_MS = 450;
+/** V6: how long the ring of a missed step (it came round and stayed silent: the ghost flash) shows (ms). */
+export const MISS_MS = 450;
 /** V6: a planet's opacity for a chance of playing `p` (0..1): 100 % is solid, 0 % still a faint dot you can find. */
 export const planetAlpha = (p) => 0.2 + 0.8 * Math.max(0, Math.min(1, +p || 0));
-/** V6: { a, b } of an "a:b" condition (plays on loop a of every b), else null (always, pre, fill, first…). */
-export function condParts(cond) { const m = /^(\d+):(\d+)$/.exec(cond || ''); return m && +m[2] > 1 ? { a: +m[1], b: +m[2] } : null; }
+/** V6: the arcs round an a:b step, one per loop of b from 12 o'clock, or null for any other condition. plays: the loop
+ *  it plays on (condPasses' own rule); here: the loop the lane is on now (`loop` of its latest step, null when stopped). */
+export function condArcs(cond, loop) {
+  const ab = condParts(cond); if (!ab) return null;
+  return Array.from({ length: ab.b }, (_, k) => ({ plays: condPasses(cond, k), here: loop != null && loop % ab.b === k }));
+}
 /** V6: where master tick `tick` is inside a `cycle`-tick machine, 0..1 (the outer cycle arc). */
 export const cyclePos = (tick, cycle) => (cycle > 0 ? (((tick % cycle) + cycle) % cycle) / cycle : 0);
 
@@ -75,7 +79,7 @@ export function createScene(cv, o) {
   const white = glowSprite('#ece9f7');
   const last = [];        // per lane: { index, t } of the latest step, for the smooth playhead
   const energy = new Array(MAX_LANES).fill(0), flash = new Map();   // energy per lane (decays), flash per "lane:index"
-  const ghosts = new Map();   // V6: "lane:index" → { t, why } of a step that stayed silent (prob / cond / dice)
+  const misses = new Map();   // V6: "lane:index" → { t, why } of a step that came round and stayed silent (prob / cond / dice)
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
 
@@ -114,7 +118,7 @@ export function createScene(cv, o) {
     const now = performance.now(); last[ev.lane] = { index: ev.index, t: now, loop: ev.loop };
     recent.push({ lane: ev.lane, index: ev.index, t: now }); while (recent.length > 16) recent.shift();
     if (ev.hit) burst(ev.lane, ev.index, ev.accent, now);
-    else if (ev.skip) ghosts.set(`${ev.lane}:${ev.index}`, { t: now, why: ev.skip });
+    else if (ev.miss) misses.set(`${ev.lane}:${ev.index}`, { t: now, why: ev.miss });
   }
   /** Light up a planet without moving the playhead (live-recorded hits). */
   function flashHit(li, index, accent) { burst(li, index, accent, performance.now()); }
@@ -143,7 +147,7 @@ export function createScene(cv, o) {
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
-    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !ghosts.size && energy.every(e => e < 0.01)) { prev = now; return; }
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01)) { prev = now; return; }
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
@@ -204,27 +208,28 @@ export function createScene(cv, o) {
         const nd = lane.lockAt(i)?.nudge || 0;
         if (nd) { ctx.strokeStyle = 'rgba(236,233,247,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 5, y - sa * 5); ctx.lineTo(x + ca * 5, y + sa * 5); ctx.stroke(); const an = ((i + nd) / len) * TAU - Math.PI / 2; x = g.cx + Math.cos(an) * r; y = g.cy + Math.sin(an) * r; }
         // G4 a ghost (soft vel lock) is a smaller, dimmer planet
-        const acc = lane.accentAt(i), ghost = lane.tierAt?.(lane.stepIndex(i)) === 'ghost', f = flash.get(`${li}:${i}`), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;
+        const key = `${li}:${i}`, acc = lane.accentAt(i), ghost = lane.tierAt?.(lane.stepIndex(i)) === 'ghost', f = flash.get(key), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;
         const size = (acc ? 15 : ghost ? 7 : 10) * (1 + fl * 0.9);
-        // V6 a planet is as solid as its chance of playing (lane prob × its prob lock); a hit that played still flares full
-        const pa = planetAlpha(lane.lockAt(i)?.prob ?? lane.prob);
+        // V6 a planet is as solid as its chance of playing (its prob lock, else the lane's prob: what Lane.at rolls); a
+        // hit that played still flares full
+        const pa = planetAlpha(lane.chanceAt(i));
         ctx.globalAlpha = (ghost ? 0.35 : 0.55) * pa + fl * 0.45; ctx.drawImage(sprite(hex), x - size * 2, y - size * 2, size * 4, size * 4);
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = Math.min(1, pa + fl); ctx.fillStyle = fl > 0.4 ? '#ffffff' : hex; ctx.beginPath(); ctx.arc(x, y, (acc ? 5.5 : ghost ? 2.8 : 4) * (1 + fl * 0.4), 0, TAU); ctx.fill();
         ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'lighter';
-        const gh = ghosts.get(`${li}:${i}`), ga = gh ? 1 - (now - gh.t) / GHOST_MS : 0;
-        if (ga > 0) {   // V6 ghost flash: the step came round and stayed silent. Solid ring = the roll said no, dashed = its condition, dotted = locked dice
-          const gr = size + 3 + (reduced ? 0 : (1 - ga) * 10); ctx.strokeStyle = rgba(hex, 0.85 * ga); ctx.lineWidth = 1.5;
-          ctx.setLineDash(gh.why === 'cond' ? [3, 3] : gh.why === 'dice' ? [1, 3] : []); ctx.beginPath(); ctx.arc(x, y, gr, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
+        const mi = misses.get(key), ma = mi ? 1 - (now - mi.t) / MISS_MS : 0;
+        if (ma > 0) {   // V6 ghost flash: the step came round and stayed silent. Solid ring = the roll said no, dashed = its condition, dotted = locked dice
+          const gr = size + 3 + (reduced ? 0 : (1 - ma) * 10); ctx.strokeStyle = rgba(hex, 0.85 * ma); ctx.lineWidth = 1.5;
+          ctx.setLineDash(mi.why === 'cond' ? [3, 3] : mi.why === 'dice' ? [1, 3] : []); ctx.beginPath(); ctx.arc(x, y, gr, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
         }
-        const tg = lane.trigAt?.(i), ab = condParts(tg?.cond);
-        if (ab) {   // V6 a:b condition: b arcs round the planet, one per loop from 12 o'clock; the one it plays on is solid, the loop the lane is on now is lit
-          const cur = playing && last[li]?.loop != null ? last[li].loop % ab.b : -1, hr = size + 6, seg = TAU / ab.b, gap = Math.min(0.35, seg * 0.25);
+        const tg = lane.trigAt?.(i), arcs = condArcs(tg?.cond, playing ? last[li]?.loop : null);
+        if (arcs) {   // V6 a:b condition: b arcs round the planet, one per loop from 12 o'clock; the one it plays on is solid, the loop the lane is on now is lit
+          const hr = size + 6, seg = TAU / arcs.length, gap = Math.min(0.35, seg * 0.25);
           ctx.lineWidth = 2;
-          for (let k = 0; k < ab.b; k++) {
-            const a0 = -Math.PI / 2 + k * seg + gap / 2, plays = k === ab.a - 1, here = k === cur;
+          arcs.forEach(({ plays, here }, k) => {
+            const a0 = -Math.PI / 2 + k * seg + gap / 2;
             ctx.strokeStyle = here ? (plays ? '#ffffff' : 'rgba(236,233,247,.75)') : rgba(hex, plays ? 0.85 : 0.22);
             ctx.beginPath(); ctx.arc(x, y, hr, a0, a0 + seg - gap); ctx.stroke();
-          }
+          });
         } else if (tg && tg.cond !== 'always') {   // other conditions (pre, fill, first): a dashed halo (it doesn't always play)
           ctx.strokeStyle = rgba(hex, 0.7); ctx.lineWidth = 1; ctx.setLineDash([2, 3]); ctx.beginPath(); ctx.arc(x, y, size + 6, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
         }
@@ -266,7 +271,7 @@ export function createScene(cv, o) {
     // outer ring fills from 12 o'clock and starts again when everything lines up (the bloom)
     if (al && al.cycle > 0) {
       const r = g.outer + Math.min(16, g.R * 0.08), a0 = -Math.PI / 2, a1 = a0 + TAU * cyclePos(al.tick, al.cycle);
-      ctx.strokeStyle = 'rgba(236,233,247,.07)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
+      ctx.strokeStyle = 'rgba(236,233,247,.16)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();   // the track: what is left to go
       ctx.strokeStyle = 'rgba(236,233,247,.45)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, Math.max(a0 + 0.01, a1)); ctx.stroke();
       ctx.fillStyle = 'rgba(236,233,247,.85)'; ctx.beginPath(); ctx.arc(g.cx + Math.cos(a1) * r, g.cy + Math.sin(a1) * r, 2, 0, TAU); ctx.fill();
     }
@@ -311,12 +316,12 @@ export function createScene(cv, o) {
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (const [k, t] of flash) if (now - t > 400) flash.delete(k);
-    for (const [k, gh] of ghosts) if (now - gh.t > GHOST_MS || !playing) ghosts.delete(k);
+    for (const [k, mi] of misses) if (now - mi.t > MISS_MS || !playing) misses.delete(k);
   }
   /** Fractional step position of a lane right now, or null before its first step. */
   function phase(lane, li, now, playing) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; ghosts.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
 }
