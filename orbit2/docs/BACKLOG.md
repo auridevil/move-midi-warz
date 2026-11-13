@@ -153,7 +153,7 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
   range; scale-snapped tune option for pitched voices. (Ines) ✅ ORBIT2-12
 - **V6 show what didn't play**: ghost flash on steps skipped by probability/condition/dice; planet opacity by
   probability (incl. prob locks); condition halo as `b` arcs with the active one lit; outer arc for position in the
-  full cycle. (Ines)
+  full cycle. (Ines) ✅ ORBIT2-13
 
 ## I · Interactive canvas, sharing, learning (phases 14, 15, 16)
 
