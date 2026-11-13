@@ -22,7 +22,7 @@ import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
-import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL } from './share.js';
+import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -69,6 +69,10 @@ const perf = { live: true, muteBar: false };
 // I5 lineage: what the beat on screen was remixed from (a shared link's title, the day's seed), carried into the links
 // and postcards you share, so a remix of a remix still says where it came from. A fresh start (init, groove, roll) drops it.
 let lineage = null;
+// I2: the open shared-beat card's ▶ button, kept in step with the transport whoever starts or stops it (togglePlay)
+let giftPlay = null;
+// I5: the postcard waits here for the clock's next bar line (onTick hands over its audio time)
+let barWait = null;
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage })); } catch {} };
@@ -334,6 +338,7 @@ function onTick(t, time, cyc, ts) {
   // waiting mute lands on the lanes that play from here): queued mutes land, the fill latch turns on (or off) for the bar
   if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
   jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
+  if (barWait && onBar(t, bars)) { const f = barWait; barWait = null; f(time); }   // I5: a postcard starts on this bar line
   if (pending.size) pending.settle(t, time);   // E6: the early parts of the steps on this tick get the time it came at
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
   const cut = Math.min(bank.nextSwitch(t, cyc, bars, m.origin), bars.next ? bars.next.at : Infinity);
@@ -359,7 +364,7 @@ async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules
-  $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout();
+  $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
 }
 $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
@@ -773,12 +778,17 @@ function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
 /** Init: every lane empty (as many lanes as now), length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
   const n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
-  loadMachine(n.toJSON()); setLineage(null);
+  loadMachine(n.toJSON()); freshBeat();
 }
+/** The beat on screen is no longer the library setup last loaded or saved: a share stops using its name (shareName),
+ *  and its row its mark. */
+function leaveSetup() { if (libCurrent == null) return; libCurrent = null; renderLib(); }
+/** A fresh start (init, a groove, a roll): a new beat, no setup's and no remix of anything. */
+function freshBeat() { setLineage(null); leaveSetup(); }
 /** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
  *  one-liner (the chips' tooltips never show on touch). */
 function loadGroove(key) {
-  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); setLineage(null); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
+  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); freshBeat(); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
 }
 /**
  * Randomize: musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click,
@@ -787,14 +797,14 @@ function loadGroove(key) {
  */
 function randomizeAll(wild = false) {
   if (dice.locked) { dice.reroll(); saveSettings(); renderDice(); }
-  setLineage(null); rollPattern(wild);
+  rollPattern(wild);
 }
 /** A roll, its own undo step, named in a toast. seeded: from the dice seed's first stream (also with free dice, for
- *  "pattern from seed"), so a seed always makes the same groove. */
+ *  "pattern from seed"), so a seed always makes the same groove. A roll is a fresh start. */
 function rollPattern(wild, seeded = dice.locked) {
   if (evo.on) setEvolve(false);
   const rng = seeded ? Dice.take(dice.seed).stream(0) : Math.random, name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name;
-  loadNext = true; hideWelcome(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`);
+  loadNext = true; hideWelcome(); freshBeat(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`);
 }
 // ---- undo / redo ----
 /** Put back an undo / redo step. Live mutes and solos stay as they are (keepPerf), unless the step crosses a load;
@@ -1140,18 +1150,18 @@ const newRoll = () => 1 + Math.floor(Math.random() * 99999);
 let expRoll = newRoll();
 const exportDice = () => dice.locked ? dice : Dice.take(expRoll);
 const rollNote = () => dice.locked ? `dice ${dice.seed}` : `roll ${expRoll}`;
-// The address bar keeps no #p= link: on a reload the link would win over the beat you made since. Only when the
-// clipboard is blocked does the link go there, as the one way left to copy it.
-/** What a share is called: the library setup on screen, else a plain "an orbit"; lineage rides along as `from`. */
-const shareTitle = () => (libCurrent && lib.get(libCurrent)?.name) || 'an orbit';
+/** What a share is called: the library setup on screen (none: shown as UNTITLED, which is never written into the
+ *  link); lineage rides along as `from`. */
+const shareName = () => (libCurrent && lib.get(libCurrent)?.name) || null;
 async function shareUrl() {
-  const title = shareTitle(), code = await encodeShare(m.toJSON(), tempo, { title, from: lineage });
-  return { code, title, url: `${location.origin}${location.pathname}#p=${code}` };
+  const name = shareName(), code = await encodeShare(m.toJSON(), tempo, { title: name, from: lineage });
+  return { code, title: name || UNTITLED, url: `${location.origin}${location.pathname}#p=${code}` };
 }
 // The OS share sheet where it is a phone's habit (touch); on a desktop the clipboard is the one-tap path.
 const touchShare = () => !!navigator.share && matchMedia('(pointer: coarse)').matches;
 /** I2: the link. Touch with a share sheet: the sheet; else the clipboard; clipboard blocked: the address bar. Every
- *  outcome says so in a toast (the export drawer may be closed). */
+ *  outcome says so in a toast (the export drawer may be closed). The address bar keeps no #p= link otherwise: on a
+ *  reload the link would win over the beat you made since. */
 async function shareLink() {
   const { code, title, url } = await shareUrl();
   if (touchShare()) { try { await navigator.share({ title: `${title} · orbits`, url }); toast('shared'); return; } catch (e) { if (e.name === 'AbortError') return; } }
@@ -1178,29 +1188,39 @@ async function shareAudio() {
 /**
  * I5 orbit postcard: 4 bars of the rings as they play, with their sound, as a WebM: the canvas's captureStream (30 fps)
  * plus the live master (tapped after its limiter into a MediaStreamAudioDestinationNode), through MediaRecorder. Real
- * time, so it records what you hear (performance FX, a jam, evolve included); it starts the beat if it is stopped.
+ * time, so it records what you hear (performance FX, a jam, evolve included). The bars are the beat's own: the clock
+ * hands over its next bar line (Play's downbeat when the postcard starts the beat, which it stops again after), a gate
+ * on the audio clock lets exactly those 4 bars through as they leave the master (its look-ahead added, a few ms of fade
+ * at each end: no cut mid-hit), and the recorder runs just around them (a timer can't start it to the sample).
  * Shared like the audio, with the remix link (and its lineage) as the text.
  */
 const POSTCARD_BARS = 4; let postcarding = false;
+const sleep = (sec) => new Promise(r => setTimeout(r, Math.max(0, sec * 1000)));
 async function recordPostcard() {
   if (postcarding) return; const cv = $('cv');
   if (!window.MediaRecorder || !cv.captureStream) throw new Error('this browser cannot record video');
-  await wake(); postcarding = true; $('share-postcard').disabled = true;
-  const dest = T.getContext().rawContext.createMediaStreamDestination(), out = kit.master.out;
+  postcarding = true; $('share-postcard').disabled = true;
+  const raw = T.getContext().rawContext, dest = raw.createMediaStreamDestination(), gate = raw.createGain(); let out = null, ours = false;
   try {
-    out.connect(dest);
+    await wake(); out = kit.master.out; gate.gain.value = 0; out.connect(gate); gate.connect(dest);
+    const lat = await masterLatency(raw.sampleRate);
     const stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
     const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
     const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {}), chunks = [], stopped = new Promise(r => { mr.onstop = r; });
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    if (!playing) await togglePlay();
-    const sec = POSTCARD_BARS * m.barTicks() * tickSec();
-    mr.start(250); toast(`recording a postcard: ${nBars(POSTCARD_BARS)}…`, sec * 1000 + 2000);
-    await new Promise(r => setTimeout(r, sec * 1000)); mr.stop(); await stopped; stream.getTracks().forEach(t => t.stop());
-    const blob = new Blob(chunks, { type: 'video/webm' }); if (!blob.size) throw new Error('the recording came out empty');
+    // the next bar line's audio time, from the scheduler (Play's tick 0 when stopped); a beat stopped meanwhile never gets there
+    const line = new Promise(r => { barWait = r; }); if (!playing) { ours = true; await togglePlay(); }
+    const t0 = await Promise.race([line, sleep(m.barTicks() * tickSec() + 2).then(() => null)]);
+    if (t0 == null) throw new Error('the beat stopped before a bar line');
+    const w = postcardWindow({ line: t0, lat, barSec: m.barTicks() * tickSec(), bars: POSTCARD_BARS }), g = gate.gain;
+    g.setValueAtTime(0, w.fadeIn); g.linearRampToValueAtTime(1, w.a); g.setValueAtTime(1, w.fadeOut); g.linearRampToValueAtTime(0, w.b);
+    await sleep(w.recStart - raw.currentTime); mr.start(250); toast(`recording a postcard: ${nBars(POSTCARD_BARS)}…`, (w.b - raw.currentTime) * 1000 + 2000);
+    await sleep(w.recStop - raw.currentTime); mr.stop(); await stopped; stream.getTracks().forEach(t => t.stop());
+    if (ours && playing) await togglePlay();
+    const type = (mr.mimeType || 'video/webm').split(';')[0], blob = new Blob(chunks, { type }); if (!blob.size) throw new Error('the recording came out empty');
     window.__postcard = blob;   // the browser check reads it back (tracks, size)
-    await shareFile(new File([blob], `orbits-postcard-${tempo}bpm-${stamp()}.webm`, { type: 'video/webm' }), 'postcard');
-  } finally { try { out.disconnect(dest); } catch {} postcarding = false; $('share-postcard').disabled = false; }
+    await shareFile(new File([blob], `orbits-postcard-${tempo}bpm-${stamp()}.${type.includes('mp4') ? 'mp4' : 'webm'}`, { type }), 'postcard');
+  } finally { try { out?.disconnect(gate); } catch {} gate.disconnect(); barWait = null; postcarding = false; $('share-postcard').disabled = false; }
 }
 /** I5 Seed of the Day: the day's constellation (share.js seedOfDay: UTC date → seed → musical randomize on a fresh
  *  4-lane machine) with the dice locked to that seed, so its chance and humanize roll the same for everyone. One undo
@@ -1208,7 +1228,7 @@ async function recordPostcard() {
 function loadDaySeed() {
   const s = seedOfDay(utcDay());
   dice.locked = true; dice.seed = s.seed; dice.repeat = 1; saveSettings(); renderDice();
-  loadMachine(s.m, { bpm: s.tempo }); libCurrent = null; setLineage(s.title); renderLib();
+  loadMachine(s.m, { bpm: s.tempo }); leaveSetup(); setLineage(s.title);
   toast(`today's seed · ${s.family} · dice ${s.seed} · ${s.tempo} bpm · make it yours, then share it`, 5000);
 }
 async function exportWav() {
@@ -1273,34 +1293,41 @@ async function exportKit() {
 async function loadShared({ first = false } = {}) {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return; history.replaceState(null, '', location.pathname + location.search);
   try {
-    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true }); libCurrent = null;
+    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup();
     if (first) hist.restart();
     $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; showGift(o, first);
-  } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`); }
+  } catch (e) {   // a link cut short or mangled fails inside the decoder (atob, inflate, JSON): say that, not its words
+    const why = /Orbits/.test(e.message) ? e.message : 'this link is broken or cut short'; $('exp-status').textContent = `link: ${why}`; toast(`link: ${why}`, 4000);
+  }
 }
 /**
  * I2: a shared beat opens as a gift, a full-screen card: its rings drawn small, title, tempo, where it came from, and
- * one big "▶ tap to hear this orbit" (the tap is also the gesture audio needs). Once it plays, "remix" takes it as
- * yours (the lineage becomes its title). "back to my beat" (not on a first visit: there is none) undoes the load.
- * Esc or × keep it, like remix. The pattern is already loaded underneath: the card only frames it.
+ * one big "▶ tap to hear this orbit" (the tap is also the gesture audio needs). The button follows the transport
+ * (giftPlay): a link opened while the beat plays is heard at once, so it reads "■ stop" from the start. Once it has
+ * played, "remix" takes it as yours (the lineage becomes its title, or keeps its own lineage when it has none). "back
+ * to my beat" (not on a first visit: there is none) undoes the load. Esc or × keep it, like remix. The pattern is
+ * already loaded underneath: the card only frames it.
  */
 function showGift(o, first) {
   const d = $('gift'); if (!d.open) d.showModal();   // open first: the canvas has its CSS size only once shown
   const cv = $('gift-rings'), px = devicePixelRatio || 1, size = cv.clientWidth || 180;
   cv.width = cv.height = Math.round(size * px); const g = cv.getContext('2d'); g.setTransform(px, 0, 0, px, 0, 0);
   drawRings(g, shapesOf(o.m), { cx: size / 2, cy: size / 2, r: size / 2 - 4, hex: LANE_HEX });
-  const title = o.title || 'an orbit';
-  $('gift-title').textContent = title;
+  const hear = $('gift-hear'), remix = $('gift-remix');
+  $('gift-title').textContent = linkName(o) || UNTITLED;
   $('gift-meta').textContent = `${Math.round(o.tempo)} bpm · ${o.m.lanes.length} rings${o.m.meter && o.m.meter !== '4/4' ? ` · ${o.m.meter}` : ''}`;
-  $('gift-from').textContent = o.from ? `from “${o.from}”` : ''; $('gift-from').hidden = !o.from;
-  $('gift-hear').hidden = false; $('gift-hear').textContent = '▶ tap to hear this orbit'; $('gift-remix').hidden = true; $('gift-back').hidden = first;
-  const take = (msg) => { setLineage(title === 'an orbit' ? o.from || title : title); if (d.open) d.close(); if (msg) toast(msg, 3500); };
-  $('gift-hear').onclick = async () => { await togglePlay(); $('gift-hear').textContent = playing ? '■ stop' : '▶ play'; $('gift-remix').hidden = false; $('gift-remix').focus(); };
-  $('gift-remix').onclick = () => take('it is yours now · change anything, then share it back');
+  $('gift-from').textContent = o.from ? `from “${o.from}”` : ''; $('gift-from').hidden = !o.from; $('gift-back').hidden = first;
+  let heard = false;
+  giftPlay = () => { heard ||= playing; hear.textContent = playing ? '■ stop' : heard ? '▶ play' : '▶ tap to hear this orbit'; remix.hidden = !heard; };
+  giftPlay();
+  const take = (msg) => { setLineage(lineageOf(o)); if (d.open) d.close(); if (msg) toast(msg, 3500); };
+  hear.onclick = async () => { const was = heard; await togglePlay(); if (heard && !was) remix.focus(); };
+  remix.onclick = () => take('it is yours now · change anything, then share it back');
   $('gift-back').onclick = () => { if (d.open) d.close(); undo(); toast('back to your beat'); };
   $('gift-x').onclick = () => take('');
   d.oncancel = (e) => { e.preventDefault(); take(''); };   // Esc keeps the beat (like remix), it never undoes
-  $('gift-hear').focus();
+  d.onclose = () => { giftPlay = null; };
+  hear.focus();
 }
 function buildExportUI() {
   ui.expLen = mount('exp-len', segmented({ options: [[1, '1'], [2, '2'], [4, '4'], [8, '8'], [16, '16 bars'], ['cycle', 'cycle', 'whole bars that hold whole polyrhythm cycles (max 64 bars)']], value: 4 }));
@@ -1317,13 +1344,14 @@ function buildExportUI() {
   addEventListener('hashchange', () => loadShared());
   // I2 / I3 share in the transport: one tap = the link; … = the other ways (4 bars of audio, …), each a toast when done
   const fail = (what) => (e) => toast(`${what}: ${e.message}`, 4000), menu = $('share-menu'), more = $('btn-share-more');
-  const setMenu = (open) => { menu.hidden = !open; more.setAttribute('aria-expanded', String(open)); if (open) menu.querySelector('button')?.focus(); };
+  // closing with the focus inside (Esc, Enter on an item) hands it back to "…", not to the page
+  const setMenu = (open) => { const had = menu.contains(document.activeElement); menu.hidden = !open; more.setAttribute('aria-expanded', String(open)); if (open) menu.querySelector('button')?.focus(); else if (had) more.focus(); };
   $('btn-share').onclick = () => shareLink().catch(fail('share'));
   more.onclick = () => setMenu(menu.hidden);
   $('share-link').onclick = () => { setMenu(false); shareLink().catch(fail('share')); };
   $('share-audio').onclick = () => { setMenu(false); shareAudio().catch(fail('4 bars')); };
   $('share-postcard').onclick = () => { setMenu(false); recordPostcard().catch(fail('postcard')); };
-  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); more.focus(); } });
+  menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); } });
   addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target) && e.target !== more) setMenu(false); });
 }
 
@@ -1503,11 +1531,12 @@ const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just no
 function renderLib() {
   const el = $('lib-list'); el.innerHTML = ''; const items = lib.list();
   if (!items.length) { el.innerHTML = '<p class="hint tight">Nothing saved yet: type a name and press save.</p>'; return; }
+  const drawn = [];   // the thumbnails drawn on this render, cached in one write (a library from before I4: all of them)
   for (const e of items) {
     const row = document.createElement('div'); row.className = `lib-row${e.id === libCurrent ? ' cur' : ''}`;
     const name = document.createElement('button'); name.type = 'button'; name.className = 'lib-name'; name.textContent = e.name; name.title = 'load this setup (undoable)'; name.onclick = () => loadSetup(e.id);
     // I4 gallery: the setup's rings, drawn once and cached in the entry (a re-save drops it, so it is drawn anew)
-    let url = e.thumb; if (!url && e.m?.lanes) { url = thumbURL(e.m, LANE_HEX); lib.setThumb(e.id, url); }
+    let url = e.thumb; if (!url && e.m?.lanes) { url = thumbURL(e.m, LANE_HEX); drawn.push([e.id, url]); }
     const img = document.createElement('img'); img.className = 'lib-thumb'; img.alt = ''; img.width = img.height = 48; if (url) img.src = url; img.onclick = () => loadSetup(e.id);
     const voices = e.m?.lanes ? Machine.from(e.m).lanes.map(l => l.voice === 'sample' ? '♪' : voiceLabel(l)).join(' · ') : '';   // as it loads (old voices migrated)
     const meta = document.createElement('span'); meta.className = 'lib-meta'; meta.textContent = `${e.tempo || '?'} bpm · ${voices} · ${ago(e.t)}`;
@@ -1522,6 +1551,7 @@ function renderLib() {
     const del = btn('×', 'delete', () => { if (del.dataset.sure) { lib.remove(e.id); if (libCurrent === e.id) libCurrent = null; renderLib(); } else { del.dataset.sure = 1; del.textContent = 'sure?'; del.classList.add('danger'); setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = '×'; del.classList.remove('danger'); } }, 2500); } });
     row.append(img, name, acts, meta); el.appendChild(row);
   }
+  if (drawn.length) lib.setThumbs(drawn);
 }
 $('lib-form').onsubmit = (e) => { e.preventDefault(); $('lib-name').setCustomValidity(''); saveSetup($('lib-name').value); };
 $('lib-name').oninput = () => $('lib-name').setCustomValidity('');

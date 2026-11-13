@@ -440,7 +440,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   were either); a sweep of unreferenced ids, or ids by content.
 - **Slice sets in share links** (ORBIT2-09 round 1, verifier, architect; phase 15): links carry no samples, so a slice
   lane opens as the drum it replaced, its slice / start / end / direction locks inert; the link could say so on open,
-  or carry a small set.
+  or carry a small set. ORBIT2-15 round 1 (dex): the I2 card says only "N bpm · N rings"; it could also say a lane
+  played a sample (the sender's page knows it when it encodes), and that the beat has ghost notes, chance or 32 steps.
 - **`hitSound`'s positional parameters** (ORBIT2-09 round 1, architect): seven, and a missing slice means slice 1 (how
   `liveHit` slipped through); an options object, or the hit itself.
 - **Tempo from the break** (ORBIT2-09 round 1, sound): a break at another tempo than the page's leaves a gap after each
@@ -505,7 +506,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Seeded noise in offline renders** (ORBIT2-10 round 4, sound; pre-existing): the synth noise voices start at random
   points (`Math.random`, 284 calls a render), so two exports of one locked roll differ in the noise (snare up to 9786
   LSB; 9810 at `1005992`), and in export all the mastered mix and the stems carry different noise; seeding the noise
-  from the dice seed during offline renders would repeat a locked roll byte for byte.
+  from the dice seed during offline renders would repeat a locked roll byte for byte. ORBIT2-15 round 1 (sound): two
+  renders of the house groove with locked dice differ by a −8.8 dB residual (max 0.39), −9.1 dB at the phase start.
 - **A jam module** (ORBIT2-10 round 2, architect): the jam take logic plus `renderRing` is ~110 lines of app.js and
   `jam` grows through `Object.assign`; its own module would shrink app.js and give the wiring unit seams. The same for
   the scheduler (round 4, architect): `onTick` lives in app.js, so its wiring (when each hit's step is due, the early
@@ -641,3 +643,40 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   lane is queued.
 - **Telling a beginner the rings play** (ORBIT2-14 round 1, maya; I6 in phase 16): a tap on a ghost turns it off with only
   a flash; nothing but the help says the rings can be dragged, pulled or pinched: a first-run line on the canvas.
+- **Lineage and dice through undo** (ORBIT2-15 round 1, verifier, architect): lineage lives beside the beat (settings,
+  library, link), so undo doesn't bring it back: a remix then undo keeps the link's name as your lineage; today's seed
+  then undo leaves the dice locked to the day's seed at repeat 1, and the dice you had (free, repeat 4) are gone (a
+  library setup's dice the same since before the phase). Carry `from` (and a load's dice) in the history step.
+- **"Back to my beat" after two links** (ORBIT2-15 round 1, verifier): two links pasted while the card is open, "back to
+  my beat" undoes one step and lands on the first link; it could go back to the beat from before the card.
+- **Sharing after a long wait** (ORBIT2-15 round 1, architect, sound): `navigator.share` runs after the 4-bar render
+  (1.5–2.2 s on a desktop, more on a phone) or after the postcard's real-time 4 bars (8 s at 120 bpm), past the tap's
+  user activation (~5 s in Chrome), so the share sheet falls back to a download; where the clipboard also needs a gesture
+  (Safari) the remix link is lost and the toast doesn't say so. When the file is ready: a "send" button in the toast (a
+  fresh tap), and say when the link wasn't copied. One rule for the sheet too: links use it on touch only, files
+  wherever `canShare` allows.
+- **Lighter thumbnails** (ORBIT2-15 round 1, architect, verifier): a 96 px PNG data URL is 9–11 K characters, about twice
+  its setup's JSON (WebP at 0.9 only gets to 7.0–7.6 K); in memory keyed by id + `t`, or the ring shapes themselves
+  (a few hundred bytes) drawn on render. (Round 1 made them one write per render, and a full store drops them before it
+  fails a save.)
+- **A share module** (ORBIT2-15 round 1, architect): the share UI (link, file share, postcard, the gift card, the menu)
+  is ~120 lines of `app.js` (1856 → 1996 lines in phase 15); `poly/share.js` holds its pure part.
+- **16 bars to make it yours** (ORBIT2-15 round 1, verifier, architect): the I5 backlog text says "16 bars to make it
+  yours"; the phase spec left it out and nothing counts them (the toast says "make it yours, then share it"). A design
+  call: a 16-bar countdown, then a nudge to share?
+- **Seed of the Day sound** (ORBIT2-15 round 1, sound): the day's beat uses the Common kit's raw defaults, so the hat sits
+  ~22 dB under the kick (stem peaks: kick −7.1, snare −15.6…−17.0, wood −15.2…−16.2, hat −29 dBFS) where the grooves
+  keep the backbeat 1.5–4 dB under it; every day is the same four voices, 7 of 14 days rolled "tresillo over four", and
+  the tempo is drawn apart from the family (boom bap at 117 bpm). A groove-style mix, or a curated kit and tempo range per
+  family.
+- **A listening version of the 4 bars** (ORBIT2-15 round 1, sound, dex): the 4-bar share follows the export drawer's loop
+  setting: on, the file opens with the wrapped ring-out under the downbeat and ends on a cut (right for a DAW loop, odd
+  played once from a share sheet); off, it is "4bars+2tail-oneshot", 11.6 s. A one-shot with ~1 bar of ring-out and a
+  short fade for sharing; a 2–5 ms edge fade either way.
+- **Faster "tap to hear"** (ORBIT2-15 round 1, sound): the first sound comes 162 ms (synth) / 205 ms (dsp) after the tap,
+  as for Play: the 100 ms look-ahead, the +0.05 s start and the master's ~12 ms look-ahead.
+- **The gift and the gallery on a phone** (ORBIT2-15 round 1, rio, dex): an unnamed beat arrives as "an orbit" (a default
+  name, or ask for one when sharing); on a desktop the library is a closed drawer, on a phone it sits far down with the
+  toast and play over its rows, and the seed chip needs a scroll (the header or the welcome bar?); "…" reads cryptic in
+  a crowded transport; after a remix on a first visit, a "make your own" line; the app shows for a moment before the card
+  on a slow load (the link decodes after Tone.js loads).

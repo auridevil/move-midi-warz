@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Machine } from '../src/poly/lanes.js';
 import { encodeShare, decodeShare } from '../src/poly/export.js';
-import { utcDay, daySeed, dayLabel, seedOfDay, ringShapes, shapesOf } from '../src/poly/share.js';
+import { utcDay, daySeed, dayLabel, seedOfDay, ringShapes, shapesOf, UNTITLED, linkName, lineageOf, postcardWindow } from '../src/poly/share.js';
 import { Library, LIB_KEY } from '../src/poly/library.js';
 
 // a link as the page made it before lineage: { v: 1, tempo, m } deflated, base64url (export.js before ORBIT2-15)
@@ -73,4 +73,40 @@ test('I4 the library caches a thumbnail per entry; a re-save drops it; a full st
   const lib2 = new Library(full), e2 = lib2.items[0];
   assert.equal(lib2.setThumb(e2.id, 'data:image/png;base64,BBB'), false); assert.equal(lib2.get(e2.id).thumb, undefined, 'not kept in memory either');
   assert.ok(lib2.save('two', { m: new Machine().toJSON(), tempo: 90 }), 'the next save still fits');
+});
+
+test('I2 r1 a beat without a name stays unnamed: the placeholder is never a title or a lineage', async () => {
+  assert.equal(linkName({ title: 'night bus' }), 'night bus');
+  assert.equal(linkName({ title: UNTITLED }), null, 'the placeholder some links carried names nothing');
+  assert.equal(linkName({}), null); assert.equal(linkName(null), null);
+  assert.equal(lineageOf({ title: 'night bus', from: 'seed of the day · 2026-11-13' }), 'night bus', 'a named beat: its name');
+  assert.equal(lineageOf({ title: null, from: 'seed of the day · 2026-11-13' }), 'seed of the day · 2026-11-13', 'unnamed: the lineage it came with');
+  assert.equal(lineageOf({ title: UNTITLED, from: null }), null, 'unnamed and from nowhere: no lineage at all');
+  // an unnamed share (no library setup on screen) writes no title into the link
+  const o = await decodeShare(await encodeShare(new Machine().toJSON(), 120, { title: null, from: null }));
+  assert.equal(o.title, null); assert.equal(lineageOf(o), null);
+});
+
+test('I5 r1 the postcard is 4 whole bars on the audio clock, from the bar line as it leaves the master', () => {
+  const near = (a, b) => Math.abs(a - b) < 1e-9;
+  const w = postcardWindow({ line: 10, lat: 0.012, barSec: 2, bars: 4 });
+  assert.ok(near(w.a, 10.012), 'the bar line plus the master\'s look-ahead'); assert.ok(near(w.b - w.a, 8), '4 bars of 2 s, exactly');
+  assert.ok(w.recStart < w.fadeIn && w.fadeIn < w.a, 'the recorder runs before the gate opens: a late timer loses no downbeat');
+  assert.ok(w.fadeOut < w.b && w.b < w.recStop, 'it closes with a fade ending on the bar line, the recorder still running');
+  assert.ok(w.a - w.recStart <= 0.05 && w.recStop - w.b >= 0.05 && w.recStop - w.b <= 0.15, 'a little silence round the bars (more after: the recorder drops what is still on its way), not a beat of them');
+  assert.ok(near(postcardWindow({ line: 0, barSec: 3.5 * 60 / 140 }).b, 6), '7/8 at 140 bpm: 4 bars = 6 s');
+});
+
+test('I4 r1 drawn thumbnails are cached in one write; a full store drops them before it fails a save', () => {
+  const mem = new Map(); let writes = 0, cap = Infinity;
+  const store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => { if (v.length > cap) throw new Error('QuotaExceededError'); writes++; mem.set(k, v); } };
+  const lib = new Library(store), a = lib.save('a', { m: { lanes: [] }, tempo: 100 }), b = lib.save('b', { m: { lanes: [] }, tempo: 90 }), big = 'data:image/png;base64,' + 'x'.repeat(5000);
+  writes = 0; assert.equal(lib.setThumbs([[a.id, big], [b.id, big], ['gone', big]]), true); assert.equal(writes, 1, 'one write for all the new thumbnails');
+  assert.equal(new Library(store).get(b.id).thumb, big);
+  cap = 1000;   // full: two thumbnails no longer fit next to a third setup, the setups alone do
+  const c = lib.save('c', { m: { lanes: [] }, tempo: 80 });
+  assert.ok(c, 'the save wins the room'); const stored = JSON.parse(mem.get(LIB_KEY));
+  assert.deepEqual(stored.map(e => e.name), ['a', 'b', 'c']); assert.ok(stored.every(e => !('thumb' in e)), 'the thumbnails went (drawn again later)');
+  cap = 100; assert.equal(lib.save('d', { m: { lanes: [] }, tempo: 70 }), null, 'no room even without them: null as before');
+  assert.deepEqual(lib.items.map(e => e.name), ['a', 'b', 'c'], 'and the failed setup is not kept');
 });

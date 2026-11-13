@@ -1,7 +1,25 @@
-// ORBIT2-15 sharing (I2–I5): Seed of the Day and the small ring drawings of the share card and the library gallery.
-// Pure: no page state. drawRings takes any 2d context (an offscreen canvas for a thumbnail, the card's canvas).
+// ORBIT2-15 sharing (I2–I5): Seed of the Day, what a shared beat is called and where it came from, the postcard's
+// timing, and the small ring drawings of the share card and the library gallery. Pure: no page state. drawRings takes
+// any 2d context (an offscreen canvas for a thumbnail, the card's canvas).
 import { Machine } from './lanes.js';
 import { Dice, hash01 } from './dice.js';
+
+/** What a beat without a name is called on screen. Never written into a link or a lineage: it names nothing. */
+export const UNTITLED = 'an orbit';
+/** A shared beat's own name: its title, unless it has none (or the placeholder links carried for a while). */
+export const linkName = (o) => (o?.title && o.title !== UNTITLED ? o.title : null);
+/** I5 the lineage of a beat taken from a link (remix, ×, Esc): its name, else the lineage it came with, else none. */
+export const lineageOf = (o) => linkName(o) || o?.from || null;
+/**
+ * I5 postcard timing, on the audio clock. line: the bar line the scheduler handed over; lat: the master's look-ahead,
+ * so [a, b] is when those bars leave the master. The gate fades in to a and out to b (no cut mid-hit), and the
+ * recorder runs round the fades: a timer can't start it to the sample, so it starts `pre` early, into silence, and
+ * stops `post` late, as the last ~30 ms still on their way to it when it stops are dropped.
+ */
+export function postcardWindow({ line, lat = 0, barSec, bars = 4, fade = 0.004, pre = 0.03, post = 0.12 }) {
+  const a = line + lat, b = a + bars * barSec;
+  return { a, b, fadeIn: a - fade, fadeOut: b - fade, recStart: a - fade - pre, recStop: b + post };
+}
 
 const pad2 = (n) => String(n).padStart(2, '0');
 /** The day in UTC, 'YYYY-MM-DD': everyone on Earth gets the same seed on the same day, whatever their time zone. */

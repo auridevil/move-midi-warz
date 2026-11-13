@@ -659,11 +659,13 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 .share-menu button { text-align: left; }
 /* I2: a shared beat opens as a gift: full screen, the rings small, one big tap to hear it */
 .gift { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 24px; box-sizing: border-box; border: 0; background: radial-gradient(circle at 50% 40%, rgba(58, 36, 120, .96), rgba(14, 10, 32, .98) 70%); color: var(--fg); }
-.gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
+/* safe center + scroll: on a short screen (a phone on its side) the top of the card stays reachable, never above the fold */
+.gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 10px; text-align: center; overflow-y: auto; }
 .gift::backdrop { background: rgba(6, 2, 18, .8); }
 .gift .gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
 .gift-kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.gift-rings { width: min(240px, 60vw); aspect-ratio: 1; }
+.gift-rings { width: min(240px, 60vw, 34dvh); aspect-ratio: 1; flex: none; }
+@media (max-height: 500px) { .gift { padding: 12px 24px; } .gift[open] { gap: 6px; } .gift-hear { margin-top: 4px; } }
 .gift h2 { margin: 4px 0 0; font-size: 22px; overflow-wrap: anywhere; }
 .gift-meta, .gift-from { margin: 0; color: var(--muted); font-size: 13px; }
 .gift-from { font-style: italic; }
