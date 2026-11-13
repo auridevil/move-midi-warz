@@ -9,14 +9,15 @@
 export class History {
   constructor({ limit = 100, coalesceMs = 700 } = {}) { this.limit = limit; this.coalesceMs = coalesceMs; this.past = []; this.future = []; this.cur = null; this.t = -Infinity; }
   /** Record the state after an edit. Returns true if it made a step. tempo / was: the load's tempo and the one before. */
-  commit(full, { key = full, load = false, now = Date.now(), tempo = null, was = null } = {}) {
+  commit(full, { key = full, load = false, own = false, now = Date.now(), tempo = null, was = null } = {}) {
     if (this.cur === null) { this.cur = { key, full, load, tempo }; return false; }
     if (key === this.cur.key && tempo == null) { this.cur.full = full; return false; }   // only performance state moved: same step
-    if (load || now - this.t > this.coalesceMs || !this.past.length) {
+    // own: a whole gesture (I1: a tap, a drag on the canvas) is one step, never folded into the edit before or after it
+    if (load || own || now - this.t > this.coalesceMs || !this.past.length) {
       if (was != null) this.cur.tempo = was;   // the tempo you had when you left this step
       this.past.push(this.cur); if (this.past.length > this.limit) this.past.shift(); this.cur = { key, full, load, tempo };
     } else this.cur = { key, full, load: this.cur.load, tempo: this.cur.tempo };
-    this.future = []; this.t = load ? -Infinity : now; return true;   // an edit right after a load is its own step
+    this.future = []; this.t = load || own ? -Infinity : now; return true;   // an edit right after a load (or a gesture) is its own step
   }
   /** The current step's state after undo / redo put it back (with the live mutes, when they were kept). */
   refresh(full) { if (this.cur) this.cur.full = full; }

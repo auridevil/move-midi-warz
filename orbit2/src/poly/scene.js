@@ -3,7 +3,7 @@
 // everything else (comet playheads, shockwaves, particles, beams, the core, the cycle bloom).
 
 import { frameLoop } from '../frames.js';
-import { MAX_LANES, condParts, condPasses } from './lanes.js';
+import { MAX_LANES, MAX_STEPS, condParts, condPasses } from './lanes.js';
 
 const TAU = Math.PI * 2;
 const MUTED = '#8b84a8';
@@ -33,6 +33,27 @@ export function condArcs(cond, loop) {
 }
 /** V6: where master tick `tick` is inside a `cycle`-tick machine, 0..1 (the outer cycle arc). */
 export const cyclePos = (tick, cycle) => (cycle > 0 ? (((tick % cycle) + cycle) % cycle) / cycle : 0);
+
+// ---- I1 playing on the canvas: pure geometry, so the gestures can be tested without a page ----
+/** I1: the angle of (dx, dy) from the centre as the rings count it: 0 at 12 o'clock, growing clockwise, 0..2π. */
+export const ringAngle = (dx, dy) => { const a = Math.atan2(dy, dx) + Math.PI / 2; return ((a % TAU) + TAU) % TAU; };
+/** I1: the visible step of a `len`-step ring nearest to the point (dx, dy) from the centre (the tick the finger is on). */
+export const stepAtAngle = (dx, dy, len) => Math.round((ringAngle(dx, dy) / TAU) * len) % len;
+/** I1: the ring at `d` px from the centre of geometry g (ringGeo): its lane, or -1 beyond half a gap from every ring. */
+export function laneAtRadius(g, d) {
+  const li = Math.round((d / g.R - 0.25) / g.gap); return li >= 0 && li < g.lanes && Math.abs(d - g.ring(li)) <= (g.gap * g.R) / 2 ? li : -1;
+}
+/** I1: the shortest signed turn from angle a0 to a1 (radians, −π..π), so a drag across 12 o'clock doesn't jump a turn. */
+export const angleDelta = (a0, a1) => { const d = (((a1 - a0) % TAU) + TAU) % TAU; return d > Math.PI ? d - TAU : d; };
+/** I1: the rotation after turning a `len`-step ring by `turn` radians (clockwise > 0) from rotation rot0: whole steps. */
+export const turnRotation = (rot0, turn, len) => ((((rot0 + Math.round((turn / TAU) * len)) % len) + len) % len);
+/** I1: the length after pulling a ring `dr` px outward (in < 0), a step every `stepPx`; 1..max. */
+export const pullLength = (len0, dr, stepPx, max = MAX_STEPS) => Math.max(1, Math.min(max, len0 + Math.round(dr / Math.max(1, stepPx))));
+/** I1: the length after a pinch that scaled the fingers' distance by `s` (2 = twice as far apart); 1..max. */
+export const pinchLength = (len0, s, max = MAX_STEPS) => Math.max(1, Math.min(max, Math.round(len0 * (s > 0 ? s : 1))));
+/** I1: which way a drag of (mx, my) px that started at (dx, dy) from the centre goes: 'turn' along the ring, 'pull'
+ *  across it (toward or away from the centre). */
+export const dragKind = (dx, dy, mx, my) => { const d = Math.hypot(dx, dy) || 1, radial = Math.abs((mx * dx + my * dy) / d), along = Math.abs((my * dx - mx * dy) / d); return radial > along ? 'pull' : 'turn'; };
 
 /**
  * Where the rings go on a W × H canvas: centre, R, ring(li) = radius of lane li (the outer one is 0.85 R). On phones the
@@ -144,6 +165,16 @@ export function createScene(cv, o) {
   /** Which ring is under (x, y)? -1 if none. */
   /** x, y are client coordinates. */
   function pick(x, y) { const b = cv.getBoundingClientRect(); x -= b.left; y -= b.top; const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / g.gap); return r >= 0 && r < g.lanes ? r : -1; }
+  /** I1: what is under client point (x, y): { dx, dy } from the centre, its lane (-1 off the rings), that lane's
+   *  visible step there and how far (px) the point is from its tick, plus the geometry (for pull distances). */
+  function locate(x, y) {
+    const b = cv.getBoundingClientRect(), g = geo(), dx = x - b.left - g.cx, dy = y - b.top - g.cy, li = laneAtRadius(g, Math.hypot(dx, dy)), lane = o.machine().lanes[li];
+    if (!lane) return { dx, dy, g, lane: -1, step: -1, off: Infinity };
+    const step = stepAtAngle(dx, dy, lane.length), [tx, ty] = nodeXY(g, li, step, lane.length);
+    return { dx, dy, g, lane: li, step, off: Math.hypot(dx + g.cx - tx, dy + g.cy - ty) };
+  }
+  /** I1: client position of lane li's visible step i (where the radial menu opens). */
+  function stepXY(li, i) { const b = cv.getBoundingClientRect(), g = geo(), len = o.machine().lanes[li]?.length || 1, [x, y] = nodeXY(g, li, i, len); return { x: x + b.left, y: y + b.top }; }
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
@@ -323,5 +354,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
 }

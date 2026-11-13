@@ -344,6 +344,11 @@ export class Lane {
     const t = this.setTier(i, { off: 'normal', normal: 'accent', accent: 'ghost', ghost: 'off' }[from]);
     return t === 'normal' ? 'on' : t;
   }
+  /** I1 a tap on the canvas: off → on → accent → off (a ghost goes off too; the steps strip still reaches the ghost). */
+  tapStep(i) {
+    if (i >= this.length) return 'off'; const from = this.tierAt(i);
+    return from === 'off' ? this.cycleStep(i) : this.setTier(i, from === 'normal' ? 'accent' : 'off');
+  }
   clear() { this.hits.fill(false); this.accents.fill(false); this.locks.fill(null); this.trigs.fill(null); this.euclidK = 0; }
   /** Condition / ratchet on one stored step. ratchet 1 = a normal hit; fade = repeats get quieter. */
   setTrig(i, patch) {
