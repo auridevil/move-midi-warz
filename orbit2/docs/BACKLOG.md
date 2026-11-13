@@ -178,8 +178,10 @@ pattern". Design first: `orbit2/docs/design/automation.md`.
 
 - **A1 step automation**: turning a knob while recording writes its value as step locks on every step of the selected
   lane that plays during the gesture (decay, snap, color, tune, vel, prob, nudge, slice, stroke…), Elektron-style.
+  (Design: slice and stroke are choosers, not moves, so they stay manual locks: see [[automation]] Decision 1.)
 - **A2 smooth automation**: a per-lane curve for parameters that sound continuous (tone filter, drive, pan, send, level,
-  master filter), recorded in real time and replayed as audio-param ramps.
+  master filter), recorded in real time and replayed as audio-param ramps. (Design: the P6 master filter stays
+  unsaved performance FX, so it is not automated in this phase: see [[automation]] Decision 1.)
 - **A3 recording modes**: arm, touch / latch, the hand overrides playback while touching, one undo step per gesture.
 - **A4 see and clear it**: "A" mark on automated gauges, a curve strip with the playhead, gauges moving on playback;
   clear one parameter / the lane.
