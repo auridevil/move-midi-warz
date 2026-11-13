@@ -867,12 +867,13 @@ function handGlide(g) {
  */
 const HAND_TAU = 0.01;
 /** When the hand may take param p: just past the end of the clock's ramp under way (its next block line), the clock's
- *  events after it dropped; once the hand has it, never before its own last target. */
+ *  events after it dropped; once the hand has it, from its own last target on, the values the clock's hits scheduled
+ *  ahead with an older hand value dropped (under the hand nothing else is after it, and its running target stays). */
 function handFrom(c, p, key) {
-  const now = T.getContext().rawContext.currentTime + 0.002; if (c.handAt?.[key] != null) return Math.max(now, c.handAt[key]);
-  const d = MIDI_DIV * tickSec(), line = clockRef.time >= now ? clockRef.time - Math.floor((clockRef.time - now) / d) * d : now;
-  try { p.cancelScheduledValues(line + 1e-4); } catch {}
-  return line + 0.001;
+  const now = T.getContext().rawContext.currentTime + 0.002, d = MIDI_DIV * tickSec();
+  const t = c.handAt?.[key] != null ? Math.max(now, c.handAt[key]) : (clockRef.time >= now ? clockRef.time - Math.floor((clockRef.time - now) / d) * d : now) + 0.001;
+  try { p.cancelScheduledValues(t + 1e-4); } catch {}
+  return t;
 }
 /** The lane's own value of key k (the knob: tune and chance on the lane, the rest in its sound). */
 const laneValue = (lane, k) => (k === 'tune' ? lane.tune : k === 'prob' ? lane.prob : lane.sound[k]);
@@ -963,8 +964,9 @@ function autoHandoff(li, key) {
  */
 function handTurn(src, k, v, kind = src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step') {
   if (!playing || (src === 'lock' && !recKnobs())) return v;
-  let g = knobGest; const x = lockClamp(k, Math.round(v * 100) / 100);
-  if (g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched) gestMove(x); else g = gestStart(m.selected, k, kind, { touch: !!gaugeOf(src, k)?.held, v: x, src });
+  let g = knobGest; const x = lockClamp(k, Math.round(v * 100) / 100), held = !!gaugeOf(src, k)?.held;
+  if (g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched) { if (held && !g.touch) { g.touch = true; clearTimeout(g.timer); } gestMove(x); }   // a drag taking over a key's timed gesture holds it until the pointer lets go
+  else g = gestStart(m.selected, k, kind, { touch: held, v: x, src });
   return g?.rec ? undefined : x;
 }
 const gaugeOf = (src, k) => (src === 'snd' ? sliders['snd:' + k] : src === 'lane' ? sliders[k] : null);

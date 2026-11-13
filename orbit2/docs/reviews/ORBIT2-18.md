@@ -3,12 +3,12 @@ type: review
 phase: ORBIT2-18
 title: ORBIT2-18 parameter automation (A1–A7), review panel
 date: 2026-11-13
-round: 3
+round: 4
 stalled: 0
 result: IN PROGRESS
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
   sound: NOT HAPPY
   kai: HAPPY
   dex: HAPPY
@@ -211,5 +211,39 @@ touch-mode recording drops the last ~50 ms before the release (no last `curveWri
   hand) (architect, sound); a recording curve gesture writes up to where you hear before it ends (sound); tests for the
   round-2 / round-3 wiring (onStart before the drag start, prime on keys and the wheel, `handPrime`, no ramp on the hand
   path, `ev`) (architect).
+- `npm run check` clean; `npm test` 258 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
+  5400 + headless-chrome.sh 9222, both stopped).
+
+## Round 4: re-check, 2 of 3 HAPPY (with kai, dex: 4 of 5)
+
+Re-check by verifier, architect, sound (default model), fresh sub-agents in one message, same ports. Brief: their
+round-3 items with the round-3 repro, "Changes after round 3", `git diff --stat c10eb46..HEAD` (5 files, +141/−61).
+`stalled: 0`: all three round-3 MUST-FIX are closed.
+
+| reviewer | verdict | MUST-FIX |
+| --- | --- | --- |
+| verifier | HAPPY | round 3 item closed: on a lane with every step locked at the edge, PageUp 0.50, PageDown 0.60, ArrowUp ×3 0.45, ArrowDown ×3 0.65, tune ArrowUp ×3 0.30, wheel ×3 0.36: the phase start's numbers; Home / End / double-click / drags / the Move / the 400 ms fallback / the lock panel / armed recording all checked |
+| architect | HAPPY | round 3 item closed: 13 edge cases equal the phase start; 12 End + 12 ArrowUp presses at random moments on a 2-of-3 locked lane: 0 dropped (round 3: 9 and 6) |
+| sound | NOT HAPPY | round 3 item closed (0 of 70 hand-offs step at the old 40–56 ms point; ½ / ×2 / loop edits ≤ 0.0039; clearing ≤ 0.0024). 1 NEW (A3, from the round-3 fix): once the hand holds a param, `handFrom` returns early without cancelling, so the per-hit `setValueAtTime`s the clock's hits scheduled ~100 ms ahead with an older hand value stay: after a release the level jumps back to the old hand value for ~25 ms (gauge drag: 0.07 → 0.77, +20.8 dB, then −23.5 dB; 3 turns: +12 dB; slow turns +22.6 dB), 14 of 120 hand-offs with one hit per loop; during fast turns a drop back to an older hand value (−3.3 dB for 9 ms); `c10eb46` (cancel-and-hold) dropped them |
+
+SHOULDs (never block): on a sparse lane "what plays" for a step key is the lock of the step under the playhead, so an
+armed nudge starts from the lane value or the lock depending on when you press (a design call, from before round 3)
+(verifier); a drag started within 400 ms of a key or wheel step goes on with that timed gesture (`touch: false`): held
+still past 400 ms, the gesture ends under the held knob (architect); the round-3 wiring tests are source pins
+(architect); a test that a hand move / hand-off drops the hit sets after it (sound).
+
+### Changes after round 4
+
+- **MUST-FIX sound 1, bursts at an older hand value.** `handFrom` now cancels after its start on every call: on the
+  hand's first move after the clock's ramp under way (as before), and once the hand holds the param after its own last
+  target, which drops the values the clock's hits scheduled ahead with an older hand value (nothing else is there under
+  the hand; its running target stays, and no ramp is cut). The hand-off goes through `handFrom` too, so it drops them
+  before it glides. Measured on audio (a 1 kHz sine at the chain's drive input, the drum voice disconnected, its hits
+  still scheduled; a steep level curve 0.15 → 0.95; 4 turns fast or slow then release; jam takes): 3 runs × (2 hits per
+  loop, every step a hit at ×4) × 13 hand-offs (10 un-armed, 3 armed rides) = 78: no residual over 0.003 anywhere in
+  the takes (round 4: 14 of 120 with one hit per loop, up to 0.44).
+- SHOULDs done: a drag that takes over a key's timed gesture now holds it until the pointer lets go (`touch` set, the
+  400 ms timer cleared) (architect); a test pins that `handFrom` always cancels after its start, with no way out before
+  it (sound).
 - `npm run check` clean; `npm test` 258 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
   5400 + headless-chrome.sh 9222, both stopped).

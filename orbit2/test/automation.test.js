@@ -249,7 +249,8 @@ test('ORBIT2-18 r2 / r3: the knob is the lane value when not recording; the hand
   assert.match(gauge, /addEventListener\('wheel', \(e\) => \{ e\.preventDefault\(\); prime\?\.\(\);/, 'a wheel step is primed'); assert.match(gauge, /if \(!KEYS\.has\(e\.key\)\) return; prime\?\.\(\);/, 'a key step is primed');
   assert.match(app, /function handPrime\(src, k\) \{ if \(playing && !recKnobs\(\) && !knobGest\?\.rec\) gaugeOf\(src, k\)\?\.set\(Math\.round\(laneValue\(m\.lane, k\) \* 100\)\)/);
   const fn = (name) => app.slice(app.indexOf(`function ${name}(`), app.indexOf('\n}', app.indexOf(`function ${name}(`)));
-  assert.match(fn('handFrom'), /cancelScheduledValues\(line \+ 1e-4\)/, 'the hand drops the clock\'s ramps only after the one under way');
+  const hf = fn('handFrom'); assert.match(hf, /p\.cancelScheduledValues\(t \+ 1e-4\)/, 'the hand drops what was scheduled after its start: the clock\'s ramps after the one under way, the hits\' values of an older hand');
+  assert.equal(hf.match(/return/g).length, 1, 'no way out of handFrom before that cancel');
   assert.doesNotMatch(fn('handGlide') + fn('handFrom') + fn('autoHandoff'), /cancelAndHoldAtTime|RampToValueAtTime/, 'no ramp cut, set on or started on the hand path: setTargets only');
   assert.match(fn('autoHandoff'), /while \(at < start \+ 0\.02\)/, 'the hand-off settles on a block line the clock has not scheduled'); assert.match(fn('rampAuto'), /if \(time <= st\.ev \+ 1e-9\) return;/, 'the clock leaves what a hand-off covers');
   assert.match(app, /if \(playing && recKnobs\(\)\) gestStart\(m\.selected, pk\.k, pk\.kind, \{ touch: true, v: playedValue/, 'not recording, a touch alone changes nothing');
