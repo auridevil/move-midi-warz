@@ -5,7 +5,8 @@
 // exact: set() from code keeps the value as given (a tempo of 127.5); what the user turns still moves in steps.
 // onStart / onEnd (A3 automation): a pointer takes the knob / lets it go (keys, the wheel and double-click have no
 // start or end: the app times them). setMark(true) shows a small "A" (automated) and says it to screen readers.
-// onChange(value, before): a turn also gives the value it started from.
+// onChange(value, before, jump): a change also gives the value it started from, and whether it jumped to a value (Home,
+// End, double-click) rather than turned.
 const NS = 'http://www.w3.org/2000/svg';
 const arc = (cx, cy, r, a0, a1) => { const p = (a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); const large = a1 - a0 > Math.PI ? 1 : 0; return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`; };
 const short = (t) => String(t).split(' · ')[0];   // 'master tempo · knob 8' → 'master tempo': the hint is for eyes
@@ -26,20 +27,22 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   let v = value;
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
   const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? arc(24, 24, 18, START, a) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
-  const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x), was = v; v = n; render(); if (emit && n !== was) onChange?.(v, was); };   // was: the value before (A3: an un-armed turn moves the lane by the difference)
-  // drag: 150 px of travel = full range; Shift = 5× finer
+  // was: the value before; jump: Home / End / double-click go to a value (A3: un-armed, a turn moves the lane value by the
+  // difference, a jump sets it)
+  const set = (x, emit = false, jump = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x), was = v; v = n; render(); if (emit && n !== was) onChange?.(v, was, jump); };
+  // drag: 150 px of travel = full range; Shift = 5× finer. onStart first: it may set where the drag starts (A3)
   let drag = null;
-  el.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, v }; el.setPointerCapture(e.pointerId); e.preventDefault(); onStart?.(v); });
+  el.addEventListener('pointerdown', (e) => { onStart?.(v); drag = { y: e.clientY, v }; el.setPointerCapture(e.pointerId); e.preventDefault(); });
   el.addEventListener('pointermove', (e) => { if (!drag) return; const range = max - min, px = e.shiftKey ? 750 : 150; set(drag.v + (drag.y - e.clientY) / px * range, true); });
   const up = () => { if (!drag) return; drag = null; onEnd?.(v); }; el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
   el.addEventListener('wheel', (e) => { e.preventDefault(); set(v + (e.deltaY < 0 ? 1 : -1) * step * (e.shiftKey ? 1 : Math.max(1, Math.round((max - min) / 50))), true); }, { passive: false });
   el.addEventListener('keydown', (e) => {
     const big = Math.max(step, Math.round((max - min) / 20)), page = Math.max(big, Math.round((max - min) / 5));
     if (e.key === 'ArrowUp' || e.key === 'ArrowRight') set(v + (e.shiftKey ? step : big), true); else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') set(v - (e.shiftKey ? step : big), true);
-    else if (e.key === 'PageUp') set(v + page, true); else if (e.key === 'PageDown') set(v - page, true); else if (e.key === 'Home') set(min, true); else if (e.key === 'End') set(max, true); else return;
+    else if (e.key === 'PageUp') set(v + page, true); else if (e.key === 'PageDown') set(v - page, true); else if (e.key === 'Home') set(min, true, true); else if (e.key === 'End') set(max, true, true); else return;
     e.preventDefault();
   });
-  el.addEventListener('dblclick', () => set(value, true));
+  el.addEventListener('dblclick', () => set(value, true, true));
   render();
   return { el, set, get value() { return v; }, get held() { return !!drag; }, setLabel: (t) => { lab.textContent = t; name = short(t); aria(); }, setColor: (c) => { fill.setAttribute('stroke', c); dot.setAttribute('fill', c); },
     setMark: (on) => { if (marked === !!on) return; marked = !!on; mark.hidden = !marked; aria(); } };

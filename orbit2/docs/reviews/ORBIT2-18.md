@@ -3,7 +3,7 @@ type: review
 phase: ORBIT2-18
 title: ORBIT2-18 parameter automation (A1–A7), review panel
 date: 2026-11-13
-round: 1
+round: 2
 stalled: 0
 result: IN PROGRESS
 reviewers:
@@ -11,7 +11,7 @@ reviewers:
   architect: NOT HAPPY
   sound: NOT HAPPY
   kai: HAPPY
-  dex: NOT HAPPY
+  dex: HAPPY
 tags: [orbit2, review]
 related:
   - '[[REVIEW-PANEL]]'
@@ -118,3 +118,52 @@ untested (kai); `recordCurve(…, s1 = length)` lands the end value on point 0 (
   mode by design (now in the panel text).
 - `npm run check` clean; `npm test` 257 + 9 green (+3: chain CC anchors, locks-only step CCs + key order, the LED line);
   `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py 5400 + headless-chrome.sh 9222, both stopped).
+
+## Round 2: re-check, 1 of 4 HAPPY (dex; with kai, 2 of 5)
+
+Re-check by the four NOT HAPPY reviewers (verifier, architect, sound on the default model; dex on sonnet), fresh
+sub-agents in one message, same ports. Brief: their open items with the round-1 repro, "Changes after round 1",
+`git diff --stat af7aa1f..HEAD` (11 files, +241/−58), the instruction to confirm each open item with the same repro,
+then check the fix broke nothing nearby, anything else only in scope and marked NEW. `stalled: 0`: all five round-1
+MUST-FIX are closed.
+
+| reviewer | verdict | MUST-FIX |
+| --- | --- | --- |
+| verifier | NOT HAPPY | round 1 item closed (`scrollWidth` 390 at 320 / 360 / 375 / 390 / 1440 with every drawer open, as at the phase start). 1 NEW (regression from the round-1 fix): un-armed while playing, on a key with locks, Home / End / double-click move the lane value by the difference instead of going to min / max / the start value: decay 0.30 under 0.90 locks, End → 0.40 (phase start 1.00), double-click → 0.00 (0.50); snap 0.80 under 0.10 locks, Home → 0.70 (0.00); tune 0 under +0.50 locks, End → 0.50 (1.00); cause `handTurn` (`app.js:941`) maps every change as a turn from the shown value |
+| architect | NOT HAPPY | round 1 items closed (◀ ▶ lit, 19 buttons as at the phase start; Shift+ArrowUp 0.31 and the Move's click 0.32 agree, the locks untouched). 1 NEW (= verifier 1, regression from the round-1 fix): an un-armed gauge can't reach the value it is set to: End 0.40, double-click 0.00, a full 200 px drag up 0.40 (phase start 1.00 / 0.50 / 1.00); tune double-click −0.50 (0), End +0.50 (1.00): with the gauge showing a lock, a gesture can only move the lane by −v0 … +(1 − v0) |
+| sound | NOT HAPPY | round 1 item closed for its repro (release at +405 ms after 17 ms turns: residual 0.0005 vs 0.0001 floor, a 30 ms glide, no jump at the next block line; `af7aa1f`: 0.0023). 1 NEW (caused by the fix): 15 turns ~7 ms apart, release 16 ms after the last: a 12 % (+1.1 dB) gain step at the release (residual 0.0246, 246× the floor; `af7aa1f`: none at the release); the filter jumps 0.21 octave. Cause: `autoHandoff` (`app.js:930`) starts from `p.getValueAtTime(now)`, Tone's model, which treats each hand `glide` (`setTargetAtTime`) as starting from the previous target, so a fast hand puts the model (0.4404) ahead of the real param (0.3874) |
+| dex | HAPPY | round 1 item closed: a 3-slot chain sets CC74 95 and CC75 64 at each slot start without automation; slot 0 restarts with its own values; CC 0 = off drops its anchors too; ghost notes get their per-note CC and the next note puts the lane value back |
+
+SHOULDs (never block): the wrapped A7 label runs on after "enable MIDI ports" when the port row is hidden (verifier);
+`autoEdit` hands back every curve the lane had, also on a lock-only clear, cancelling scheduled ramps and hit sets it
+didn't change (architect); `handTurn`'s value isn't rounded to the gauge step (0.31000000000000005 saved, a kit can read
+"custom") (architect); a gesture that ends without writing only redraws the strip, so a gauge `sync` skipped can keep
+the hand's value (architect); `handTurn` returns three kinds of result read three ways (architect); still from round 1:
+the gesture logic in `app.js`, `collectChainRamps` for tests, two "automated" rules (architect); ½ while playing leaves a
+1.4 % step ~43 ms after the edit (sound); the round-1 measurement read Tone's model, not the audio (sound); a slot silent
+on a lane still gets its anchor CC; a curve restarting every bar is worth a note for DAW users (dex).
+
+### Changes after round 2
+
+- **MUST-FIX verifier 1 = architect 1, un-armed gauges reach their value again.** Not recording, the knob is the lane
+  value: `gauge.js` passes `jump` for Home / End / double-click (`onChange(v, before, jump)`) and calls `onStart` before
+  the drag takes its start, so `handHold` puts a held gauge on the lane value first (the full range is there); `handTurn`
+  writes a jump's value, a turn moves the lane value by the turn (rounded to 0.01), and the hand plays that value; the
+  Move's un-armed turns and touches start from the lane value too (recording, the hand still starts from what plays).
+  Measured, playing un-armed (decay 0.30 under 0.90 locks, snap 0.80 under 0.10, tune 0 under +0.50): End → 1, double-
+  click → the gauge's start value 0.50, a 200 px drag → 1, Shift+ArrowUp → 0.31, Home on snap → 0, End on tune → 1; the
+  locks untouched.
+- **MUST-FIX sound 1, the step on a fast release.** `paramTo`: the hand's glide and the hand-off are cancel-and-hold 10
+  ms ahead plus a 30 ms ramp, never `setTargetAtTime`, so Tone's model is the param (model 1.1986 = real 1.1986 at a
+  release 16 ms after 15 turns 7 ms apart). Measured on audio (a 1 kHz sine through the lane's chain, a level curve at
+  0.3, a jam take, sine-model residual): touch + release 0.0002, fast turns 0.0001, the release ±30–200 ms 0.0003, the
+  untouched floor 0.0002 (round-2 repro: 0.0246). On the way: a plain `cancelScheduledValues` at a future anchor drops the
+  ramp under way and holds its start (a staircase, 0.13); cancel-and-hold cuts it at its value. (Two other spikes in that
+  experiment were the test's own: `send` and `level` changed on the model without `applySound`, so the first knob event
+  jumped them; the echoes of the send jump came back every dotted eighth. With the setup applied: clean. An un-automated
+  knob turn still jumps per click via `holdParam`, as before the phase.)
+- SHOULDs done: `autoEdit` hands back only the curves the edit changed (a lock-only clear touches no ramp); a gesture that
+  ends without writing redraws with `sync` (the held gauge shows the lane again); the A7 label is a block of its own;
+  `__poly.applySound` for test setups.
+- `npm run check` clean; `npm test` 257 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
+  5400 + headless-chrome.sh 9222, both stopped).
