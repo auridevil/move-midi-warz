@@ -167,9 +167,9 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **I5 Seed of the Day**: a daily dice seed → same starting constellation for everyone; 16 bars to make it yours; an
   "orbit postcard" (WebM of canvas + audio via `captureStream`) with a remix link that keeps lineage. (Rio) ✅ ORBIT2-15
 - **I6 quests & progressive disclosure**: "make 3 against 4", "rotate the snare onto 2 & 4", "let it evolve 8 bars";
-  badges; advanced drawers unlock as you go (never hidden from power users: a "show everything" switch). (Rio, Maya)
+  badges; advanced drawers unlock as you go (never hidden from power users: a "show everything" switch). (Rio, Maya) ✅ ORBIT2-16
 - **I7 simple mode / plain words**: "hits" not "euclid hits", "shift" not "rotation"; advanced controls tucked behind
-  "advanced". (Maya)
+  "advanced". (Maya) ✅ ORBIT2-16
 
 ## A · Parameter automation (phase 18)
 
