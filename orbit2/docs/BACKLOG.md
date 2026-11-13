@@ -160,12 +160,12 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 - **I1 the orbit is the instrument**: tap a step tick to add a planet (pop + sound), tap a planet: on → accent → off,
   drag along a ring to rotate, pull a ring in/out to change length, long-press a planet = radial lock menu. (Rio) ✅ ORBIT2-14
 - **I2 share up front**: share button in the transport; opening a link shows a full-screen "▶ tap to hear this orbit"
-  card, then Remix; status is visible (not in a closed drawer). (Rio, Maya)
+  card, then Remix; status is visible (not in a closed drawer). (Rio, Maya) ✅ ORBIT2-15
 - **I3 one-tap share of audio**: render 4 bars and open the OS share sheet (`navigator.share` with a file) where
-  available, download otherwise. (Maya)
-- **I4 library as a gallery**: thumbnails of each setup's ring polygons. (Rio)
+  available, download otherwise. (Maya) ✅ ORBIT2-15
+- **I4 library as a gallery**: thumbnails of each setup's ring polygons. (Rio) ✅ ORBIT2-15
 - **I5 Seed of the Day**: a daily dice seed → same starting constellation for everyone; 16 bars to make it yours; an
-  "orbit postcard" (WebM of canvas + audio via `captureStream`) with a remix link that keeps lineage. (Rio)
+  "orbit postcard" (WebM of canvas + audio via `captureStream`) with a remix link that keeps lineage. (Rio) ✅ ORBIT2-15
 - **I6 quests & progressive disclosure**: "make 3 against 4", "rotate the snare onto 2 & 4", "let it evolve 8 bars";
   badges; advanced drawers unlock as you go (never hidden from power users: a "show everything" switch). (Rio, Maya)
 - **I7 simple mode / plain words**: "hits" not "euclid hits", "shift" not "rotation"; advanced controls tucked behind
