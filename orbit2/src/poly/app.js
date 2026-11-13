@@ -4,7 +4,7 @@ import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_
 import { Dice } from './dice.js';
 import { History } from './history.js';
 import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
-import { hitVel, tuneLock, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare } from './export.js';
+import { hitVel, tuneLock, liveTick, liveQuiet, collectHits, collectChain, chainSixteenths, chainMeters, hitsToMidi, encodeShare, decodeShare, autoRamps } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
 import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBarCycle, trimChunks, tagWav, trimOneShot, safeName, headroomGain, logHit, pendingSteps, ringPlan, ringOut, joinRing } from './jam.js';
@@ -222,36 +222,75 @@ function padBuf(lane, k, rev) {
  *  its first hit, a knob turned on a lane that isn't sounding): the lane went on with its constructor value (send 0.15,
  *  level 0.8) while every export, rendered from time 0, had the setting, so a jam take and its ring-out disagreed. */
 const holdParam = (param, v) => { param.cancelScheduledValues(0); param.setValueAtTime(v, 0); };
-/** Push a lane's sound params into its chain (called on every Shift+knob / slider change). */
+/** A lane sound key (0..1) → its chain param's value: the knobs' maps. tone 200 Hz .. 12 kHz (every hit sets it again
+ *  at its time). drive moves the wet over a shaper set at the lane's drive top (c.dtop: the knob, or a drive curve's
+ *  highest point, A2): at the top it is the knob's own sound, at 0 dry, continuous between (the knob alone jumps from
+ *  dry to 0.31 wet at 0.02, which would click on a ramp). */
+const SOUND_MAP = { tone: (v) => 200 * Math.pow(60, v), pan: (v) => v * 2 - 1, level: (v) => v * v * 1.2, send: (v) => v * 0.8 };
+const driveWet = (d, top) => (top > 0.02 ? Math.min(1, d / top) * (0.3 + 0.7 * top) : 0);
+const soundValue = (c, k, v) => (k === 'drive' ? driveWet(v, c.dtop) : SOUND_MAP[k](v));
+/** The chain param a curve key (lanes.js AUTO_KEYS) moves. */
+const autoParam = (c, k) => (k === 'tone' ? c.tone.frequency : k === 'pan' ? c.pan.pan : k === 'level' ? c.level.gain : k === 'send' ? c.send.gain : c.drive.wet);
+/** Push a lane's sound params into its chain (called on every Shift+knob / slider change). A2: on the live kit while the
+ *  clock runs, a param riding a curve is the clock's (rampAuto): a hold here would wipe its ramps, and the knob reaches
+ *  it through the curve's empty points. Anywhere else (stopped, an offline render before its ramps, the kit export) it
+ *  starts at the knob. */
 function applySound(li, k = kit) {
-  if (!k) return; const s = lanesOf(k)[li].sound, c = k.chains[li];
-  c.drive.distortion = s.drive * 0.9; holdParam(c.drive.wet, s.drive > 0.02 ? 0.3 + s.drive * 0.7 : 0);
-  c.tone.frequency.value = 200 * Math.pow(60, s.tone);              // 200 Hz .. 12 kHz (every hit sets it again at its time)
-  holdParam(c.pan.pan, s.pan * 2 - 1); holdParam(c.level.gain, s.level * s.level * 1.2); holdParam(c.send.gain, s.send * 0.8);
+  if (!k) return; const lane = lanesOf(k)[li], s = lane.sound, c = k.chains[li], a = lane.auto, own = (key) => !(a?.[key] && k === kit && playing);
+  c.dtop = a?.drive ? lane.autoTop('drive') : s.drive; c.drive.distortion = c.dtop * 0.9; if (own('drive')) holdParam(c.drive.wet, soundValue(c, 'drive', s.drive));
+  if (own('tone')) c.tone.frequency.value = SOUND_MAP.tone(s.tone);
+  if (own('pan')) holdParam(c.pan.pan, SOUND_MAP.pan(s.pan)); if (own('level')) holdParam(c.level.gain, SOUND_MAP.level(s.level)); if (own('send')) holdParam(c.send.gain, SOUND_MAP.send(s.send));
 }
-/** Every lane's voice and sound on kit k: after a load, an undo, a kit or a lane-count change. */
-function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); }); }
+/** Every lane's voice and sound on kit k: after a load, an undo, a kit or a lane-count change. The curves' next block
+ *  line starts with a jump (rampAuto). */
+function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); if (k) k.chains[i].ramp = null; }); }
+/**
+ * A2: one block line of a lane curve on a chain param (autoRamps → here, live and in every render alike): a jump the
+ * first time (c.ramp empty: Play, a load, an undo, a new curve), else a ramp from the last line (exponential on the
+ * filter = linear in the knob's map), nothing while the value holds still (leaving such a run re-anchors at its last
+ * line first, or the ramp would start where the run began). The live kit logs what it schedules for a jam take's
+ * ring-out (replayRamps).
+ */
+function rampAuto(k, li, key, time, v) {
+  const c = k.chains[li]; if (!c) return; const p = autoParam(c, key), x = soundValue(c, key, v), st = (c.ramp ??= {})[key], log = k === kit && jam.ramps;
+  const at = (val, t, ramp) => { try { if (!ramp) p.setValueAtTime(val, t); else if (key === 'tone') p.exponentialRampToValueAtTime(val, t); else p.linearRampToValueAtTime(val, t); } catch {} if (log) logHit(log, { li, k: key, time: t, x: val, ramp }, RING_KEEP); };
+  if (!st) { at(x, time, false); c.ramp[key] = { x, t: time, flat: false }; return; }
+  if (x === st.x) { st.t = time; st.flat = true; return; }
+  if (st.flat) at(st.x, st.t, false); at(x, time, true); st.x = x; st.t = time; st.flat = false;
+}
+/** E6 + A2: the live kit's logged curve moves on a jam ring-out's kit; t0 = the live time of the render's start: what
+ *  was set before it holds from the start, the rest lands where it did live. */
+function replayRamps(k, log, t0) {
+  const start = new Map();
+  for (const r of log) if (r.time <= t0 && k.chains[r.li]) start.set(`${r.li}:${r.k}`, r);
+  for (const r of start.values()) autoParam(k.chains[r.li], r.k).setValueAtTime(r.x, 0);
+  for (const r of log) { const c = k.chains[r.li]; if (!c || r.time <= t0) continue; const p = autoParam(c, r.k), t = r.time - t0; if (!r.ramp) p.setValueAtTime(r.x, t); else if (r.k === 'tone') p.exponentialRampToValueAtTime(r.x, t); else p.linearRampToValueAtTime(r.x, t); }
+}
 /** Seconds of live hits a jam take keeps for its ring-out (E6): the delay's tail plus a long sample at half speed. */
 const RING_KEEP = 48;
 /** slice: the slice of a set this hit plays (Lane.sliceAt; null = the lock's, else the first). step: when the step it
  *  plays is due on the grid, before swing, nudge, push or humanize (the scheduler's; a pad or an audition: its time).
- *  Returns the jam log entry it made (E6), if any. */
-function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null, step = null) {
+ *  auto (A2): the lane's curve values where the hit sounds (expandHits). Returns the jam log entry it made (E6), if any. */
+function hitSound(lane, time, accent, lock = null, vel = null, k = kit, slice = null, step = null, auto = null) {
   const li = lanesOf(k).indexOf(lane), c = k?.chains[li]; if (!c?.v) return; const s = lane.sound, L = lock || {}, dec = L.decay ?? s.decay;
   // a jam take that wants its ring-out remembers what the live kit played, to render the tails past its end (renderRing),
   // with when its step was due: a downbeat humanized or nudged before the take's end is still the next bar's. A time,
   // not a tick: Play and reset count the ticks from 0 again, a MIDI clock's snap renumbers them
-  const logged = k === kit && jam.log ? { li, lane, time, step: step ?? time, accent, lock, vel, slice } : null; if (logged) logHit(jam.log, logged, RING_KEEP);
+  const logged = k === kit && jam.log ? { li, lane, time, step: step ?? time, accent, lock, vel, slice, auto } : null; if (logged) logHit(jam.log, logged, RING_KEEP);
+  // A2: the hit puts the lane's other curve params on their curve at its own time too, so a chain silent between hits
+  // (whose ramps Chrome may not have run) sounds right; the clock's next ramp goes on from there
+  if (auto) for (const key in auto) if (key !== 'tone') try { autoParam(c, key).setValueAtTime(soundValue(c, key, auto[key]), time); } catch {}
   // G5: a soft hit is darker, softer and a little shorter (velShape, per voice); dsp layers darken in the worklet
   const p = velShape({ vel: vel ?? hitVel(accent, lock), tune: L.tune ?? lane.tune, dec: 0.04 + dec * dec * 1.2, decayRaw: dec, snap: L.snap ?? s.snap, color: L.color ?? s.color, artic: lane.strokeAt(lock) ?? undefined }, c.voice);   // L3: the stroke live MIDI and the export send too
   const viaDsp = c.voice !== 'sample' && c.engine === 'dsp';
   // choke groups: this hit opens its own lane and cuts the lane it chokes (open hat ← closed hat)
   try { c.choke.gain.setValueAtTime(1, time); const o = k.chains[lane.choke]; if (o && lane.choke !== li) o.choke.gain.setTargetAtTime(0, time, 0.008); } catch {}
   // every hit sets the lane filter at its own time: a tone lock opens / closes it for that hit only, a soft hit (synth
-  // voices and samples) closes it by p.dark octaves, any other hit puts it back. Hits can be scheduled out of time order
-  // (a ratchet nudged past the next step is scheduled before that step, sounds after it): the automation sorts by time
+  // voices and samples) closes it by p.dark octaves, any other hit puts it back (on a tone curve: onto the curve, A2).
+  // Hits can be scheduled out of time order (a ratchet nudged past the next step is scheduled before that step, sounds
+  // after it): the automation sorts by time
   const dark = viaDsp ? 0 : p.dark;
-  try { c.tone.frequency.setValueAtTime(200 * Math.pow(60, L.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {}
+  try { c.tone.frequency.setValueAtTime(SOUND_MAP.tone(L.tone ?? auto?.tone ?? s.tone) * Math.pow(2, -dark), time); } catch {}
   try { if (c.voice === 'sample') playSample(c, lane, p, time, lock, slice ?? lane.sliceAt(0, lock)); else if (viaDsp) c.dsp.port.postMessage({ t: time, layers: DSP_VOICES[c.voice](p).map(x => p.dark ? { ...x, dark: p.dark } : x) }); else VOICES[c.voice].hit(T, c.v, p, time); } catch {}
   return logged;
 }
@@ -348,11 +387,13 @@ function onTick(t, time, cyc, ts) {
   jamTick(t, time);   // after the slot and evolve: a take starting here counts in the meter that plays from here
   if (barWait && onBar(t, bars)) { const f = barWait; barWait = null; f(time); }   // I5: a postcard starts on this bar line
   if (pending.size) pending.settle(t, time);   // E6: the early parts of the steps on this tick get the time it came at
+  // A2: a block line (every MIDI_DIV ticks, from the pattern this tick plays: after a slot or evolve): one ramp per curve
+  if (t % MIDI_DIV === 0 && m.lanes.some(l => l.auto)) for (const r of autoRamps(m, t, t + 1)) rampAuto(kit, r.li, r.k, time, r.v);
   // the steps from a queued slot's switch, or from a new meter's first bar line, belong to what starts there
   const cut = Math.min(bank.nextSwitch(t, cyc, bars, m.origin), bars.next ? bars.next.at : Infinity);
   if (liveQuiet(m, t, early, { humanize: m.humanize, tickSec: ts, cut })) { if (skip.size) m.lanes.forEach((_, li) => skip.delete(`${li}:${t}`)); return cyc; }
   const now = T.getContext().rawContext.currentTime, at = perfAt(time);
-  const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt), e = hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); return e; };
+  const play = (li, lane, h, step) => { const ht = Math.max(now, time + h.dt), e = hitSound(lane, ht, h.accent, h.lock, h.vel, kit, h.slice, step, h.auto); midiHit(li, lane, h.vel, at + (ht - time) * 1000, h.lock); return e; };
   // swing, nudge, push/pull, ±humanize, ratchets; a step nudged or pushed before its tick plays its early part from an
   // earlier tick (liveTick, export.js), unless a queued slot takes over by then (cut) or a pad just played it (skip).
   // step: when the hit's own step is due (this tick; for an early part the later tick it belongs to, estimated at this
@@ -371,7 +412,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); } else { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
 }
 $('btn-play').onclick = togglePlay;
@@ -1138,8 +1179,11 @@ async function renderPattern({ stems = false, dry = false, hits = null, bars = n
     transport.bpm.value = tempo;
     const k = makeKit({ raw: stems, fx });   // a fresh kit in the offline context, same voices and sounds (P6: the filter only with "print FX")
     if (stems) routeStems(k, dry);
+    // A2: the curves' block lines as the live clock schedules them, from the one before tick 0 (what the pre-roll and a
+    // loop's wrap hear) through the tail (live, the pattern plays on)
+    for (const r of autoRamps(m, -MIDI_DIV, ticks + Math.ceil(tailSec() / tickSec()), 0)) rampAuto(k, r.li, r.k, lead + r.t * tickSec(), r.v);
     // a one-shot starts on the downbeat, so a hit humanized before it is clamped there instead of losing its attack
-    for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k, h.slice);
+    for (const h of hits) hitSound(m.lanes[h.li], (loop ? h.time : Math.max(0, h.time)) + lead, h.accent, h.lock, h.vel, k, h.slice, null, h.auto);
     return k;
   }, lead + sec + tailSec(), stems ? 2 * m.lanes.length + (dry ? 2 : 0) : 2, rate);   // stems: a stereo pair per lane (8 or 12 channels, + the return)
   const sr = b.sampleRate, pre = lead + lat, raw = Array.from({ length: b.numberOfChannels }, (_, c) => b.getChannelData(c));
@@ -1387,7 +1431,7 @@ function buildEditUI() {
 const jam = { state: 'idle', node: null, startTick: 0, stopTick: 0, lastTick: 0, lastTime: 0, beats: 0, chunks: null, lanes: 4, sr: 44100, bar: BAR_TICKS, meter: '4/4' };   // idle → armed → rec → finishing → done; bar / meter: the take's, from its first bar line
 // E6 ring-out: log = the live hits while a take that wants one runs (hitSound), ring = its rendered tails (renderRing),
 // ringJob = that render while it runs, take = which take a render belongs to (a discard or a new take drops a late one)
-Object.assign(jam, { startTime: 0, endTime: 0, log: null, ring: null, ringJob: null, take: 0 });   // endTime: the end last posted to the recorder
+Object.assign(jam, { startTime: 0, endTime: 0, log: null, ramps: null, ring: null, ringJob: null, take: 0 });   // endTime: the end last posted to the recorder; ramps (A2): the curve moves the live kit made, for the ring-out
 async function ensureJamNode() {
   // through Tone's context: its rawContext is a wrapper the native AudioWorkletNode constructor rejects
   if (jam.node) return; const tc = T.getContext(), ctx = tc.rawContext; jam.sr = ctx.sampleRate;
@@ -1403,10 +1447,10 @@ async function ensureJamNode() {
       // E6: the ring-out renders now, from the hits the take played; its end on the recorder's clock = start + frames
       if (any && jam.log && data.frames != null) {
         const take = jam.take;
-        jam.ringJob = renderRing(jam.log, Math.round(jam.startTime * jam.sr) + data.frames, jam.endTime).then((r) => { if (jam.take === take) jam.ring = r && joinRing(jam.chunks, r, Math.round(0.002 * jam.sr)); }, (e) => console.error('jam ring-out:', e))
+        jam.ringJob = renderRing(jam.log, jam.ramps, Math.round(jam.startTime * jam.sr) + data.frames, jam.endTime).then((r) => { if (jam.take === take) jam.ring = r && joinRing(jam.chunks, r, Math.round(0.002 * jam.sr)); }, (e) => console.error('jam ring-out:', e))
           .finally(() => { if (jam.take === take) { jam.ringJob = null; renderJam(); } });
       }
-      jam.log = null; renderJam(); paintLeds();
+      jam.log = jam.ramps = null; renderJam(); paintLeds();
     }
   };
 }
@@ -1415,11 +1459,11 @@ async function toggleJam() {
   if (jam.state === 'finishing') return;   // the take is closing on its bar line: a press now would mix two takes
   try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
   // lanes: the most the take played (L2)
-  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.take++; jam.ring = jam.ringJob = null; jam.log = exp.ring ? [] : null; jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
+  jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.take++; jam.ring = jam.ringJob = null; jam.log = exp.ring ? [] : null; jam.ramps = exp.ring ? [] : null; jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
   if (!playing) togglePlay();
 }
 function stopJam() {
-  if (jam.state === 'armed') { jam.state = 'idle'; jam.log = null; jam.node?.port.postMessage({ cancel: true }); }
+  if (jam.state === 'armed') { jam.state = 'idle'; jam.log = jam.ramps = null; jam.node?.port.postMessage({ cancel: true }); }
   else if (jam.state === 'rec') {
     // The take ends on a bar line, like Live's record quantize: the next one, or the one just passed if the stop came
     // within a 16th of it (late by a hair shouldn't cost a whole bar). "Now" is the audible tick, not the last
@@ -1453,12 +1497,13 @@ const sampleSec = (lane) => (lane?.voice === 'sample' && lane.sample ? 2 * Math.
  * that bar line, whether or not the pattern played on. Same sample grid, rate and 16-bit shape as the take, a pair per
  * lane; null when nothing rings past the end.
  */
-async function renderRing(log, endFrame, endTime) {
+async function renderRing(log, ramps, endFrame, endTime) {
   const sr = jam.sr, tail = tailSec(), plan = ringPlan(log, { endFrame, endTime, sampleRate: sr, reach: (li, lane) => tail + sampleSec(lane) }); if (!plan) return null;
   // each lane as it played its last hit in the take (a lane that played none: a placeholder, it stays silent)
   const lanes = Array.from({ length: Math.max(jam.lanes, plan.lanes.length) }, (_, i) => plan.lanes[i] || m.lanes[i] || m.lanes[0]);
   for (const l of new Set(lanes)) await ensureSample(l);
-  const b = await offline(() => { const k = makeKit({ raw: true, lanes }); routeStems(k); for (const h of plan.hits) hitSound(lanes[h.li], h.at, h.accent, h.lock, h.vel, k, h.slice); return k; }, (plan.lead + plan.frames) / sr + 0.01, 2 * lanes.length, sr);
+  // A2: the curves as the live kit moved them (replayRamps), on the hits' clock (the render starts lead frames before the end)
+  const b = await offline(() => { const k = makeKit({ raw: true, lanes }); routeStems(k); if (ramps?.length) replayRamps(k, ramps, endFrame / sr - plan.lead / sr); for (const h of plan.hits) hitSound(lanes[h.li], h.at, h.accent, h.lock, h.vel, k, h.slice, null, h.auto); return k; }, (plan.lead + plan.frames) / sr + 0.01, 2 * lanes.length, sr);
   return ringOut(Array.from({ length: jam.lanes }, (_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]), plan.lead, plan.frames);
 }
 function renderJam() {
@@ -1479,7 +1524,7 @@ async function downloadJam() {
 }
 function buildJamUI() {
   $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = () => downloadJam().catch(e => { $('jam-text').textContent = `jam: ${e.message}`; });
-  $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = jam.ring = jam.ringJob = jam.log = null; jam.take++; renderJam(); paintLeds(); };
+  $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = jam.ring = jam.ringJob = jam.log = jam.ramps = null; jam.take++; renderJam(); paintLeds(); };
   renderJam();
 }
 

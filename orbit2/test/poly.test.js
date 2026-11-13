@@ -1543,7 +1543,7 @@ test('ORBIT2-10 r2 / r3: a ring-out goes by when each step was due: the next dow
   // wiring: the scheduler passes when each hit's step is due, the log keeps it, every posted end is remembered and decides
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
   assert.match(app, /for \(const h of soon\) \{ const e = play\(li, lane, h, time \+ \(h\.tick - t\) \* ts\)/); assert.match(app, /for \(const h of hits\) play\(li, lane, h, time\)/);
-  assert.match(app, /step: step \?\? time,/); assert.match(app, /renderRing\(jam\.log, Math\.round\(jam\.startTime \* jam\.sr\) \+ data\.frames, jam\.endTime\)/);
+  assert.match(app, /step: step \?\? time,/); assert.match(app, /renderRing\(jam\.log, jam\.ramps, Math\.round\(jam\.startTime \* jam\.sr\) \+ data\.frames, jam\.endTime\)/);
   assert.equal((app.match(/jam\.endTime = [^;]+; jam\.node\.port\.postMessage\(\{ end: (jam\.endTime|time) \}\)/g) || []).length, 3, 'all three ends are remembered: a stop, the clock on the stop tick, the cap');
   assert.doesNotMatch(app, /postMessage\(\{ end: (?!jam\.endTime|time)/, 'no end is posted without being remembered');
   assert.match(app, /headroomGain\(shots\.flatMap\(s => s\.chans\), exp\.bits\)/, 'the kit gain follows the chosen bits (32f: as rendered)');

@@ -70,6 +70,46 @@ export const laneCountOf = (n) => (n > 4 ? MAX_LANES : 4);
 /** Per-lane sound sculpting, all 0..1: Shift + knobs on the Move. */
 export const SOUND_KEYS = ['decay', 'tone', 'drive', 'snap', 'color', 'send', 'pan', 'level'];
 export const DEFAULT_SOUND = { decay: 0.5, tone: 0.75, drive: 0, snap: 0.5, color: 0.5, send: 0.15, pan: 0.5, level: 0.8 };
+/** A2 smooth automation (docs/design/automation.md): the sound keys that ride a per-lane curve. They sit on the lane
+ *  chain and shape what already rings (tails, echoes), so they move as AudioParam ramps. The rest (decay, snap, color,
+ *  the lane's tune and chance) are read once per hit: recorded, they become step locks (A1). */
+export const AUTO_KEYS = ['tone', 'drive', 'pan', 'send', 'level'];
+/** Curve points per lane step (a 16th at ×4 = 1/128 note), the most points one curve holds (share links), the longest span. */
+export const AUTO_RES = 8, AUTO_MAX = 1024, AUTO_LOOPS_MAX = 16;
+/** One char per point: base64url = 64 levels over the key's 0..1, '.' = no point (the lane value plays there). */
+const AUTO_CH = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_', AUTO_LV = AUTO_CH.length - 1;
+const AUTO_DEC = new Float64Array(128).fill(-1); [...AUTO_CH].forEach((c, i) => { AUTO_DEC[c.charCodeAt(0)] = i / AUTO_LV; });
+/** A value 0..1 as a curve char (the nearest of the 64 levels). */
+export const autoChar = (v) => AUTO_CH[Math.round(clamp(+v || 0, 0, 1) * AUTO_LV)];
+/** Point i of curve string c: 0..1, or null ('.', past the end, anything else). */
+const autoVal = (c, i) => { const x = AUTO_DEC[c.charCodeAt(i)]; return x >= 0 ? x : null; };
+const hasPoint = (c) => /[^.]/.test(c);
+/**
+ * A2 curves from saved data (a link is text anyone can edit): `loops` a power of two up to 16, rows 1..32 steps wide
+ * (`len`), at most AUTO_MAX points per curve (a span too long halves), each known key's string cut or padded with '.' to
+ * its size (an unknown char is '.'), a curve without a point dropped; `res: 4` (a long link's half-resolution curves:
+ * autoHalf) back to AUTO_RES, the point between two kept ones their mean. null when no curve is left.
+ */
+export function autoFrom(o) {
+  if (!o || typeof o !== 'object') return null;
+  let loops = 2 ** clamp(Math.round(Math.log2(Math.max(1, +o.loops || 1))), 0, Math.log2(AUTO_LOOPS_MAX)); const len = clamp(Math.round(+o.len || 1), 1, MAX_STEPS);
+  while (loops > 1 && loops * len * AUTO_RES > AUTO_MAX) loops /= 2;
+  const n = loops * len * AUTO_RES, half = o.res === AUTO_RES / 2, a = { loops, len };
+  for (const k of AUTO_KEYS) {
+    const src = o[k]; if (typeof src !== 'string') continue; let s = '';
+    for (let j = 0; j < n; j++) {
+      let v;
+      if (!half) v = autoVal(src, j);
+      else if (j % 2 === 0) v = autoVal(src, j / 2);
+      else { const p = autoVal(src, (j - 1) / 2), q = autoVal(src, ((j + 1) / 2) % (n / 2)); v = p != null && q != null ? (p + q) / 2 : null; }
+      s += v == null ? '.' : autoChar(v);
+    }
+    if (hasPoint(s)) a[k] = s;
+  }
+  return AUTO_KEYS.some(k => a[k]) ? a : null;
+}
+/** A share link's curves at half resolution (every second point, `res: 4`): autoFrom puts the points between back. */
+export const autoHalf = (a) => { if (!a) return a; const o = { ...a, res: AUTO_RES / 2 }; for (const k of AUTO_KEYS) if (a[k]) o[k] = a[k].replace(/(.)./g, '$1'); return o; };
 /** Master clock resolution (ticks per beat). 840 = 24 × 35 = 2³·3·5·7: every ratio's step is a whole number of ticks
  *  (×5/4 = 672, ×7/4 = 480, ×6 = 140), so 5- and 7-tuplets are exact. MIDI clock (24 per beat) = every MIDI_DIV ticks;
  *  the old 24-PPQ positions are exactly ×35, so a pattern plays the same hits. BAR_TICKS = a 4/4 bar. */
@@ -241,6 +281,7 @@ export class Lane {
     // V3 euclid combine mode; V5 slow modulator { target, loops (0 = the whole cycle), depth } or null, timbre dice
     // { tone, color, decay: range 0..1 } or null, scale snap for tune (SCALES key)
     this.euclidMode = 'replace'; this.mod = null; this.tdice = null; this.scale = 'off';
+    this.auto = null;   // A2 curves { loops, len, <AUTO_KEYS key>: point string } or null (autoFrom)
     this.resetLoops();
   }
   /** V3: the euclid mask of the lane (cached on k and length). */
@@ -375,6 +416,83 @@ export class Lane {
   strokeAt(lock) { return strokeOf(this.voice, lock, lock?.color ?? this.sound.color); }
   clearLocks(i) { this.locks[i] = null; }
   unlock(i, k) { const lk = this.locks[i]; if (!lk) return; delete lk[k]; if (!Object.keys(lk).length) this.locks[i] = null; }
+  // ---- A1 / A2 automation (docs/design/automation.md). Step automation is plain step locks; curves live in `auto`. ----
+  /**
+   * A2: curve k at absolute step s (fractional, counted from the lane's step 1 like Lane.at's): linear between its two
+   * neighbouring points, a '.' neighbour counting as the lane value; null with no point on either side (the lane value
+   * plays) or no curve. A curve spans `loops` lane loops (loop = the absolute loop count mod loops), on the lane's time:
+   * a rotation moves the hits under it, not the curve; steps past its rows (a lane made longer) have none; a lane made
+   * shorter never reaches the steps past its length.
+   */
+  autoAt(k, s) {
+    const a = this.auto, c = a?.[k]; if (!c) return null;
+    const L = this.length, R = AUTO_RES, row = a.len * R, span = L * a.loops, x = ((s % span) + span) % span;
+    const loop = Math.min(a.loops - 1, Math.floor(x / L)), p = (x - loop * L) * R, j = Math.min(L * R - 1, Math.floor(p));
+    const pt = (lp, i) => (i < row ? autoVal(c, lp * row + i) : null);
+    const v0 = pt(loop, j), v1 = j + 1 < L * R ? pt(loop, j + 1) : pt((loop + 1) % a.loops, 0);   // the point after the loop's last: the next loop's first
+    if (v0 == null && v1 == null) return null; const b = this.sound[k], f = clamp(p - j, 0, 1);
+    return (v0 ?? b) + ((v1 ?? b) - (v0 ?? b)) * f;
+  }
+  /** The highest value key k reaches on this lane: its curve's top or the lane value (drive's shaper is set there). */
+  autoTop(k) { const c = this.auto?.[k]; let t = this.sound[k]; if (c) for (let i = 0; i < c.length; i++) { const v = autoVal(c, i); if (v > t) t = v; } return t; }
+  /** A1 record: a recorded step value is a step lock on stored step si (setLock: clamped, a nudge of 0 is none). */
+  recordStepValue(si, k, v) { return this.setLock(si, k, v); }
+  /**
+   * A2 record: curve k gets the hand's value on every point from absolute step s0 to s1 (s0 ≤ s1, linear from v0 to v1
+   * in between), overwriting what is there; the nearest point when none lies between. The lane's first curve is one
+   * lane loop (`loops` 1, `len` its length); a lane made longer than the rows widens them first when the cap allows
+   * (else the points past them are not written). A write longer than the span keeps its last span. Returns the points
+   * written.
+   */
+  recordCurve(k, s0, v0, s1 = s0, v1 = v0) {
+    if (!AUTO_KEYS.includes(k) || !(s1 >= s0)) return 0; const L = this.length, R = AUTO_RES;
+    const a = (this.auto ??= { loops: 1, len: L }); if (L > a.len) this.widenAuto(L);
+    const row = a.len * R, cs = (a[k] || '.'.repeat(a.loops * row)).split('');
+    let p0 = Math.ceil(s0 * R - 1e-9), p1 = Math.floor(s1 * R + 1e-9); if (p1 < p0) p0 = p1 = Math.round(s1 * R);
+    p0 = Math.max(p0, p1 - L * a.loops * R + 1); let n = 0;
+    for (let p = p0; p <= p1; p++) {
+      const lp = Math.floor(p / (L * R)), j = p - lp * L * R; if (j >= row) continue;   // a step past the rows the cap couldn't widen
+      const f = s1 > s0 ? clamp((p / R - s0) / (s1 - s0), 0, 1) : 1;
+      cs[(((lp % a.loops) + a.loops) % a.loops) * row + j] = autoChar(v0 + (v1 - v0) * f); n++;
+    }
+    if (n) a[k] = cs.join(''); else if (!a[k] && !AUTO_KEYS.some(x => a[x])) this.auto = null;
+    return n;
+  }
+  /** Rows as wide as `len` steps (a lane made longer), '.' on the new steps: false when the cap doesn't allow it. */
+  widenAuto(len) {
+    const a = this.auto; if (!a || len <= a.len || a.loops * len * AUTO_RES > AUTO_MAX) return false;
+    const w = a.len * AUTO_RES, pad = '.'.repeat((len - a.len) * AUTO_RES);
+    for (const k of AUTO_KEYS) if (a[k]) a[k] = Array.from({ length: a.loops }, (_, i) => a[k].slice(i * w, (i + 1) * w) + pad).join('');
+    a.len = len; return true;
+  }
+  /** The curve span ×2 (dir 1: every curve repeated, so it plays the same) or ½ (dir −1: the first half kept). False
+   *  when it can't (16 loops, the cap, 1 loop). */
+  spanAuto(dir) {
+    const a = this.auto; if (!a) return false;
+    if (dir > 0) { if (a.loops >= AUTO_LOOPS_MAX || a.loops * 2 * a.len * AUTO_RES > AUTO_MAX) return false; for (const k of AUTO_KEYS) if (a[k]) a[k] += a[k]; a.loops *= 2; return true; }
+    if (a.loops <= 1) return false; a.loops /= 2; const n = a.loops * a.len * AUTO_RES;
+    for (const k of AUTO_KEYS) if (a[k]) { a[k] = a[k].slice(0, n); if (!hasPoint(a[k])) delete a[k]; }
+    if (!AUTO_KEYS.some(k => a[k])) this.auto = null; return true;
+  }
+  /**
+   * A4 clear: key k's curve and / or every lock of key k (kind 'curve' / 'step'; both when not given); no key = every
+   * curve and every lock of a recordable key (LOCK_KEYS). Slice, stroke, start / end / rev, conditions and ratchets stay,
+   * and so does the ghost tier (a 0.35 vel lock is the tier, not automation). True when something went.
+   */
+  clearAuto(k = null, kind = null) {
+    let gone = false; const a = this.auto;
+    if (kind !== 'step' && a && (k == null || a[k])) { if (k == null) this.auto = null; else { delete a[k]; if (!AUTO_KEYS.some(x => a[x])) this.auto = null; } gone = true; }
+    if (kind !== 'curve') for (const key of k == null ? LOCK_KEYS : LOCK_KEYS.includes(k) ? [k] : []) for (let i = 0; i < MAX_STEPS; i++) {
+      const v = this.locks[i]?.[key]; if (v == null || (key === 'vel' && v === GHOST_VEL)) continue; this.unlock(i, key); gone = true;
+    }
+    return gone;
+  }
+  /** A4: does this lane automate key k: a curve, or a lock of k on a step that plays (the ghost tier aside)? */
+  automates(k) {
+    if (this.auto?.[k]) return true; if (!LOCK_KEYS.includes(k)) return false;
+    for (let i = 0; i < this.length; i++) { const v = this.locks[i]?.[k]; if (v != null && this.played(i) && !(k === 'vel' && v === GHOST_VEL)) return true; }
+    return false;
+  }
   /**
    * Live record onto stored step `i`, keeping the feel on the three tiers: an accent is its own flag (and plays full);
    * any other velocity lands on the nearest tier, ghost (a 0.35 vel lock) or normal (no lock), and drops an old accent,
@@ -418,7 +536,8 @@ export class Lane {
     const r = ctx.dice ? ctx.dice.at(ctx.li ?? 0, step, this.length) : rng();
     // the condition is judged on every active step, muted or not, so a mute doesn't change what pre / not pre read later
     const on = this.hitAt(i), pass = on && condPasses(trig?.cond, loop, ctx.fill, this.lastCond);
-    const hit = pass && !this.muted && !ctx.silenced && r < this.chanceAt(i) + (ctx.boost || 0);   // V2: a coupled lane's lift
+    // V2: a coupled lane's lift; A3: a hand on the chance knob (live play) over the step's lock
+    const hit = pass && !this.muted && !ctx.silenced && r < (ctx.hand?.[ctx.li ?? 0]?.prob ?? this.chanceAt(i)) + (ctx.boost || 0);
     if (on && setsPrev(trig?.cond)) this.lastCond = pass;
     // V6: a programmed step that stayed silent, and why (a mute or a solo elsewhere is your choice, not a miss): the
     // condition said no, or the roll did (a locked dice roll is 'dice', a free one 'prob'). Only drawn, never heard.
@@ -469,6 +588,7 @@ export class Lane {
     if (this.swing > 0) n = lcm(n, lcm(this.length, this.swingPeriod()) / this.length);
     const rolls = humanize > 0 || this.velHuman > 0 || this.prob < 1 || this.locks.some((lk, i) => i < this.length && this.played(i) && lk?.prob != null && lk.prob < 1) || TIMBRE_KEYS.some(k => this.tdice?.[k] > 0);
     if (this.mod?.depth > 0 && this.mod.loops > 0) n = lcm(n, this.mod.loops);   // V5: the modulator's period, in loops
+    if (this.auto) n = lcm(n, this.auto.loops);   // A2: the curves' span, in loops
     return repeat > 1 && rolls ? lcm(n, repeat) : n;   // dice repeat counts loops too: 1:2 with repeat 2 is still 2
   }
   /** V1: is the lane exactly its euclid fill (no hand edits on the steps it loops over)? */
@@ -546,10 +666,10 @@ export class Lane {
   /** Put back what evolve may change, from a toJSON copy (the max cycle guard refusing a move). */
   restore(o) { const b = Lane.from(o); for (const k of EVOLVE_FIELDS) this[k] = b[k]; if (this.pos >= this.length) this.pos = 0; }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null, ...this.genJSON() }; }
-  /** V3 / V5 settings, saved only when set (an older lane saves as it always did). */
-  genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; return o; }
+  /** V3 / V5 settings and A2 curves, saved only when set (an older lane saves as it always did). */
+  genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; if (this.auto) o.auto = { ...this.auto }; return o; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
-  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); l.setEuclidMode(o.euclidMode); l.setMod(o.mod); l.setTimbreDice(o.tdice); l.setScale(o.scale); for (const t of l.trigs) if (t) { t.ratchet = clamp(Math.round(+t.ratchet || 1), 1, MAX_RATCHET); if (t.ramp != null) t.ramp = clamp(+t.ramp || 0, -1, 1); } return l; }   // older saves: no template (MPC), no offset
+  static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); l.setEuclidMode(o.euclidMode); l.setMod(o.mod); l.setTimbreDice(o.tdice); l.setScale(o.scale); l.auto = autoFrom(o.auto); for (const t of l.trigs) if (t) { t.ratchet = clamp(Math.round(+t.ratchet || 1), 1, MAX_RATCHET); if (t.ramp != null) t.ramp = clamp(+t.ramp || 0, -1, 1); } return l; }   // older saves: no template (MPC), no offset
 }
 
 export class Machine {
