@@ -5,6 +5,7 @@
 // exact: set() from code keeps the value as given (a tempo of 127.5); what the user turns still moves in steps.
 // onStart / onEnd (A3 automation): a pointer takes the knob / lets it go (keys, the wheel and double-click have no
 // start or end: the app times them). setMark(true) shows a small "A" (automated) and says it to screen readers.
+// onChange(value, before): a turn also gives the value it started from.
 const NS = 'http://www.w3.org/2000/svg';
 const arc = (cx, cy, r, a0, a1) => { const p = (a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); const large = a1 - a0 > Math.PI ? 1 : 0; return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`; };
 const short = (t) => String(t).split(' · ')[0];   // 'master tempo · knob 8' → 'master tempo': the hint is for eyes
@@ -25,7 +26,7 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   let v = value;
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
   const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? arc(24, 24, 18, START, a) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
-  const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
+  const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x), was = v; v = n; render(); if (emit && n !== was) onChange?.(v, was); };   // was: the value before (A3: an un-armed turn moves the lane by the difference)
   // drag: 150 px of travel = full range; Shift = 5× finer
   let drag = null;
   el.addEventListener('pointerdown', (e) => { drag = { y: e.clientY, v }; el.setPointerCapture(e.pointerId); e.preventDefault(); onStart?.(v); });

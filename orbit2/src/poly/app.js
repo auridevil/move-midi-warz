@@ -239,9 +239,9 @@ const autoParam = (c, k) => (k === 'tone' ? c.tone.frequency : k === 'pan' ? c.p
 /** Push a lane's sound params into its chain (called on every Shift+knob / slider change). A2: on the live kit while the
  *  clock runs, a param riding a curve is the clock's (rampAuto): a hold here would wipe its ramps, and the knob reaches
  *  it through the curve's empty points. Anywhere else (stopped, an offline render before its ramps, the kit export) it
- *  starts at the knob. */
-function applySound(li, k = kit) {
-  if (!k) return; const lane = lanesOf(k)[li], s = lane.sound, c = k.chains[li], a = lane.auto, own = (key) => !(a?.[key] && k === kit && playing);
+ *  starts at the knob. soft: keys left alone here (autoEdit glides them itself). */
+function applySound(li, k = kit, soft = null) {
+  if (!k) return; const lane = lanesOf(k)[li], s = lane.sound, c = k.chains[li], a = lane.auto, own = (key) => !(a?.[key] && k === kit && playing) && !soft?.has(key);
   c.dtop = a?.drive ? lane.autoTop('drive') : s.drive; c.drive.distortion = c.dtop * 0.9; if (own('drive')) holdParam(c.drive.wet, soundValue(c, 'drive', s.drive));
   if (own('tone')) c.tone.frequency.value = SOUND_MAP.tone(s.tone);
   if (own('pan')) holdParam(c.pan.pan, SOUND_MAP.pan(s.pan)); if (own('level')) holdParam(c.level.gain, SOUND_MAP.level(s.level)); if (own('send')) holdParam(c.send.gain, SOUND_MAP.send(s.send));
@@ -479,7 +479,7 @@ const INFO = {
   quantize: 'Live record: "nearest step" rounds, so a slightly early hit lands on the coming step; "step just played" always files it under the last step.',
   'automation cc': 'MIDI export: each automated parameter of a lane goes out as this CC on the lane\'s track and channel: step values (locks) just before each note, curves wherever they change. 0 = left out. Defaults: tone 74, decay 75, snap 73, color 71, tune 16, drive 17, level 7, pan 10, send 91. "One Drum-Rack track" has one channel for every lane, so it carries notes only.',
   'record knobs': 'Record knob moves into the selected lane, armed and playing. off = knobs act as always. touch = while you hold a knob (a gauge, or a Move knob you touch) its moves are recorded: chance, tune, decay, snap and color (and the step lock knobs) as step locks on the steps that play, tone, drive, send, pan and level as a smooth curve over the lane\'s loops; let go and it plays back. latch = after you let go the last value goes on until the loop is back where you started. The lane\'s own value stays; each touch is one undo step. The strip under the steps shows it; clear it there (Move: touch the knob + Delete).',
-  'pitch pads': 'Live record:the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
+  'pitch pads': 'Live record: the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
   'evolve every': 'Evolve mode: how many bars between two mutations.',
   'evolve amount': 'Evolve mode: chance per lane of being nudged at each mutation.',
   'evolve scope': 'What evolve may touch: rotation only; rotation + the hits; or everything with a weight (also length, speed, chance and tune). A euclid lane you edited by hand keeps your edits: evolve adds or takes away one hit. Accents, locks and conditions travel with their hits.',
@@ -529,7 +529,7 @@ const laneTabs = [];  // the four coloured lane buttons: a touch-friendly altern
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
   // A3: chance and tune record (as step locks) when knobs record; the rest are the grid, never recorded
-  for (const p of PARAMS) { const auto = p.k === 'prob' || p.k === 'tune', g = makeGauge({ label: knobWord(p.k), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { if (auto && handTurn('lane', p.k, v / 100)) return; p.set(m.lane, v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); }, ...(auto && { onStart: (v) => handHold('lane', p.k, v / 100), onEnd: () => handLetGo('lane', p.k) }) }); sliders[p.k] = g; el.appendChild(g.el); }
+  for (const p of PARAMS) { const auto = p.k === 'prob' || p.k === 'tune', g = makeGauge({ label: knobWord(p.k), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v, was) => { const x = auto ? handTurn('lane', p.k, v / 100, was / 100) : v / 100; if (x === undefined) return; p.set(m.lane, auto ? Math.round(x * 100) : v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); }, ...(auto && { onStart: (v) => handHold('lane', p.k, v / 100), onEnd: () => handLetGo('lane', p.k) }) }); sliders[p.k] = g; el.appendChild(g.el); }
   // G6: the swing template sits right after the swing gauge
   ui.swingTpl = segmented({ options: SWING_KEYS.map(k => [k, SWING_TEMPLATES[k].name, INFO['swing template']]), value: m.lane.swingTpl, onChange: (k) => { m.lane.setSwingTpl(k); sync(); } });
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
@@ -545,14 +545,15 @@ function buildSliders() {
   const se = $('sound-sliders'); se.innerHTML = '';
   const panSay = (v) => v === 50 ? 'centre' : `${Math.abs(v - 50) * 2}% ${v < 50 ? 'left' : 'right'}`;   // spoken: the knob shows 0–100
   // A3: every sound knob records when knobs record: tone, drive, send, pan, level as a curve, decay, snap, color as locks
-  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { if (handTurn('snd', k, v / 100)) return; m.lane.setSound(k, v / 100); applySound(m.selected); sync(); }, onStart: (v) => handHold('snd', k, v / 100), onEnd: () => handLetGo('snd', k) }); sliders['snd:' + k] = g; se.appendChild(g.el); }
+  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v, was) => { const x = handTurn('snd', k, v / 100, was / 100); if (x === undefined) return; m.lane.setSound(k, x); applySound(m.selected); sync(); }, onStart: (v) => handHold('snd', k, v / 100), onEnd: () => handLetGo('snd', k) }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
 const pages = new MovePages();   // the Move's pages and pad window (pages.js, used by the Move section below)
 function sync() {
   pages.window(m.selected, m.lanes.length);   // the pad window follows every selection, Move or not: the computer keys mirror the pads
-  for (const p of PARAMS) sliders[p.k].set(p.get(m.lane));
+  const handG = handGauge();   // A3: the knob a hand turns shows the hand (autoFrame), not the lane value under it
+  for (const p of PARAMS) if (sliders[p.k] !== handG) sliders[p.k].set(p.get(m.lane));
   ui.swingTpl.set(m.lane.swingTpl);
-  for (const k of SOUND_KEYS) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
+  for (const k of SOUND_KEYS) if (sliders['snd:' + k] !== handG) sliders['snd:' + k].set(Math.round(m.lane.sound[k] * 100));
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100)); ui.meter?.set(m.meter);
   muteQ.trim(m.lanes.length);   // a lane the pattern no longer has (6 → 4, a slot) has no mute waiting
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
@@ -643,7 +644,7 @@ function buildLockGauges() {
   for (const k of LOCK_KEYS) {
     // A3: recording, a lock knob writes onto the steps that play (a gesture), not the one step the panel shows
     const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, say: u.say || u.fmt || ((v) => v + '%'), title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
-      onChange: (v) => { if (handTurn('lock', k, v / 100)) return; if (lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); },
+      onChange: (v) => { if (handTurn('lock', k, v / 100) === undefined || lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); },
       onStart: (v) => handHold('lock', k, v / 100), onEnd: () => handLetGo('lock', k) });
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
@@ -814,7 +815,9 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   // a pad plays what its step will play (S1 its slice, S3 its start / end / direction): recording, the step the hit
   // lands on (steps count from the pattern's bar 1); otherwise the step under the pad
   const q = recd ? lane.quantize(heardTick() - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), ph = lane.padHit(idx, lock);
-  hitSound(lane, T.immediate(), accent, ph.lock, accent ? 1 : v, kit, ph.slice); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
+  // A2: playing, a pad hit lands on the lane's curves where you hear (the hand's value on a knob it holds)
+  const auto = playing && lane.auto ? Object.fromEntries(AUTO_KEYS.filter(k => lane.auto[k]).map(k => [k, handNow?.[li]?.[k] ?? playedValue(lane, k, 'curve')])) : null;
+  hitSound(lane, T.immediate(), accent, ph.lock, accent ? 1 : v, kit, ph.slice, null, auto); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
   if (!recd) { m.select(li); sync(); return; }
   lane.recordHit(idx, { accent, vel: accent ? null : v, tune });   // ghost notes stay ghosts (a vel lock), a soft overdub drops an old accent
   const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
@@ -851,10 +854,14 @@ function handGlide(g) {
   if (g.k === 'drive' && g.v > c.dtop) { c.dtop = g.v; c.drive.distortion = c.dtop * 0.9; }   // the shaper grows with the hand (applySound sets the curve's top on release)
   glide(autoParam(c, g.k), soundValue(c, g.k, g.v));
 }
-function gestStart(li, k, kind, { touch, v, src, knob = null }) {
+/** The lane's own value of key k (the knob: tune and chance on the lane, the rest in its sound). */
+const laneValue = (lane, k) => (k === 'tune' ? lane.tune : k === 'prob' ? lane.prob : lane.sound[k]);
+/** from: where the hand started (a gauge's value before a timed turn); the hand and the lane value (lane0) move by the
+ *  same amount from there when it doesn't record. */
+function gestStart(li, k, kind, { touch, v, src, knob = null, from = v }) {
   if (knobGest) gestEnd(true);   // one hand at a time: a new gesture ends the one before (a latch too)
   const lane = m.lanes[li]; if (!lane || !playing) return null;
-  const g = knobGest = { li, lane, k, kind, src, knob, touch, v, rec: recKnobs(), timer: 0, wrote: false, latched: false };
+  const g = knobGest = { li, lane, k, kind, src, knob, touch, v, v0: from, lane0: laneValue(lane, k), rec: recKnobs(), timer: 0, wrote: false, latched: false };
   stripKey = { k, kind }; handNow = []; handNow[li] = { [k]: v };
   if (g.rec) { startBlink('record'); if (kind === 'curve') { const s = heardStep(lane); Object.assign(g, { s0: s, lastS: s, lastV: v, grow: !lane.auto?.[k] }); curveWrite(g); } }
   if (kind === 'curve') handGlide(g);
@@ -872,10 +879,13 @@ function gestTimer(g) { clearTimeout(g.timer); g.timer = setTimeout(() => { if (
  *  (a jump of the heard position, a restart or a new bar line, starts afresh there); a gesture that began on an empty
  *  curve doubles its span each time it comes back to its start (up to the cap). */
 function curveWrite(g) {
-  const s = heardStep(g.lane); if (!(s >= 0)) return;
+  let s = heardStep(g.lane); if (!(s >= 0)) return;
   if (s < g.lastS || s - g.lastS > g.lane.length * AUTO_LOOPS_MAX) { g.lastS = s; g.lastV = g.v; }
-  if (g.lane.recordCurve(g.k, g.lastS, g.lastV, s, g.v)) g.wrote = true; g.lastS = s; g.lastV = g.v;
+  if (g.latched) s = Math.min(s, g.end - 0.5 / AUTO_RES);   // nothing past a latch's end: it would land on the gesture's start
+  // the span doubles before the points past it are written (they belong to the new half, not over the first points)
   while (g.grow && g.lane.auto && s - g.s0 >= g.lane.auto.loops * g.lane.length) if (!g.lane.spanAuto(1)) g.grow = false;
+  if (s <= g.lastS && g.lane.auto?.[g.k]) return;
+  if (g.lane.recordCurve(g.k, g.lastS, g.lastV, s, g.v)) g.wrote = true; g.lastS = s; g.lastV = g.v;
 }
 /**
  * The clock's side of a recording gesture, every master tick before liveTick (the lane being still the gesture's: a load,
@@ -908,19 +918,30 @@ function gestEnd(force = false, fromClock = false) {
     Object.assign(g, { latched: true, touch: true, grow: false, end: from + Math.ceil(Math.max(1e-9, at - from) / span) * span }); return;
   }
   knobGest = null; handNow = null; stopBlink('record');
-  const c = here ? kit?.chains[g.li] : null;
-  if (c && g.kind === 'curve') { if (c.ramp) c.ramp[g.k] = null; if (playing) glide(autoParam(c, g.k), soundValue(c, g.k, playedValue(g.lane, g.k, 'curve'))); }   // the next block line jumps onto the curve
-  if (!g.wrote && !g.dirty) return offClock(fromClock, renderAuto);
-  if (here) applySound(g.li); ownNext = true; save(); offClock(fromClock, sync);   // the gesture's undo step now, before a load replaces the pattern; the page after
+  if (here && g.kind === 'curve' && playing) autoHandoff(g.li, g.k, playedValue(g.lane, g.k, 'curve'));
+  if (g.wrote || g.dirty) { if (here) applySound(g.li); ownNext = true; save(); }   // the gesture's undo step now, before a load replaces the pattern
+  if (!fromClock) (g.wrote || g.dirty ? sync : renderAuto)();   // from the clock (a slot, evolve's way home) the caller redraws the page, as its load
 }
-/** A knob moved (v in lock units) on the selected lane: its gesture follows, or one starts (timed: it ends 400 ms after
- *  its last move). Stopped, or a lock-panel knob not recording: nothing (the knob acts as always). True when it
- *  recorded: the caller leaves the lane value alone. */
-function handTurn(src, k, v, kind = src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step') {
-  if (!playing || (src === 'lock' && !recKnobs())) return false;
-  const g = knobGest; if (g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched) gestMove(v); else gestStart(m.selected, k, kind, { touch: false, v, src });
-  return !!knobGest?.rec;
+/** A curve's param handed back to the clock without a jump (a hand lets go, a curve cleared while playing): from where it
+ *  is now to `v` in 30 ms, and the clock's next block line ramps on from there (its state starts at that point). The
+ *  hits already scheduled with the hand's value leave this param alone (cancelled from now). */
+function autoHandoff(li, key, v) {
+  const c = kit?.chains[li]; if (!c) return; const p = autoParam(c, key), now = T.getContext().rawContext.currentTime, t = now + 0.03, x = soundValue(c, key, v);
+  try { const x0 = p.getValueAtTime(now); p.cancelScheduledValues(now); p.setValueAtTime(x0, now); if (key === 'tone') p.exponentialRampToValueAtTime(x, t); else p.linearRampToValueAtTime(x, t); } catch {}
+  (c.ramp ??= {})[key] = { x, t, flat: false };
 }
+/** A gauge turned (v in lock units, from `before`) on the selected lane: its gesture follows, or one starts (timed: it
+ *  ends 400 ms after its last move). → the value the knob's own edit writes: undefined when the gesture records (the
+ *  lane value stays); not recording, the lane value moved by the turn, as the Move's relative knobs move it (the gauge
+ *  shows what plays, a lock or a curve, while the lane value is under it); stopped, or a lock-panel knob not recording:
+ *  v itself (the knob acts as always). */
+function handTurn(src, k, v, before = v, kind = src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step') {
+  if (!playing || (src === 'lock' && !recKnobs())) return v;
+  let g = knobGest; if (g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched) gestMove(v); else g = gestStart(m.selected, k, kind, { touch: false, v, src, from: before });
+  return !g ? v : g.rec ? undefined : lockClamp(k, g.lane0 + (v - g.v0));
+}
+/** The gauge the gesture on now holds, if it is one of the selected lane's (sync leaves it to the hand). */
+const handGauge = () => { const g = knobGest; return g?.li === m.selected ? (g.src === 'snd' ? sliders['snd:' + g.k] : g.src === 'lane' ? sliders[g.k] : null) : null; };
 /** A gauge held: its gesture runs until the pointer lets go (the knob's own moves come through handTurn). */
 function handHold(src, k, v) { if (!playing || (src === 'lock' && !recKnobs())) return; gestStart(m.selected, k, src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step', { touch: true, v, src }); }
 function handLetGo(src, k) { const g = knobGest; if (g && g.src === src && g.k === k && g.knob == null && g.touch && !g.latched) gestEnd(); }
@@ -988,8 +1009,11 @@ function buildAutoUI() {
 /** A4: an edit of the selected lane's automation (½, ×2, a clear): one undo step; its chain starts over from the knob or
  *  the curve (a jump on the next block line). True when it changed something. */
 function autoEdit(fn, li = m.selected) {
-  gestEnd(true); if (!fn(m.lanes[li])) return false; const c = kit?.chains[li]; if (c) c.ramp = null;
-  applySound(li); ownNext = true; sync(); return true;
+  gestEnd(true); const lane = m.lanes[li], had = AUTO_KEYS.filter(k => lane.auto?.[k]); if (!fn(lane)) return false;
+  // playing, each curve it changed glides to what plays now (a cleared one to the knob) instead of jumping there
+  const soft = playing && kit ? new Set(had) : null; applySound(li, kit, soft);
+  if (soft) for (const k of had) autoHandoff(li, k, lane.autoAt(k, heardStep(lane)) ?? lane.sound[k]);
+  ownNext = true; sync(); return true;
 }
 
 // ---- evolve: every N bars, nudge some lanes; optionally come back home ----
@@ -1907,7 +1931,7 @@ function paintLeds() {
   for (let t = 1; t <= 4; t++) { const li = trackLane(t, shift, m.lanes.length); move.setButtonColor(`track${t}`, mute.held ? (muteQ.has(li) ? CUE_LED : m.lanes[li].muted ? 0 : LANE_LED[li]) : li === m.selected ? COLOR.WHITE : LANE_DIM[li]); }
   const blinkLed = (name, idle) => { const b = blink.get(name); move.setButtonColor(name, b ? (b.on ? REC_LED : 0) : idle); };
   move.setButtonColor('play', playing ? COLOR.WHITE : CYAN_LED); move.setButtonColor('mute', lane.solo ? nearestPaletteIndex('#fde047') : lane.muted ? COLOR.WHITE : 0); blinkLed('capture', evo.on ? MAGENTA_LED : LANE_LED[0]); move.setButtonColor('undo', hist.canUndo ? LANE_LED[3] : 0); move.setButtonColor('layout', fill ? COLOR.WHITE : latch.state === 'armed' ? CYAN_LED : 16); blinkLed('delete', 16); move.setButtonColor('minus', evo.on ? MAGENTA_LED : 16); move.setButtonColor('plus', pfx.throw ? COLOR.WHITE : 16);
-  blinkLed('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185'));   // A3: blinks while a gesture records move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);
+  blinkLed('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);   // record (A3): blinks while a gesture records
   move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
 move.addEventListener('pad', (e) => {

@@ -181,29 +181,35 @@ function chainSegments(slotStates, bars, restart) {
 export const collectChain = (slotStates, { bars, tempo, dice = null, restart = false }) => chainSegments(slotStates, bars, restart).flatMap(({ m, from, to, origin }) => collectHits(m, { from, to, tempo, dice, origin }));
 /** A2: the curves of a chain (autoRamps per slot segment, each from its own origin). */
 export const collectChainRamps = (slotStates, { bars, restart = false }) => chainSegments(slotStates, bars, restart).flatMap(({ m, from, to, origin }) => autoRamps(m, from, to, origin));
-/** A7: a chain's hits and its automation as MIDI CC (autoCCs per slot segment: each slot's lanes and curves). */
+/** A7: a chain's hits and its automation as MIDI CC (autoCCs per slot segment: each slot's lanes and curves). A key the
+ *  chain automates anywhere on a lane is set at the start of every slot that doesn't (to that slot's lane value), so a
+ *  DAW never plays a slot with the last value of the one before. */
 export function collectChainAuto(slotStates, { bars, tempo, dice = null, restart = false, cc = AUTO_CC }) {
-  const hits = [], ccs = [], tickSec = 60 / tempo / PPQ;
-  for (const { m, from, to, origin } of chainSegments(slotStates, bars, restart)) { const h = collectHits(m, { from, to, tempo, dice, origin }); hits.push(...h); ccs.push(...autoCCs(m, h, autoRamps(m, from, to, origin), { cc, tickSec })); }
-  return { hits, ccs };
+  const hits = [], tickSec = 60 / tempo / PPQ, segs = chainSegments(slotStates, bars, restart).map((s) => { const h = collectHits(s.m, { from: s.from, to: s.to, tempo, dice, origin: s.origin }); hits.push(...h); return { ...s, ccs: autoCCs(s.m, h, autoRamps(s.m, s.from, s.to, s.origin), { cc, tickSec }) }; });
+  const used = new Set(segs.flatMap(s => s.ccs.map(c => `${c.li}:${c.k}`)));
+  for (const s of segs) for (const id of used) {
+    const [li, k] = [+id.split(':')[0], id.split(':')[1]], l = s.m.lanes[li];
+    if (l && !s.ccs.some(c => c.li === li && c.k === k)) s.ccs.unshift({ li, k, time: s.from * tickSec, cc: cc[k], v: cc7(k, laneBase(l, k)) });
+  }
+  return { hits, ccs: segs.flatMap(s => s.ccs) };
 }
-/** A7: the keys a hit's own value goes out on as a CC before its note (a lock, a modulator, timbre dice or scale snap
- *  put them on the hit); velocity is the note's, chance and nudge are in which notes there are and when. */
+/** A7: the keys a lane's step locks go out on as a CC before each note (Decision 6: only keys the lane has locks of);
+ *  velocity is the note's, chance and nudge are in which notes there are and when. */
 const STEP_CC_KEYS = ['tone', 'decay', 'snap', 'color', 'tune'];
 const cc7 = (k, v) => Math.max(0, Math.min(127, Math.round((k === 'tune' ? (v + 1) / 2 : v) * 127)));
+const laneBase = (l, k) => (k === 'tune' ? l.tune : l.sound[k]);
 /**
- * A7: the automation of a hit list as MIDI CC on each lane's own track: [{ li, time (s), cc, v (0..127) }]. Step values:
- * one CC just before each note of a lane whose hits carry that key (`hits` from collectHits: its lock, else the lane
- * value, so a note without a lock puts the synth back), only for those keys; curves (`ramps`: autoRamps, master ticks) on
- * the block grid, wherever the 7-bit value changes (the first always). cc: { key: CC number, 0 = left out }. A pattern
- * without either gives none.
+ * A7: the automation of a hit list as MIDI CC on each lane's own track: [{ li, k, time (s), cc, v (0..127) }]. Step
+ * values: for each key a lane has step locks of, one CC just before each of its notes with what the note plays (its
+ * lock, as the modulator or the scale moved it; a note without one: the curve where it sounds, else the lane value, so
+ * the synth is put back); curves (`ramps`: autoRamps, master ticks) on the block grid, wherever the 7-bit value changes
+ * (the first always). cc: { key: CC number, 0 = left out }. A pattern without locks of those keys or curves gives none.
  */
 export function autoCCs(m, hits, ramps, { cc = AUTO_CC, tickSec }) {
-  const out = [], keys = m.lanes.map((l, li) => STEP_CC_KEYS.filter(k => cc[k] > 0 && hits.some(h => h.li === li && h.lock?.[k] != null)));
-  const base = (l, k) => (k === 'tune' ? l.tune : l.sound[k]);
-  for (const h of hits) for (const k of keys[h.li] || []) out.push({ li: h.li, time: h.time, cc: cc[k], v: cc7(k, h.lock?.[k] ?? h.auto?.[k] ?? base(m.lanes[h.li], k)) });   // a tone curve where the note sounds
+  const out = [], keys = m.lanes.map(l => STEP_CC_KEYS.filter(k => cc[k] > 0 && l.locks.some((lk, i) => i < l.length && lk?.[k] != null)));
+  for (const h of hits) for (const k of keys[h.li] || []) out.push({ li: h.li, k, time: h.time, cc: cc[k], v: cc7(k, h.lock?.[k] ?? h.auto?.[k] ?? laneBase(m.lanes[h.li], k)) });
   const last = new Map();
-  for (const r of ramps) { if (!(cc[r.k] > 0)) continue; const v = cc7(r.k, r.v), id = `${r.li}:${r.k}`; if (last.get(id) === v) continue; last.set(id, v); out.push({ li: r.li, time: r.t * tickSec, cc: cc[r.k], v }); }
+  for (const r of ramps) { if (!(cc[r.k] > 0)) continue; const v = cc7(r.k, r.v), id = `${r.li}:${r.k}`; if (last.get(id) === v) continue; last.set(id, v); out.push({ li: r.li, k: r.k, time: r.t * tickSec, cc: cc[r.k], v }); }
   return out;
 }
 /** The time signatures of a chain, `bars` each: [{ s (sixteenth it starts on), meter }], one per change (the MIDI

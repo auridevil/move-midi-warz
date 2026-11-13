@@ -107,11 +107,11 @@ export function stemsZip(lanes, names, sampleRate, folder = 'orbits', acid = nul
 }
 // ---- E6 jam ring-out. Recorded live, what follows a take's end is the pattern playing on (new hits). So the ring-out
 // is rendered offline from the hits the take itself played: only their tails, as if the music stopped on the bar line.
-/** The live kit's hit log: newest last; entries over `keep` seconds older than the newest go in batches (the scheduler
- *  pays for a push). */
+/** The live kit's hit log (and A2's curve log): newest last; entries over `keep` seconds older than the newest go in
+ *  batches, once the oldest is a second past it (the scheduler pays for a push: no splice on every one). */
 export function logHit(log, h, keep) {
   log.push(h);
-  if (log.length > 256 && log[0].time < h.time - keep) { let i = 0; while (i < log.length && log[i].time < h.time - keep) i++; log.splice(0, i); }
+  if (log.length > 256 && log[0].time < h.time - keep - 1) { let i = 0; while (i < log.length && log[i].time < h.time - keep) i++; log.splice(0, i); }
   return log;
 }
 /** The last frame in [from, to) where any channel is over `floor` (from − 1 when none is). */

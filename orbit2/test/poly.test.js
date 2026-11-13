@@ -1390,7 +1390,7 @@ test('ORBIT2-09 r1: slices join without a hole, a break lies across its lane at 
   // sample lane loads its set, even on a chain that already plays a sample, as after a slot recall (dex 1)
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
   const live = app.slice(app.indexOf('function liveHit('), app.indexOf('function setRec('));
-  assert.match(live, /ph = lane\.padHit\(idx, lock\)/); assert.match(live, /hitSound\([^;]*ph\.lock[^;]*ph\.slice\)/, 'liveHit plays its step\'s slice'); assert.ok(live.indexOf('lane.quantize(') < live.indexOf('hitSound('), 'the step is known before the hit sounds');
+  assert.match(live, /ph = lane\.padHit\(idx, lock\)/); assert.match(live, /hitSound\([^;]*ph\.lock[^;]*ph\.slice[,)]/, 'liveHit plays its step\'s slice'); assert.ok(live.indexOf('lane.quantize(') < live.indexOf('hitSound('), 'the step is known before the hit sounds');
   const bv = app.slice(app.indexOf('function buildVoice('), app.indexOf('// ---- engines')), at = bv.indexOf('ensureSample(lane)');
   assert.ok(at > 0 && at < bv.indexOf('&& c.v) return'), 'ensureSample runs before the early return');
 });

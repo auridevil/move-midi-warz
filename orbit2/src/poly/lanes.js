@@ -108,6 +108,9 @@ export function autoFrom(o) {
   }
   return AUTO_KEYS.some(k => a[k]) ? a : null;
 }
+/** Curves as saved: a copy, keys in AUTO_KEYS order whatever order they were recorded in (so a save, an undo snapshot and
+ *  what autoFrom rebuilds compare equal). */
+const autoJSON = (a) => { const o = { loops: a.loops, len: a.len }; for (const k of AUTO_KEYS) if (a[k]) o[k] = a[k]; return o; };
 /** A share link's curves at half resolution (every second point, `res: 4`): autoFrom puts the points between back. */
 export const autoHalf = (a) => { if (!a) return a; const o = { ...a, res: AUTO_RES / 2 }; for (const k of AUTO_KEYS) if (a[k]) o[k] = a[k].replace(/(.)./g, '$1'); return o; };
 /** Master clock resolution (ticks per beat). 840 = 24 × 35 = 2³·3·5·7: every ratio's step is a whole number of ticks
@@ -667,7 +670,7 @@ export class Lane {
   restore(o) { const b = Lane.from(o); for (const k of EVOLVE_FIELDS) this[k] = b[k]; if (this.pos >= this.length) this.pos = 0; }
   toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null, ...this.genJSON() }; }
   /** V3 / V5 settings and A2 curves, saved only when set (an older lane saves as it always did). */
-  genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; if (this.auto) o.auto = { ...this.auto }; return o; }
+  genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; if (this.auto) o.auto = autoJSON(this.auto); return o; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one
   static from(o) { const l = new Lane(o.name, { length: o.length, ratioIndex: ratioFrom(o) }); Object.assign(l, { hits: Array.from({ length: MAX_STEPS }, (_, i) => !!o.hits?.[i]), accents: Array.from({ length: MAX_STEPS }, (_, i) => !!o.accents?.[i]), rotation: o.rotation, swing: o.swing, prob: o.prob, tune: o.tune, muted: o.muted, euclidK: o.euclidK }); l.sound = { ...DEFAULT_SOUND, ...(o.sound || {}) }; l.voice = o.voice || o.name; l.locks = Array.from({ length: MAX_STEPS }, (_, i) => lockFrom(o.locks?.[i])); l.evolve = o.evolve ?? true; l.trigs = Array.from({ length: MAX_STEPS }, (_, i) => (o.trigs?.[i] ? { ...o.trigs[i] } : null)); l.solo = !!o.solo; l.choke = Number.isInteger(o.choke) ? o.choke : -1; l.sample = sampleFrom(o.sample); l.setSwingTpl(o.swingTpl); l.setOffset(o.offsetMs); l.velHuman = clamp(+o.velHuman || 0, 0, 1); l.setEuclidMode(o.euclidMode); l.setMod(o.mod); l.setTimbreDice(o.tdice); l.setScale(o.scale); l.auto = autoFrom(o.auto); for (const t of l.trigs) if (t) { t.ratchet = clamp(Math.round(+t.ratchet || 1), 1, MAX_RATCHET); if (t.ramp != null) t.ramp = clamp(+t.ramp || 0, -1, 1); } return l; }   // older saves: no template (MPC), no offset
 }

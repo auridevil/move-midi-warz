@@ -185,7 +185,7 @@ test('A3 / A6 wiring: the clock writes before the tick\'s steps, the hand rides 
   const at = (re) => app.search(re); assert.ok(at(/if \(knobGest\?\.rec\) autoRecordTick\(t, ts, cut\)/) > 0 && at(/if \(knobGest\?\.rec\) autoRecordTick/) < at(/if \(liveQuiet\(m, t, early/), 'step locks are written before the tick decides its steps');
   assert.match(app, /liveTick\(m, t, early, \{[^}]*hand: handNow \}\)/); assert.match(app, /if \(handNow\?\.\[r\.li\]\?\.\[r\.k\] == null\) rampAuto\(kit/, 'no ramp under a hand');
   assert.match(app, /const save = \(\) => \{ if \(knobGest\?\.rec && !restoring\) \{ knobGest\.dirty = true; return; \}/, 'nothing committed while a gesture records');
-  assert.match(app, /ownNext = true; save\(\); offClock\(fromClock, sync\)/, 'its end is one step of its own, committed before a load replaces the pattern');
+  assert.match(app, /if \(g\.wrote \|\| g\.dirty\) \{ if \(here\) applySound\(g\.li\); ownNext = true; save\(\); \}/, 'its end is one step of its own, committed before a load replaces the pattern');
   assert.match(app, /move\.addEventListener\('encoderTouch'/); assert.match(gauge, /onStart\?\.\(v\)/); assert.match(gauge, /onEnd\?\.\(v\)/);
   for (const fn of ['function loadSlot', 'function loadMachine', 'function rollPattern']) assert.match(app.slice(app.indexOf(fn), app.indexOf(fn) + 200), /gestEnd\(true/, `${fn} ends a gesture first`);
   assert.match(app, /const undo = \(\) => \{ gestEnd\(true\); applyState/);
@@ -223,8 +223,30 @@ test('A7 MIDI of a chain: each slot\'s own lanes and curves (collectChainAuto)',
   const b = Machine.from(a.toJSON()); b.lanes[0].clearAuto(); b.lanes[0].recordStepValue(0, 'snap', 1);
   const { hits, ccs } = collectChainAuto([a.toJSON(), b.toJSON()], { bars: 1, tempo: 120, dice: Dice.take(4), restart: true });
   assert.deepEqual(hits, collectChain([a.toJSON(), b.toJSON()], { bars: 1, tempo: 120, dice: Dice.take(4), restart: true }), 'the same hits as the chain export');
-  const bar = BAR_TICKS * TICK; assert.ok(ccs.filter(c => c.cc === AUTO_CC.pan).every(c => c.time < bar), 'the pan curve only in slot A'); assert.equal(ccs.filter(c => c.cc === AUTO_CC.snap).length, 4, 'slot B: a snap CC on each of its 4 notes');
-  assert.ok(ccs.filter(c => c.cc === AUTO_CC.snap).every(c => c.time >= bar));
+  const bar = BAR_TICKS * TICK, pan = ccs.filter(c => c.cc === AUTO_CC.pan && c.time >= bar); assert.deepEqual(pan.map(c => [c.time, c.v]), [[bar, 64]], 'slot B: the pan curve is slot A\'s; B sets its own lane value once where it comes in'); assert.equal(ccs.filter(c => c.cc === AUTO_CC.snap && c.time >= bar).length, 4, 'slot B: a snap CC on each of its 4 notes');
+  assert.deepEqual(ccs.filter(c => c.cc === AUTO_CC.snap && c.time < bar).map(c => c.time), [0], 'slot A has no snap locks: its lane value once, at its start');
+});
+test('ORBIT2-18 r1: a chain\'s MIDI sets every automated key again where a slot without it comes in (its lane value)', async () => {
+  const { collectChainAuto } = await import('../src/poly/export.js'), { AUTO_CC } = await import('../src/poly/midiio.js');
+  const a = new Machine(); a.lanes.forEach(l => l.clear()); const k = a.lanes[0]; k.setLength(4); k.setEuclid(4); k.sound.decay = 0.5; k.sound.tone = 0.25; k.recordCurve('tone', 0, 0.2, 3.875, 0.8); k.recordStepValue(0, 'decay', 0.9);
+  const b = Machine.from(a.toJSON()); b.lanes[0].clearAuto();
+  const { ccs } = collectChainAuto([a.toJSON(), b.toJSON(), a.toJSON()], { bars: 1, tempo: 120, dice: Dice.take(4), restart: true }), bar = BAR_TICKS * TICK;
+  const at = (cc, t) => ccs.filter(c => c.cc === cc && Math.abs(c.time - t) < 1e-9).map(c => c.v);
+  assert.deepEqual(at(AUTO_CC.tone, bar), [32], 'slot 2 starts its tone at its lane value (0.25)'); assert.deepEqual(at(AUTO_CC.decay, bar), [64], 'and its decay (0.5)');
+  assert.equal(ccs.filter(c => c.time > bar && c.time < 2 * bar).length, 0, 'nothing else in slot 2'); assert.equal(at(AUTO_CC.tone, 2 * bar).length, 1, 'slot 3 starts its curve again');
+});
+test('ORBIT2-18 r1: step CCs only for keys a lane has locks of (Decision 6): a scale-snapped lane without locks sends none; the saved curve keys come in one order', async () => {
+  const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setVoice('marimba'); l.setScale('minor'); l.tune = 0.13; l.setLength(4); l.setEuclid(4);
+  const hits = collectHits(m, { to: BAR_TICKS, tempo: 120, dice: Dice.take(1) }); assert.ok(hits.some(h => h.lock?.tune != null), 'the scale puts a tune on the hits');
+  const { autoCCs } = await import('../src/poly/export.js'); assert.equal(autoCCs(m, hits, [], { tickSec: TICK }).length, 0);
+  l.recordStepValue(1, 'tune', 0.5); assert.equal(autoCCs(m, collectHits(m, { to: BAR_TICKS, tempo: 120, dice: Dice.take(1) }), [], { tickSec: TICK }).length, 4, 'with a tune lock: a CC on every note');
+  const r = laneOf(4); r.recordCurve('level', 0, 0.5); r.recordCurve('tone', 0, 0.5); assert.deepEqual(Object.keys(r.toJSON().auto), ['loops', 'len', 'tone', 'level']);
+  assert.equal(JSON.stringify(Lane.from(JSON.parse(JSON.stringify(r.toJSON()))).toJSON()), JSON.stringify(r.toJSON()), 'a reload saves the same bytes (undo compares them)');
+});
+test('ORBIT2-18 r1: the Move\'s ◀ ▶ are lit again (paintLeds, not inside a comment)', async () => {
+  const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  const line = app.split('\n').find(s => s.includes("move.setButtonColor('left', LANE_DIM[m.selected])")); assert.ok(line);
+  assert.ok(!line.includes('//') || line.indexOf('//') > line.indexOf("setButtonColor('right'"), 'the calls come before any comment on the line');
 });
 test('A5 share links carry curves; over the limit at half resolution, then without curves (locks always kept)', async () => {
   const { encodeShare, encodeShareFit, decodeShare } = await import('../src/poly/export.js');

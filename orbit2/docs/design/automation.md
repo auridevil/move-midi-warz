@@ -288,8 +288,14 @@ Browser (`orbit2/tools/cdp.mjs`, port 5400 / 9400, muted), a 4-bar pattern:
 - The knob gesture is `knobGest` in `app.js` (the I1 canvas owns `gest`). A gesture that records defers `save()` and
   commits one own undo step synchronously on its end (before a slot, an undo or a load replaces the pattern). Move:
   touching a knob + Record cycles knobs off → touch → latch; touching + Delete clears that knob's automation.
-- MIDI CC: `autoCCs` sends a step key for a lane whose hits carry it (a lock, a modulator, timbre dice or scale snap),
-  the curve where the note sounds else the lane value on the other notes; CC numbers are 0..119 (`ccFrom`).
+- MIDI CC: `autoCCs` sends a step key only for a lane with step locks of it (Decision 6), with what each note plays (its
+  lock as a modulator or the scale moved it; else the curve where it sounds, else the lane value); CC numbers are
+  0..119 (`ccFrom`). A chain sets every key it automates on a lane again where a slot without it comes in (its lane
+  value), so no slot plays with the one before's last value.
+- Un-armed, a gauge turn moves the lane value by the turn (the gauge shows what plays, a lock or a curve, over it), as
+  the Move's relative knobs always did; `sync` leaves the gauge a hand holds to the hand. On release a curve param glides
+  from where it is to the curve in 30 ms and the clock ramps on from there (`autoHandoff`); clearing a curve while
+  playing glides the same way.
 - Budget: `autoRamps` costs ~2 µs per block for 6 lanes × 5 curves (Node); the stress meter stays at level 0 with
   headroom 74–75 ms at 240 bpm (unchanged) and 64–68 ms against 70–71 ms without curves under a 6× CPU throttle. The
   strip is drawn once per change into an offscreen canvas; a frame copies it and sets only the gauges whose value moved.

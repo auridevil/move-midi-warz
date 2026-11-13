@@ -207,7 +207,7 @@
         <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
         <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
       </div>
-      <span class="ctl-lbl" title="MIDI export: automation as CC on each lane's track">automation in the MIDI export: CC per parameter (0 = left out)</span>
+      <span class="ctl-lbl wrap" title="MIDI export: automation as CC on each lane's track">automation in the MIDI export: CC per parameter (0 = left out)</span>
       <div id="midi-cc" class="gauges midi-gauges"></div>
       <p id="midi-status" class="hint tight"></p>
     </details>
@@ -257,7 +257,7 @@
         <tr><th>−</th><td>evolve on/off</td></tr>
         <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
         <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
-        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
+        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · in touch mode a touch writes even while the knob holds still (rest a finger on it only to record its value) · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
         <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
         <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
         <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
