@@ -110,3 +110,10 @@ test('I4 r1 drawn thumbnails are cached in one write; a full store drops them be
   cap = 100; assert.equal(lib.save('d', { m: { lanes: [] }, tempo: 70 }), null, 'no room even without them: null as before');
   assert.deepEqual(lib.items.map(e => e.name), ['a', 'b', 'c'], 'and the failed setup is not kept');
 });
+
+test('I2 r2 a broken or cut link says so in plain words; a link of something else says that', async () => {
+  const good = await encodeShare(new Machine().toJSON(), 120, { title: 'night bus' });
+  for (const bad of ['AAAA', 'garbage!', good.slice(0, 40), good.slice(0, -5)]) await assert.rejects(decodeShare(bad), /^Error: this link is broken or cut short$/, bad.slice(0, 12));
+  await assert.rejects(decodeShare(b64u(await deflate({ v: 1, tempo: 90 }))), /^Error: not an Orbits link$/, 'whole, but no pattern in it');
+  assert.equal((await decodeShare(good)).title, 'night bus');
+});

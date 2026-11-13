@@ -48,7 +48,7 @@ const perfKey = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo'
 const save = () => { const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, own: ownNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; ownNext = false; try { localStorage.setItem(SAVE, full); } catch {} };
 const dice = new Dice(); let fill = false, fillHold = false;   // fill = held (Layout, the fill button, key 0) or latched for a bar (P3)
 const latch = new FillLatch(), muteQ = new MuteQueue();   // P3 fill for the next bar; P2 mutes waiting for the next bar line
-const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one last loaded / saved
+const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one on screen (loaded or saved, until a fresh start or a link: leaveSetup)
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
 const SETTINGS = 'midi-warz.orbit2.settings.v1';
 const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest' };
@@ -1200,18 +1200,20 @@ async function recordPostcard() {
   if (postcarding) return; const cv = $('cv');
   if (!window.MediaRecorder || !cv.captureStream) throw new Error('this browser cannot record video');
   postcarding = true; $('share-postcard').disabled = true;
-  const raw = T.getContext().rawContext, dest = raw.createMediaStreamDestination(), gate = raw.createGain(); let out = null, ours = false;
+  const raw = T.getContext().rawContext, dest = raw.createMediaStreamDestination(), gate = raw.createGain(); let out = null, ours = false, stream = null, mr = null;
   try {
     await wake(); out = kit.master.out; gate.gain.value = 0; out.connect(gate); gate.connect(dest);
     const lat = await masterLatency(raw.sampleRate);
-    const stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
     const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
-    const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {}), chunks = [], stopped = new Promise(r => { mr.onstop = r; });
+    mr = new MediaRecorder(stream, mimeType ? { mimeType } : {}); const chunks = [], stopped = new Promise(r => { mr.onstop = r; });
     mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    // the next bar line's audio time, from the scheduler (Play's tick 0 when stopped); a beat stopped meanwhile never gets there
-    const line = new Promise(r => { barWait = r; }); if (!playing) { ours = true; await togglePlay(); }
-    const t0 = await Promise.race([line, sleep(m.barTicks() * tickSec() + 2).then(() => null)]);
-    if (t0 == null) throw new Error('the beat stopped before a bar line');
+    // the next bar line's audio time, from the scheduler (Play's tick 0 when the postcard starts the beat); null as soon
+    // as the beat stops (checked every 100 ms), or if it never gets there
+    const until = raw.currentTime + m.barTicks() * tickSec() + 2;
+    const line = new Promise(r => { const end = (t) => { clearInterval(iv); barWait = null; r(t); }, iv = setInterval(() => { if (!playing || raw.currentTime > until) end(null); }, 100); barWait = end; });
+    if (!playing) { ours = true; await togglePlay(); } else toast('postcard: it starts on the next bar line…', 4000);   // up to a bar of waiting
+    const t0 = await line; if (t0 == null) throw new Error('the beat stopped before a bar line');
     const w = postcardWindow({ line: t0, lat, barSec: m.barTicks() * tickSec(), bars: POSTCARD_BARS }), g = gate.gain;
     g.setValueAtTime(0, w.fadeIn); g.linearRampToValueAtTime(1, w.a); g.setValueAtTime(1, w.fadeOut); g.linearRampToValueAtTime(0, w.b);
     await sleep(w.recStart - raw.currentTime); mr.start(250); toast(`recording a postcard: ${nBars(POSTCARD_BARS)}…`, (w.b - raw.currentTime) * 1000 + 2000);
@@ -1220,7 +1222,10 @@ async function recordPostcard() {
     const type = (mr.mimeType || 'video/webm').split(';')[0], blob = new Blob(chunks, { type }); if (!blob.size) throw new Error('the recording came out empty');
     window.__postcard = blob;   // the browser check reads it back (tracks, size)
     await shareFile(new File([blob], `orbits-postcard-${tempo}bpm-${stamp()}.${type.includes('mp4') ? 'mp4' : 'webm'}`, { type }), 'postcard');
-  } finally { try { out?.disconnect(gate); } catch {} gate.disconnect(); barWait = null; postcarding = false; $('share-postcard').disabled = false; }
+  } finally {   // whatever happened: no recorder or canvas capture left running, the master untapped
+    if (mr?.state === 'recording') mr.stop(); stream?.getTracks().forEach(t => t.stop());
+    try { out?.disconnect(gate); } catch {} gate.disconnect(); barWait = null; postcarding = false; $('share-postcard').disabled = false;
+  }
 }
 /** I5 Seed of the Day: the day's constellation (share.js seedOfDay: UTC date → seed → musical randomize on a fresh
  *  4-lane machine) with the dice locked to that seed, so its chance and humanize roll the same for everyone. One undo
@@ -1296,9 +1301,7 @@ async function loadShared({ first = false } = {}) {
     const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup();
     if (first) hist.restart();
     $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; showGift(o, first);
-  } catch (e) {   // a link cut short or mangled fails inside the decoder (atob, inflate, JSON): say that, not its words
-    const why = /Orbits/.test(e.message) ? e.message : 'this link is broken or cut short'; $('exp-status').textContent = `link: ${why}`; toast(`link: ${why}`, 4000);
-  }
+  } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`, 4000); }   // decodeShare's words are for people
 }
 /**
  * I2: a shared beat opens as a gift, a full-screen card: its rings drawn small, title, tempo, where it came from, and

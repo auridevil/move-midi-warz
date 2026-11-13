@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-15
 title: ORBIT2-15 sharing (I2–I5), review panel
 date: 2026-11-13
-round: 1
+round: 2
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
-  verifier: NOT HAPPY
-  architect: NOT HAPPY
-  sound: NOT HAPPY
+  verifier: HAPPY
+  architect: HAPPY
+  sound: HAPPY
   rio: HAPPY
   dex: HAPPY
 tags: [orbit2, review]
@@ -155,3 +155,69 @@ UTC (sound, verifier); `share.js` is a clean model module reusing `Machine.from`
   (5400/9400, silent, `/tmp/orbit2-impl/`, deleted): the checks above, 26 of 26, 0 page errors on desktop (1440 × 900)
   and phones (390 × 844, 844 × 390); screenshots looked at (the card playing, the card sideways, the library's four
   thumbnails). `app.js` 1966 → 1996 lines.
+
+## Round 2 (re-check): verifier, architect and sound HAPPY, the whole panel HAPPY
+
+Only the reviewers NOT HAPPY after round 1 (verifier, architect, sound, all on the default model), fresh sub-agents in
+one message, own ports 5401 / 5402 / 5403 (+ 940x; the phase start `1682334` on +100, the code before the round-1 fixes
+`a2a606b` on +200), the verifier also ran the smoke on 9222. Brief as in round 1 (goal, I2–I5, the spec, where things
+are, the must-fix rule with the later ids and the Later items, the page), `git diff a2a606b..d81cd67` (the round-1 fixes
+alone: app.js, library.js, share.js, styles.css, share.test.js, +145/−52) and the whole phase (`1682334..d81cd67`, 9
+files, +621/−35 with the docs), each one's own round-1 MUST-FIX and "Changes after round 1", with the instruction to
+confirm their items first with the same repro, then check nearby, anything new only in scope and marked NEW.
+`stalled: 0`: every round-1 MUST-FIX is closed and everyone is HAPPY.
+
+| reviewer | verdict | MUST-FIX |
+|---|---|---|
+| verifier | HAPPY | (1) FIXED: 1440 × 900, returning visit, boom bap playing, then `location.hash = '#p=…'`: the card reads "■ stop" with remix and "back to my beat", the clock running (tick 4655 → 5600 in 0.5 s); tap 1: "▶ play", the transport stopped (tick held at 5670); tap 2: "■ stop", the clock running; remix closes the card with the beat playing. At `a2a606b` the same repro still fails ("▶ tap to hear this orbit" over a running clock, the tap stops it). Stopped, a link pasted: "▶ tap to hear this orbit", no remix, focus on it; Enter: "■ stop", focus on remix; first visit: no "back to my beat", tap / tap / remix as expected. (2) FIXED: a saved "night bus" reloaded before each step; after a groove, randomize, wild, init and "pattern from seed" (`#dice-make`): `shareUrl().title` "an orbit", the decoded link with no title and no from, no row marked, lineage null, every time; today's seed: untitled, from and lineage "seed of the day · 2026-11-13"; at `a2a606b` all five still share as "night bus" with the row marked. Nearby: × and Esc keep the beat (lineage "night bus"), "back to my beat" restores the previous beat (undo / redo flip between the two; opened while playing it keeps playing), a re-share after a remix has no title and from "night bus"; a `1682334` link opens as "an orbit · 124 bpm · 4 rings", Esc leaves the lineage null; an `a2a606b` link carrying the placeholder takes its from, never "an orbit"; `#p=abc` and a half-length code: "link: this link is broken or cut short", no card; Esc and Enter on a menu item give the focus back to "…"; postcard at 120 bpm from stopped 8.16 s, first sound at 49 ms, the beat stopped after, a second call while recording returns at once (one file); from playing 8.10 s, first sound at 43 ms; the beat stopped during the wait: "the beat stopped before a bar line", the menu item enabled again; 4 bars of audio 8.000 s; 844 × 390: the kicker at 33–51 px, all within 390 px. Check clean, 218 + 9, smoke 10/10, no page errors. |
+| architect | HAPPY | (1) FIXED: a link taken with Esc ("friend beat" as lineage), `saveSetup('night bus')` (its `from` "friend beat"), then for each of a groove, randomize, wild, init and `#dice-make` after `loadSetup(night bus)`: before, title "night bus", lineage "friend beat", the row marked; after every one, title "an orbit", the link with title and from null, lineage null (the getter and the saved settings), no row marked. At `a2a606b`: "night bus" and the mark after all five, and "pattern from seed" kept the lineage (the link said from "friend beat"). Nearby: the day's seed over a setup is untitled with its own lineage; a link over a setup unmarks the row as the card opens; an untitled link with a from gives that from as lineage, without one none (`a2a606b`: "an orbit"); the phase-start library and settings carried over: one write at boot caches both thumbnails, lineage null; `barWait` at 240 bpm from stopped (4.28 s, stopped after), while playing (keeps playing), 40 bpm stopped 0.6 s in ("the beat stopped before a bar line", the next postcard works); the card's button with a link opened while playing; `leaveSetup`'s re-render with 42 setups: a groove after a setup 9.0–13.9 ms against 9.9–11.6 after a groove; storage filled to under 2 K free with 42 setups and thumbnails: a 43rd save is stored (the thumbnails dropped), load, randomize and a groove after it raise nothing and lose nothing. 218 + 9, check clean, no page errors on the three trees. |
+| sound | HAPPY | (1) FIXED: house at 120 bpm, an AudioWorklet tap on `kit.master.out`, the WebM decoded at 48 kHz and lined up by cross-correlation (r 0.984–0.997, −0.1 dB): from stopped, bar 1 beat 1 at 48.6 ms in the file, the sound ends 0.4 ms before the end of bar 4 on a 4 ms linear fade (file / master 0.95, 0.86, 0.61, 0.35, 0.16, 0), then −62.9 dBFS, 8.16 s in all; the four downbeats −10.7 / −10.7 / −11.3 / −10.6 dB against −10.6 / −10.7 / −10.7 / −10.3 on the master; the gate's look-ahead 12.0 ms (measured 12.1), the recorder 34 ms before the gate and 120.7 ms after; the beat stopped after. Tapped at bar 2 beat 2.88 while playing: it starts on bar 3 (1.046 s later), bar 1 beat 1 at 44.6 ms, ends at the end of bar 4 with the fade, the beat keeps playing. The same script on `a2a606b`: 7.98 s, 168.6 ms of silence before beat 1, ending 188.6 ms early on a hard cut (−28 dBFS) while the master still sounded; while playing from bar 2 beat 2.88 to bar 6 beat 2.83. Nearby: the master's level per bar the same inside and outside a postcard (−26.2…−26.6 dB), stress headroom 74.3 / 74.1 ms mean, 69.8 / 70.9 min, level 0, also at 40 and 240 bpm; 7/8 at 240 bpm from stopped (4 bars of 875 ms, a 3.66 s file, r 0.994), 4/4 at 240 while playing, poly345 at 40 bpm while playing (the next bar line 4.45 s after the tap, a 24.12 s file, r 0.997), all ending at the end of bar 4 with the fade; the beat stopped mid-way: no error, the file follows the master to the stop; stopped before the line: the message after 4.0 s, the next postcard works; `exportWav` (HEAD, `a2a606b`, `1682334`) and the 4-bar share (HEAD, `a2a606b`) unchanged (352,800 frames, fmt / acid / smpl / data, acid 16 beats, the loop 0–352,799, RMS within 0.04 dB; sample differences at the level of two renders of one build: the parked unseeded noise); the card's button follows a stop or start from outside it. No page errors. |
+
+SHOULD items recorded (never block): NEW, the share title still follows the setup on screen when a slot recall or an
+undo replaces the beat (`recallSlot(1)` after loading "night bus": the house beat shares as "night bus", its row
+marked; a setup's name does not come back with an undo either, failing safe as unnamed; the row mark behaved so before
+the phase) (verifier, architect); a failed postcard ("the beat stopped before a bar line", or a recorder that can't be
+made) left the canvas capture running, one more live track each time (architect); with storage nearly full,
+`setThumbs`' one write is all or nothing, so after a save that needed `dropThumbs` none are cached again and every render
+fails a write of the whole library (43 setups: 7 failed writes; randomize after a setup 28 ms) (architect); "what this
+beat is" is decided in 7 places, pinned by no unit test (architect); `loadShared` told its own errors apart by matching
+`export.js`'s wording (architect); NEW, a postcard that started the beat stops it ~0.25 s after bar 4 ends, so bar 5's
+downbeat is heard live (−11.2 dBFS within 50 ms; the file is right) (sound); NEW, nothing said the postcard was waiting
+for its bar line (up to a bar: 4.45 s at 40 bpm), and a beat stopped before it was reported only after a bar + 2 s
+(sound); NEW, a beat stopped mid-postcard still gives a 4-bar-long file (music to 4.1 s, then silence) (sound).
+
+GOOD: the card's button follows the transport through the one place `playing` changes (`togglePlay`), right playing and
+stopped, and for the Move's and MIDI's start / stop too (verifier); `freshBeat` / `leaveSetup` plus `linkName` /
+`lineageOf` keep "an orbit" out of every link and lineage, and placeholder links from before still open right
+(verifier, architect); the postcard is exactly 4 bars from the beat's own bar line at every tempo and meter tried, the
+look-ahead measured, not guessed, the 4 ms fades leave no cut and no click, the first downbeat as loud as the rest, and
+it costs the live sound nothing (sound); `barWait` is one null check per tick, and every postcard path leaves the
+transport as it found it (architect).
+
+### Changes after round 2
+
+- **Quick SHOULDs done** (nothing a reviewer confirmed changes):
+  - a postcard that fails or stops early leaves nothing running: the recorder, the stream's tracks (the canvas capture
+    and the destination's audio) and the master's tap all end in `finally` (architect). Page: a postcard whose beat is
+    stopped while it waits: 0 live capture tracks after it, the menu item enabled.
+  - the postcard says when it waits: "postcard: it starts on the next bar line…" while the beat plays, and a beat
+    stopped meanwhile is noticed within 100 ms (checked every 100 ms beside the bar-line hand-over), not after a bar + 2 s
+    (sound). Page: 40 bpm, a postcard started 0.4 s after Play, the beat stopped 300 ms later: "the beat stopped before
+    a bar line" at once.
+  - `decodeShare` says what went wrong in words for people ("this link is broken or cut short" when base64, inflate or
+    JSON fail; "not an Orbits link" for a whole link of something else), so `loadShared` shows its message as it is,
+    matching no text (architect).
+  - the `libCurrent` comment says what it now is: the setup on screen (architect).
+- **Not changed** → [[BACKLOG]] Later: the setup's name through slot recalls and undo, appended to "Lineage and dice
+  through undo" (verifier, architect); thumbnails all or nothing on a full store, appended to "Lighter thumbnails"
+  (architect); "what this beat is" in one place, appended to "A share module" (architect); "The postcard's edges" (the
+  live stop ~0.25 s after bar 4, a file 4 bars long after a stop mid-way) (sound).
+- Tests (219 + 9; `orbit2/test/share.test.js` 8 → 9): "I2 r2 a broken or cut link says so in plain words; a link of
+  something else says that" ('AAAA', a stray character, a link cut to 40 characters and one missing its last 5, a whole
+  payload without a pattern). `npm run check` clean, `npm test` 219 + 9, `node tools/smoke.mjs http://localhost:5400`
+  10/10 (serve.py 5400 + headless Chrome 9222, both stopped). Page (5400/9400, silent, `/tmp/orbit2-impl/`, deleted):
+  the checks above plus a postcard from stopped at 120 bpm (downbeats at 0.049 / 2.057 / 4.057 / 6.057 s, the capture
+  ended, the beat stopped; the first bar 8 ms long because the script had just gone from 40 to 120 bpm and the
+  transport's tempo glides over 0.1 s, so bar 4 ended 8 ms after the gate closed: the end is reckoned at the start's
+  tempo, see "The postcard's edges" in Later) and the broken-link toast, 7 of 7, no page errors. `app.js` 1996 → 1999 lines. **Phase 15
+  review: `result: HAPPY`.**

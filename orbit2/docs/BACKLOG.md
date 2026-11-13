@@ -646,7 +646,11 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Lineage and dice through undo** (ORBIT2-15 round 1, verifier, architect): lineage lives beside the beat (settings,
   library, link), so undo doesn't bring it back: a remix then undo keeps the link's name as your lineage; today's seed
   then undo leaves the dice locked to the day's seed at repeat 1, and the dice you had (free, repeat 4) are gone (a
-  library setup's dice the same since before the phase). Carry `from` (and a load's dice) in the history step.
+  library setup's dice the same since before the phase). Carry `from` (and a load's dice) in the history step. Round 2
+  (verifier, architect): the setup on screen (`libCurrent`) the same: a slot recall or an undo that brings back another
+  beat keeps the setup's name in what you share (`recallSlot(1)` after loading "night bus": the house beat shares as
+  "night bus"), and an undo back to a setup doesn't bring its name back (it fails safe: unnamed); carry the setup id in
+  the history step next to `from`.
 - **"Back to my beat" after two links** (ORBIT2-15 round 1, verifier): two links pasted while the card is open, "back to
   my beat" undoes one step and lands on the first link; it could go back to the beat from before the card.
 - **Sharing after a long wait** (ORBIT2-15 round 1, architect, sound): `navigator.share` runs after the 4-bar render
@@ -658,9 +662,21 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Lighter thumbnails** (ORBIT2-15 round 1, architect, verifier): a 96 px PNG data URL is 9–11 K characters, about twice
   its setup's JSON (WebP at 0.9 only gets to 7.0–7.6 K); in memory keyed by id + `t`, or the ring shapes themselves
   (a few hundred bytes) drawn on render. (Round 1 made them one write per render, and a full store drops them before it
-  fails a save.)
+  fails a save.) Round 2 (architect): that write is all or nothing, so once a save has needed the room, most thumbnails
+  would fit again but none are cached, and every render redraws them all and fails a write of the whole library (43
+  setups: 7 failed writes across save, load, randomize and a groove; randomize after a setup 28 ms): cache what fits.
 - **A share module** (ORBIT2-15 round 1, architect): the share UI (link, file share, postcard, the gift card, the menu)
-  is ~120 lines of `app.js` (1856 → 1996 lines in phase 15); `poly/share.js` holds its pure part.
+  is ~120 lines of `app.js` (1856 → 1999 lines in phase 15); `poly/share.js` holds its pure part. Round 2 (architect):
+  "what this beat is" (the setup on screen and the lineage) is decided in 7 places (init, a groove, a roll, the day's
+  seed, a link, a setup's load and save) and only the browser checks pin the rule, so the next load path (a MIDI import, a
+  Move set) can miss it; one origin argument on `loadMachine`, or a small tested piece of state in that module.
+- **The postcard's edges** (ORBIT2-15 round 2, sound): a postcard that started the beat stops it ~0.25 s after bar 4
+  ends (the recorder's stop, its `onstop`, then the 0.1 s look-ahead), so bar 5's downbeat is heard live (the file is
+  right); a transport stop scheduled on that bar line would end the playback with the postcard. A beat stopped
+  mid-postcard still gives a file 4 bars long (music to 4.1 s, then silence): end it early, or say so. Round 2
+  (implementer): the end is reckoned from the tempo and meter at the start, so a tempo move, a slot in another meter or
+  the transport's 0.1 s tempo glide (Play right after a tempo change: the first bar 8 ms long) moves the real end of bar
+  4 off the gate; the scheduler could hand over the 4th bar line after the start too, as it does the first.
 - **16 bars to make it yours** (ORBIT2-15 round 1, verifier, architect): the I5 backlog text says "16 bars to make it
   yours"; the phase spec left it out and nothing counts them (the toast says "make it yours, then share it"). A design
   call: a 16-bar countdown, then a nudge to share?

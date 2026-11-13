@@ -202,9 +202,11 @@ export async function encodeShare(machineJSON, tempo, meta = {}) {
   const title = metaStr(meta.title), from = metaStr(meta.from);
   return b64u(await pipe(new TextEncoder().encode(JSON.stringify({ v: 1, tempo, m: o, ...(title && { title }), ...(from && { from }) })), new CompressionStream('deflate-raw')));
 }
-/** → { v, tempo, m, title, from } (title / from null on a link made before lineage, or a bad one). */
+/** → { v, tempo, m, title, from } (title / from null on a link made before lineage, or a bad one). Throws a message
+ *  for people: a link cut short or mangled fails in base64, inflate or JSON, a link of something else after that. */
 export async function decodeShare(str) {
-  const o = JSON.parse(new TextDecoder().decode(await pipe(unb64u(str), new DecompressionStream('deflate-raw'))));
+  let o; try { o = JSON.parse(new TextDecoder().decode(await pipe(unb64u(str), new DecompressionStream('deflate-raw')))); }
+  catch { throw new Error('this link is broken or cut short'); }
   if (o?.v !== 1 || !o.m?.lanes) throw new Error('not an Orbits link');
   return { ...o, title: metaStr(o.title), from: metaStr(o.from) };
 }
