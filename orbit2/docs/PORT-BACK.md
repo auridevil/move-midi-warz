@@ -124,6 +124,22 @@ Each package is one port job with its own gate. Order inside a package is the or
 | **Canvas + sharing** | I1 0/3/0, I2 2/3/0, I3 2/4/0, I4 0/5/1, I5 seed 1/3/0 | Commit 0; "A gestures module" and "A share module" extracted in orbit2; I1 after T1 / T2 (touch conflicts) | new `src/poly/share.js`, `src/poly/library.js` (I4 thumbnails), `src/poly/history.js` + `src/poly/scene.js` (I1), `src/poly/app.js`, `poly.html`, `styles.css` (I blocks) |
 | **Learning** | I6 1/4/2 | I7 ported, the phone layout (quest card under the floating ▶), a decision on whether the shipped Orbits wants quests at all (kai, dex: never) | `src/poly/quests.js` (quests), `src/poly/app.js`, `poly.html`, `styles.css` (I6 block) |
 
+### A · parameter automation (ORBIT2-18, added after the final review)
+
+Not in the [[ORBIT2-17]] tally: phase 18 came after it, so there are no votes. Recommendation: **later**, as one package,
+gated on Clock + meter and Commit 0. Design: [[automation]]; review: ORBIT2-18 (round 5, 5/5 HAPPY, nothing deferred).
+
+| package | ids | gate before porting | files (orbit2 → root, whole file unless noted) |
+| --- | --- | --- | --- |
+| **Automation** | A1–A7 | Commit 0 done (the `auto` field is new data on links and saves); Clock + meter ported (`autoRamps` runs on the 840 PPQ block grid and `liveTick({ hand })` sits on R1); the gesture machine kept out of `app.js` (Later "The gesture machine out of `app.js`"); one stress-meter run on a phone with 6 automated lanes (the lab measured 64–68 vs 70–71 ms headroom plain at 6× CPU throttle) | `src/poly/lanes.js` (`AUTO_KEYS`, `autoFrom`, `Lane.auto`, `autoAt`, `recordCurve`, `clearAuto`), `src/poly/export.js` (`autoRamps`, `collectChainRamps`, `expandHits` auto values, `autoCCs`, `encodeShareFit`, `LINK_MAX`), `src/poly/app.js` (`rampAuto`, `paramTo`, `knobGest`, hand hand-off, strip, A marks), `src/gauge.js` (`onStart` / `onEnd`, `setMark`, `prime`; **shared:** smoke Punchliner and Unassembler), `src/poly/midiio.js` (`AUTO_CC`, CC gauges), `src/punch/smf.js` (`part.ccs`, `readMidi` ccs; **shared:** smoke Punchliner), `poly.html`, `styles.css` (strip, A mark, "knobs" segmented control) |
+
+Migration: nothing runs. `lane.auto` is absent in every shipped save and link, and `Lane.from` leaves it off, so old data
+plays byte-identical hits (tested against two old saves, every groove and old share links from the pre-phase code). Links
+stay `v: 1`: a shipped page ignores `auto` and plays the link without curves, locks included. Links over 4000 characters
+fall back to half-resolution curves, then no curves, with a visible note. Port with the MIDI CC defaults unchanged (tone 74,
+decay 75, snap 73, color 71, tune 16, drive 17, level 7, pan 10, send 91). The Move panel rows (touch-record, touch +
+Delete, touch + Record) need the hardware pass the Live package already asks for.
+
 ### Never
 
 - **I5's postcard** (architect, kai, dex, ines, rio): 4 bars recorded in real time lose the tap's share permission

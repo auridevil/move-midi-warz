@@ -178,17 +178,17 @@ pattern". Design first: `orbit2/docs/design/automation.md`.
 
 - **A1 step automation**: turning a knob while recording writes its value as step locks on every step of the selected
   lane that plays during the gesture (decay, snap, color, tune, vel, prob, nudge, slice, stroke…), Elektron-style.
-  (Design: slice and stroke are choosers, not moves, so they stay manual locks: see [[automation]] Decision 1.)
+  (Design: slice and stroke are choosers, not moves, so they stay manual locks: see [[automation]] Decision 1.) ✅ ORBIT2-18
 - **A2 smooth automation**: a per-lane curve for parameters that sound continuous (tone filter, drive, pan, send, level,
   master filter), recorded in real time and replayed as audio-param ramps. (Design: the P6 master filter stays
-  unsaved performance FX, so it is not automated in this phase: see [[automation]] Decision 1.)
-- **A3 recording modes**: arm, touch / latch, the hand overrides playback while touching, one undo step per gesture.
+  unsaved performance FX, so it is not automated in this phase: see [[automation]] Decision 1.) ✅ ORBIT2-18
+- **A3 recording modes**: arm, touch / latch, the hand overrides playback while touching, one undo step per gesture. ✅ ORBIT2-18
 - **A4 see and clear it**: "A" mark on automated gauges, a curve strip with the playhead, gauges moving on playback;
-  clear one parameter / the lane.
-- **A5 everywhere it plays**: live, WAV / stems / jam renders identical to live, slots and chains, share links.
-- **A6 Move gestures**: encoder touch (notes 0–8) starts and ends a gesture; documented in the Move panel.
+  clear one parameter / the lane. ✅ ORBIT2-18
+- **A5 everywhere it plays**: live, WAV / stems / jam renders identical to live, slots and chains, share links. ✅ ORBIT2-18
+- **A6 Move gestures**: encoder touch (notes 0–8) starts and ends a gesture; documented in the Move panel. ✅ ORBIT2-18
 - **A7 MIDI export**: step automation as per-note values / CC, smooth automation as CC curves (CC per parameter,
-  editable).
+  editable). ✅ ORBIT2-18
 
 ## Deferred
 
