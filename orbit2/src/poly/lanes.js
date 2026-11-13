@@ -407,10 +407,13 @@ export class Lane {
     const on = this.hitAt(i), pass = on && condPasses(trig?.cond, loop, ctx.fill, this.lastCond);
     const hit = pass && !this.muted && !ctx.silenced && r < (lock?.prob ?? this.prob) + (ctx.boost || 0);   // V2: a coupled lane's lift
     if (on && setsPrev(trig?.cond)) this.lastCond = pass;
+    // V6: a programmed step that stayed silent, and why (a mute or a solo elsewhere is your choice, not a skip): the
+    // condition said no, or the roll did (a locked dice roll is 'dice', a free one 'prob'). Only drawn, never heard.
+    const skip = on && !hit && !this.muted && !ctx.silenced ? (!pass ? 'cond' : ctx.dice ? 'dice' : 'prob') : null;
     this.pos = (i + 1) % this.length; this.loopN = loop; this.lastTick = tick;
     // swing follows the absolute step (swungAt), not the loop index: on a 5-step lane the index restarts on an odd
     // step every other loop, which would swing the downbeat
-    return { index: i, step, hit, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, curve: trig?.curve, ramp: trig?.ramp || 0, loop, slice: this.sliceAt(this.stepIndex(i), lock), mod: hit && this.mod ? this.modAt(step, tick, ctx.cycle) : null };
+    return { index: i, step, hit, skip, accent: hit && this.accentAt(i), swung: this.swingAt(step), lock, lane: this.name, ratchet: hit ? trig?.ratchet || 1 : 0, fade: !!trig?.fade, curve: trig?.curve, ramp: trig?.ramp || 0, loop, slice: this.sliceAt(this.stepIndex(i), lock), mod: hit && this.mod ? this.modAt(step, tick, ctx.cycle) : null };
   }
   /** at() without moving the playhead (pos) or the loop counter: live play looks ahead with it. */
   peek(tick, rng, ctx) { const { pos, loopN, lastTick, lastCond } = this, ev = this.at(tick, rng, ctx); Object.assign(this, { pos, loopN, lastTick, lastCond }); return ev; }

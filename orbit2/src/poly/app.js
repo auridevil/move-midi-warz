@@ -342,7 +342,7 @@ function onTick(t, time, cyc, ts) {
     if (!ev) return;
     for (const h of hits) play(li, lane, h, time);
     // drawn at its time: by then the lane may be gone (6 → 4 lanes, an undo, a slot with fewer lanes)
-    T.getDraw().schedule(() => { if (li >= m.lanes.length) return; scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
+    T.getDraw().schedule(() => { if (li >= m.lanes.length) return; scene.onStep({ lane: li, index: ev.index, hit: ev.hit, accent: ev.accent, skip: ev.skip, loop: ev.loop }); lane.shown = ev.index; if (li === m.selected) paintPlayhead(); paintLeds(); }, time);
   });
   return cyc;
 }
