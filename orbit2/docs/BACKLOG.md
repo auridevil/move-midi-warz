@@ -158,7 +158,7 @@ playbook phase (`.maestro/playbooks/2026-11-06-Orbit2-Lab/ORBIT2-NN.md`).
 ## I · Interactive canvas, sharing, learning (phases 14, 15, 16)
 
 - **I1 the orbit is the instrument**: tap a step tick to add a planet (pop + sound), tap a planet: on → accent → off,
-  drag along a ring to rotate, pull a ring in/out to change length, long-press a planet = radial lock menu. (Rio)
+  drag along a ring to rotate, pull a ring in/out to change length, long-press a planet = radial lock menu. (Rio) ✅ ORBIT2-14
 - **I2 share up front**: share button in the transport; opening a link shows a full-screen "▶ tap to hear this orbit"
   card, then Remix; status is visible (not in a closed drawer). (Rio, Maya)
 - **I3 one-tap share of audio**: render 4 bars and open the OS share sheet (`navigator.share` with a file) where
