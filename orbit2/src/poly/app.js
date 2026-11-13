@@ -23,6 +23,7 @@ import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../
 import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
+import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -73,6 +74,12 @@ let lineage = null;
 let giftPlay = null;
 // I5: the postcard waits here for the clock's next bar line (onTick hands over its audio time)
 let barWait = null;
+// I6 / I7: quest progress + the view (simple / everything), one key of their own. A first visit starts simple; a page
+// that already has a beat saved starts with everything (nothing it had disappears). questLog: what you did since the
+// current quest came up (quests.js events), in memory only
+const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null')); } catch { return questsFrom(null); } })();
+quests.view = startView(quests.view, firstVisit);
+let questLog = [], questTimer = 0;
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage })); } catch {} };
@@ -334,6 +341,7 @@ function onTick(t, time, cyc, ts) {
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
   // waiting mute lands on the lanes that play from here): queued mutes land, the fill latch turns on (or off) for the bar
   if ((muteQ.size || latch.state !== 'off') && onBar(t, bars)) barPerf();
@@ -466,7 +474,7 @@ const sliders = {};   // k -> gauge handle ({ set, value })
 const laneTabs = [];  // the four coloured lane buttons: a touch-friendly alternative to tapping a ring
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
-  for (const p of PARAMS) { const g = makeGauge({ label: p.label, min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); } }); sliders[p.k] = g; el.appendChild(g.el); }
+  for (const p of PARAMS) { const g = makeGauge({ label: paramLabel(p.k, p.label, quests.view === 'simple'), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { p.set(m.lane, v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); } }); sliders[p.k] = g; el.appendChild(g.el); }
   // G6: the swing template sits right after the swing gauge
   ui.swingTpl = segmented({ options: SWING_KEYS.map(k => [k, SWING_TEMPLATES[k].name, INFO['swing template']]), value: m.lane.swingTpl, onChange: (k) => { m.lane.setSwingTpl(k); sync(); } });
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
@@ -515,7 +523,7 @@ function renderLaneMix() {
   $('sample-name').textContent = lane.sample ? `${lane.sample.name}${lane.sliceCount() ? ` · ${lane.sliceCount()} slices, a slice per step` : ''}${lane.voice === 'sample' ? '' : ' (pick it in voice)'}` : 'none loaded';
   renderTrim();
 }
-function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, p.get(m.lane) + delta); sync(); }
+function nudge(k, delta) { const p = PARAMS.find(x => x.k === k); p.set(m.lane, p.get(m.lane) + delta); sync(); questEvent({ type: 'edit', lane: m.selected, k }); }
 // Step buttons are built once and repainted in place: a rebuild would drop the keyboard focus on every edit, and a
 // long press that opens the lock panel would leave the finger on a detached button.
 const stepBtns = [];
@@ -562,7 +570,7 @@ const LOCK_UI = {
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 // opening it brings the panel into view: in the scrolling lane panel the slice picker can open below its edge
-function editLocks(i) { lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) $('lockpanel').scrollIntoView({ block: 'nearest' }); }
+function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) $('lockpanel').scrollIntoView({ block: 'nearest' }); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). */
 function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); readout(); }
@@ -681,7 +689,7 @@ function setLaneCount(n) {
   const was = m.lanes.length; m.setLaneCount(n); if (m.lanes.length === was) return;
   rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve();
 }
-function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); }
+function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); questEvent({ type: 'slot-save', slot: i }); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
 function recallSlot(i) { if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
 function chainSlots(list) { bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
@@ -1183,7 +1191,7 @@ async function shareFile(file, what) {
 async function shareAudio() {
   await wake(); toast('rendering 4 bars…', 15000);
   const r = await renderPattern({ bars: 4 });
-  await shareFile(new File([mixWav(r)], `${fileBase('', r)}.wav`, { type: 'audio/wav' }), '4 bars');
+  await shareFile(new File([mixWav(r)], `${fileBase('', r)}.wav`, { type: 'audio/wav' }), '4 bars'); questEvent({ type: 'export', what: 'share' });
 }
 /**
  * I5 orbit postcard: 4 bars of the rings as they play, with their sound, as a WebM: the canvas's captureStream (30 fps)
@@ -1240,7 +1248,7 @@ async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
   const r = await renderPattern();
   download(mixWav(r), `${fileBase('', r)}.wav`, 'audio/wav');
-  $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)} · ${fmtNote()}`;
+  $('exp-status').textContent = `WAV: ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)} · ${fmtNote()}`; questEvent({ type: 'export', what: 'wav' });
 }
 /** A MIDI file of `hits` (the pattern's, or a chain's: `states`, its slots), a track per lane or one Drum-Rack track
  *  (exp.midiOne, E3). */
@@ -1254,7 +1262,7 @@ function exportMidi() {
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
   const hits = chain ? collectChain(states, { bars: bank.chainBars, tempo, dice: exportDice(), restart: bank.restart }) : exportHits(ticks);
-  download(midiOf(hits, { states, bars }), `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars · ${midiNote()}${chain ? ` · chain of ${bank.chain.length}` : ''}`;
+  download(midiOf(hits, { states, bars }), `${fileBase(chain ? 'chain' : '', { loop: true, bars })}.mid`, 'audio/midi'); $('exp-status').textContent = `MIDI: ${hits.length} notes · ${rollNote()} · ${bars} bars · ${midiNote()}${chain ? ` · chain of ${bank.chain.length}` : ''}`; questEvent({ type: 'export', what: 'midi' });
 }
 /**
  * E5 export all: ONE hit list (this roll) → the mix WAV, the stems (dry + return when "dry stems" is on) with their raw
@@ -1269,7 +1277,7 @@ async function exportAll() {
   files.unshift({ name: `${base}/${base}-mix.wav`, data: mixWav(mix) });
   files.push({ name: `${base}/${base}.mid`, data: midiOf(hits, { bars: ticks / m.barTicks() }) });
   download(zipStored(files), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}${ui.expWhat.value === 'chain' ? ' · this pattern only: a chain exports as MIDI' : ''}`;
+  $('exp-status').textContent = `all: mix + ${n} ${exp.dry ? 'dry stems + delay return' : 'stems'} + raw mix + MIDI (${midiNote()}) · ${hits.length} hits · ${rollNote()} · ${renderNote(mix)} · ${fmtNote()}${gain < 1 ? ` · stems scaled ${(20 * Math.log10(gain)).toFixed(1)} dB` : ''}${ui.expWhat.value === 'chain' ? ' · this pattern only: a chain exports as MIDI' : ''}`; questEvent({ type: 'export', what: 'all' });
 }
 /**
  * E4 kit: each lane's sound as one-shot WAVs to load into Simpler or a Drum Rack, an accent and a normal hit (velocity
@@ -1479,7 +1487,7 @@ async function exportStems() {
   const r = await renderPattern({ stems: true, dry: exp.dry }), n = m.lanes.length, base = fileBase('stems', r);
   const { files, gain } = stemFiles(Array.from({ length: n }, (_, i) => [r.chans[2 * i], r.chans[2 * i + 1]]), laneNames(n), r.sr, base, { bits: exp.bits, ...renderTags(r), ret: exp.dry ? [r.chans[2 * n], r.chans[2 * n + 1]] : null });
   download(zipStored(files), `${base}.zip`, 'application/zip');
-  $('exp-status').textContent = `stems: ${n} lanes${exp.dry ? ' (dry) + delay return' : ''} + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)} · ${fmtNote()}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`;
+  $('exp-status').textContent = `stems: ${n} lanes${exp.dry ? ' (dry) + delay return' : ''} + raw mix · ${r.hits.length} hits · ${rollNote()} · ${renderNote(r)} · ${fmtNote()}${gain < 1 ? ` · all scaled ${(20 * Math.log10(gain)).toFixed(1)} dB to avoid clipping` : ''}`; questEvent({ type: 'export', what: 'stems' });
 }
 // ---- welcome back, toasts ----
 // When the welcome bar goes, everything under it moves up: clicks are swallowed for a moment, so the second click of
@@ -1497,7 +1505,47 @@ function toast(txt, ms = 2400) {
   const t = $('toast'); t.textContent = txt; t.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = setTimeout(() => { t.textContent = ''; }, 300); }, ms);
 }
-buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync();
+// ---- I6 quests, I7 simple mode (quests.js: the quests, their checks, the plain words) ----
+const saveQuests = () => { try { localStorage.setItem(QUESTS_KEY, JSON.stringify(quests)); } catch {} };
+/** Something you did (quests.js events). Called from the clock too (a bar line), so the check waits for the page. */
+function questEvent(e) {
+  if (!currentQuest(quests.done)) return; questLog.push(e); if (questLog.length > 400) questLog.splice(0, questLog.length - 400);
+  if (!questTimer) questTimer = setTimeout(() => { questTimer = 0; checkQuest(); }, 0);
+}
+function checkQuest() {
+  const q = currentQuest(quests.done); if (!q || !q.check(m, questLog)) return;
+  finishQuest(q); celebrate(q);
+}
+function finishQuest(q) { quests.done.push(q.id); questLog = []; saveQuests(); renderQuest(); }
+/** A light cheer: the card glows once (a steady glow when motion is reduced, CSS) and a toast names the next quest. */
+function celebrate(q) {
+  const c = $('quest'), next = currentQuest(quests.done); c.classList.remove('cheer'); void c.offsetWidth; c.classList.add('cheer');
+  toast(`quest done: ${q.title} ✓${next ? ` · next: ${next.title}` : ' · that was the last one'}`, 4000);
+}
+/** The card: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or finish. */
+function renderQuest() {
+  const q = currentQuest(quests.done), c = $('quest'); c.hidden = !q || quests.hidden;
+  if (q) { $('quest-n').textContent = `${QUESTS.indexOf(q) + 1} of ${QUESTS.length}`; $('quest-title').textContent = q.title; $('quest-hint').textContent = q.hint; }
+  // the drawer this quest is played in gets a light (finishing a quest lights the next one's drawer)
+  const d = q && !quests.hidden ? hintDrawer(quests.done) : null;
+  for (const el of document.querySelectorAll('.quest-lit')) if (el.id !== d) { el.classList.remove('quest-lit'); el.querySelector('summary')?.removeAttribute('data-quest'); }
+  if (d) { const el = $(d); el.classList.add('quest-lit'); el.querySelector('summary')?.setAttribute('data-quest', `quest ${QUESTS.indexOf(q) + 1}`); }
+}
+/** I7: simple = plain words on the lane knobs and the advanced drawers tucked away (.adv); all = everything. */
+function setView(v) {
+  const simple = v === 'simple'; if (simple && quests.view !== v) quests.hidden = false;   // switching to simple brings hidden quests back
+  quests.view = v; saveQuests();
+  document.body.classList.toggle('simple', simple); ui.view?.set(v);
+  for (const p of PARAMS) sliders[p.k]?.setLabel(paramLabel(p.k, p.label, simple));
+  if (simple && lockStep >= 0) editLocks(lockStep);   // an open lock panel closes with the drawers
+  renderQuest();
+}
+/** Simple mode and a reach for the step locks: say where they are instead (nothing opens). */
+function locksTucked() { if (quests.view !== 'simple') return false; toast('step locks are in "everything" (the switch at the top of the left panel)', 3500); return true; }
+ui.view = mount('view-mode', segmented({ options: [['simple', 'simple', 'plain words and the basics'], ['all', 'everything', 'every drawer and knob: dice, MIDI, evolve weights, step locks, generative']], value: quests.view, onChange: (v) => setView(v) }));
+$('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { finishQuest(q); toast(`skipped: ${q.title}`); } };
+$('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
+buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); setView(quests.view);
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
@@ -1834,7 +1882,7 @@ cv.addEventListener('pointermove', (e) => {
 function gestureEnd(e, tap) {
   if (!pts.delete(e.pointerId) || pts.size) return; const g = gest; gest = null; if (!g) return; clearTimeout(g.timer); if (gone(g)) return;
   if (!g.kind && tap) { if (g.step >= 0) canvasTap(g.li, g.step); else { m.select(g.li); sync(); } }   // between the ticks: select only
-  else if (g.changed) { ownNext = true; sync(); }   // the whole turn / pull / pinch: one undo step
+  else if (g.changed) { ownNext = true; sync(); questEvent({ type: 'edit', lane: g.li, k: g.changed === 'rot' ? 'rotation' : 'length' }); }   // the whole turn / pull / pinch: one undo step
 }
 // touch: a finger that lands on a ring plays it (no scroll, no zoom); off the rings (the core, the corners of a phone's
 // stage) the page scrolls as it always did: touch-action can't tell the rings from the space between them, this can.
@@ -1857,6 +1905,7 @@ const RING_ITEMS = [['tune', 'tune'], ['prob', 'chance'], ['vel', 'velocity'], [
 const ringMenu = document.createElement('div'); ringMenu.id = 'ring-menu'; ringMenu.className = 'ring-menu'; ringMenu.setAttribute('role', 'menu'); ringMenu.hidden = true; document.body.appendChild(ringMenu);
 let menuBack = null;   // what had the focus before the menu opened: Esc gives it back
 function openRingMenu(li, i) {
+  if (locksTucked()) return;   // I7 simple: the locks are tucked away (the toast says where)
   // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide. Kept inside, its
   // centre can leave the planet (near a side or the top of a phone): then the pills turn so the planet sits in a gap
   // between two of them, the gap with the most room round the finger (measured: the pills' widths differ)
@@ -1995,5 +2044,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, get questLog() { return questLog; } };
 readout(); layoutHud(); scene.start();

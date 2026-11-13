@@ -94,6 +94,8 @@
     <p class="hint">On the orbits: each planet is a hit you set, as solid as its chance of playing (a faint one seldom plays). A ring that flashes round a planet: it came round and stayed silent (solid ring: its chance said no · dotted: the locked dice said no · dashed: its condition). Arcs round a planet: a 1:3-style condition, one arc per loop from the top; the solid arc is the loop it plays on, the white one the loop you are in now. The thin arc outside the rings: how far you are through the whole cycle, until everything lines up again.</p>
   </dialog>
   <div class="hud-left" id="hud-left">
+    <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
+    <div class="view-row"><div id="view-mode" class="ctl" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."></div></div>
     <details class="drawer">
       <summary>Humanize</summary>
       <div id="global-sliders" class="gauges two"></div>
@@ -106,7 +108,7 @@
       </form>
       <div id="lib-list" class="lib-list"></div>
     </details>
-    <details class="drawer">
+    <details class="drawer" id="patterns-drawer">
       <summary>Patterns</summary>
       <div class="ctl meter-ctl" title="Time signature of this pattern"><span class="ctl-lbl">meter</span><div id="meter"></div></div>
       <div class="ctl meter-ctl" title="How many lanes this pattern has"><span class="ctl-lbl">lanes</span><div id="lane-count"></div></div>
@@ -139,7 +141,7 @@
       </div>
       <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents.</p>
     </details>
-    <details class="drawer">
+    <details class="drawer" id="evolve-drawer">
       <summary>Evolve</summary>
       <div class="row-ctl">
         <button id="btn-evolve" class="rec-btn">◌ evolve</button>
@@ -149,14 +151,14 @@
       </div>
       <div id="evo-gauges" class="gauges three"></div>
       <div id="evo-more" class="gauges two"></div>
-      <details class="evo-sub"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
+      <details class="evo-sub adv"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
       <div id="evo-lanes" class="evo-lanes"></div>
       <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady. Gravity pulls them back home.</p>
       <div class="row-ctl"><div class="ctl" title="A hit on one lane makes another lane more likely to play its next step"><span class="ctl-lbl">coupling</span><div id="couple-mode"></div></div></div>
       <div id="couple-gauges" class="gauges two"></div>
       <div id="couple-matrix" class="couple-matrix" hidden></div>
     </details>
-    <details class="drawer">
+    <details class="drawer adv" id="dice-drawer">
       <summary>Dice</summary>
       <div class="row-ctl">
         <button id="btn-dice" class="rec-btn">○ dice free</button>
@@ -167,7 +169,7 @@
       <div id="dice-gauges" class="gauges three"></div>
       <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
     </details>
-    <details class="drawer">
+    <details class="drawer" id="export-drawer">
       <summary>Export</summary>
       <div class="row-ctl">
         <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
@@ -191,7 +193,7 @@
       <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + their raw sum (no master compressor), all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button><button id="exp-kit" title="each lane's sound as one-shot WAVs (an accent and a normal hit, up to 2 s, no delay) in a zip: load them into Simpler or a Drum Rack">⤓ kit (.zip)</button><button id="exp-all" class="primary" title="the mix WAV, the stems and the MIDI of this pattern in one zip, all from one roll of the dice, every file named after one base">⤓ export all (.zip)</button><button id="exp-roll" class="small" title="Free dice: WAV, stems and MIDI share one roll of the probability and humanize dice, so they hold the same hits. New roll = a different take.">new roll</button></div>
       <p id="exp-status" class="hint tight"></p>
     </details>
-    <details class="drawer">
+    <details class="drawer adv" id="midi-drawer">
       <summary>MIDI</summary>
       <button id="btn-midi-enable">enable MIDI ports</button>
       <div id="midi-body" hidden>
@@ -263,6 +265,8 @@
   </div>
   <div class="hud">
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
+    <!-- I6: the quest you are on (filled by app.js renderQuest) -->
+    <div id="quest" class="quest" role="region" aria-label="quest" hidden><span class="quest-k">quest <b id="quest-n"></b></span><b id="quest-title" class="quest-title"></b><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-skip" class="small" type="button" title="Skip this quest (it stays open in the list of what is left)">skip</button><button id="quest-x" class="small" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span></div>
     <div id="jam-panel" class="jam-panel" hidden>
       <div class="jam-bar"><i id="jam-fill"></i></div>
       <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
@@ -281,7 +285,7 @@
       <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
       <div id="sliders" class="gauges"></div>
       <div id="stepsui" class="stepsui" role="group" aria-label="steps"></div>
-      <div id="lockpanel" class="lockpanel" hidden>
+      <div id="lockpanel" class="lockpanel adv" hidden>
         <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
         <div id="lock-gauges" class="gauges"></div>
         <div id="lock-sample" class="lock-sample" hidden>
@@ -321,6 +325,7 @@
       <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sample-trim" class="row-ctl" hidden><div id="sample-trim-gauges" class="gauges"></div><div id="sample-rev"></div></div>
       <div id="sound-sliders" class="gauges"></div>
+      <div id="gen-block" class="adv">
       <h3 class="subh">generative</h3>
       <div class="row-ctl"><div class="ctl" title="How the euclid hits combine with the steps you set"><span class="ctl-lbl">euclid</span><div id="gen-euclid"></div></div></div>
       <div class="row-ctl"><div class="ctl" title="A slow wave on one sound knob of this lane"><span class="ctl-lbl">modulate</span><div id="gen-mod"></div></div></div>
@@ -329,6 +334,7 @@
       <div id="gen-tdice" class="gauges three"></div>
       <div class="row-ctl"><div class="ctl" title="Snap this lane's tune to a scale"><span class="ctl-lbl">scale</span><div id="gen-scale"></div></div></div>
       <p id="gen-scale-note" class="hint tight"></p>
+      </div>
     </details>
   </div>
   <script src="../vendor/tone/Tone.js"></script>

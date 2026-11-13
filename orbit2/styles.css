@@ -674,3 +674,21 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 @media (pointer: coarse) { .gift-acts button { min-height: 44px; } }
 /* I5 "today's seed": the one chip that changes every day, in the warm colour */
 .chips button.seed-chip { --chip: var(--ember-magenta); font-weight: 700; }
+/* I7 simple mode: the advanced drawers and panels step aside ("everything" brings them back) */
+body.simple .adv { display: none !important; }
+.view-row { display: flex; justify-content: flex-start; }
+.view-row .seg button { min-width: 84px; }
+/* I6 the quest card: what to try now; its drawer gets a light and a "quest n" tag */
+.quest { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; padding: 8px 10px 8px 12px; border: 1px solid rgba(253,224,71,.45); border-radius: 10px; background: rgba(22, 14, 46, 0.92); font-size: 12.5px; max-width: 520px; margin-left: auto; }
+.quest[hidden] { display: none; }
+.quest-k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.quest-title { color: #fde047; font-size: 14px; }
+.quest-hint { flex: 1 1 100%; color: var(--muted); line-height: 1.4; }
+.quest-acts { display: flex; gap: 6px; margin-left: auto; }
+.quest-acts button { padding: 2px 10px; }
+.quest.cheer { animation: quest-cheer 1.2s ease-out; }
+@keyframes quest-cheer { 0% { box-shadow: 0 0 0 0 rgba(253,224,71,.7); transform: scale(1.03); } 100% { box-shadow: 0 0 0 14px rgba(253,224,71,0); transform: none; } }
+@media (prefers-reduced-motion: reduce) { .quest.cheer { animation: none; box-shadow: 0 0 0 2px rgba(253,224,71,.8); } }
+.drawer.quest-lit { border-color: rgba(253,224,71,.6); }
+.drawer.quest-lit > summary[data-quest]::after { content: attr(data-quest); margin-left: 8px; padding: 0 6px; border-radius: 6px; background: rgba(253,224,71,.18); color: #fde047; font-size: 11px; }
+@media (pointer: coarse) { .quest-acts button { min-height: 44px; min-width: 44px; } }
