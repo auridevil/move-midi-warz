@@ -661,7 +661,7 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 .gift { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 24px; box-sizing: border-box; border: 0; background: radial-gradient(circle at 50% 40%, rgba(58, 36, 120, .96), rgba(14, 10, 32, .98) 70%); color: var(--fg); }
 .gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; text-align: center; }
 .gift::backdrop { background: rgba(6, 2, 18, .8); }
-.gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
+.gift .gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
 .gift-kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .gift-rings { width: min(240px, 60vw); aspect-ratio: 1; }
 .gift h2 { margin: 4px 0 0; font-size: 22px; overflow-wrap: anywhere; }
