@@ -40,8 +40,8 @@ export const ringAngle = (dx, dy) => { const a = Math.atan2(dy, dx) + Math.PI / 
 /** I1: the visible step of a `len`-step ring nearest to the point (dx, dy) from the centre (the tick the finger is on). */
 export const stepAtAngle = (dx, dy, len) => Math.round((ringAngle(dx, dy) / TAU) * len) % len;
 /** I1: the ring at `d` px from the centre of geometry g (ringGeo): its lane, or -1 beyond half a gap from every ring. */
-export function laneAtRadius(g, d) {
-  const li = Math.round((d / g.R - 0.25) / g.gap); return li >= 0 && li < g.lanes && Math.abs(d - g.ring(li)) <= (g.gap * g.R) / 2 ? li : -1;
+export function laneAtRadius(g, d) {   // | 0: just inside ring 0 rounds to −0
+  const li = Math.round((d / g.R - 0.25) / g.gap) | 0; return li >= 0 && li < g.lanes && Math.abs(d - g.ring(li)) <= (g.gap * g.R) / 2 ? li : -1;
 }
 /** I1: the shortest signed turn from angle a0 to a1 (radians, −π..π), so a drag across 12 o'clock doesn't jump a turn. */
 export const angleDelta = (a0, a1) => { const d = (((a1 - a0) % TAU) + TAU) % TAU; return d > Math.PI ? d - TAU : d; };

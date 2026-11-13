@@ -1702,12 +1702,13 @@ cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser
 const RING_ITEMS = [['tune', 'tune'], ['prob', 'chance'], ['vel', 'velocity'], ['nudge', 'nudge'], ['cond', 'condition']];
 const ringMenu = document.createElement('div'); ringMenu.id = 'ring-menu'; ringMenu.className = 'ring-menu'; ringMenu.setAttribute('role', 'menu'); ringMenu.hidden = true; document.body.appendChild(ringMenu);
 function openRingMenu(li, i) {
-  const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), R = 62;
+  // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide
+  const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), RX = 100, RY = 62;
   ringMenu.innerHTML = ''; ringMenu.setAttribute('aria-label', `locks of lane ${li + 1} step ${i + 1}`);
-  ringMenu.style.left = `${Math.max(R + 40, Math.min(innerWidth - R - 40, at.x))}px`; ringMenu.style.top = `${Math.max(R + 20, Math.min(innerHeight - R - 20, at.y))}px`;
+  ringMenu.style.left = `${Math.max(RX + 70, Math.min(innerWidth - RX - 70, at.x))}px`; ringMenu.style.top = `${Math.max(RY + 24, Math.min(innerHeight - RY - 24, at.y))}px`;
   RING_ITEMS.forEach(([k, label], n) => {
     const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); const a = -Math.PI / 2 + (n / RING_ITEMS.length) * Math.PI * 2;
-    b.style.left = `${Math.cos(a) * R}px`; b.style.top = `${Math.sin(a) * R}px`;
+    b.style.left = `${Math.cos(a) * RX}px`; b.style.top = `${Math.sin(a) * RY}px`;
     const set = k === 'cond' ? tg && tg.cond !== 'always' : lk[k] != null, v = k === 'cond' ? (tg?.cond ?? 'always') : LOCK_UI[k].fmt?.(Math.round(lockValue(lane, i, k) * 100)) ?? `${Math.round(lockValue(lane, i, k) * 100)}%`;
     b.textContent = `${label} ${v}`; b.classList.toggle('lk', !!set); b.title = `${label} of step ${i + 1}${set ? ' (locked)' : ' (the lane value)'}: open it in the lock panel`;
     b.onclick = () => { closeRingMenu(); if (m.selected !== li) { m.select(li); sync(); } if (lockStep !== i) editLocks(i); (k === 'cond' ? $('cond-every').querySelector('button') : sliders['lock:' + k].el)?.focus(); };
