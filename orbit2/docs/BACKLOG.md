@@ -285,7 +285,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   At 1280 and 1440 it never wraps.
 - **Bit-identical exports** (ORBIT2-04, sound; pre-existing): with dice locked and `Math.random` seeded, two renders of
   the same code differ by 1 LSB in up to 37 of 705,600 samples (~−110 dB); seeded noise everywhere would make A/B
-  checks exact.
+  checks exact. Again in ORBIT2-18 round 1 (dex: two stem renders differ).
 - **Jam raw-mix headroom** (ORBIT2-04, sound; pre-existing, phase 10): the jam download's raw mix (four lane buses
   summed) peaked at −0.19 dBFS on the demo groove with dsp; a −1 dBFS ceiling or a limiter on that sum.
 - **Floating play over content** (ORBIT2-04, greta): at the top of a 390 phone the 76 px play sits over the welcome
@@ -755,6 +755,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Slices in the MIDI export** (ORBIT2-17 round 1, dex): a slice-set lane exports every step on the lane's one note
   (42: the `hat` kept under a break as `sample.drum`), so an 8-slice break in a Drum Rack plays one pad. Slice N on its
   own note (base + N, the way Live's "Slice to New MIDI Track" lays a break out from C1), or a slice map beside the file.
+  Again in ORBIT2-18 round 1 (dex).
 - **Ghosts in the kit export** (ORBIT2-17 round 1, dex): E4 renders accent and normal per lane, no ghost (G4's 0.35,
   darker and shorter by G5); a ghost one-shot per lane that uses them.
 - **Two tabs** (ORBIT2-17 round 1, rio, tomi; the shipped autosave did the same): two tabs save over each other (a
@@ -768,3 +769,35 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   in the 11 px mono line (see "Status line emphasis").
 - **Mute on the next bar by default** (ORBIT2-17 round 1, kai; taste): `perf.muteBar` is off until set; a live set
   wants it on.
+- **The gesture machine out of `app.js`** (ORBIT2-18 rounds 1–5, architect, sound): recording and the hand
+  (`gestStart` / `gestMove` / `gestEnd`, `handTurn`, `handFrom`, `autoHandoff`, `rampAuto`) live in `app.js`; the
+  reviewers measured them in the browser, and the tests pin their text (`handFrom` cancels after its start, `rampAuto`'s
+  `ev` guard, the `prime` / `onStart` order), so a harmless refactor breaks a pin and no test runs the code. A pure
+  module driven with a fake `AudioParam` (events in, the value at any time out) could test the behaviour: hand-offs,
+  releases, the Chrome trap in [[automation]] "As built".
+- **Two "automated" rules** (ORBIT2-18 round 1, architect, verifier): the gauges' "A" mark (`Lane.automates`) counts
+  locks on steps that play, the strip's clear list (`autoParams`) any lock inside the length (a lock on a silent step
+  can still be cleared there); lock units → 0..1 are written twice (`unitOf` in `app.js`, `cc7` in `export.js`);
+  `collectChainRamps` is read by the tests only (the chain sampler they check).
+- **A tone lock under a moving tone curve** (ORBIT2-18 round 1, sound; as [[automation]] says): the lock sets the
+  filter for its hit and the curve's ramp takes it back at the next block line (1/24 of a beat), not at the end of the
+  step; the lock panel doesn't say so.
+- **Finer curve levels** (ORBIT2-18 round 1, sound): a point has 64 levels (one base64url character), 6.7 % cutoff
+  steps on a slow filter ride; two characters a point on tone would smooth them, at twice the size in saves and links.
+- **The first un-armed move on tone** (ORBIT2-18 round 5, sound): not recording, the hand starts from the lane value,
+  so its first move sweeps the filter from what plays (a lock, the curve) to it with a 10 ms time constant: a −29 dB
+  transient on a sine near the cutoff, inaudible on drums. A longer constant on tone.
+- **Where an armed turn starts on a sparse lane** (ORBIT2-18 round 4, verifier; a design call): "what plays" for a step
+  key (nudge, decay…) is the lock of the step under the playhead, so on a lane with a few locked steps an armed turn
+  starts from the lane value or from a lock, depending on when it starts.
+- **Un-automated knob turns** (ORBIT2-18 round 2, found while measuring; round 3, verifier; from before the phase): a
+  turn on a key with no curve still jumps the param per click (`holdParam`), and the Move's un-armed turns save the
+  lane value unrounded, where the screen's gauges round to 0.01.
+- **Chain MIDI anchors** (ORBIT2-18 round 2, dex): a slot that is silent on a lane still gets that lane's anchor CCs at
+  its start; a curve that restarts every bar shows in the DAW's CC lane as a jump back each bar (worth a line for DAW
+  users).
+- **`recordCurve` over a whole loop** (ORBIT2-18 round 1, dex): `recordCurve(…, s1 = length)` lands the end value on
+  point 0 (the pass wraps, and the last span wins there).
+- **Gestures across a slot switch or a fill** (ORBIT2-18 round 1, kai): measured (a slot ends the gesture, its undo
+  step keeps its load flag) but untested; in touch mode a finger resting on a Move knob writes the played value (by
+  design, said in the Move panel).

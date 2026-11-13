@@ -3,13 +3,13 @@ type: review
 phase: ORBIT2-18
 title: ORBIT2-18 parameter automation (A1–A7), review panel
 date: 2026-11-13
-round: 4
+round: 5
 stalled: 0
-result: IN PROGRESS
+result: HAPPY
 reviewers:
   verifier: HAPPY
   architect: HAPPY
-  sound: NOT HAPPY
+  sound: HAPPY
   kai: HAPPY
   dex: HAPPY
 tags: [orbit2, review]
@@ -247,3 +247,23 @@ still past 400 ms, the gesture ends under the held knob (architect); the round-3
   it (sound).
 - `npm run check` clean; `npm test` 258 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
   5400 + headless-chrome.sh 9222, both stopped).
+
+## Round 5: re-check, 1 of 1 HAPPY: everyone HAPPY
+
+Re-check by sound alone (default model), a fresh sub-agent, the same ports. Brief: the round-4 item with its repro,
+"Changes after round 4", `git diff --stat fa6bf30..HEAD`. `stalled: 0`: the round-4 MUST-FIX is closed.
+
+| reviewer | verdict | MUST-FIX |
+| --- | --- | --- |
+| sound | HAPPY | round 4 item closed: a sine at the drive input (voice disconnected, hits scheduled), steep level curve + a tone curve, 13 hand-offs per take (gauge drags released mid-move, the round-3 repro, slow and fast turns, armed rides) at 1 hit per loop, every step at ×4 and at ×6: 117 hand-offs, 0 steps (worst 0.0030, a smooth glide); a sample-exact DC probe, 39 hand-offs: largest sample-to-sample change 0.0019; a replay of every set / target / ramp / cancel on level and tone: no hit value of an older hand survives under the hand |
+
+SHOULDs (never block): the `handFrom` test checks its text, not its behaviour (a fake param could) (sound); un-armed,
+the first move on tone sweeps the filter from what plays to the lane value with a 10 ms time constant (a −29 dB
+transient on a sine near the cutoff; inaudible on drums) (sound). Exports are untouched by the round-4 fix (`handFrom`
+and `handTurn` run only on the live kit while playing).
+
+**Result: HAPPY** (verifier, architect, sound, kai, dex). The SHOULDs left open in rounds 1–5 are in [[BACKLOG]] Later
+(+10, "ORBIT2-18"): "The gesture machine out of `app.js`", "Two "automated" rules", "A tone lock under a moving tone
+curve", "Finer curve levels", "The first un-armed move on tone", "Where an armed turn starts on a sparse lane",
+"Un-automated knob turns", "Chain MIDI anchors", "`recordCurve` over a whole loop", "Gestures across a slot switch or a
+fill"; dex's two from before the phase join "Slices in the MIDI export" and "Bit-identical exports".
