@@ -577,13 +577,16 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .lib-form input, .lib-rename { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: rgba(14,10,32,.7); color: var(--star-white); font: inherit; font-size: 13px; }
 .lib-form input:focus, .lib-rename:focus { outline: none; border-color: var(--signal-cyan); }
 .lib-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
-.lib-row { display: grid; grid-template-columns: 1fr auto; gap: 0 6px; align-items: center; padding: 5px 8px; border-radius: 8px; border: 1px solid transparent; background: rgba(236,233,247,.04); }
+.lib-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 0 8px; align-items: center; padding: 5px 8px; border-radius: 8px; border: 1px solid transparent; background: rgba(236,233,247,.04); }
 .lib-row:hover { border-color: var(--hairline); }
 .lib-row.cur { border-color: var(--signal-cyan); background: rgba(103,232,249,.08); }
 .lib-name { justify-self: start; padding: 0; border: 0; background: none; box-shadow: none; color: var(--star-white); font-weight: 700; font-size: 13px; text-align: left; cursor: pointer; }
 .lib-name:hover { color: var(--signal-cyan); background: none; }
-.lib-meta { grid-column: 1 / -1; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-meta { grid-column: 2 / -1; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-acts { display: flex; gap: 3px; } .lib-acts button { padding: 2px 8px; min-width: 26px; }
+/* I4 the library as a gallery: each setup's rings, small, spanning its two lines (a tap loads it, like its name) */
+.lib-thumb { grid-row: span 2; width: 48px; height: 48px; border-radius: 8px; background: rgba(14,10,32,.6); cursor: pointer; }
+.lib-row.cur .lib-thumb { box-shadow: 0 0 0 1px var(--signal-cyan); }
 .lib-acts button.danger { background: #ef4444; border-color: #ef4444; color: #fff; }
 .install-btn { margin: 4px 0 10px; }
 /* screen-reader only: the polite live region that announces one changed value (the readout itself is silent) */
@@ -667,3 +670,5 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 .gift-hear { margin-top: 10px; padding: 14px 28px; font-size: 17px; border-radius: 999px; min-height: 52px; }
 .gift-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 44px; align-items: center; }
 @media (pointer: coarse) { .gift-acts button { min-height: 44px; } }
+/* I5 "today's seed": the one chip that changes every day, in the warm colour */
+.chips button.seed-chip { --chip: var(--ember-magenta); font-weight: 700; }

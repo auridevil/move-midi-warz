@@ -18,13 +18,16 @@ export class Library {
   /** Save under a name; the same name (case-insensitive) overwrites. Returns the entry, or null if storage is full. */
   save(name, data, now = Date.now()) {
     name = (name || '').trim() || this.nextName(); const hit = this.byName(name);
-    const entry = { ...(hit || { id: uid() }), name, t: now, ...clone(data) };
+    const entry = { ...(hit || { id: uid() }), name, t: now, thumb: undefined, ...clone(data) };   // a new pattern: its old thumbnail goes (JSON drops undefined)
     if (hit) this.items[this.items.indexOf(hit)] = entry; else this.items.push(entry);
     if (!this.persist()) { if (hit) this.items[this.items.indexOf(entry)] = hit; else this.items.pop(); return null; }
     return entry;
   }
   overwrite(id, data, now = Date.now()) { const e = this.get(id); return e ? this.save(e.name, data, now) : null; }
   rename(id, name) { const e = this.get(id); name = (name || '').trim(); if (!e || !name) return false; const other = this.byName(name); if (other && other !== e) return false; e.name = name; return this.persist(); }
+  /** I4: cache an entry's thumbnail (a data URL). Storage full: not kept (a thumbnail must never cost a save its room),
+   *  so it is drawn again next time. */
+  setThumb(id, url) { const e = this.get(id); if (!e) return false; e.thumb = url; if (this.persist()) return true; delete e.thumb; return false; }
   remove(id) { const n = this.items.length; this.items = this.items.filter(i => i.id !== id); this.persist(); return this.items.length < n; }
   /** "pattern 3" — the first free number. */
   nextName() { let k = this.items.length + 1; while (this.byName(`pattern ${k}`)) k++; return `pattern ${k}`; }

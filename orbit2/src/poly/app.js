@@ -22,7 +22,7 @@ import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
-import { shapesOf, drawRings } from './share.js';
+import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL } from './share.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -89,6 +89,7 @@ let kit = null, loop = null;
 const FX_Q = 0.9, THROW = { send: 0.7, fb: 0.55, rest: 0.3 };   // P6: resonance (a touch over flat, so a sweep is heard); the throw's send and feedback held / at rest
 function makeMaster(gain, fx = null) {
   const limiter = new T.Limiter(-2).toDestination(); const comp = new T.Compressor({ threshold: -18, ratio: 3 }).connect(limiter), input = new T.Gain(gain);
+  input.out = limiter;   // the master's last node: the postcard (I5) taps the mix here
   if (!fx) return input.connect(comp);
   const raw = T.getContext().rawContext, f = fxFreqs(fx.filter, fx.sr || raw.sampleRate), lp = raw.createBiquadFilter(), hp = raw.createBiquadFilter();
   lp.type = 'lowpass'; hp.type = 'highpass'; lp.Q.value = hp.Q.value = FX_Q; lp.frequency.value = Math.min(f.lp, raw.sampleRate / 2); hp.frequency.value = f.hp;
@@ -1164,13 +1165,51 @@ async function shareFile(file, what) {
     try { await navigator.share({ files: [file], title: `${title} · orbits`, text: `${title} · remix it: ${url}` }); toast(`${what} shared`); return; }
     catch (e) { if (e.name === 'AbortError') { toast('share cancelled'); return; } }   // NotAllowed (no gesture left after a long render): download
   }
-  download(file, file.name, file.type); toast(`${what} saved: ${file.name}`, 4000);
+  // no file sharing here: the file downloads and the remix link goes to the clipboard, to send along with it
+  download(file, file.name, file.type); let copied = false; try { await navigator.clipboard.writeText(url); copied = true; } catch {}
+  toast(`${what} saved: ${file.name}${copied ? ' · remix link copied' : ''}`, 4000);
 }
 /** I3: one tap → 4 bars of the mix (the export format, loop as set) → share sheet or download. */
 async function shareAudio() {
   await wake(); toast('rendering 4 bars…', 15000);
   const r = await renderPattern({ bars: 4 });
   await shareFile(new File([mixWav(r)], `${fileBase('', r)}.wav`, { type: 'audio/wav' }), '4 bars');
+}
+/**
+ * I5 orbit postcard: 4 bars of the rings as they play, with their sound, as a WebM: the canvas's captureStream (30 fps)
+ * plus the live master (tapped after its limiter into a MediaStreamAudioDestinationNode), through MediaRecorder. Real
+ * time, so it records what you hear (performance FX, a jam, evolve included); it starts the beat if it is stopped.
+ * Shared like the audio, with the remix link (and its lineage) as the text.
+ */
+const POSTCARD_BARS = 4; let postcarding = false;
+async function recordPostcard() {
+  if (postcarding) return; const cv = $('cv');
+  if (!window.MediaRecorder || !cv.captureStream) throw new Error('this browser cannot record video');
+  await wake(); postcarding = true; $('share-postcard').disabled = true;
+  const dest = T.getContext().rawContext.createMediaStreamDestination(), out = kit.master.out;
+  try {
+    out.connect(dest);
+    const stream = new MediaStream([...cv.captureStream(30).getVideoTracks(), ...dest.stream.getAudioTracks()]);
+    const mimeType = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'].find(t => MediaRecorder.isTypeSupported(t));
+    const mr = new MediaRecorder(stream, mimeType ? { mimeType } : {}), chunks = [], stopped = new Promise(r => { mr.onstop = r; });
+    mr.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+    if (!playing) await togglePlay();
+    const sec = POSTCARD_BARS * m.barTicks() * tickSec();
+    mr.start(250); toast(`recording a postcard: ${nBars(POSTCARD_BARS)}…`, sec * 1000 + 2000);
+    await new Promise(r => setTimeout(r, sec * 1000)); mr.stop(); await stopped; stream.getTracks().forEach(t => t.stop());
+    const blob = new Blob(chunks, { type: 'video/webm' }); if (!blob.size) throw new Error('the recording came out empty');
+    window.__postcard = blob;   // the browser check reads it back (tracks, size)
+    await shareFile(new File([blob], `orbits-postcard-${tempo}bpm-${stamp()}.webm`, { type: 'video/webm' }), 'postcard');
+  } finally { try { out.disconnect(dest); } catch {} postcarding = false; $('share-postcard').disabled = false; }
+}
+/** I5 Seed of the Day: the day's constellation (share.js seedOfDay: UTC date → seed → musical randomize on a fresh
+ *  4-lane machine) with the dice locked to that seed, so its chance and humanize roll the same for everyone. One undo
+ *  step; the seed becomes its lineage, so what you share from it says where it started. */
+function loadDaySeed() {
+  const s = seedOfDay(utcDay());
+  dice.locked = true; dice.seed = s.seed; dice.repeat = 1; saveSettings(); renderDice();
+  loadMachine(s.m, { bpm: s.tempo }); libCurrent = null; setLineage(s.title); renderLib();
+  toast(`today's seed · ${s.family} · dice ${s.seed} · ${s.tempo} bpm · make it yours, then share it`, 5000);
 }
 async function exportWav() {
   await wake(); $('exp-status').textContent = 'rendering…';
@@ -1283,6 +1322,7 @@ function buildExportUI() {
   more.onclick = () => setMenu(menu.hidden);
   $('share-link').onclick = () => { setMenu(false); shareLink().catch(fail('share')); };
   $('share-audio').onclick = () => { setMenu(false); shareAudio().catch(fail('4 bars')); };
+  $('share-postcard').onclick = () => { setMenu(false); recordPostcard().catch(fail('postcard')); };
   menu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); setMenu(false); more.focus(); } });
   addEventListener('pointerdown', (e) => { if (!menu.hidden && !menu.contains(e.target) && e.target !== more) setMenu(false); });
 }
@@ -1439,6 +1479,9 @@ $('wb-keep').onclick = () => { hideWelcome(); if (!playing) togglePlay(); };
 $('wb-close').onclick = hideWelcome;
 $('wb-fresh').onclick = () => { initPattern(); toast('fresh start · undo brings your beat back'); };
 // starter grooves (grooves.js): one chip each, the description as tooltip and in the toast; loading one is undoable
+// I5 "today's seed" chip, first in the row: the date is read at the tap, so a page left open past midnight (UTC) gets the new day
+{ const b = document.createElement('button'); b.type = 'button'; b.id = 'seed-today'; b.className = 'seed-chip'; b.textContent = `today's seed · ${dayLabel(utcDay())}`; b.title = 'Seed of the Day: the same starting beat for everyone today (dice locked to the day\'s seed). Make it yours, then share it. Undoable.';
+  b.onclick = () => { b.textContent = `today's seed · ${dayLabel(utcDay())}`; loadDaySeed(); }; $('grooves').appendChild(b); }
 for (const g of GROOVES) {
   const b = document.createElement('button'); b.type = 'button'; b.id = `groove-${g.key}`; b.textContent = g.name; b.title = `${g.desc} (${g.tempo} bpm, undoable)`;
   b.onclick = () => loadGroove(g.key); $('grooves').appendChild(b);
@@ -1463,6 +1506,9 @@ function renderLib() {
   for (const e of items) {
     const row = document.createElement('div'); row.className = `lib-row${e.id === libCurrent ? ' cur' : ''}`;
     const name = document.createElement('button'); name.type = 'button'; name.className = 'lib-name'; name.textContent = e.name; name.title = 'load this setup (undoable)'; name.onclick = () => loadSetup(e.id);
+    // I4 gallery: the setup's rings, drawn once and cached in the entry (a re-save drops it, so it is drawn anew)
+    let url = e.thumb; if (!url && e.m?.lanes) { url = thumbURL(e.m, LANE_HEX); lib.setThumb(e.id, url); }
+    const img = document.createElement('img'); img.className = 'lib-thumb'; img.alt = ''; img.width = img.height = 48; if (url) img.src = url; img.onclick = () => loadSetup(e.id);
     const voices = e.m?.lanes ? Machine.from(e.m).lanes.map(l => l.voice === 'sample' ? '♪' : voiceLabel(l)).join(' · ') : '';   // as it loads (old voices migrated)
     const meta = document.createElement('span'); meta.className = 'lib-meta'; meta.textContent = `${e.tempo || '?'} bpm · ${voices} · ${ago(e.t)}`;
     const acts = document.createElement('span'); acts.className = 'lib-acts';
@@ -1474,7 +1520,7 @@ function renderLib() {
       inp.onkeydown = (k) => { if (k.key === 'Enter') done(true); if (k.key === 'Escape') done(false); k.stopPropagation(); }; inp.onblur = () => done(true);
     });
     const del = btn('×', 'delete', () => { if (del.dataset.sure) { lib.remove(e.id); if (libCurrent === e.id) libCurrent = null; renderLib(); } else { del.dataset.sure = 1; del.textContent = 'sure?'; del.classList.add('danger'); setTimeout(() => { if (del.isConnected) { delete del.dataset.sure; del.textContent = '×'; del.classList.remove('danger'); } }, 2500); } });
-    row.append(name, acts, meta); el.appendChild(row);
+    row.append(img, name, acts, meta); el.appendChild(row);
   }
 }
 $('lib-form').onsubmit = (e) => { e.preventDefault(); $('lib-name').setCustomValidity(''); saveSetup($('lib-name').value); };
@@ -1916,5 +1962,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
+window.__poly = { move, get m() { return m; }, sync, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp };
 readout(); layoutHud(); scene.start();
