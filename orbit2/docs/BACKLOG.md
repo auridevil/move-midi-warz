@@ -193,6 +193,11 @@ pattern". Design first: `orbit2/docs/design/automation.md`.
 (In-scope MUST-FIX items the whole panel agreed to move to a follow-up playbook, see [[REVIEW-PANEL]] "Motion to
 defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 
+- **Port-back** (ORBIT2-17): no MUST-FIX was deferred, so there is no follow-up playbook. What the final panel
+  deferred is the port to the shipped Orbits, in [[PORT-BACK]]: 28 done ids port **now** (B1–B12, F3, F4, T1–T7, C3,
+  C4, E1, E3, E5, E6, I7), 45 go **later** in 11 gated packages (Clock + meter, Groove, Longer patterns, Voices,
+  Samples, More exports, Live, Generative, Layout, Canvas + sharing, Learning), and I5's postcard is **never**.
+
 ## Later
 
 (Reviewers' non-blocking SHOULD items that were not done land here, with the phase that raised them.)
