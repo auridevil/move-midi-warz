@@ -257,11 +257,15 @@ function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k
  * ring-out (replayRamps).
  */
 function rampAuto(k, li, key, time, v) {
-  const c = k.chains[li]; if (!c) return; const p = autoParam(c, key), x = soundValue(c, key, v), st = (c.ramp ??= {})[key], log = k === kit && jam.ramps;
-  const at = (val, t, ramp) => { try { if (!ramp) p.setValueAtTime(val, t); else if (key === 'tone') p.exponentialRampToValueAtTime(val, t); else p.linearRampToValueAtTime(val, t); } catch {} if (log) logHit(log, { li, k: key, time: t, x: val, ramp }, RING_KEEP); };
-  if (!st) { at(x, time, false); c.ramp[key] = { x, t: time, flat: false }; return; }
+  const c = k.chains[li]; if (!c) return; const x = soundValue(c, key, v), st = (c.ramp ??= {})[key];
+  if (!st) { autoSet(k, c, li, key, x, time, false); c.ramp[key] = { x, t: time, flat: false }; return; }
   if (x === st.x) { st.t = time; st.flat = true; return; }
-  if (st.flat) at(st.x, st.t, false); at(x, time, true); st.x = x; st.t = time; st.flat = false;
+  if (st.flat) autoSet(k, c, li, key, st.x, st.t, false); autoSet(k, c, li, key, x, time, true); st.x = x; st.t = time; st.flat = false;
+}
+/** One curve event on a chain param (a set, or a ramp to it), logged on the live kit for a jam take's ring-out. */
+function autoSet(k, c, li, key, x, t, ramp) {
+  const p = autoParam(c, key); try { if (!ramp) p.setValueAtTime(x, t); else if (key === 'tone') p.exponentialRampToValueAtTime(x, t); else p.linearRampToValueAtTime(x, t); } catch {}
+  if (k === kit && jam.ramps) logHit(jam.ramps, { li, k: key, time: t, x, ramp }, RING_KEEP);
 }
 /** E6 + A2: the live kit's logged curve moves on a jam ring-out's kit; t0 = the live time of the render's start: what
  *  was set before it holds from the start, the rest lands where it did live. */
@@ -924,7 +928,9 @@ function handLetGo(src, k) { const g = knobGest; if (g && g.src === src && g.k =
 function autoParams(lane) { const a = lane.auto; return [...AUTO_KEYS.filter(k => a?.[k]).map(k => ({ k, kind: 'curve' })), ...LOCK_KEYS.filter(k => lane.locks.some((lk, i) => i < lane.length && lk?.[k] != null && !(k === 'vel' && lk.vel === GHOST_VEL))).map(k => ({ k, kind: 'step' }))]; }
 /** A4: the "A" marks on the knobs that record, the strip's picker (the last touched parameter, else the first), its draw. */
 function renderAuto() {
-  const lane = m.lane; for (const k of SOUND_KEYS) sliders['snd:' + k]?.setMark(lane.automates(k)); for (const k of ['tune', 'prob']) sliders[k]?.setMark(lane.automates(k));
+  const lane = m.lane; autoShown = [];
+  const mark = (gg, k, src, kind) => { const on = lane.automates(k); gg?.setMark(on); if (gg && on) autoShown.push({ gg, k, src, kind }); };
+  for (const k of SOUND_KEYS) mark(sliders['snd:' + k], k, 'snd', AUTO_KEYS.includes(k) ? 'curve' : 'step'); for (const k of ['tune', 'prob']) mark(sliders[k], k, 'lane', 'step');
   const list = autoParams(lane), strip = $('auto-strip'); strip.hidden = !list.length; if (!list.length) return;
   const cur = list.find(p => p.k === stripKey?.k && p.kind === stripKey?.kind) || list[0], sel = $('auto-key'), opts = list.map(p => `${p.kind}:${p.k}`).join();
   if (sel.dataset.opts !== opts) { sel.innerHTML = ''; for (const p of list) sel.add(new Option(`${knobWord(p.k)} · ${p.kind === 'curve' ? 'curve' : 'locks'}`, `${p.kind}:${p.k}`)); sel.dataset.opts = opts; }
@@ -938,30 +944,40 @@ const nLoops = (n) => `${n} loop${n === 1 ? '' : 's'}`;
 /** Lock units → 0..1 for drawing (tune −1..1, nudge ±½). */
 const unitOf = (k, v) => (k === 'tune' ? (v + 1) / 2 : k === 'nudge' ? v + 0.5 : v);
 /** A4 strip: a curve over its span (loop dividers, the lane value dashed where it has no points) or a key's locks as bars
- *  per step, and the playhead. At most once per frame (autoFrame), the selected lane only. */
+ *  per step, and the playhead. The picture is drawn once into `stripBg` and redrawn only when what it shows changes
+ *  (stripSig); a frame (autoFrame) copies it and adds the playhead. The selected lane only. */
+let stripBg = null, stripSig = '';
 function drawStrip() {
   const cv = $('auto-cv'), lane = m.lane, p = stripKey; if (!p || $('auto-strip').hidden) return;
   const w = cv.clientWidth, h = cv.clientHeight, px = devicePixelRatio || 1; if (!w || !h) return;
   if (cv.width !== Math.round(w * px) || cv.height !== Math.round(h * px)) { cv.width = Math.round(w * px); cv.height = Math.round(h * px); }
-  const g = cv.getContext('2d'), L = lane.length, col = LANE_HEX[m.selected], y = (v) => h - 3 - unitOf(p.k, v) * (h - 6); g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, h);
-  const loops = p.kind === 'curve' ? lane.auto?.loops || 1 : 1, span = loops * L, xs = (s) => (s / span) * w;
-  g.strokeStyle = 'rgba(236,233,247,.2)'; g.lineWidth = 1; for (let i = 1; i < span; i++) { if (i % L && L > 16) continue; g.globalAlpha = i % L ? 0.35 : 1; g.beginPath(); g.moveTo(xs(i), i % L ? h - 5 : 0); g.lineTo(xs(i), h); g.stroke(); } g.globalAlpha = 1;
-  if (p.kind === 'curve') {
-    const base = lane.sound[p.k], n = span * AUTO_RES; g.setLineDash([3, 3]); g.strokeStyle = 'rgba(236,233,247,.35)'; g.beginPath(); g.moveTo(0, y(base)); g.lineTo(w, y(base)); g.stroke(); g.setLineDash([]);
-    g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath(); let pen = false;
-    for (let q = 0; q <= n; q++) { const v = lane.autoAt(p.k, q / AUTO_RES); if (v == null) { pen = false; continue; } const x = (q / n) * w; if (pen) g.lineTo(x, y(v)); else g.moveTo(x, y(v)); pen = true; }
-    g.stroke();
-  } else for (let i = 0; i < L; i++) { const v = lane.lockAt(i)?.[p.k]; if (v == null) continue; g.fillStyle = lane.hitAt(i) ? col : 'rgba(236,233,247,.25)'; const top = y(v); g.fillRect(xs(i) + 1, top, Math.max(1, xs(1) - 2), h - 3 - top); }
-  if (playing) { const s = p.kind === 'curve' ? heardStep(lane) : lane.shown != null ? lane.shown + 0.5 : -1; if (s >= 0) { const x = xs(((s % span) + span) % span); g.fillStyle = '#fff'; g.fillRect(x - 0.75, 0, 1.5, h); } }
+  const L = lane.length, loops = p.kind === 'curve' ? lane.auto?.loops || 1 : 1, span = loops * L, xs = (s) => (s / span) * w;
+  const sig = `${m.selected}|${p.kind}:${p.k}|${L}|${w}x${h}@${px}|${p.kind === 'curve' ? `${loops}|${lane.sound[p.k]}|${lane.auto?.[p.k]}` : Array.from({ length: L }, (_, i) => `${lane.hitAt(i) ? 1 : 0}${lane.lockAt(i)?.[p.k] ?? ''}`).join()}`;
+  if (sig !== stripSig) {
+    stripSig = sig; stripBg ??= document.createElement('canvas'); stripBg.width = cv.width; stripBg.height = cv.height;
+    const g = stripBg.getContext('2d'), col = LANE_HEX[m.selected], y = (v) => h - 3 - unitOf(p.k, v) * (h - 6); g.setTransform(px, 0, 0, px, 0, 0); g.clearRect(0, 0, w, h);
+    g.strokeStyle = 'rgba(236,233,247,.2)'; g.lineWidth = 1; for (let i = 1; i < span; i++) { if (i % L && L > 16) continue; g.globalAlpha = i % L ? 0.35 : 1; g.beginPath(); g.moveTo(xs(i), i % L ? h - 5 : 0); g.lineTo(xs(i), h); g.stroke(); } g.globalAlpha = 1;
+    if (p.kind === 'curve') {
+      const base = lane.sound[p.k], n = span * AUTO_RES; g.setLineDash([3, 3]); g.strokeStyle = 'rgba(236,233,247,.35)'; g.beginPath(); g.moveTo(0, y(base)); g.lineTo(w, y(base)); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = col; g.lineWidth = 1.6; g.beginPath(); let pen = false;
+      for (let q = 0; q <= n; q++) { const v = lane.autoAt(p.k, q / AUTO_RES); if (v == null) { pen = false; continue; } const x = (q / n) * w; if (pen) g.lineTo(x, y(v)); else g.moveTo(x, y(v)); pen = true; }
+      g.stroke();
+    } else for (let i = 0; i < L; i++) { const v = lane.lockAt(i)?.[p.k]; if (v == null) continue; g.fillStyle = lane.hitAt(i) ? col : 'rgba(236,233,247,.25)'; const top = y(v); g.fillRect(xs(i) + 1, top, Math.max(1, xs(1) - 2), h - 3 - top); }
+  }
+  const g = cv.getContext('2d'); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); g.drawImage(stripBg, 0, 0);
+  if (playing) { const s = p.kind === 'curve' ? heardStep(lane) : lane.shown != null ? lane.shown + 0.5 : -1; if (s >= 0) { const x = xs(((s % span) + span) % span) * px; g.fillStyle = '#fff'; g.fillRect(x - 0.75 * px, 0, 1.5 * px, cv.height); } }
 }
-/** A4 while playing, once per frame: the selected lane's automated knobs follow what plays (the hand while it holds one)
- *  and the strip's playhead moves. Stopped, the knobs show the lane values again (sync). */
-let autoRaf = 0;
+/** A4 while playing, once per frame: the selected lane's automated knobs (autoShown, from renderAuto) follow what plays
+ *  (the hand while it holds one), each set only when its shown value moves, and the strip's playhead moves. Nothing
+ *  automated and no hand: nothing to do. Stopped, the knobs show the lane values again (sync). */
+let autoRaf = 0, autoShown = [];
 function autoFrame() {
-  autoRaf = 0; if (!playing) return; const lane = m.lane, g = knobGest?.li === m.selected ? knobGest : null;
-  for (const k of SOUND_KEYS) { const gg = sliders['snd:' + k]; if (!gg || gg.held) continue; const hand = g && g.src === 'snd' && g.k === k; if (hand || lane.automates(k)) gg.set(Math.round((hand ? g.v : playedValue(lane, k, AUTO_KEYS.includes(k) ? 'curve' : 'step')) * 100)); }
-  for (const k of ['tune', 'prob']) { const gg = sliders[k]; if (!gg || gg.held) continue; const hand = g && g.src === 'lane' && g.k === k; if (hand || lane.automates(k)) gg.set(Math.round((hand ? g.v : playedValue(lane, k, 'step')) * 100)); }
-  drawStrip(); autoRaf = requestAnimationFrame(autoFrame);
+  autoRaf = requestAnimationFrame(autoFrame); if (!playing) { cancelAnimationFrame(autoRaf); autoRaf = 0; return; }
+  const lane = m.lane, g = knobGest?.li === m.selected ? knobGest : null; if (!autoShown.length && !g) return;
+  const show = (gg, v) => { const x = Math.round(v * 100); if (!gg.held && gg.value !== x) gg.set(x); };
+  for (const a of autoShown) if (!(g && g.src === a.src && g.k === a.k)) show(a.gg, playedValue(lane, a.k, a.kind));
+  if (g && (g.src === 'snd' || g.src === 'lane')) show(sliders[g.src === 'snd' ? 'snd:' + g.k : g.k], g.v);
+  drawStrip();
 }
 function buildAutoUI() {
   $('auto-key').onchange = (e) => { const [kind, k] = e.target.value.split(':'); stripKey = { k, kind }; renderAuto(); letGoAfterPointer(e.target); };

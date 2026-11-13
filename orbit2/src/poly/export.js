@@ -163,8 +163,8 @@ export function collectHits(m, { from = 0, to, tempo, dice = null, fill = false,
 export function autoRamps(m, from, to, origin = m.origin) {
   const out = [], t0 = Math.ceil(from / MIDI_DIV) * MIDI_DIV;
   m.lanes.forEach((l, li) => {
-    const a = l.auto; if (!a) return; const st = l.stepTicks(), ks = AUTO_KEYS.filter(k => a[k]);
-    for (let t = t0; t < to; t += MIDI_DIV) for (const k of ks) out.push({ li, k, t, v: l.autoAt(k, (t - origin) / st) ?? l.sound[k] });
+    const a = l.auto; if (!a) return; const st = l.stepTicks();
+    for (let t = t0; t < to; t += MIDI_DIV) for (const k of AUTO_KEYS) if (a[k]) out.push({ li, k, t, v: l.autoAt(k, (t - origin) / st) ?? l.sound[k] });
   });
   return out;
 }

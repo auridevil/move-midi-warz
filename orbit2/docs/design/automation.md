@@ -269,6 +269,31 @@ Browser (`orbit2/tools/cdp.mjs`, port 5400 / 9400, muted), a 4-bar pattern:
 - Stress meter while 6 automated lanes play; screenshots 1440×900 and 390×844 (the strip, the A marks).
 - `npm run check`, `npm test`, `node tools/smoke.mjs http://localhost:5400`.
 
+## As built (where the code differs from the text above)
+
+- `autoRamps(m, from, to, origin = m.origin)` returns `{ li, k, t, v }` with `t` the **master tick** (not `dt`): live
+  play, renders (`lead + t · tickSec`, from the block line before tick 0 through the tail) and the MIDI export each turn
+  ticks into their own times. Block lines are the absolute multiples of 35 ticks (the live blocks), which are the lines
+  from the origin whenever the origin is a bar line. `collectChainRamps` / `collectChainAuto` share `chainSegments` with
+  `collectChain`.
+- The curve writer is `Lane.recordCurve(k, s0, v0, s1, v1)` (a span, linear between two hand values), with
+  `widenAuto`, `spanAuto(±1)` (the strip's ×2 / ½) and `clearAuto(k?, kind?)`; `clearAuto` keeps the ghost tier (a
+  0.35 vel lock is a tier, not automation).
+- Every hit carries **all** of its lane's curve values at its own time (`h.auto`), and `hitSound` sets the non-tone
+  ones too: a chain that is silent between hits may not have run its ramps (the reason `holdParam` exists), so each hit
+  starts on the curve and the next block ramp goes on from there. Measured: a live jam take matches the render (per-hit
+  decay within 0.33 dB, the hat's spectral centroid per beat within 6 %, onsets within 0.06 ms).
+- `applySound` leaves a curve's param alone only on the live kit while playing; stopped, offline kits and the kit
+  export start from the knob. A Stop puts the knobs back on automated chains.
+- The knob gesture is `knobGest` in `app.js` (the I1 canvas owns `gest`). A gesture that records defers `save()` and
+  commits one own undo step synchronously on its end (before a slot, an undo or a load replaces the pattern). Move:
+  touching a knob + Record cycles knobs off → touch → latch; touching + Delete clears that knob's automation.
+- MIDI CC: `autoCCs` sends a step key for a lane whose hits carry it (a lock, a modulator, timbre dice or scale snap),
+  the curve where the note sounds else the lane value on the other notes; CC numbers are 0..119 (`ccFrom`).
+- Budget: `autoRamps` costs ~2 µs per block for 6 lanes × 5 curves (Node); the stress meter stays at level 0 with
+  headroom 74–75 ms at 240 bpm (unchanged) and 64–68 ms against 70–71 ms without curves under a 6× CPU throttle. The
+  strip is drawn once per change into an offscreen canvas; a frame copies it and sets only the gauges whose value moved.
+
 ## Later (not this phase)
 
 - Master filter automation (Decision 1). Live MIDI CC out of automation. Recording slice / stroke as a move. A

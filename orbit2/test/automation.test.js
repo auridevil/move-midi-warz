@@ -127,6 +127,15 @@ test('A2 old saves and grooves save and play byte-identically (no curve: nothing
     assert.equal(m.lanes.some(l => l.auto), false); assert.deepEqual(autoRamps(m, 0, 4 * m.barTicks()), [], `${key}: no ramps`);
   }
 });
+// links made by the page before this phase (encodeShare of two grooves, titled), opened by this one: the same hits
+const OLD_LINKS = { boombap: '7ZbBjtMwEIZfBf3n2ZJUabfrJwABN26oB9eZNlYcO0qcwFL13ZGTtgRtEaUSklf0MnLG9nic-f1p9ughUoLnqnYQqyWhgtjDSMstxJc9rKwYAqVWJQiG7c4XECtCI712723O3yDS5PgNMScU2oe9vumYttK0JztxvJiLzK4JUim2ly_yquya0DgfimMhEkL7VdsdRDKbH8efawOBqlYguO22Zf-pHVb2bN51lRy31Y3bjFLpLA-eqvOcQ4xHgTtldP5hPMJ1Ng8yylnJ53DWckHwbtg4WxLyRvdjkNbKOjgXBOWMa47jlkOAZJYuCPWQQfAa7tkMIR4PhN5pFaTZuq0_ydOpMlTMdsZQvGZN4N6Z8AsGbcE3evc68m6dceeaq8KVDPGQElpZ1YYhwrIDnbHRWtnwX3LjN8h44Y7xWf7CjWsvEkHekWJjQo3V_Cc2ZtniVnKspuA4ifN6auxxjJMd7vD41_AopL-l5bjCRPC-ruk2_jiMzMbGjKebkZHNJ8x4SqfQKGTJzb3XiA8XNTfqP-RFBPlEw4zx9d9CjceL1DghI50AI70IjOWZF1NY9No-mzsrYmFFWMeG1SCLhFAE-ejvQ9WTFaHUHgIf3cNWg1Cx5wYC2dsMB4LXPgSCM_mbjXPVRtY4_AA', poly345: '7dfBjtMwEAbgV0H_2ZSkTbvUVy4gxI0b2oNxpq1V2xM5Tpal6rsjJ1XXu0JC7IUE9TJyHHviyJNP8Qk9ZCkQyTUMWRaFgIM8wSpPLeS3E7xyBImj0UcIWPL7eICsBIKKhj_5mn5AlsvL9XDnYGKaG0NHYqdsO8t4L6C0Jv9_vErgmLbHQxYC7YPx-6fW18ZCwjUaArzbtRS_tMPdnuzHzqlxUhP4-1grnaehx3WRasjxQaBOW1N_HtNy5-tURjVp9QhZLNYCkYd5i7u1QB1MPyZpvWouAzRbDpd2SylBsSjXAs2wgtRrqSeb2pvNWaBno_PSZH1Me-U7a8V0w70A9WzT6w9VhRjMfh7rbtnydb_1gY8E-bYUaJVrLEGmYWdxJaP1KlBmxvpmxnziHMzY_NGMKjPj_V1mRjDuRsb0yDiomIGxegFGeQVj9RyMpzCBL-fGxb_hosq82L7yH2OTebHdZl5cCvPmxbS8aCjoDIzlCzCKKxjLKxhj7rl-bc_ImMB6Zm7G6m-OJZvf_2Lk55JtlZnxwFzf0JgKGmkcWdJDcRQCh1RC5ue43UcTIfGBnWMPAUeRAiSqdxXOAtHElAZs6zcN28dVtcb5Fw' };
+test('A5 share links from before this phase open and play byte-identically', async () => {
+  const { decodeShare } = await import('../src/poly/export.js'), h = (o) => createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 16);
+  for (const [key, link] of Object.entries(OLD_LINKS)) {
+    const o = await decodeShare(link), m = Machine.from(o.m); assert.equal(o.title, `old ${key}`); assert.equal(m.lanes.some(l => l.auto), false);
+    assert.equal(h(collectHits(m, { to: 4 * m.barTicks(), tempo: o.tempo, dice: Dice.take(11) })), BEFORE[key][1], key);
+  }
+});
 test('A1 recorded step values play per hit: collectHits carries each step lock (renders and MIDI read the same hits)', () => {
   const m = new Machine(); m.lanes.forEach(l => l.clear()); const l = m.lanes[0]; l.setLength(4); l.setEuclid(4);
   [0.1, 0.4, 0.7, 1].forEach((v, i) => l.recordStepValue(i, 'decay', v));
