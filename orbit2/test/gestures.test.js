@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Lane, MAX_STEPS } from '../src/poly/lanes.js';
 import { History } from '../src/poly/history.js';
-import { ringGeo, ringAngle, stepAtAngle, laneAtRadius, angleDelta, turnRotation, pullLength, pinchLength, dragKind } from '../src/poly/scene.js';
+import { ringGeo, ringAngle, stepAtAngle, planetNudge, laneAtRadius, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from '../src/poly/scene.js';
 
 const TAU = Math.PI * 2;
 /** (dx, dy) of visible step i of a len-step ring at radius r: step 0 at 12 o'clock, clockwise (as the scene draws). */
@@ -80,4 +80,43 @@ test('I1 a gesture is one undo step of its own: never folded into the edit befor
   h.commit('f', { now: 1350, own: true }); h.commit('g', { now: 1360, own: true }); assert.equal(h.past.length, 5, 'two quick taps = two steps');
   assert.equal(h.undo().json, 'f'); assert.equal(h.undo().json, 'e'); assert.equal(h.undo().json, 'd');
   h.commit('d', { now: 2000, key: 'd', own: true }); assert.equal(h.past.length, 2, 'same key (only a selection moved): no step, even for a gesture');
+});
+
+test('I1 r1 a nudged planet is played where it is drawn (G1: its step + its nudge), its bare tick still reaches it', () => {
+  const l = new Lane('hat', { length: 16 }); l.hits[4] = true; l.setLock(4, 'nudge', 0.25);   // the verifier's repro
+  const nd = (i) => planetNudge(l, i), pos = (p, len = 16) => at(p, len);
+  assert.equal(planetNudge(l, 4), 0.25); assert.equal(planetNudge(l, 5), 0, 'an empty step sits on its tick');
+  l.setLock(7, 'nudge', 0.4); assert.equal(planetNudge(l, 7), 0, 'a nudge lock on an empty step moves nothing (nothing is drawn there)');
+  assert.equal(stepAtAngle(...pos(4.25), 16, nd), 4, 'on the planet');
+  assert.equal(stepAtAngle(...pos(4), 16, nd), 4, 'on its faint tick'); assert.equal(stepAtAngle(...pos(4.6), 16, nd), 4, 'nearer the planet than tick 5');
+  assert.equal(stepAtAngle(...pos(4.7), 16, nd), 5, 'nearer tick 5'); assert.equal(stepAtAngle(...pos(4.25), 16), 4, 'without nudges: the nearest tick');
+  assert.equal(stepAtAngle(...pos(4.6), 16), 5);
+  // round 12 o'clock both ways, and through a rotation (visible steps, as drawn)
+  const w = new Lane('hat', { length: 16 }); w.hits[15] = true; w.setLock(15, 'nudge', 0.4); w.hits[0] = true; w.setLock(0, 'nudge', -0.3);
+  const wn = (i) => planetNudge(w, i); assert.equal(stepAtAngle(...pos(15.4), 16, wn), 15); assert.equal(stepAtAngle(...pos(15.7), 16, wn), 0, 'step 1 nudged early sits before 12 o\'clock');
+  const r = new Lane('hat', { length: 8 }); r.rotation = 2; r.hits[1] = true; r.setLock(1, 'nudge', 0.3);   // stored 1 = visible 3
+  assert.equal(planetNudge(r, 3), 0.3); assert.equal(stepAtAngle(...pos(3.3, 8), 8, (i) => planetNudge(r, i)), 3);
+  // the demo's 2-step ring: a small nudge is far round the ring
+  const two = new Lane('kick', { length: 2 }); two.hits[0] = true; two.setLock(0, 'nudge', 0.15);
+  assert.equal(stepAtAngle(...pos(0.15, 2), 2, (i) => planetNudge(two, i)), 0);
+  // with no nudge anywhere it is the plain nearest tick, every length and angle
+  const none = () => 0; for (let len = 1; len <= MAX_STEPS; len++) for (let k = 0; k < 64; k++) { const p = (k / 64) * len + 0.01; assert.equal(stepAtAngle(...pos(p, len), len, none), stepAtAngle(...pos(p, len), len)); }
+});
+
+test('I1 r1 a pull is measured along the line it started on: past the centre it keeps shortening the ring', () => {
+  assert.equal(outward(0, -100, 0, -40), 40, 'outward from 12 o\'clock'); assert.equal(outward(0, -100, 0, 40), -40, 'inward');
+  assert.equal(outward(0, -100, 0, 150), -150, 'through the centre and beyond: still inward'); assert.equal(outward(0, -100, 30, 0), 0, 'sideways: no change');
+  assert.equal(outward(0, 0, 5, 5), 0, 'a start on the centre never divides by 0');
+  // the verifier's inner ring (r 81.6 px, a step every 21.75 px): 16 → 1 in one pull, which ended on the far side
+  assert.equal(pullLength(16, outward(0, -81.6, 0, 326), 21.75), 1);
+  assert.equal(dragKind(0, -100, 2, -10), 'pull', 'dragKind measures the same way'); assert.equal(dragKind(0, -100, 10, 2), 'turn');
+});
+
+test('I1 r1 a pull is rebuilt from the whole lane as it started (Lane.restore of a copy): out and back = exactly as it was', () => {
+  const l = new Lane('snare', { length: 16 }); l.setEuclid(5); l.accents[3] = true; l.setLock(6, 'tune', 0.4); l.setTrig(9, { cond: '1:2', ratchet: 3 }); l.rotation = 2;
+  const start = structuredClone(l.toJSON()), json = JSON.stringify(l);
+  const pull = (len) => { l.restore(start); if (len !== start.length) { l.setLength(len); if (l.euclidK) l.setEuclid(Math.min(l.euclidK, l.length)); } };   // app.js dragLength + the length knob
+  for (const len of [13, 7, 3, 9, 24, 32]) { pull(len); assert.equal(l.length, len); }
+  pull(16); assert.equal(JSON.stringify(l), json, 'back at the start length: hits, accents, locks, conditions and rotation as they were');
+  pull(12); l.hits[0] = !l.hits[0]; pull(16); assert.equal(JSON.stringify(l), json, 'whatever happened to the lane in between');
 });

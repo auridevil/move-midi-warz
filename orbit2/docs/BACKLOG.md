@@ -618,3 +618,22 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **A scene test** (ORBIT2-13 round 1, verifier, architect): the drawing side of V6 (a ring set on a miss, gone after
   `MISS_MS`, cleared on Stop and `reset()`) is checked in the browser only; `createScene` needs a canvas, so a unit test
   needs a small 2D-context stub.
+- **A gestures module** (ORBIT2-14 round 1, architect): the I1 pointer state machine (tap or select, the slop, the long
+  press, a turn put back for a pinch, record on release, the gesture's own lane) lives in `app.js` with no unit test, only
+  its geometry in `scene.js` has one; a `poly/gestures.js` with injected callbacks (select, tap, set rotation / length,
+  open the menu, commit) would let it run in Node. `app.js` 1738 → 1845 lines in phase 14.
+- **One tap rule through the euclid mask** (ORBIT2-14 round 1, architect; the strip's `cycleStep` the same since phase
+  12): in AND / XOR mode a tap cycles the stored hand step, not what plays, so with XOR and E(3,8) a planet the mask lights
+  goes off, off, on, and its accent can't be reached from the canvas. One rule in the model for both, on the played tier.
+- **Rings and the lock menu on a phone** (ORBIT2-14 round 1, architect, rio, maya): at 390 × 844 each ring owns 17.2 px
+  either side, less than `TAP_PX` (22), so any touch on the two inner rings taps a tick (no select-only spot; the lane
+  tabs select) while the help says "touch a ring to select its lane"; the menu's pills (12 px text, 32 px tall) are small
+  and overlap the neighbouring planets; a pill scrolls the page ~1350 px down to the lock panel and the rings are gone
+  (a lock sheet over the stage, or a way back); a select-only touch shows little; a fade-in or a dimmed backdrop for the
+  menu (taste).
+- **The tap's sound and the pads** (ORBIT2-14 round 1, sound): stopped, a tap sounds on release plus the look-ahead
+  (~100 ms after the touch with a 90 ms hold); an empty tick has no long press, so it could sound on pointerdown. The
+  Move pads' `liveHit` plays at `T.immediate()` on the lane's own mono voice while the pattern plays: the case that cut
+  the lane's queued note for canvas taps (not measured for the pads; from before phase 14).
+- **Telling a beginner the rings play** (ORBIT2-14 round 1, maya; I6 in phase 16): a tap on a ghost turns it off with only
+  a flash; nothing but the help says the rings can be dragged, pulled or pinched: a first-run line on the canvas.

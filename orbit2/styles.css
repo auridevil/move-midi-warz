@@ -211,8 +211,9 @@ body.launcher { display: grid; place-items: center; min-height: 100vh; }
 body.chaos { overflow: hidden; }
 body.chaos::before { display: none; }
 #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
-/* I1 the rings are played by hand: a drag on the canvas turns or pulls a ring, it never scrolls or zooms the page */
-#cv { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* I1 the rings are played by hand: a touch on a ring never scrolls or zooms the page (app.js cancels it there); off the
+   rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
+#cv { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-menu { position: fixed; z-index: 60; width: 0; height: 0; }
 .ring-menu button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--star-white); background: rgb(18, 12, 40); border: 1px solid rgba(103, 232, 249, .45); box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
 .ring-menu button.lk { border-color: var(--signal-cyan); background: rgb(22, 52, 66); }

@@ -37,8 +37,17 @@ export const cyclePos = (tick, cycle) => (cycle > 0 ? (((tick % cycle) + cycle) 
 // ---- I1 playing on the canvas: pure geometry, so the gestures can be tested without a page ----
 /** I1: the angle of (dx, dy) from the centre as the rings count it: 0 at 12 o'clock, growing clockwise, 0..2π. */
 export const ringAngle = (dx, dy) => { const a = Math.atan2(dy, dx) + Math.PI / 2; return ((a % TAU) + TAU) % TAU; };
-/** I1: the visible step of a `len`-step ring nearest to the point (dx, dy) from the centre (the tick the finger is on). */
-export const stepAtAngle = (dx, dy, len) => Math.round((ringAngle(dx, dy) / TAU) * len) % len;
+/** I1: the visible step of a `len`-step ring whose mark is nearest to the point (dx, dy) from the centre (the one the
+ *  finger is on). A mark is the step's tick, or, for a planet with a nudge (`nudge(i)`: G1, a fraction of a step), the
+ *  place the planet is drawn, so a nudged planet is played where you see it. */
+export function stepAtAngle(dx, dy, len, nudge = null) {
+  const p = (ringAngle(dx, dy) / TAU) * len; if (!nudge) return Math.round(p) % len;
+  let best = 0, gap = Infinity;
+  for (let i = 0; i < len; i++) { const d = (((p - i - nudge(i)) % len) + len) % len, e = Math.min(d, len - d); if (e < gap) { gap = e; best = i; } }
+  return best;
+}
+/** I1 / G1: how far off its tick lane step i's planet is drawn (its nudge lock, in steps); 0 for an empty step. */
+export const planetNudge = (lane, i) => (lane.hitAt(i) && lane.lockAt(i)?.nudge) || 0;
 /** I1: the ring at `d` px from the centre of geometry g (ringGeo): its lane, or -1 beyond half a gap from every ring. */
 export function laneAtRadius(g, d) {   // | 0: just inside ring 0 rounds to −0
   const li = Math.round((d / g.R - 0.25) / g.gap) | 0; return li >= 0 && li < g.lanes && Math.abs(d - g.ring(li)) <= (g.gap * g.R) / 2 ? li : -1;
@@ -47,13 +56,16 @@ export function laneAtRadius(g, d) {   // | 0: just inside ring 0 rounds to −0
 export const angleDelta = (a0, a1) => { const d = (((a1 - a0) % TAU) + TAU) % TAU; return d > Math.PI ? d - TAU : d; };
 /** I1: the rotation after turning a `len`-step ring by `turn` radians (clockwise > 0) from rotation rot0: whole steps. */
 export const turnRotation = (rot0, turn, len) => ((((rot0 + Math.round((turn / TAU) * len)) % len) + len) % len);
+/** I1: how far a move of (mx, my) px goes outward (inward < 0) along the line from the centre through (dx, dy), where
+ *  the drag started: a pull that crosses the centre keeps shortening the ring instead of growing it again. */
+export const outward = (dx, dy, mx, my) => (mx * dx + my * dy) / (Math.hypot(dx, dy) || 1);
 /** I1: the length after pulling a ring `dr` px outward (in < 0), a step every `stepPx`; 1..max. */
 export const pullLength = (len0, dr, stepPx, max = MAX_STEPS) => Math.max(1, Math.min(max, len0 + Math.round(dr / Math.max(1, stepPx))));
 /** I1: the length after a pinch that scaled the fingers' distance by `s` (2 = twice as far apart); 1..max. */
 export const pinchLength = (len0, s, max = MAX_STEPS) => Math.max(1, Math.min(max, Math.round(len0 * (s > 0 ? s : 1))));
 /** I1: which way a drag of (mx, my) px that started at (dx, dy) from the centre goes: 'turn' along the ring, 'pull'
  *  across it (toward or away from the centre). */
-export const dragKind = (dx, dy, mx, my) => { const d = Math.hypot(dx, dy) || 1, radial = Math.abs((mx * dx + my * dy) / d), along = Math.abs((my * dx - mx * dy) / d); return radial > along ? 'pull' : 'turn'; };
+export const dragKind = (dx, dy, mx, my) => { const along = Math.abs((my * dx - mx * dy) / (Math.hypot(dx, dy) || 1)); return Math.abs(outward(dx, dy, mx, my)) > along ? 'pull' : 'turn'; };
 
 /**
  * Where the rings go on a W × H canvas: centre, R, ring(li) = radius of lane li (the outer one is 0.85 R). On phones the
@@ -146,7 +158,7 @@ export function createScene(cv, o) {
   function burst(li, index, accent, now) {
     const ev = { lane: li, index, accent };
     const m = o.machine(), lane = m.lanes[ev.lane]; if (!lane) return;
-    const g = geo(), [x, y, a] = nodeXY(g, ev.lane, ev.index, lane.length), hex = o.laneHex[ev.lane];
+    const g = geo(), [x, y, a] = nodeXY(g, ev.lane, ev.index + planetNudge(lane, ev.index), lane.length), hex = o.laneHex[ev.lane];   // from the planet, where it is drawn
     energy[ev.lane] = Math.min(1.6, energy[ev.lane] + (ev.accent ? 1 : 0.65)); flash.set(`${ev.lane}:${ev.index}`, now);
     waves.push({ x, y, hex, t: now, big: ev.accent });
     const n = Math.round((ev.accent ? 18 : 9) * quality * (reduced ? 0.4 : 1));
@@ -162,19 +174,19 @@ export function createScene(cv, o) {
   /** The app calls this when the master clock reaches a full cycle (Machine.cycleTicks, conditions and dice included). */
   function bloom() { const now = performance.now(); if (now - lastAlign < 400) return; lastAlign = now; blooms.push({ t: now }); }
 
-  /** Which ring is under (x, y)? -1 if none. */
-  /** x, y are client coordinates. */
-  function pick(x, y) { const b = cv.getBoundingClientRect(); x -= b.left; y -= b.top; const g = geo(); const d = Math.hypot(x - g.cx, y - g.cy) / g.R; const r = Math.round((d - 0.25) / g.gap); return r >= 0 && r < g.lanes ? r : -1; }
+  /** Which ring is under client point (x, y)? -1 if none (the same rings the gestures find). */
+  function pick(x, y) { return locate(x, y).lane; }
   /** I1: what is under client point (x, y): { dx, dy } from the centre, its lane (-1 off the rings), that lane's
-   *  visible step there and how far (px) the point is from its tick, plus the geometry (for pull distances). */
+   *  visible step whose mark is nearest (a planet where it is drawn) and how far (px) the point is from that mark, plus
+   *  the geometry (for pull distances). */
   function locate(x, y) {
     const b = cv.getBoundingClientRect(), g = geo(), dx = x - b.left - g.cx, dy = y - b.top - g.cy, li = laneAtRadius(g, Math.hypot(dx, dy)), lane = o.machine().lanes[li];
     if (!lane) return { dx, dy, g, lane: -1, step: -1, off: Infinity };
-    const step = stepAtAngle(dx, dy, lane.length), [tx, ty] = nodeXY(g, li, step, lane.length);
+    const nd = (i) => planetNudge(lane, i), step = stepAtAngle(dx, dy, lane.length, nd), [tx, ty] = nodeXY(g, li, step + nd(step), lane.length);
     return { dx, dy, g, lane: li, step, off: Math.hypot(dx + g.cx - tx, dy + g.cy - ty) };
   }
-  /** I1: client position of lane li's visible step i (where the radial menu opens). */
-  function stepXY(li, i) { const b = cv.getBoundingClientRect(), g = geo(), len = o.machine().lanes[li]?.length || 1, [x, y] = nodeXY(g, li, i, len); return { x: x + b.left, y: y + b.top }; }
+  /** I1: client position of lane li's visible step i, its planet where it is drawn (where the radial menu opens). */
+  function stepXY(li, i) { const b = cv.getBoundingClientRect(), g = geo(), lane = o.machine().lanes[li], [x, y] = nodeXY(g, li, i + (lane ? planetNudge(lane, i) : 0), lane?.length || 1); return { x: x + b.left, y: y + b.top }; }
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
@@ -236,7 +248,7 @@ export function createScene(cv, o) {
         const a = (i / len) * TAU - Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); let x = g.cx + ca * r, y = g.cy + sa * r;
         if (!lane.hitAt(i)) { ctx.strokeStyle = 'rgba(236,233,247,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 4, y - sa * 4); ctx.lineTo(x + ca * 4, y + sa * 4); ctx.stroke(); continue; }
         // G1 a nudged hit sits off its tick by the nudge (a fraction of the step), the tick stays as a faint mark
-        const nd = lane.lockAt(i)?.nudge || 0;
+        const nd = planetNudge(lane, i);
         if (nd) { ctx.strokeStyle = 'rgba(236,233,247,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 5, y - sa * 5); ctx.lineTo(x + ca * 5, y + sa * 5); ctx.stroke(); const an = ((i + nd) / len) * TAU - Math.PI / 2; x = g.cx + Math.cos(an) * r; y = g.cy + Math.sin(an) * r; }
         // G4 a ghost (soft vel lock) is a smaller, dimmer planet
         const key = `${li}:${i}`, acc = lane.accentAt(i), ghost = lane.tierAt?.(lane.stepIndex(i)) === 'ghost', f = flash.get(key), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;

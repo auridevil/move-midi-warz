@@ -20,7 +20,7 @@ import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
-import { createScene, stageBox, ringAngle, angleDelta, turnRotation, pullLength, pinchLength, dragKind } from './scene.js';
+import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 
 const $ = (id) => document.getElementById(id);
@@ -645,11 +645,15 @@ function renderTrig(tg) {
   for (let k = 1; k <= (b || 0); k++) { const d = document.createElement('button'); d.type = 'button'; d.className = `ldot${k === a ? ' on' : ''}`; d.textContent = k; d.title = `play on loop ${k} of every ${b}`; d.style.setProperty('--chip', LANE_HEX[m.selected]); d.onclick = () => { m.lane.setTrig(m.lane.stepIndex(lockStep), { cond: `${k}:${b}` }); auditionLock(); stepEdited(); }; dots.appendChild(d); }
   $('cond-text').textContent = ab ? `plays on loop ${a} of every ${b}${b > 1 ? ` (${[0, 1, 2].map(n => a + n * b).join(', ')}…)` : ''}` : { always: 'plays every loop', fill: 'plays only while Fill is held', 'not fill': 'rests while Fill is held', first: 'plays only on the first loop after Play', 'not first': 'rests on the first loop, then plays', pre: 'plays when the last step with a condition on this lane passed it (PRE)', 'not pre': 'plays when the last step with a condition on this lane failed it (not PRE)' }[cond];
 }
-function auditionLock() {
-  if (!awake || playing || lockStep < 0) return; const lane = m.lane, tg = lane.trigAt(lockStep), n = tg?.ratchet || 1, v = hitVel(lane.accentAt(lockStep), lane.lockAt(lockStep));
-  const at = ratchetTimes(n, tg?.curve), g = ratchetGains(n, tg?.curve), lk = lane.lockAt(lockStep);
-  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, lane.accentAt(lockStep) && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), (tg?.fade ? v * Math.pow(0.72, k) : v) * g[k], kit, lane.sliceAt(lane.stepIndex(lockStep), lk));
+/** Play visible step i of a lane as it will sound (its accent, locks and repeats, with their spacing, pitch ramp and
+ *  fade): the lock panel's audition and a tap on the canvas (I1). Only while stopped, like every audition: an extra hit
+ *  on a playing lane's voice would cut the note already queued for its next step. */
+function auditionStep(lane, i) {
+  if (!awake || playing) return; const tg = lane.trigAt(i), n = tg?.ratchet || 1, lk = lane.lockAt(i), acc = lane.accentAt(i), v = hitVel(acc, lk);
+  const at = ratchetTimes(n, tg?.curve), g = ratchetGains(n, tg?.curve);
+  for (let k = 0; k < n; k++) hitSound(lane, T.now() + at[k] * 0.18, acc && !k, tuneLock(lane, lk, n > 1 ? (tg?.ramp || 0) * k / (n - 1) : 0), (tg?.fade ? v * Math.pow(0.72, k) : v) * g[k], kit, lane.sliceAt(lane.stepIndex(i), lk));
 }
+function auditionLock() { if (lockStep >= 0) auditionStep(m.lane, lockStep); }
 
 // ---- pattern slots & chains ----
 // Called from the master clock (fromClock): the model and the voices change now, so this tick already plays the new
@@ -1633,64 +1637,67 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
 const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
-// ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (pop + sound), tap
-// a planet = on → accent → off, drag along a ring = rotate it (whole steps), drag across it or pinch = its length,
-// long-press (or right-click) a planet = a radial menu of its locks. Touching a ring selects its lane. Each gesture is
-// one undo step (ownNext): the drag paints as it goes and records once, on release. The keyboard way is the steps strip
-// and the lane knobs. ----
+// ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at
+// once when stopped, on its turn while playing), tap a planet = on → accent → off, drag along a ring = rotate it (whole
+// steps), drag across it or pinch = its length, long-press (or right-click) a planet = a radial menu of its locks.
+// Touching a ring selects its lane. Each gesture is one undo step (ownNext): the drag paints as it goes and records once,
+// on release. A gesture belongs to the lane it started on: if that lane goes (a slot, a chain step, undo, a load), the
+// gesture ends with nothing done. The keyboard way is the steps strip and the lane knobs. ----
 const lenParam = PARAMS.find(p => p.k === 'length'), rotParam = PARAMS.find(p => p.k === 'rotation');
 const TAP_PX = 22;       // a tap this close to a tick (or planet) plays it; farther along the ring it only selects the lane
 const pts = new Map();   // pointers down on the canvas: id → { x, y }
-let gest = null;         // { li, step, x0, y0, dx0, dy0, kind: null | 'turn' | 'pull' | 'pinch' | 'long', … }
-const fingers = () => [...pts.values()], spread = ([a, b]) => Math.hypot(a.x - b.x, a.y - b.y);
+let gest = null;         // { li, lane, step, x0, y0, dx0, dy0, kind: null | 'turn' | 'pull' | 'pinch' | 'long', start, … }
+const fingers = () => [...pts.values()], spread = ([a, b]) => Math.hypot(a.x - b.x, a.y - b.y), gone = (g) => m.lanes[g.li] !== g.lane;
 /** While a drag is under way: the steps strip and the lane knobs follow, the canvas redraws, nothing is recorded yet. */
 function dragPaint() { for (const p of PARAMS) sliders[p.k].set(p.get(m.lane)); renderSteps(); paintLeds(); poke(); }
-/** A pull or a pinch sets the length from the lane as it was when the gesture started (a pull out and back in leaves
- *  the hits as they were, not as a shorter euclid fill rewrote them). */
+/** A pull or a pinch sets the length from the lane as it was when the gesture started (`start`, a copy of it), so a pull
+ *  out and back in leaves every hit, accent and lock as they were, not as a shorter euclid fill rewrote them. */
 function dragLength(len) {
   const g = gest, lane = m.lanes[g.li]; if (len === lane.length) return;
-  lane.hits = [...g.hits]; lane.euclidK = g.euclidK; if (len === g.len0) lane.setLength(len); else lenParam.set(lane, len);   // back where it started: exactly as it was
+  lane.restore(g.start); if (len !== g.len0) lenParam.set(lane, len);   // back where it started: exactly as it was
   g.changed = 'len'; dragPaint();
-}
-/** Play the step as it will sound, and burst its planet (a tap that added or accented a hit). */
-function popStep(li, i) {
-  const lane = m.lanes[li], si = lane.stepIndex(i), lk = lane.locks[si], acc = lane.accents[si]; scene.flash(li, i, acc);
-  if (awake) hitSound(lane, T.immediate(), acc, tuneLock(lane, lk, 0), hitVel(acc, lk), kit, lane.sliceAt(si, lk));
 }
 function canvasTap(li, i) {
   const lane = m.lanes[li]; lane.tapStep(lane.stepIndex(i)); m.select(li); ownNext = true; sync();
-  if (lane.hitAt(i)) popStep(li, i); else scene.flash(li, i, false);   // off (or a euclid mask silenced it): a small flash only
+  const on = lane.hitAt(i); scene.flash(li, i, on && lane.accentAt(i));   // off (or a euclid mask silenced it): a small flash only
+  if (on) auditionStep(lane, i);   // stopped: you hear it now; playing: on its turn (a hit now would cut the queued one)
 }
 const cv = $('cv');
 cv.addEventListener('pointerdown', (e) => {
   if (e.button) return;   // right-click: contextmenu below
   pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); cv.setPointerCapture?.(e.pointerId);
-  if (pts.size === 2 && gest && gest.kind !== 'long') {   // a second finger: pinch the ring the first one is on
-    clearTimeout(gest.timer); if (gest.kind === 'turn') { rotParam.set(m.lanes[gest.li], gest.rot0); }   // a pinch, not a turn
+  if (pts.size === 2 && gest && gest.kind !== 'long' && !gone(gest)) {   // a second finger: pinch the ring the first one is on
+    clearTimeout(gest.timer); if (gest.kind === 'turn') { rotParam.set(gest.lane, gest.rot0); }   // a pinch, not a turn
     Object.assign(gest, { kind: 'pinch', d0: Math.max(10, spread(fingers())) }); if (m.selected !== gest.li) { m.select(gest.li); sync(); } return;
   }
   if (pts.size > 1) return;
   closeRingMenu(); const at = scene.locate(e.clientX, e.clientY); if (at.lane < 0) { gest = null; return; }
   const lane = m.lanes[at.lane], onTick = at.off <= TAP_PX;
-  gest = { li: at.lane, step: onTick ? at.step : -1, x0: e.clientX, y0: e.clientY, dx0: at.dx, dy0: at.dy, kind: null, rot0: lane.rotation, len0: lane.length, hits: [...lane.hits], euclidK: lane.euclidK, changed: null,
-    stepPx: Math.max(8, (at.g.gap * at.g.R) / 3), timer: onTick && lane.hitAt(at.step) ? setTimeout(() => { if (!gest || gest.kind) return; gest.kind = 'long'; openRingMenu(gest.li, gest.step); }, LONG_MS) : 0 };
+  gest = { li: at.lane, lane, step: onTick ? at.step : -1, x0: e.clientX, y0: e.clientY, dx0: at.dx, dy0: at.dy, kind: null, rot0: lane.rotation, len0: lane.length, start: structuredClone(lane.toJSON()), changed: null,
+    stepPx: Math.max(8, (at.g.gap * at.g.R) / 3), timer: onTick && lane.hitAt(at.step) ? setTimeout(() => { if (!gest || gest.kind || gone(gest)) return; gest.kind = 'long'; openRingMenu(gest.li, gest.step); }, LONG_MS) : 0 };
 });
 cv.addEventListener('pointermove', (e) => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); const g = gest; if (!g || g.kind === 'long') return;
+  if (gone(g)) { clearTimeout(g.timer); gest = null; return; }   // its lane went: the gesture is over
   if (g.kind === 'pinch') { if (pts.size === 2) dragLength(pinchLength(g.len0, spread(fingers()) / g.d0)); return; }
   const mx = e.clientX - g.x0, my = e.clientY - g.y0;
   if (!g.kind) { if (Math.hypot(mx, my) <= LONG_SLOP) return; clearTimeout(g.timer); g.kind = dragKind(g.dx0, g.dy0, mx, my); g.a = ringAngle(g.dx0, g.dy0); g.turn = 0; if (m.selected !== g.li) { m.select(g.li); sync(); } }
-  const at = scene.locate(e.clientX, e.clientY), lane = m.lanes[g.li];
+  const at = scene.locate(e.clientX, e.clientY), lane = g.lane;
   if (g.kind === 'turn') {
     const a = ringAngle(at.dx, at.dy); g.turn += angleDelta(g.a, a); g.a = a;
     const rot = turnRotation(g.rot0, g.turn, lane.length); if (rot !== lane.rotation) { rotParam.set(lane, rot); g.changed = 'rot'; dragPaint(); }
-  } else dragLength(pullLength(g.len0, Math.hypot(at.dx, at.dy) - Math.hypot(g.dx0, g.dy0), g.stepPx));
+  } else dragLength(pullLength(g.len0, outward(g.dx0, g.dy0, at.dx - g.dx0, at.dy - g.dy0), g.stepPx));   // along the line it started on: past the centre still shorter
 });
 function gestureEnd(e, tap) {
-  if (!pts.delete(e.pointerId) || pts.size) return; const g = gest; gest = null; if (!g) return; clearTimeout(g.timer);
+  if (!pts.delete(e.pointerId) || pts.size) return; const g = gest; gest = null; if (!g) return; clearTimeout(g.timer); if (gone(g)) return;
   if (!g.kind && tap) { if (g.step >= 0) canvasTap(g.li, g.step); else { m.select(g.li); sync(); } }   // between the ticks: select only
   else if (g.changed) { ownNext = true; sync(); }   // the whole turn / pull / pinch: one undo step
 }
+// touch: a finger that lands on a ring plays it (no scroll, no zoom); off the rings (the core, the corners of a phone's
+// stage) the page scrolls as it always did: touch-action can't tell the rings from the space between them, this can.
+// A long press that opened the lock menu sends no click on release (it would press the pill under the finger)
+cv.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; if (gest || (t && scene.locate(t.clientX, t.clientY).lane >= 0)) e.preventDefault(); }, { passive: false });
+cv.addEventListener('touchend', (e) => { if (!ringMenu.hidden) e.preventDefault(); }, { passive: false });
 cv.addEventListener('pointerup', (e) => gestureEnd(e, true));
 cv.addEventListener('pointercancel', (e) => gestureEnd(e, false));
 cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser's own long press: the lock menu
@@ -1701,23 +1708,37 @@ cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser
 // control focused, so the edit goes through the same (undoable, auditioned) path as there
 const RING_ITEMS = [['tune', 'tune'], ['prob', 'chance'], ['vel', 'velocity'], ['nudge', 'nudge'], ['cond', 'condition']];
 const ringMenu = document.createElement('div'); ringMenu.id = 'ring-menu'; ringMenu.className = 'ring-menu'; ringMenu.setAttribute('role', 'menu'); ringMenu.hidden = true; document.body.appendChild(ringMenu);
+let menuBack = null;   // what had the focus before the menu opened: Esc gives it back
 function openRingMenu(li, i) {
-  // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide
-  const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), RX = 100, RY = 62;
-  ringMenu.innerHTML = ''; ringMenu.setAttribute('aria-label', `locks of lane ${li + 1} step ${i + 1}`);
-  ringMenu.style.left = `${Math.max(RX + 70, Math.min(innerWidth - RX - 70, at.x))}px`; ringMenu.style.top = `${Math.max(RY + 24, Math.min(innerHeight - RY - 24, at.y))}px`;
+  // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide. Kept inside, its
+  // centre can leave the planet (near a side of a phone): then the pills turn so the planet sits in the gap between two
+  // of them, never under one
+  const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), RX = 100, RY = 62, N = RING_ITEMS.length;
+  const cx = Math.max(RX + 70, Math.min(innerWidth - RX - 70, at.x)), cy = Math.max(RY + 24, Math.min(innerHeight - RY - 24, at.y));
+  const ex = (at.x - cx) / RX, ey = (at.y - cy) / RY, turn = Math.hypot(ex, ey) > 0.3 ? Math.atan2(ey, ex) + Math.PI / 2 + Math.PI / N : 0;
+  if (ringMenu.hidden) menuBack = document.activeElement;
+  ringMenu.innerHTML = ''; ringMenu.setAttribute('aria-label', `locks of lane ${li + 1} step ${i + 1}`); ringMenu.style.left = `${cx}px`; ringMenu.style.top = `${cy}px`;
   RING_ITEMS.forEach(([k, label], n) => {
-    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); const a = -Math.PI / 2 + (n / RING_ITEMS.length) * Math.PI * 2;
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem'); const a = -Math.PI / 2 + turn + (n / N) * Math.PI * 2;
     b.style.left = `${Math.cos(a) * RX}px`; b.style.top = `${Math.sin(a) * RY}px`;
     const set = k === 'cond' ? tg && tg.cond !== 'always' : lk[k] != null, v = k === 'cond' ? (tg?.cond ?? 'always') : LOCK_UI[k].fmt?.(Math.round(lockValue(lane, i, k) * 100)) ?? `${Math.round(lockValue(lane, i, k) * 100)}%`;
     b.textContent = `${label} ${v}`; b.classList.toggle('lk', !!set); b.title = `${label} of step ${i + 1}${set ? ' (locked)' : ' (the lane value)'}: open it in the lock panel`;
-    b.onclick = () => { closeRingMenu(); if (m.selected !== li) { m.select(li); sync(); } if (lockStep !== i) editLocks(i); (k === 'cond' ? $('cond-every').querySelector('button') : sliders['lock:' + k].el)?.focus(); };
+    // focus mode hides the lane panel the lock panel lives in: picking a lock leaves it
+    b.onclick = () => { closeRingMenu(); if (focusMode) setFocusMode(false); if (m.selected !== li) { m.select(li); sync(); } if (lockStep !== i) editLocks(i); (k === 'cond' ? $('cond-every').querySelector('button') : sliders['lock:' + k].el)?.focus(); };
     ringMenu.appendChild(b);
   });
   ringMenu.hidden = false; ringMenu.querySelector('button').focus({ preventScroll: true });
 }
-function closeRingMenu() { if (!ringMenu.hidden) { ringMenu.hidden = true; ringMenu.innerHTML = ''; } }
-ringMenu.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.stopPropagation(); closeRingMenu(); cv.focus?.(); } });
+function closeRingMenu(refocus = false) {
+  if (ringMenu.hidden) return; ringMenu.hidden = true; ringMenu.innerHTML = '';
+  const back = menuBack; menuBack = null; if (refocus && back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
+}
+// Esc closes it and gives the focus back; the arrow keys (and Home / End) go round the pills, as in any menu
+ringMenu.addEventListener('keydown', (e) => {
+  const items = [...ringMenu.children], k = items.indexOf(document.activeElement), d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
+  if (e.key === 'Escape') { e.stopPropagation(); closeRingMenu(true); }
+  else if (d || e.key === 'Home' || e.key === 'End') { e.preventDefault(); e.stopPropagation(); items[e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (k + d + items.length) % items.length]?.focus(); }
+});
 addEventListener('pointerdown', (e) => { if (!ringMenu.hidden && !ringMenu.contains(e.target) && e.target !== cv) closeRingMenu(); }, true);
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
 // C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
