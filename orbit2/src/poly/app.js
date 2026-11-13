@@ -248,7 +248,7 @@ function applySound(li, k = kit, soft = null) {
 }
 /** Every lane's voice and sound on kit k: after a load, an undo, a kit or a lane-count change. The curves' next block
  *  line starts with a jump (rampAuto). */
-function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); if (k) k.chains[i].ramp = null; }); }
+function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k); applySound(i, k); if (k) k.chains[i].ramp = k.chains[i].handAt = null; }); }
 /**
  * A2: one block line of a lane curve on a chain param (autoRamps → here, live and in every render alike): a jump the
  * first time (c.ramp empty: Play, a load, an undo, a new curve), else a ramp from the last line (exponential on the
@@ -258,9 +258,13 @@ function rebuildVoices(k = kit) { lanesOf(k).forEach((_, i) => { buildVoice(i, k
  */
 function rampAuto(k, li, key, time, v) {
   const c = k.chains[li]; if (!c) return; const x = soundValue(c, key, v), st = (c.ramp ??= {})[key];
-  if (!st) { autoSet(k, c, li, key, x, time, false); c.ramp[key] = { x, t: time, flat: false }; return; }
+  if (!st) { autoSet(k, c, li, key, x, time, false); c.ramp[key] = { x, t: time, ev: time, flat: false }; return; }
+  // ev: the param's last scheduled event. A line at or before it is covered (a hand-off's ramp ends there, a late clock
+  // catching up), and an event on a ramp's end while that ramp runs makes Chrome hold the ramp's start until then (a step)
+  if (time <= st.ev + 1e-9) return;
   if (x === st.x) { st.t = time; st.flat = true; return; }
-  if (st.flat) autoSet(k, c, li, key, st.x, st.t, false); autoSet(k, c, li, key, x, time, true); st.x = x; st.t = time; st.flat = false;
+  if (st.flat && st.t > st.ev + 1e-9) autoSet(k, c, li, key, st.x, st.t, false);
+  autoSet(k, c, li, key, x, time, true); Object.assign(st, { x, t: time, ev: time, flat: false });
 }
 /** One curve event on a chain param (a set, or a ramp to it), logged on the live kit for a jam take's ring-out. */
 function autoSet(k, c, li, key, x, t, ramp) {
@@ -423,7 +427,7 @@ function retime({ transport = true } = {}) { if (!awake) return; if (transport) 
 async function togglePlay() {
   await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
-  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
 }
 $('btn-play').onclick = togglePlay;
@@ -529,7 +533,7 @@ const laneTabs = [];  // the four coloured lane buttons: a touch-friendly altern
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
   // A3: chance and tune record (as step locks) when knobs record; the rest are the grid, never recorded
-  for (const p of PARAMS) { const auto = p.k === 'prob' || p.k === 'tune', g = makeGauge({ label: knobWord(p.k), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v, was, jump) => { const x = auto ? handTurn('lane', p.k, v / 100, was / 100, jump) : v / 100; if (x === undefined) return; p.set(m.lane, auto ? Math.round(x * 100) : v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); }, ...(auto && { onStart: (v) => handHold('lane', p.k, v / 100), onEnd: () => handLetGo('lane', p.k) }) }); sliders[p.k] = g; el.appendChild(g.el); }
+  for (const p of PARAMS) { const auto = p.k === 'prob' || p.k === 'tune', g = makeGauge({ label: knobWord(p.k), min: p.min, max: p.max, value: p.get(m.lane), fmt: p.fmt, say: p.say, title: INFO[p.k], onChange: (v) => { const x = auto ? handTurn('lane', p.k, v / 100) : v / 100; if (x === undefined) return; p.set(m.lane, auto ? Math.round(x * 100) : v); sync(); questEvent({ type: 'edit', lane: m.selected, k: p.k }); }, ...(auto && { onStart: (v) => handHold('lane', p.k, v / 100), onEnd: () => handLetGo('lane', p.k), prime: () => handPrime('lane', p.k) }) }); sliders[p.k] = g; el.appendChild(g.el); }
   // G6: the swing template sits right after the swing gauge
   ui.swingTpl = segmented({ options: SWING_KEYS.map(k => [k, SWING_TEMPLATES[k].name, INFO['swing template']]), value: m.lane.swingTpl, onChange: (k) => { m.lane.setSwingTpl(k); sync(); } });
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
@@ -545,7 +549,7 @@ function buildSliders() {
   const se = $('sound-sliders'); se.innerHTML = '';
   const panSay = (v) => v === 50 ? 'centre' : `${Math.abs(v - 50) * 2}% ${v < 50 ? 'left' : 'right'}`;   // spoken: the knob shows 0–100
   // A3: every sound knob records when knobs record: tone, drive, send, pan, level as a curve, decay, snap, color as locks
-  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v, was, jump) => { const x = handTurn('snd', k, v / 100, was / 100, jump); if (x === undefined) return; m.lane.setSound(k, x); applySound(m.selected); sync(); }, onStart: (v) => handHold('snd', k, v / 100), onEnd: () => handLetGo('snd', k) }); sliders['snd:' + k] = g; se.appendChild(g.el); }
+  for (const k of SOUND_KEYS) { const g = makeGauge({ label: k, min: 0, max: 100, value: Math.round(m.lane.sound[k] * 100), say: k === 'pan' ? panSay : (v) => v + '%', title: INFO[k], color: 'var(--ember-magenta)', onChange: (v) => { const x = handTurn('snd', k, v / 100); if (x === undefined) return; m.lane.setSound(k, x); applySound(m.selected); sync(); }, onStart: (v) => handHold('snd', k, v / 100), onEnd: () => handLetGo('snd', k), prime: () => handPrime('snd', k) }); sliders['snd:' + k] = g; se.appendChild(g.el); }
 }
 const pages = new MovePages();   // the Move's pages and pad window (pages.js, used by the Move section below)
 function sync() {
@@ -852,17 +856,23 @@ function setKnobs(v) { rec.knobs = KNOB_MODES.includes(v) ? v : 'off'; ui.recKno
 function handGlide(g) {
   const c = kit?.chains[g.li]; if (!c || !playing) return;
   if (g.k === 'drive' && g.v > c.dtop) { c.dtop = g.v; c.drive.distortion = c.dtop * 0.9; }   // the shaper grows with the hand (applySound sets the curve's top on release)
-  paramTo(autoParam(c, g.k), g.k, soundValue(c, g.k, g.v));
+  const p = autoParam(c, g.k), t = handFrom(c, p, g.k); try { p.setTargetAtTime(soundValue(c, g.k, g.v), t, HAND_TAU); } catch {}
+  (c.handAt ??= {})[g.k] = t;
 }
-/** A chain param to x in `sec`, from where it is then: cancel-and-hold (a ramp under way is cut at its value there, not
- *  dropped: dropping it holds the param at the ramp's start, a step), then a ramp (exponential on the filter); never a
- *  setTarget, so Tone's model (getValueAtTime) is what the browser plays and the next move or hand-off starts from the
- *  real value (a setTarget glide is modelled from its previous target: under a fast hand the model ran 12 % ahead). It
- *  starts 10 ms ahead, past what the audio thread may already be rendering. → its end time. */
-function paramTo(p, key, x, sec = 0.03) {
-  const now = T.getContext().rawContext.currentTime + 0.01, t = now + sec;
-  try { p.cancelAndHoldAtTime(now); if (key === 'tone') p.exponentialRampToValueAtTime(x, t); else p.linearRampToValueAtTime(x, t); } catch {}
-  return t;
+/**
+ * The hand moves a chain param, and hands it back, with setTargetAtTime only: each target from its start on, from
+ * wherever the param really is then. Never a cancel inside a ramp the browser is playing, nor a value on that ramp's
+ * end: Chrome then holds the ramp's start until that end (a step); a ramp started from Tone's model of a glide would
+ * start from the wrong value (Tone models a setTarget from its previous target). HAND_TAU: the approach (99.75 % in 6 τ).
+ */
+const HAND_TAU = 0.01;
+/** When the hand may take param p: just past the end of the clock's ramp under way (its next block line), the clock's
+ *  events after it dropped; once the hand has it, never before its own last target. */
+function handFrom(c, p, key) {
+  const now = T.getContext().rawContext.currentTime + 0.002; if (c.handAt?.[key] != null) return Math.max(now, c.handAt[key]);
+  const d = MIDI_DIV * tickSec(), line = clockRef.time >= now ? clockRef.time - Math.floor((clockRef.time - now) / d) * d : now;
+  try { p.cancelScheduledValues(line + 1e-4); } catch {}
+  return line + 0.001;
 }
 /** The lane's own value of key k (the knob: tune and chance on the lane, the rest in its sound). */
 const laneValue = (lane, k) => (k === 'tune' ? lane.tune : k === 'prob' ? lane.prob : lane.sound[k]);
@@ -927,39 +937,48 @@ function gestEnd(force = false, fromClock = false) {
     const L = g.lane.length, span = g.kind === 'curve' ? (g.lane.auto?.loops || 1) * L : L, from = g.kind === 'curve' ? g.s0 : g.s0 ?? 0, at = g.kind === 'curve' ? heardStep(g.lane) : (g.last ?? from) + 1;
     Object.assign(g, { latched: true, touch: true, grow: false, end: from + Math.ceil(Math.max(1e-9, at - from) / span) * span }); return;
   }
+  if (g.rec && g.kind === 'curve' && here && playing) curveWrite(g);   // the curve up to where you hear the hand let go (the clock writes once per block)
   knobGest = null; handNow = null; stopBlink('record');
-  if (here && g.kind === 'curve' && playing) autoHandoff(g.li, g.k, playedValue(g.lane, g.k, 'curve'));
+  if (here && g.kind === 'curve' && playing) autoHandoff(g.li, g.k);
   if (g.wrote || g.dirty) { if (here) applySound(g.li); ownNext = true; save(); }   // the gesture's undo step now, before a load replaces the pattern
   if (!fromClock) (g.wrote || g.dirty || !g.rec ? sync : renderAuto)();   // the held gauge shows the lane again; from the clock (a slot, evolve's way home) the caller redraws, as its load
 }
-/** A curve's param handed back to the clock without a jump (a hand lets go, a curve cleared while playing): from where it
- *  really is now (paramTo) to `v` in 30 ms, and the clock's next block line ramps on from there (its state starts at
- *  that point). The hits already scheduled with the hand's value leave this param alone (cancelled from now). */
-function autoHandoff(li, key, v) {
-  const c = kit?.chains[li]; if (!c) return; const x = soundValue(c, key, v), t = paramTo(autoParam(c, key), key, x);
-  (c.ramp ??= {})[key] = { x, t, flat: false };
+/** A curve's param handed back to the clock without a jump (a hand lets go, a curve cleared while playing): it glides
+ *  (handFrom, a setTarget) to the curve's value on the first block line the clock hasn't scheduled yet, is set there
+ *  (what is left of the glide by then: a few tenths of a percent), and the clock ramps on from that line, its state
+ *  starting there (a line before it is covered: rampAuto). */
+function autoHandoff(li, key) {
+  const c = kit?.chains[li], lane = m.lanes[li]; if (!c || !lane) return; const p = autoParam(c, key), start = handFrom(c, p, key), d = MIDI_DIV * tickSec();
+  let tick = clockRef.tick + MIDI_DIV, at = clockRef.time + d; while (at < start + 0.02) { tick += MIDI_DIV; at += d; }
+  const x = soundValue(c, key, lane.autoAt(key, (tick - m.origin) / lane.stepTicks()) ?? lane.sound[key]);
+  try { p.setTargetAtTime(x, start, Math.max(0.003, (at - start) / 6)); p.setValueAtTime(x, at); } catch {}
+  if (c.handAt) delete c.handAt[key]; (c.ramp ??= {})[key] = { x, t: at, ev: at, flat: false };
 }
 /**
- * A gauge changed (v in lock units, from `before`; `jump`: Home, End, double-click) on the selected lane: its gesture
- * follows, or one starts (timed: it ends 400 ms after its last move). → the value the knob's own edit writes: undefined
- * when the gesture records (the hand writes automation, the lane value stays). Not recording, the knob is the lane value:
- * a jump goes there, a turn moves it by the turn (the gauge may show a lock or a curve over it), as the Move's relative
- * knobs do, and the hand plays it. Stopped, or a lock-panel knob not recording: v itself (the knob acts as always).
+ * A gauge changed (v in lock units) on the selected lane: its gesture follows, or one starts (held by the pointer: until
+ * it lets go; else timed, 400 ms after its last move). → the value the knob's own edit writes: undefined when the gesture
+ * records (the hand writes automation, the lane value stays); else v, which the hand plays while it lasts. Not
+ * recording the gauge works on the lane value (handPrime, handHold put it there first), so a turn, a jump (Home, End,
+ * double-click) or a drag is the knob's own edit. Stopped, or a lock-panel knob not recording: v (the knob as always).
  */
-function handTurn(src, k, v, before = v, jump = false, kind = src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step') {
+function handTurn(src, k, v, kind = src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step') {
   if (!playing || (src === 'lock' && !recKnobs())) return v;
-  let g = knobGest; const same = g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched, rec = same ? g.rec : recKnobs();
-  const x = rec ? v : lockClamp(k, Math.round((jump ? v : laneValue(m.lane, k) + (v - before)) * 100) / 100);
-  if (same) gestMove(x); else g = gestStart(m.selected, k, kind, { touch: false, v: x, src });
+  let g = knobGest; const x = lockClamp(k, Math.round(v * 100) / 100);
+  if (g && g.src === src && g.k === k && g.knob == null && g.li === m.selected && !g.latched) gestMove(x); else g = gestStart(m.selected, k, kind, { touch: !!gaugeOf(src, k)?.held, v: x, src });
   return g?.rec ? undefined : x;
 }
+const gaugeOf = (src, k) => (src === 'snd' ? sliders['snd:' + k] : src === 'lane' ? sliders[k] : null);
 /** The gauge the gesture on now holds, if it is one of the selected lane's (sync leaves it to the hand). */
-const handGauge = () => { const g = knobGest; return g?.li === m.selected ? (g.src === 'snd' ? sliders['snd:' + g.k] : g.src === 'lane' ? sliders[g.k] : null) : null; };
-/** A gauge held: its gesture runs until the pointer lets go (the knob's own moves come through handTurn). Not recording
- *  you hold the knob itself: the gauge goes to the lane value before the drag starts from it (the full range is there). */
+const handGauge = () => { const g = knobGest; return g?.li === m.selected ? gaugeOf(g.src, g.k) : null; };
+/** Before a key or a wheel step on a gauge (gauge.js prime): not recording while playing, the knob is the lane value, so
+ *  the gauge goes there first (it may show a lock or a curve that plays) and the step is the lane value's, in full. */
+function handPrime(src, k) { if (playing && !recKnobs() && !knobGest?.rec) gaugeOf(src, k)?.set(Math.round(laneValue(m.lane, k) * 100)); }
+/** A gauge held. Recording, its gesture runs from what plays until the pointer lets go (touch mode writes while it is
+ *  held). Not recording you hold the knob itself: the gauge goes to the lane value before the drag starts from it (the
+ *  full range is there), and nothing changes until it moves (handTurn starts the hand then). */
 function handHold(src, k, v) {
-  if (!playing || (src === 'lock' && !recKnobs())) return; const rec = recKnobs(), x = rec ? v : laneValue(m.lane, k);
-  gestStart(m.selected, k, src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step', { touch: true, v: x, src }); if (!rec) handGauge()?.set(Math.round(x * 100));
+  if (!playing || (src === 'lock' && !recKnobs())) return;
+  if (recKnobs()) gestStart(m.selected, k, src === 'snd' && AUTO_KEYS.includes(k) ? 'curve' : 'step', { touch: true, v, src }); else handPrime(src, k);
 }
 function handLetGo(src, k) { const g = knobGest; if (g && g.src === src && g.k === k && g.knob == null && g.touch && !g.latched) gestEnd(); }
 /** A4: the selected lane's automated parameters: curves first, then the keys it has locks of (not the ghost tier). */
@@ -1030,7 +1049,7 @@ function autoEdit(fn, li = m.selected) {
   // playing, each curve it changed glides to what plays now (a cleared one to the knob) instead of jumping there; the
   // rest (a lock-only clear changes none) keep their scheduled ramps
   const had = AUTO_KEYS.filter((k, i) => was[i] && was[i] !== (lane.auto?.[k] && `${lane.auto.loops}:${lane.auto[k]}`)), soft = playing && kit ? new Set(had) : null; applySound(li, kit, soft);
-  if (soft) for (const k of had) autoHandoff(li, k, lane.autoAt(k, heardStep(lane)) ?? lane.sound[k]);
+  if (soft) for (const k of had) autoHandoff(li, k);
   ownNext = true; sync(); return true;
 }
 
@@ -2011,7 +2030,9 @@ move.addEventListener('encoderTouch', (e) => {
   const { index, on } = e.detail; if (index > 7) return;
   if (!on) { touched.delete(index); const g = knobGest; if (g?.knob === index && g.touch && !g.latched) gestEnd(); return; }
   if (held.size) return; const pk = moveKnob(index, shift); if (!pk) return; touched.set(index, pk);
-  if (playing) gestStart(m.selected, pk.k, pk.kind, { touch: true, v: recKnobs() ? playedValue(m.lane, pk.k, pk.kind) : laneValue(m.lane, pk.k), src: pk.src, knob: index });
+  // recording, a touch writes from what plays (touch mode: also while the knob holds still); not recording a finger
+  // resting on a knob changes nothing: its first turn starts the hand
+  if (playing && recKnobs()) gestStart(m.selected, pk.k, pk.kind, { touch: true, v: playedValue(m.lane, pk.k, pk.kind), src: pk.src, knob: index });
 });
 move.addEventListener('wheel', (e) => {
   if (held.size) {   // G1: hold step(s) + jog wheel = nudge those steps early / late, 5 % of a step per click

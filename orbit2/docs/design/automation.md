@@ -292,15 +292,17 @@ Browser (`orbit2/tools/cdp.mjs`, port 5400 / 9400, muted), a 4-bar pattern:
   lock as a modulator or the scale moved it; else the curve where it sounds, else the lane value); CC numbers are
   0..119 (`ccFrom`). A chain sets every key it automates on a lane again where a slot without it comes in (its lane
   value), so no slot plays with the one before's last value.
-- Not recording, the knob is the lane value: a gauge held starts from the lane value (the full range), Home / End /
-  double-click set it, a key or wheel turn moves it by the turn (the gauge may show a lock or a curve over it), the Move
-  turns it from the lane value; the hand plays that value while it lasts. Recording, the hand starts from what plays.
-  `sync` leaves the gauge a hand holds to the hand.
-- The hand's param moves and the release (`autoHandoff`) go through `paramTo`: cancel-and-hold 10 ms ahead (a ramp under
-  way is cut at its value, not dropped; past what the audio thread may be rendering) and a 30 ms ramp, never a
-  `setTarget` (Tone models a setTarget from its previous target, so the model ran 12 % ahead of the param under a fast
-  hand); the clock ramps on from the hand-off's end. Clearing a curve while playing glides the same way (only the curves
-  that changed).
+- Not recording, the knob is the lane value: every gauge input works on it (a held gauge, a key or wheel step go to the
+  lane value first: `onStart`, `prime`), and the Move turns it from the lane value; a touch alone changes nothing (the
+  first move starts the hand); the hand plays that value while it lasts. Recording, the hand starts from what plays and
+  a touch writes (touch mode). `sync` leaves the gauge a hand holds to the hand.
+- The hand's param moves and the release (`autoHandoff`) are `setTargetAtTime` only (from wherever the param really is):
+  the clock's ramps are dropped only after the one under way (`handFrom`), the hand-off glides to the curve's value on
+  the first block line the clock hasn't scheduled, sets it there, and the clock ramps on from that line (a line at or
+  before the param's last event is skipped: `rampAuto`'s `ev`). The reason: Chrome holds a ramp's start until its end
+  when an event lands on the end of a ramp it is already playing (Tone's cancel-and-hold does that, and so did a
+  re-anchor on a hand-off's end): a step of up to the whole hand-to-curve distance. Clearing a curve while playing
+  glides the same way (only the curves that changed).
 - Budget: `autoRamps` costs ~2 µs per block for 6 lanes × 5 curves (Node); the stress meter stays at level 0 with
   headroom 74–75 ms at 240 bpm (unchanged) and 64–68 ms against 70–71 ms without curves under a 6× CPU throttle. The
   strip is drawn once per change into an offscreen canvas; a frame copies it and sets only the gauges whose value moved.

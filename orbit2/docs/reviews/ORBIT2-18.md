@@ -3,7 +3,7 @@ type: review
 phase: ORBIT2-18
 title: ORBIT2-18 parameter automation (A1–A7), review panel
 date: 2026-11-13
-round: 2
+round: 3
 stalled: 0
 result: IN PROGRESS
 reviewers:
@@ -166,4 +166,50 @@ on a lane still gets its anchor CC; a curve restarting every bar is worth a note
   ends without writing redraws with `sync` (the held gauge shows the lane again); the A7 label is a block of its own;
   `__poly.applySound` for test setups.
 - `npm run check` clean; `npm test` 257 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
+  5400 + headless-chrome.sh 9222, both stopped).
+
+## Round 3: re-check, 0 of 3 HAPPY (kai, dex HAPPY from before)
+
+Re-check by verifier, architect, sound (default model), fresh sub-agents in one message, same ports. Brief: their
+round-2 items with the round-2 repro, "Changes after round 2", `git diff --stat be39b19..HEAD` (5 files, +118/−42).
+`stalled: 0`: all three round-2 MUST-FIX are closed.
+
+| reviewer | verdict | MUST-FIX |
+| --- | --- | --- |
+| verifier | NOT HAPPY | round 2 item closed (End 1.00, double-click 0.50, Home 0.00, tune End 1.00, a 200 px drag 1.00, Shift+ArrowUp 0.31, locks untouched; a tone curve too). 1 NEW (A3 regression): un-armed while playing, the first key or wheel step toward a lock at the edge of the range is cut short or lost: the gauge shows the playing lock and `set()` clamps `v + step` around it (no `onChange` when nothing moves): decay 0.30 under 0.90 locks PageUp → 0.40 (phase start 0.50); snap 0.80 under 0.10 PageDown → 0.70 (0.60); decay under 1.00 locks ArrowUp ×3 → 0.30 (0.45); tune under +1.00 ArrowUp ×3 → 0 (0.30); wheel up ×3 → 0.30 (0.36) |
+| architect | NOT HAPPY | round 2 item closed (End / double-click / 200 px drag / tune match the phase start; keys, wheel, short drags, the Move agree). 1 NEW (= verifier 1): with a lock at the end of the range, Home / End / arrows / wheel do nothing while the gauge shows it (9 of 12 End presses and 6 of 12 ArrowUp dropped on a lane with 2 of 3 hits locked at decay 1.00); suggests a hook at the top of `keydown` / `wheel` that puts the gauge on the lane value first, so `before` / `jump` can go |
+| sound | NOT HAPPY | round 2 item closed (fast turns + release: 0.000084 un-armed, 0.000097 armed vs 0.0049 / 0.0058 at `be39b19`; model = param). 1 NEW (A3 release, A4 ½ / ×2): about 1 hand-off in 4 still steps 43–59 ms after it: `autoHandoff` anchors the clock's ramp state at `currentTime + 0.04`; when the clock's first batch after it runs later than that, `rampAuto` ramps from an anchor already past and the param jumps onto the line (9 of 41 hand-offs; a steep curve up to 0.0198, a 7.2 % step; the round-2 "½ leaves a 1.4 % step" SHOULD is the same) |
+
+SHOULDs (never block): the Move's un-armed path saves an unrounded lane value (as before the phase) (verifier); the
+round-2 fixes have no tests (architect); un-armed, a touch with no turn plays the lane value over the locks / curve: a
+finger resting on a Move knob changes the mix (architect, sound); `handTurn` returns three kinds of result (architect);
+touch-mode recording drops the last ~50 ms before the release (no last `curveWrite` in `gestEnd`) (sound).
+
+### Changes after round 3
+
+- **MUST-FIX verifier 1 = architect 1, keys and the wheel near an edge lock.** `gauge.js` `prime()` runs before a key
+  or a wheel step works out its value (and `onStart` before a drag takes its start); not recording while playing,
+  `handPrime` puts the gauge on the lane value first, so every gauge input is the knob's own edit of the lane value and
+  `handTurn` just returns it (the `before` / `jump` arguments are gone: one kind of result besides "recording"). Measured,
+  playing un-armed, against the phase start's numbers: decay 0.30 under 0.90 locks PageUp → 0.50; snap 0.80 under 0.10
+  PageDown → 0.60; decay under 1.00 locks ArrowUp ×3 → 0.45, wheel ×3 → 0.36, End → 1.00; snap under 0 ArrowDown ×3 →
+  0.65, Home → 0; tune under +1.00 ArrowUp ×3 → 0.30; the locks untouched.
+- **MUST-FIX sound 1, the late step after a hand-off.** Found by logging the level param's events and the audio
+  envelope: the hand-off's ramp ran, then the clock's flat-run re-anchor put a `setValueAtTime` on that ramp's end while
+  Chrome was playing it, and Chrome held the ramp's start until the end, then stepped (0.27–0.42 residual; reproduced
+  with a minimal case only when the event lands on a ramp already under way). Fixes: `rampAuto` keeps `ev` (the param's
+  last event) and never schedules at or before it, nor re-anchors on it; the hand path no longer cuts or starts ramps at
+  all (Tone's cancel-and-hold puts the same kind of value on the end of the ramp it cuts): hand moves and the hand-off
+  are `setTargetAtTime` from wherever the param is (`handFrom` drops the clock's ramps only after the one under way), the
+  hand-off settles on the first block line the clock hasn't scheduled and is set there, and the clock ramps on from it.
+  (Tried and dropped on the way: the browser's own `cancelAndHoldAtTime` stepped at every release; anchoring after the
+  next block line stepped at the first turns.) Measured on audio (a 1 kHz sine through the chain, a steep level curve
+  0.15 → 0.95, jam takes): 3 runs × 13 hand-offs (12 un-armed after 3 turns, 1 armed fast ride) at 0.0004–0.0012 (the
+  glide's start), no residual over 0.003 anywhere in the takes (touches, turns, releases); before: 9 of 41 hand-offs
+  stepped, up to 0.37.
+- SHOULDs done: not recording, a touch alone changes nothing (the Move's first turn, or a gauge's first move, starts the
+  hand) (architect, sound); a recording curve gesture writes up to where you hear before it ends (sound); tests for the
+  round-2 / round-3 wiring (onStart before the drag start, prime on keys and the wheel, `handPrime`, no ramp on the hand
+  path, `ev`) (architect).
+- `npm run check` clean; `npm test` 258 + 9 green; `node tools/smoke.mjs http://localhost:5400` all pages ok (serve.py
   5400 + headless-chrome.sh 9222, both stopped).

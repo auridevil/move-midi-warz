@@ -243,6 +243,17 @@ test('ORBIT2-18 r1: step CCs only for keys a lane has locks of (Decision 6): a s
   const r = laneOf(4); r.recordCurve('level', 0, 0.5); r.recordCurve('tone', 0, 0.5); assert.deepEqual(Object.keys(r.toJSON().auto), ['loops', 'len', 'tone', 'level']);
   assert.equal(JSON.stringify(Lane.from(JSON.parse(JSON.stringify(r.toJSON()))).toJSON()), JSON.stringify(r.toJSON()), 'a reload saves the same bytes (undo compares them)');
 });
+test('ORBIT2-18 r2 / r3: the knob is the lane value when not recording; the hand moves its param with exact ramps and hands it back on a line the clock has not scheduled', async () => {
+  const { readFileSync } = await import('node:fs'), src = (p) => readFileSync(new URL(p, import.meta.url), 'utf8'), app = src('../src/poly/app.js'), gauge = src('../src/gauge.js');
+  const down = gauge.slice(gauge.indexOf("addEventListener('pointerdown'")); assert.ok(down.indexOf('onStart?.(v)') < down.indexOf('drag = {'), 'onStart may move the knob before the drag takes its start');
+  assert.match(gauge, /addEventListener\('wheel', \(e\) => \{ e\.preventDefault\(\); prime\?\.\(\);/, 'a wheel step is primed'); assert.match(gauge, /if \(!KEYS\.has\(e\.key\)\) return; prime\?\.\(\);/, 'a key step is primed');
+  assert.match(app, /function handPrime\(src, k\) \{ if \(playing && !recKnobs\(\) && !knobGest\?\.rec\) gaugeOf\(src, k\)\?\.set\(Math\.round\(laneValue\(m\.lane, k\) \* 100\)\)/);
+  const fn = (name) => app.slice(app.indexOf(`function ${name}(`), app.indexOf('\n}', app.indexOf(`function ${name}(`)));
+  assert.match(fn('handFrom'), /cancelScheduledValues\(line \+ 1e-4\)/, 'the hand drops the clock\'s ramps only after the one under way');
+  assert.doesNotMatch(fn('handGlide') + fn('handFrom') + fn('autoHandoff'), /cancelAndHoldAtTime|RampToValueAtTime/, 'no ramp cut, set on or started on the hand path: setTargets only');
+  assert.match(fn('autoHandoff'), /while \(at < start \+ 0\.02\)/, 'the hand-off settles on a block line the clock has not scheduled'); assert.match(fn('rampAuto'), /if \(time <= st\.ev \+ 1e-9\) return;/, 'the clock leaves what a hand-off covers');
+  assert.match(app, /if \(playing && recKnobs\(\)\) gestStart\(m\.selected, pk\.k, pk\.kind, \{ touch: true, v: playedValue/, 'not recording, a touch alone changes nothing');
+});
 test('ORBIT2-18 r1: the Move\'s ◀ ▶ are lit again (paintLeds, not inside a comment)', async () => {
   const { readFileSync } = await import('node:fs'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
   const line = app.split('\n').find(s => s.includes("move.setButtonColor('left', LANE_DIM[m.selected])")); assert.ok(line);
