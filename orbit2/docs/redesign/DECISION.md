@@ -57,6 +57,7 @@ canvas is read-only light.
 | **Filter on the face** | A small knob in the transport group with a centre detent. Double-click sets it to off. | So it isn't left at 0.2 in the middle of a set (Greta). |
 | **First visit** | The sun is not clickable. On a visit that has never played, the sun reads "press play" for a few seconds and the play ring gets a slow outline pulse. A **fill flare** in the sun shows when fill is held from anywhere. | Rio's delight comes back without adding a target. |
 | **Quest "show me"** | Yes, in RD-7. It draws the gesture once on the canvas as a ghost hand. It is read-only and can be dismissed. | Rio. |
+| **Console-log overlay** (conductor, 2026-11-14) | **Kept, switchable.** Today's text readout (status line + the per-lane and sound rows of "nerd stats") lives on as a read-only overlay of monospace text over the stage, toggled with the backquote key `` ` `` or Sheet → setup, off by default, remembered. It is text, not controls (not counted in A5), never `aria-live`, below the 0.475 luminance cap, and it never moves the rings (A7). Ships in RD-5 (where the readout leaves the face). | The conductor likes it as a performer's console log. |
 | **Wordmark** | Not on the face. Major Mono only for the wordmark, which sits at the top of the sheet's setup tab, next to the home link. | Greta. |
 
 ### The screen at 1512×860
@@ -176,9 +177,13 @@ Loop + knobs and a second Shift page are **not** added.
 | A9 | **Audio untouched** (Sofia) | `exportWav` of a fixed seed is bit-identical to the RD-1 baseline; Tone.Loop lateness and stress-meter p95 no worse than the baseline; frame time p95 regresses by no more than 1 ms |
 | A10 | **Screen-off drift** (RD-11 only) | screen off: set every = 8, amount ≈ half, lanes 1, 2 and 4 evolving; 5 of 5 tries correct |
 
-A2, A3, A10 and the night run of the label ladder need a human with a real Move in a dark room. Reviewers run scripted
-versions (Move MIDI injected through `cdp.mjs`) as the regression gate. The real runs are the conductor's and mine (see
-"Needs the conductor" below).
+**Run by agents, not the conductor (decided 2026-11-14).** A2, A3, A10 and the night run of the label ladder are
+performed by player agents (the `noor` and `kai` personas) through the session tools built in RD-1: Move MIDI injected
+through `cdp.mjs`, `?setlog` sets driven by a seeded performer script with injected slips, a glance proxy (a
+screenshot taken 300 ms after the action, darkened and scaled to 70 cm viewing, shown alone to a fresh agent that must
+name the page and the lane), and a screen-off proxy for A10 (only the Move's LED state, drawn as the device, shown to a
+fresh agent). These are simulations: nothing here touches the real Move's USB link or its LEDs, so a real-device
+pass stays an optional extra for the conductor, never a gate.
 
 ## 3. Phase plan
 
@@ -197,7 +202,7 @@ General rules for every phase:
 | **RD-2** | **Light and type** (S) | The dark-room visual system, with no layout change. | `styles.css` tokens (`--v --l --b --track`, lane hues only, red only for rec); no fills on controls; play outlined; Space Grotesk at 3 sizes, 300 only ≥ 40 px, 500 for values; Major Mono only in the wordmark; `index.html` font links. | ORBIT2-03 focus rings, reduced motion, phone layout, every test selector. | A1 passes at all three sizes; no layout diff (control positions within 2 px of baseline). | greta, yuki, kai |
 | **RD-3** | **Stage and sheet** (M) | Fit on one screen, with the rings fixed. | A CSS grid of three columns + console row, replacing `layoutHud()` / `stageBox` measuring; `scene.js` ring geometry from the stage cell; the 13 drawers and the right column moved, **ids kept**, into a 428 px sheet with 6 tabs, pinned open by default in this phase; the top strip stays. | Every control reachable by its id; e2e tests open the tab first; demo, quests, gift dialog, share links; phone bottom sheet. | A6 and A7 pass. A test lists every control id from the baseline and finds each in the DOM. Old saves load. | greta, dex, rio |
 | **RD-4** | **Find and one Escape** (M) | One searchable deep place. | ⌘K and `/` search: an index from accessible names, a synonyms table (seeded from Rio's and Greta's feature tables) and actions, with recents; one Escape handler; empty-canvas click = the Esc order; the sheet is closed by default. | Key ownership (pad rows, Space, hold 0, Alt+1–6); no keys stolen while typing. | 100 % of labelled controls are in the index; the synonyms test (euclid, rotation, ratio, probability, stems, 7/8) passes; A4's search part passes. | greta, maya, rio |
-| **RD-5** | **The console** (L) | The Move's face on screen; the top strip and lane drawer leave the face. | Console in `index.html` / `styles.css` / the UI half of `app.js`; `gauge.js` pie variant and page binding; `pages.js` page model; transport group (play, bar·beat, fill, fill next, throw, filter with detent); rhythm and sound pages following Move Shift; touch flips the row (+400 ms); the MOVE ⇢ chip; lane list with M (solo on Shift-click / long-press); the peek (touch / drag / focus); action words on hairlines; readout, top strip and lane drawer removed (the rest → Sheet → lane). | Every Move behaviour in the table; A3 knob recording (gauge onStart / onEnd); the "A" marks; step cycle; tempo extremes; undo / redo; live mode. | A5 ≤ 50; A8 < 30 ms; A2 for rhythm / sound ≥ 18/20 (scripted); Nils's T0 / T0′ / T3 / T4 rows as unit tests; setlog baseline sets done before merge; Vera's mis-click run. | noor, kai, nils |
+| **RD-5** | **The console** (L) | The Move's face on screen; the top strip and lane drawer leave the face. | Console in `index.html` / `styles.css` / the UI half of `app.js`; `gauge.js` pie variant and page binding; `pages.js` page model; transport group (play, bar·beat, fill, fill next, throw, filter with detent); rhythm and sound pages following Move Shift; touch flips the row (+400 ms); the MOVE ⇢ chip; lane list with M (solo on Shift-click / long-press); the peek (touch / drag / focus); action words on hairlines; readout, top strip and lane drawer removed (the rest → Sheet → lane). | Every Move behaviour in the table; A3 knob recording (gauge onStart / onEnd); the "A" marks; step cycle; tempo extremes; undo / redo; live mode. | A5 ≤ 50; A8 < 30 ms; A2 for rhythm / sound ≥ 18/20 (scripted); Nils's T0 / T0′ / T3 / T4 rows as unit tests; the RD-1 agent baseline sets are the comparison; Vera's mis-click run. | noor, kai, nils |
 | **RD-6** | **Step page and the ring answers the hand** (M) | One lock editor, and the screen shows what the hand did. | Step page (ring knobs, loop dots, clear / more… / done); 450 ms or first-turn flip; mouse latch with planet switching; hold Loop → slots on the cells; a pure page resolver for Nils's full state table; the lock panel and the radial menu retired; `scene.js` read-only answers (shift trails, hits re-spread, swing ticks, chance dim, push lead/lag, length pulse, held-step halo); the touched-knob plate. | Every lock (tune … condition, nudge, repeats, stroke, slice, start / end) settable and saved; Move hold-step + jog / push-jog; R4 conditions; phone long-press. | Nils's table T0–T4 + all edge cases pass as unit tests; A2 for the step page ≥ 18/20; A9 frame time; a tap (< 450 ms, no turn) toggles the step and never flashes the page. | noor, nils, rio |
 | **RD-7** | **Pills** (S–M) | State always visible, in one place. | A `role="status"` pill region in a fixed order; button + ×; max 4, then "+N more"; it replaces the welcome bar, quest card and jam panel (download / discard on the jam pill); quest pill with "show me" (a ghost gesture drawn once by `scene.js`). | Quest progression (I6), welcome back (F3), jam takes, pending-mute timing, MIDI clock follow. | Each pill announced once and its text never updates per bar (A4 part); 1280×720 with 6 pills keeps the sheet ≥ 340 px; A7 still passes. | maya, greta, kai |
 | **RD-8** | **Light on the canvas** (M) | The score speaks without opening anything. | `scene.js`: sun numeral (300, continuous), first-visit "press play" + play pulse, fill flare, cycle caption in straight type, read-only generative arc with a continuous countdown (per beat under reduced motion), slot moons, one arc label (13 px rules), labels cached as sprites; the evolve pill drops its countdown. | Frame time and the stress meter while playing; reduced motion; nothing on the canvas becomes clickable. | A9 (frame p95 ≤ +1 ms, audio hash identical); the 6-lane / 32-step drop order matches Yuki's list; the label ladder checked at night (13 px word / 15 px number floors). | noor, yuki, ines |
@@ -218,7 +223,14 @@ General rules for every phase:
   the continuous generative arc, the label floors and drop order, F keeping every pill, the touched knob on the ring,
   and one-tab-stop canvas focus over cells that stay.
 
-## Needs the conductor
+## Needs the conductor (answered 2026-11-14)
+
+- 1 → **No:** agents perform the A2 / A3 / A10 / night-ladder runs (see "Acceptance tests"). No playbook pauses for a human.
+- 2 → asked for more detail before approving (RD-11 stays behind `?drift` until then).
+- 3 → **OK** (rings 64 px off-centre at 1280×720), plus the console-log overlay above.
+
+Original questions:
+
 
 1. The real-hardware runs: A2, A3 (a baseline set before RD-5 and the final sets in RD-9), A10, and the night run of
    the label ladder need the conductor and me at the Move in a dark room. Reviewers can only run scripted versions.
