@@ -24,6 +24,7 @@ import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pu
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
+import { attachSetlog, patternWords } from './setlog.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -35,6 +36,11 @@ const LANE_HEX = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa', '#86efac', '#fdba7
 // first ever visit = nothing saved yet (read before the first sync() writes it): it gets the demo groove, not init
 let firstVisit = true; try { firstVisit = localStorage.getItem(SAVE) == null; } catch {}
 let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null')); } catch { m = new Machine(); }
+// RD-1 setlog (?setlog only): the action log for the accident budget (setlog.js). Off, slog is null and every hook is
+// `slog?.…`: no listeners, no work, the arguments never evaluated. The Move's bytes mark their source on the way in.
+const slog = new URLSearchParams(location.search).has('setlog') ? attachSetlog({ win: window, model: () => m.toJSON(), now: () => performance.now(), defer: (f) => setTimeout(f, 0) }) : null;
+if (slog) { const recv = move.receive.bind(move); move.receive = (b, t) => { slog.from('move'); return recv(b, t); }; }
+const slogWords = () => patternWords(m.toJSON());
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
 // every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step).
@@ -47,7 +53,7 @@ const hist = new History(); let restoring = false, loadNext = false, ownNext = f
 let spoken = null, announceTimer = 0, hush = false;   // screen-reader announcements (announceChanges, next to readout)
 const perfKey = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo' || k === 'selected' ? undefined : v));
 // A3: a gesture that records is one undo step: nothing is committed while it writes (its end saves, with ownNext)
-const save = () => { if (knobGest?.rec && !restoring) { knobGest.dirty = true; return; } const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, own: ownNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; ownNext = false; try { localStorage.setItem(SAVE, full); } catch {} };
+const save = () => { if (knobGest?.rec && !restoring) { knobGest.dirty = true; return; } const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, own: ownNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; ownNext = false; try { localStorage.setItem(SAVE, full); } catch {} slog?.dirty(hush); };   // hush: the clock changed it (evolve, a slot, a waiting mute)
 const dice = new Dice(); let fill = false, fillHold = false;   // fill = held (Layout, the fill button, key 0) or latched for a bar (P3)
 const latch = new FillLatch(), muteQ = new MuteQueue();   // P3 fill for the next bar; P2 mutes waiting for the next bar line
 const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one on screen (loaded or saved, until a fresh start or a link: leaveSetup)
@@ -330,9 +336,9 @@ const pfx = { filter: 0, throw: false };
 /** A param glides to v (time constant `tc` s): no zipper noise however fast the knob turns, every move takes over from where the last one is. */
 function glide(param, v, tc = 0.03) { const now = T.getContext().rawContext.currentTime; param.cancelScheduledValues(now); param.setTargetAtTime(v, now, tc); }
 function setFilter(x) {
-  pfx.filter = Math.max(-1, Math.min(1, Math.round(x * 100) / 100)); const f = kit?.master.fx;
+  const was = pfx.filter; pfx.filter = Math.max(-1, Math.min(1, Math.round(x * 100) / 100)); const f = kit?.master.fx;
   if (f) { const { lp, hp } = fxFreqs(pfx.filter, T.getContext().rawContext.sampleRate); glide(f.lp.frequency, lp); glide(f.hp.frequency, hp); }
-  sliders.fxFilter?.set(Math.round(pfx.filter * 100)); readout();
+  sliders.fxFilter?.set(Math.round(pfx.filter * 100)); readout(); if (pfx.filter !== was) slog?.act('filter', was, pfx.filter, { merge: true });
 }
 function setThrow(on) {
   if (pfx.throw === on) return; pfx.throw = on; const f = kit?.master.fx;
@@ -429,6 +435,7 @@ async function togglePlay() {
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
+  slog?.act('transport', playing ? 'stopped' : 'playing', playing ? 'playing' : 'stopped');
 }
 $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
@@ -445,7 +452,9 @@ function applyTempo(bpm, publish = true, { exact = false, transport = true } = {
  *  drives the transport: a retime would fight it. */
 const followClockTempo = (bpm) => { hush = true; try { applyTempo(bpm, true, { exact: true, transport: !(pmidi.follow === 'lock' && playing) }); } finally { hush = false; } };   // the clock's tempo isn't announced: you didn't touch it
 onTempo((bpm, src) => { if (src !== 'poly') applyTempo(bpm, false, { exact: true }); });
-const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) applyTempo(b); }; $('btn-tap').onclick = tapTempo;
+/** A tempo the hands set (knob, tap, Move knob 8): logged by the setlog, a turn as one entry. */
+const handTempo = (bpm) => { const was = tempo; applyTempo(bpm); if (tempo !== was) slog?.act('tempo', was, tempo, { merge: true }); };
+const tap = makeTapTempo(); const tapTempo = () => { const b = tap(); if (b) handTempo(b); }; $('btn-tap').onclick = tapTempo;
 
 // ---- lane params (UI + Move) ----
 const INFO = {
@@ -539,7 +548,7 @@ function buildSliders() {
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
-  sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => applyTempo(v) });
+  sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => handTempo(v) });
   $('tempo-gauge').replaceChildren(sliders.tempo.el);   // C1: tempo sits in the transport strip
   sliders.humanize = makeGauge({ label: 'humanize', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
   for (let i = 0; i < MAX_LANES; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
@@ -754,10 +763,10 @@ function setLaneCount(n) {
   const was = m.lanes.length; m.setLaneCount(n); if (m.lanes.length === was) return;
   rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve();
 }
-function saveSlot(i) { bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); questEvent({ type: 'slot-save', slot: i }); }
+function saveSlot(i) { slog?.act('slot.save', null, i + 1); bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); questEvent({ type: 'slot-save', slot: i }); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
-function recallSlot(i) { if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
-function chainSlots(list) { bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
+function recallSlot(i) { const was = bank.current; if (!bank.recall(i)) return; slog?.act('slot', was + 1 || null, i + 1, { queued: playing }); if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
+function chainSlots(list) { slog?.act('chain', bank.chain.map(i => i + 1), list.map(i => i + 1)); bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
 // Slot buttons are built once (a clock-driven slot switch repaints them mid-press). A long press (or right-click)
 // opens a small menu under the grid: the touch way to save, chain and erase.
 const slotBtns = []; let slotMenuFor = -1;
@@ -827,7 +836,7 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
-function setRec(on) { if (!on) gestEnd(true); rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
+function setRec(on) { if (on !== rec.armed) slog?.act('record', rec.armed, on); if (!on) gestEnd(true); rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
 function buildRecUI() {
   $('btn-rec').onclick = () => setRec(!rec.armed);
   sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, say: (v) => `velocity ${v}`, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
@@ -1058,7 +1067,7 @@ function autoEdit(fn, li = m.selected) {
 // ---- evolve: every N bars, nudge some lanes; optionally come back home ----
 let lastEvolve = '';
 /** Clearing or randomizing is a fresh start: evolve stops (it would mutate the new pattern away from you). */
-function clearLane() { if (evo.on) setEvolve(false); m.lane.clear(); sync(); }
+function clearLane() { const was = slog && slogWords(); if (evo.on) setEvolve(false); m.lane.clear(); sync(); slog?.act('clear', was, slogWords(), { lane: m.selected + 1 }); }
 /**
  * Every load (init, a groove, a link, a setup) goes through here: the pattern with its voices and sounds, one undo
  * step of its own, and its tempo when it brings one (undo puts the tempo you had back too). Once the beat is
@@ -1072,8 +1081,8 @@ function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
 }
 /** Init: every lane empty (as many lanes as now), length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
-  const n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
-  loadMachine(n.toJSON()); freshBeat();
+  const was = slog && slogWords(), n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
+  loadMachine(n.toJSON()); freshBeat(); slog?.act('init', was, slogWords());
 }
 /** The beat on screen is no longer the library setup last loaded or saved: a share stops using its name (shareName),
  *  and its row its mark. */
@@ -1083,7 +1092,7 @@ function freshBeat() { setLineage(null); leaveSetup(); }
 /** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
  *  one-liner (the chips' tooltips never show on touch). */
 function loadGroove(key) {
-  const g = grooveByKey(key); if (!g) return; loadMachine(g.m, { bpm: g.tempo }); freshBeat(); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
+  const g = grooveByKey(key); if (!g) return; const was = slog && slogWords(); loadMachine(g.m, { bpm: g.tempo }); slog?.act('load', was, slogWords(), { what: `groove ${key}` }); freshBeat(); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
 }
 /**
  * Randomize: musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click,
@@ -1097,22 +1106,22 @@ function randomizeAll(wild = false) {
 /** A roll, its own undo step, named in a toast. seeded: from the dice seed's first stream (also with free dice, for
  *  "pattern from seed"), so a seed always makes the same groove. A roll is a fresh start. */
 function rollPattern(wild, seeded = dice.locked) {
-  gestEnd(true); if (evo.on) setEvolve(false);
+  gestEnd(true); if (evo.on) setEvolve(false); const was = slog && slogWords();
   const rng = seeded ? Dice.take(dice.seed).stream(0) : Math.random, name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name;
-  loadNext = true; hideWelcome(); freshBeat(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`);
+  loadNext = true; hideWelcome(); freshBeat(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`); slog?.act('randomize', was, slogWords(), { what: name });
 }
 // ---- undo / redo ----
 /** Put back an undo / redo step. Live mutes and solos stay as they are (keepPerf), unless the step crosses a load;
  *  a load that set the tempo takes its tempo with it. */
-function applyState(step) {
-  if (!step) return; restoring = true; const live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
+function applyState(step, what) {
+  if (!step) return; const was = slog && slogWords(); restoring = true; const live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
   m.assign(JSON.parse(step.json), { keep: true, selected: m.selected });   // keep: loops go on counting (R4)
   if (step.keepPerf) m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
   if (step.tempo != null) applyTempo(step.tempo, true, { exact: true });
-  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false;
+  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false; slog?.act(what, was, slogWords());
 }
 // A3: a gesture going on ends first (its one undo step is then what undo takes back)
-const undo = () => { gestEnd(true); applyState(hist.undo({ tempo })); }, redo = () => { gestEnd(true); applyState(hist.redo()); };
+const undo = () => { gestEnd(true); applyState(hist.undo({ tempo }), 'undo'); }, redo = () => { gestEnd(true); applyState(hist.redo(), 'redo'); };
 /** Momentary fill (Layout, the fill button, key 0): on while held, on top of a latched bar. */
 function setFill(on) { if (fillHold === on) return; fillHold = on; fill = fillHold || latch.on; renderFill(); }
 /** P3: Shift + Layout or "fill next bar": the next whole bar fills (again before it starts = cancel). Stopped, it waits for Play's downbeat. */
@@ -1127,8 +1136,9 @@ function renderFill() {
  *  performance move: never an undo step (perfKey). */
 function toggleMute(li) {
   if (li < 0 || li >= m.lanes.length) return;
+  const muteNow = () => (muteQ.has(li) ? muteQ.target(li) : !!m.lanes[li].muted), was = slog && muteNow();
   if (perf.muteBar && playing) muteQ.toggle(li, !m.lanes[li].muted); else m.lanes[li].muted = !m.lanes[li].muted;
-  sync();
+  sync(); slog?.act(`lane${li + 1}.mute`, was, muteNow(), { voice: m.lanes[li].voice, queued: muteQ.has(li) });
 }
 /** What a waiting mute does to lane li, in words ("mutes" / "unmutes"). */
 const muteWord = (li) => (muteQ.target(li) ? 'mutes' : 'unmutes');
@@ -1152,7 +1162,7 @@ function evolveNow(bar = 0, fromClock = false) {
   }
   offClock(fromClock, sync);
 }
-function setEvolve(on) { evo.on = on; if (on) { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
+function setEvolve(on) { if (on !== evo.on) slog?.act('evolve', evo.on, on); evo.on = on; if (on) { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
   m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
@@ -1468,6 +1478,7 @@ const touchShare = () => !!navigator.share && matchMedia('(pointer: coarse)').ma
  *  outcome says so in a toast (the export drawer may be closed). The address bar keeps no #p= link otherwise: on a
  *  reload the link would win over the beat you made since. */
 async function shareLink() {
+  slog?.act('export', null, 'link');
   const { code, title, url, note } = await shareUrl(), also = note ? ` · ${note}` : '';
   if (touchShare()) { try { await navigator.share({ title: `${title} · orbits`, url }); toast(`shared${also}`, note ? 5000 : 2400); return; } catch (e) { if (e.name === 'AbortError') return; } }
   try { await navigator.clipboard.writeText(url); $('exp-status').textContent = `link copied (${url.length} chars)${also}`; toast(`link copied · paste it anywhere${also}`, note ? 5000 : 2400); }
@@ -1486,6 +1497,7 @@ async function shareFile(file, what) {
 }
 /** I3: one tap → 4 bars of the mix (the export format, loop as set) → share sheet or download. */
 async function shareAudio() {
+  slog?.act('export', null, 'audio');
   await wake(); toast('rendering 4 bars…', 15000);
   const r = await renderPattern({ bars: 4 });
   await shareFile(new File([mixWav(r)], `${fileBase('', r)}.wav`, { type: 'audio/wav' }), '4 bars'); questEvent({ type: 'export', what: 'share' });
@@ -1502,6 +1514,7 @@ async function shareAudio() {
 const POSTCARD_BARS = 4; let postcarding = false;
 const sleep = (sec) => new Promise(r => setTimeout(r, Math.max(0, sec * 1000)));
 async function recordPostcard() {
+  slog?.act('export', null, 'postcard');
   if (postcarding) return; const cv = $('cv');
   if (!window.MediaRecorder || !cv.captureStream) throw new Error('this browser cannot record video');
   postcarding = true; $('share-postcard').disabled = true;
@@ -1536,12 +1549,13 @@ async function recordPostcard() {
  *  4-lane machine) with the dice locked to that seed, so its chance and humanize roll the same for everyone. One undo
  *  step; the seed becomes its lineage, so what you share from it says where it started. */
 function loadDaySeed() {
-  const s = seedOfDay(utcDay());
+  const s = seedOfDay(utcDay()), was = slog && slogWords();
   dice.locked = true; dice.seed = s.seed; dice.repeat = 1; saveSettings(); renderDice();
-  loadMachine(s.m, { bpm: s.tempo }); leaveSetup(); setLineage(s.title);
+  loadMachine(s.m, { bpm: s.tempo }); leaveSetup(); setLineage(s.title); slog?.act('load', was, slogWords(), { what: 'seed of the day' });
   toast(`today's seed · ${s.family} · dice ${s.seed} · ${s.tempo} bpm · make it yours, then share it`, 5000);
 }
 async function exportWav() {
+  slog?.act('export', null, 'wav');
   await wake(); $('exp-status').textContent = 'rendering…';
   const r = await renderPattern();
   download(mixWav(r), `${fileBase('', r)}.wav`, 'audio/wav');
@@ -1558,6 +1572,7 @@ function midiOf(hits, { states = null, bars, ccs = null }) {
 const patternCCs = (hits, ticks) => autoCCs(m, hits, autoRamps(m, 0, ticks, 0), { cc: pmidi.cc, tickSec: tickSec() });
 const midiNote = (ccs = []) => `${exp.midiOne ? 'one Drum-Rack track' : 'a track per lane'}${!ccs.length ? '' : exp.midiOne ? ' · one track holds no per-lane CCs: the automation is left out (a track per lane keeps it)' : ` · automation as ${ccs.length} CC${ccs.length === 1 ? '' : 's'}`}`;
 function exportMidi() {
+  slog?.act('export', null, 'midi');
   const chain = ui.expWhat.value === 'chain' && bank.chain.length > 1, { ticks } = renderTicks();
   const states = chain ? bank.chain.map(i => bank.get(i)) : null, bars = chain ? bank.chainBars * bank.chain.length : ticks / m.barTicks();
   const { hits, ccs } = chain ? collectChainAuto(states, { bars: bank.chainBars, tempo, dice: exportDice(), restart: bank.restart, cc: pmidi.cc }) : (h => ({ hits: h, ccs: patternCCs(h, ticks) }))(exportHits(ticks));
@@ -1569,6 +1584,7 @@ function exportMidi() {
  * would need every slot's kit). Both renders get the same hits, so the files line up note for note.
  */
 async function exportAll() {
+  slog?.act('export', null, 'all');
   await wake(); $('exp-status').textContent = `rendering the mix and ${m.lanes.length} stems…`;
   const { ticks } = renderTicks(), hits = exportHits(ticks), mix = await renderPattern({ hits }), st = await renderPattern({ stems: true, dry: exp.dry, hits });
   const base = fileBase('all', mix), n = m.lanes.length, pairs = Array.from({ length: n }, (_, i) => [st.chans[2 * i], st.chans[2 * i + 1]]);
@@ -1586,6 +1602,7 @@ async function exportAll() {
  */
 const KIT_PRE = 0.05, KIT_SEC = 2;
 async function exportKit() {
+  slog?.act('export', null, 'kit');
   await wake(); const n = m.lanes.length, rate = exp.rate, shots = [], base = `orbits-kit-${stamp()}`, names = laneNames(n);
   for (const l of m.lanes) await ensureSample(l);
   for (let li = 0; li < n; li++) for (const accent of [true, false]) {
@@ -1605,7 +1622,7 @@ async function exportKit() {
 async function loadShared({ first = false } = {}) {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return; history.replaceState(null, '', location.pathname + location.search);
   try {
-    const o = await decodeShare(mm[1]); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup();
+    const o = await decodeShare(mm[1]), was = slog && slogWords(); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup(); slog?.act('load', was, slogWords(), { what: 'link' });
     if (first) hist.restart();
     $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; showGift(o, first);
   } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`, 4000); }   // decodeShare's words are for people
@@ -1768,6 +1785,7 @@ function renderJam() {
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
 async function downloadJam() {
+  slog?.act('export', null, 'jam');
   // a ring-out still rendering goes in the same zip; one that hangs (a worklet that never answers) doesn't hold the take
   if (jam.state !== 'done') return; let timer;
   const late = await Promise.race([jam.ringJob?.then(() => false), new Promise(r => { timer = setTimeout(() => r(true), 15000); })]); clearTimeout(timer);
@@ -1783,6 +1801,7 @@ function buildJamUI() {
 
 // ---- stems: the current pattern rendered once, each lane to its own pair of channels → equal-length WAVs ----
 async function exportStems() {
+  slog?.act('export', null, 'stems');
   await wake(); $('exp-status').textContent = `rendering ${m.lanes.length} stems…`;
   const r = await renderPattern({ stems: true, dry: exp.dry }), n = m.lanes.length, base = fileBase('stems', r);
   const { files, gain } = stemFiles(Array.from({ length: n }, (_, i) => [r.chans[2 * i], r.chans[2 * i + 1]]), laneNames(n), r.sr, base, { bits: exp.bits, ...renderTags(r), ret: exp.dry ? [r.chans[2 * n], r.chans[2 * n + 1]] : null });
@@ -1882,9 +1901,9 @@ for (const g of GROOVES) {
 const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON(), from: lineage });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
 function loadSetup(id) {
-  const e = lib.get(id); if (!e?.m) return;
+  const e = lib.get(id); if (!e?.m) return; const was = slog && slogWords();
   if (e.vol != null) { vol = e.vol; kit?.master.gain.rampTo(vol, 0.05); } if (e.dice) { dice.fromJSON(e.dice); saveSettings(); renderDice(); }
-  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); setLineage(e.from); renderLib(); flash('btn-load', `“${e.name}” ✓`);
+  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); setLineage(e.from); renderLib(); flash('btn-load', `“${e.name}” ✓`); slog?.act('load', was, slogWords(), { what: 'setup' });
 }
 function saveSetup(name) {
   const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }
@@ -2030,7 +2049,7 @@ move.addEventListener('encoder', (e) => {
     if (pk.src === 'snd') { m.lane.setSound(pk.k, m.lane.sound[pk.k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
     nudge(pk.k, delta * 2); return;
   }
-  const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) applyTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
+  const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) handTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
 });
 // A6: a touched knob (encoder touch, notes 0–7) is a gesture from touch to release, on the parameter it is then (Shift:
 // the sound); a held step makes it a lock edit instead. The volume knob's touch (8) is not one.
@@ -2135,6 +2154,7 @@ window.addEventListener('keydown', (e) => {
   // ? = help from anywhere but a text field: a button or a drawer header the keyboard reached has no use for it
   if (e.key === '?' && !e.metaKey && !e.ctrlKey && !(e.target instanceof Element && e.target.closest(TEXT_SEL))) { e.preventDefault(); openHelp(); return; }
   if (controlOwnsKey(e)) return;
+  if (slog && e.key.toLowerCase() === 'l' && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); const f = slog.file({ page: location.pathname, tempo }); download(f.text, f.name, 'application/json'); return; }   // RD-1: L saves the setlog
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
   if (e.key === '0') { setFill(true); return; }
   // F = focus mode (Caps Lock too; Shift+F accents the pad); while record is armed the keys are pads, so F plays its pad
@@ -2395,5 +2415,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, get questLog() { return questLog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, get questLog() { return questLog; }, get setlog() { return slog; } };
 readout(); layoutHud(); scene.start();
