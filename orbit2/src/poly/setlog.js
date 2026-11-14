@@ -17,6 +17,7 @@ export const SETLOG_FORMAT = 'orbits-setlog';
 const same = (a, b) => a === b || JSON.stringify(a) === JSON.stringify(b);
 /** A value small enough to read in the log: long ones (a curve, a lock set) become their size and a short hash. */
 export function brief(v) {
+  if (typeof v === 'number') return Math.round(v * 1e4) / 1e4;   // 0.5399999999999999 → 0.54
   if (v == null || typeof v !== 'object') return v ?? null;
   const s = JSON.stringify(v); if (s.length <= 120) return v;
   let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
@@ -131,6 +132,7 @@ export function attachSetlog({ win, model, now, defer, cap } = {}) {
   return {
     log,
     get source() { return src; },
+    now: at,   // the log's clock (ms since it began): the session tools time their actions on it
     from(s) { src = s; },
     // the pattern change an action made (a load's hundred fields) is the action: its diff is absorbed
     act(target, before, after, extra = {}) { log.add({ t: at(), source: src, target, before, after, ...extra }); absorb = true; later(); },

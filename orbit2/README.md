@@ -23,7 +23,9 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
 - Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll, A7 rings, A9
   audio; `--assert` fails on a threshold; baselines in `docs/redesign/baselines.md`), `?setlog` on the page (the
-  action log, key L saves it).
+  action log, key L saves it). Player-agent runs (A2 / A3 / A10 by agents): `orbit2/tools/session.mjs` (a seeded
+  performer plays a set as Move MIDI or mouse-only, with slips, and tags the setlog's accidents), `glance.mjs` (300 ms
+  darkened screenshots + answer key + `score`), `moveview.mjs` (the Move's LEDs drawn as the device).
 - Browser checks: `orbit2/tools/cdp.mjs` (headless Chrome helper: open, eval, click/tap/key, screenshot, capture
   downloads, `parseWav`, `unzipStored`).
 
