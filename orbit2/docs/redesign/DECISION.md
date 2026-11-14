@@ -226,7 +226,8 @@ General rules for every phase:
 ## Needs the conductor (answered 2026-11-14)
 
 - 1 → **No:** agents perform the A2 / A3 / A10 / night-ladder runs (see "Acceptance tests"). No playbook pauses for a human.
-- 2 → asked for more detail before approving (RD-11 stays behind `?drift` until then).
+- 2 → **Approved** (2026-11-14, after the detail): hold − + knobs = drift, Move LEDs carry the state, tap − toggles evolve
+  on release with no knob turned. Still behind `?drift` until A10 passes (agent-run).
 - 3 → **OK** (rings 64 px off-centre at 1280×720), plus the console-log overlay above.
 
 Original questions:
