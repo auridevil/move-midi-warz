@@ -1,7 +1,7 @@
 // MIDI Warz service worker: makes the app installable and usable offline.
 // Network first (you always get the latest when online), the cache answers when the network can't.
 // The shell is cached on install; everything else (Tone, movewire, Doom, fonts) as it is first used.
-const CACHE = 'midi-warz-v1';
+const CACHE = 'midi-warz-v2';   // v2: Orbits promoted from the orbit2 lab (new modules; don't mix an old page with them)
 const SHELL = ['./', './index.html', './poly.html', './drums.html', './chaos.html', './lights.html', './punchliner.html', './unassembler.html', './melodic.html', './doom.html',
   './styles.css', './favicon.svg', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './vendor/tone/Tone.js'];
 

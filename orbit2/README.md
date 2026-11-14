@@ -1,5 +1,8 @@
 # orbit2: Orbits lab
 
+**2026-11-14: everything here up to ORBIT2-18 was promoted to the shipped Orbits** (`poly.html`, `src/poly/`, the shared
+modules, `styles.css`, the tests), with the shipped storage keys. The lab keeps going for the next round.
+
 A full, self-contained copy of Orbits (`../poly.html` + `../src/poly/`) to try improvements without touching the
 shipped Orbits. Open it at `orbit2/index.html` (locally `npm start` → http://localhost:5173/orbit2/index.html, live
 https://auridevil.github.io/move-midi-warz/orbit2/index.html).

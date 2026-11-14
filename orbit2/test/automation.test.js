@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { Lane, Machine, PPQ as P, MIDI_DIV, BAR_TICKS, AUTO_RES, AUTO_MAX, AUTO_KEYS, LOCK_KEYS, GHOST_VEL, autoFrom, autoHalf, autoChar, ratioIndexOf } from '../src/poly/lanes.js';
+import { Lane, Machine, PPQ as P, MIDI_DIV, BAR_TICKS, AUTO_RES, AUTO_MAX, AUTO_KEYS, LOCK_KEYS, GHOST_VEL, autoFrom, autoHalf, autoChar, ratioIndexOf, RATIOS } from '../src/poly/lanes.js';
 import { collectHits, collectChainRamps, autoRamps, liveTick, expandHits, timbreLock } from '../src/poly/export.js';
 import { GROOVES } from '../src/poly/grooves.js';
 import { Dice } from '../src/poly/dice.js';
@@ -120,10 +120,13 @@ const SIX = { lanes: [
   { name: 'cymbal', length: 8, ratio: 1, hits: [true], accents: [true], rotation: 0, swing: 0, prob: 1, tune: 0, muted: false, euclidK: 0, sound: {}, voice: 'sample', locks: [], evolve: true, trigs: [] },
 ], selected: 2, humanize: 0.1, meter: '7/8', couple: { mode: 'next', amount: 0.4 } };
 const BEFORE = { boombap: ['db1b613a003ed68f', '747cf2d992328672'], trap: ['ec9e99e557cdacbe', '79ea2814c8e4623e'], house: ['243ace3ef16276b3', 'aa0390a72c0b9530'], techno: ['82dd668ea024c88d', '00afba4dfacac397'], dnb: ['7d64e18d9a80e242', '766b5ddd90362e0d'], afro: ['7416fa23e316a122', 'f8c05f10c9360f4a'], poly345: ['255dd12c70ecfea0', 'd2317936790222f8'], 'old-v1': ['f99596275818054f', 'd723f42056f1fc13'], six: ['ef4d0a92248b818d', '69292c773c655392'] };
+// Commit 0 (port-back) writes `ratioIndex` in the old 10-entry table so pages from before R2 read links right; the
+// fingerprints below were taken before that, with the new-table index: map it back, everything else must be identical.
+const asBefore = (j) => ({ ...j, lanes: j.lanes.map(l => { const o = {}; for (const [k, v] of Object.entries(l)) { if (k === 'ratioIndex') continue; o[k] = v; if (k === 'length') o.ratioIndex = RATIOS.findIndex(x => Math.abs(x - l.ratio) < 1e-9); } return o; }) });
 test('A2 old saves and grooves save and play byte-identically (no curve: nothing changed)', () => {
   const h = (o) => createHash('sha256').update(JSON.stringify(o)).digest('hex').slice(0, 16);
   for (const [key, json, tempo] of [...GROOVES.map(g => [g.key, g.m, g.tempo]), ['old-v1', OLD, 120], ['six', SIX, 133]]) {
-    const m = Machine.from(json); assert.deepEqual([h(m.toJSON()), h(collectHits(m, { to: 4 * m.barTicks(), tempo, dice: Dice.take(11) }))], BEFORE[key], key);
+    const m = Machine.from(json); assert.deepEqual([h(asBefore(m.toJSON())), h(collectHits(m, { to: 4 * m.barTicks(), tempo, dice: Dice.take(11) }))], BEFORE[key], key);
     assert.equal(m.lanes.some(l => l.auto), false); assert.deepEqual(autoRamps(m, 0, 4 * m.barTicks()), [], `${key}: no ramps`);
   }
 });

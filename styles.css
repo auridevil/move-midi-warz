@@ -32,22 +32,22 @@ main, header { position: relative; z-index: 1; }
 
 .bar { display: flex; justify-content: space-between; align-items: center; padding: 10px 18px; gap: 12px; flex-wrap: wrap; background: rgba(22, 14, 46, 0.85); backdrop-filter: blur(8px); border-bottom: 1px solid var(--hairline); }
 h1 { font: 400 15px var(--font-display); letter-spacing: .22em; text-transform: lowercase; margin: 0; color: var(--star-white); text-shadow: -1px 0 var(--signal-cyan), 1px 0 var(--ember-magenta), 0 0 18px rgba(103, 232, 249, 0.25); }
-h1 .sub { color: rgba(167, 139, 250, 0.8); font-weight: normal; margin-left: 12px; letter-spacing: .18em; text-shadow: none; font-size: 11px; }
+h1 .sub { color: rgba(167, 139, 250, 0.8); font: 500 11px var(--font-body); margin-left: 12px; letter-spacing: .14em; text-shadow: none; }
 .home { color: var(--star-white); text-decoration: none; }
 h2 { font: 400 11px var(--font-display); margin: 0 0 10px; color: rgba(167, 139, 250, 0.9); text-transform: lowercase; letter-spacing: .22em; text-shadow: 0 0 14px rgba(167,139,250,.25); }
 h2 small { text-transform: none; letter-spacing: 0; margin-left: 8px; font-family: var(--font-body); color: var(--muted); }
-.status { display: flex; gap: 8px; align-items: center; }
+.status { display: flex; gap: 8px; align-items: center; } .status[hidden] { display: none; }
 .pill { padding: 5px 12px; border-radius: 999px; font: 500 12px var(--font-body); border: 1px solid var(--hairline); background: rgba(167,139,250,.12); }
 .pill-off { color: var(--muted); } .pill-on { color: #0a2a30; background: var(--signal-cyan); border-color: var(--signal-cyan); box-shadow: 0 0 14px rgba(103,232,249,.35); } .pill-warn { color: #3a0a3e; background: var(--ember-magenta); border-color: var(--ember-magenta); }
 button, select, input { background: rgba(167, 139, 250, 0.16); color: var(--fg); border: 1px solid var(--hairline); border-radius: 999px; padding: 6px 12px; font: 13px var(--font-body); }
 select, input[type=number] { border-radius: 8px; }
 button { cursor: pointer; font-weight: 500; color: var(--star-white); border-color: rgba(167,139,250,.6); transition: all .25s; }
 button:hover { color: var(--void-black); background: var(--nebula-purple); border-color: var(--nebula-purple); box-shadow: 0 0 18px rgba(167,139,250,.4); }
-button:disabled { opacity: .4; cursor: default; box-shadow: none; } button:disabled:hover { color: var(--star-white); background: rgba(167, 139, 250, 0.16); border-color: rgba(167,139,250,.6); }
+button:disabled, button[aria-disabled=true] { opacity: .4; cursor: default; box-shadow: none; } button:disabled:hover, button[aria-disabled=true]:hover { color: var(--star-white); background: rgba(167, 139, 250, 0.16); border-color: rgba(167,139,250,.6); }
 button.mini { padding: 2px 10px; font-size: 11px; }
 button.primary { background: var(--signal-cyan); color: #06222a; border-color: transparent; font-weight: 700; padding: 8px 18px; font-size: 14px; box-shadow: 0 0 22px rgba(103,232,249,.35); }
 button.primary:hover { background: var(--star-white); }
-button.primary:disabled { background: rgba(167,139,250,.15); color: var(--muted); box-shadow: none; }
+button.primary:disabled, button.primary[aria-disabled=true] { background: rgba(167,139,250,.15); color: var(--muted); box-shadow: none; }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .panel-wide { grid-column: 1 / -1; }
@@ -211,12 +211,47 @@ body.launcher { display: grid; place-items: center; min-height: 100vh; }
 body.chaos { overflow: hidden; }
 body.chaos::before { display: none; }
 #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+/* I1 the rings are played by hand: a touch on a ring never scrolls or zooms the page (app.js cancels it there); off the
+   rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
+#cv { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.ring-menu { position: fixed; z-index: 60; width: 0; height: 0; }
+.ring-menu button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--star-white); background: rgb(18, 12, 40); border: 1px solid rgba(103, 232, 249, .45); box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.ring-menu button.lk { border-color: var(--signal-cyan); background: rgb(22, 52, 66); }
+.ring-menu button:focus-visible { outline: 2px solid var(--signal-cyan); outline-offset: 2px; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
-.readout { position: fixed; left: 24px; top: 74px; z-index: 3; font: 400 11px/1.9 var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.82); text-shadow: -1px 0 rgba(103,232,249,.7), 1px 0 rgba(240,171,252,.7); white-space: pre; pointer-events: none; }
-.hud { position: fixed; right: 24px; top: 74px; bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; max-width: 440px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+/* C2: the status line, the header's last row */
+.readout { flex-basis: 100%; margin: 0; font: 400 11px/1.6 var(--font-display); letter-spacing: .14em; text-transform: lowercase; color: rgba(236,233,247,.82); text-shadow: -1px 0 rgba(103,232,249,.7), 1px 0 rgba(240,171,252,.7); }
+/* C1: the transport strip, in the header between the title and the Move */
+.tstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tstrip .big-btn { padding: 8px 18px; font-size: 14px; min-width: 96px; }
+.tstrip-tempo .gauge, .tstrip-fx .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
+.tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; font-size: 13px; white-space: nowrap; } .tstrip-tempo .g-label { display: none; }
+/* P6: the performance filter knob, the tempo's shape; its value says "off" / "LP 40" / "HP 25" */
+.tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: 12px; white-space: nowrap; min-width: 3.4em; } .tstrip-fx .g-label { display: none; }
+#btn-throw.armed { background: var(--ember-magenta); border-color: var(--ember-magenta); color: var(--void-black); }
+/* nerd stats: the old readout rows, small and scrollable */
+.nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
+.hud { position: fixed; right: 24px; top: var(--hud-top, 74px); bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; width: 400px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
+/* first visit: the play button breathes until it is pressed once (a steady glow when motion is reduced) */
+#btn-play.pulse { animation: play-pulse 1.4s ease-in-out infinite; box-shadow: 0 0 0 3px rgba(253,224,71,.5), 0 0 24px rgba(253,224,71,.45); }
+@keyframes play-pulse { 50% { box-shadow: 0 0 0 7px rgba(253,224,71,.12), 0 0 34px rgba(253,224,71,.25); } }
+@media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
+/* one line on wide screens (the words wrap, the buttons don't); stacked with finger-sized buttons on a phone */
+.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(22, 14, 46, 0.9); font-size: 12.5px; }
+.welcome > span { flex: 1 1 auto; min-width: 0; }
+.welcome > button { flex: none; }
+.welcome[hidden] { display: none; }
+.welcome .wb-x { padding: 2px 8px; background: transparent; }
+/* randomize and the grooves name what they loaded; stays in the page (a live region), shown by fading in */
+.toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; width: max-content; max-width: min(92vw, 560px); padding: 8px 16px; border-radius: 14px; background: rgba(22, 14, 46, 0.95); border: 1px solid var(--hairline); color: var(--star-white); font-size: 13px; line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
+.toast.show { opacity: 1; }
+.grooves-row { align-items: center; }
+.grooves-row .chips { justify-content: flex-end; }
+/* a long press is wild randomize: no text selection or callout menu on touch */
+#btn-random { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }
 .drawer summary { cursor: pointer; color: var(--muted); font-size: 12px; }
 .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 8px 0; }
@@ -224,24 +259,30 @@ body.chaos::before { display: none; }
 .gtable { border-collapse: collapse; font-size: 12px; margin-top: 6px; } .gtable th { text-align: left; color: var(--fg); padding: 3px 8px 3px 0; white-space: nowrap; } .gtable td { color: var(--muted); padding: 3px 14px 3px 0; }
 .chaos .bar .sub { color: rgba(240,171,252,.85); }
 
-.stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 400 10px var(--font-display); letter-spacing: .2em; text-transform: lowercase; color: rgba(236,233,247,.75); cursor: help; }
+.stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 500 11px var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: rgba(236,233,247,.75); cursor: help; }
 .stress-val { min-width: 13ch; font-variant-numeric: tabular-nums; }
 .stressbar { width: 220px; height: 6px; border-radius: 3px; background: rgba(236,233,247,.12); overflow: hidden; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--signal-cyan); transition: width .2s, background .3s; }
-.stepsui { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; margin: 8px 0; }
-.stepsui .st { height: 18px; border-radius: 4px; background: rgba(236,233,247,.14); cursor: pointer; } .stepsui .st.on { background: var(--signal-cyan); } .stepsui .st.acc { background: #fff; } .stepsui .st.off { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; }
+.stepsui { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 8px 0; }   /* 8 in a row: a target 32 px wide too (16 in a row were 22 px) */
+/* L1: a lane of up to 16 steps keeps the strip above (steps 17–32 hidden); a longer one is two rows of 16, a bar each */
+.stepsui.short .st:nth-child(n+17) { display: none; }
+.stepsui:not(.short) { grid-template-columns: repeat(16, 1fr); column-gap: 3px; }
+.stepsui .st { height: 32px; min-width: 0; padding: 0; border: 1px solid transparent; border-radius: 4px; background: rgba(236,233,247,.14); box-shadow: none; cursor: pointer; transition: none; }
+.stepsui .st:hover { background: rgba(236,233,247,.26); border-color: transparent; box-shadow: none; } .stepsui .st.on, .stepsui .st.on:hover { background: var(--signal-cyan); } .stepsui .st.acc, .stepsui .st.acc:hover { background: #fff; }
+.stepsui .st.off, .stepsui .st.off:disabled:hover { background: transparent; border: 1px dashed rgba(236,233,247,.15); cursor: default; opacity: 1; }
+/* long-press targets: no iOS callout, no text selection, no double-tap zoom delay */
+.stepsui .st, .slots .slot { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
 .sliders .pv { font-size: 11px; color: var(--signal-cyan); margin-left: 4px; }
 .lane-drawer { border-width: 1px; transition: border-color .2s; }
-.subh { font: 400 10px var(--font-display); letter-spacing: .2em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
+.subh { font: 600 11px var(--font-body); letter-spacing: .08em; color: var(--muted); margin: 10px 0 4px; text-transform: lowercase; }
 .shift-ind { font-style: normal; color: var(--ember-magenta); margin-left: 8px; font-size: 11px; }
 /* pages with a live full-screen canvas: blur would be recomputed every frame, so go opaque instead */
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(22, 14, 46, 0.86); }
-.drawer.inner { margin-top: 8px; padding: 6px 10px; background: rgba(0,0,0,.15); }
 .sliders label[title] { cursor: help; }
-.hud-left { position: fixed; left: 24px; top: 215px; z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 380px; max-height: calc(100vh - 240px); overflow: auto; }
+.hud-left { position: fixed; left: 24px; top: var(--hud-top, 130px); z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 340px; max-height: calc(100vh - 240px); overflow: auto; }
 .hud-left .drawer { width: 100%; }
 @media (max-width: 1100px) { .hud-left { position: static; width: auto; margin: 0 16px; } }
-.hud-bl { position: fixed; left: 24px; bottom: 18px; z-index: 3; width: 380px; }
+.hud-bl { position: fixed; left: 24px; bottom: 18px; z-index: 3; width: 340px; }
 .hud-bl .drawer { width: 100%; }
 @media (max-width: 1100px) { .hud-bl { position: static; width: auto; margin: 0 16px 16px; } }
 
@@ -249,11 +290,17 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px; margin: 4px 0; }
 .gauge { display: flex; flex-direction: column; align-items: center; gap: 0; cursor: ns-resize; user-select: none; touch-action: none; padding: 2px 0 3px; border-radius: 8px; outline: none; }
 .gauge:hover, .gauge:focus { background: rgba(167,139,250,.08); }
+.gauge:focus-visible { outline: 2px solid var(--signal-cyan); outline-offset: 2px; }   /* same ring as the buttons */
 .gauge svg { width: 34px; height: 34px; display: block; }
 .gauge .g-track { fill: none; stroke: rgba(236,233,247,.16); stroke-width: 4.5; stroke-linecap: round; }
 .gauge .g-fill { fill: none; stroke-width: 4.5; stroke-linecap: round; filter: drop-shadow(0 0 3px rgba(103,232,249,.3)); }
-.gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 9.5px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
+.gauge .g-val { font-size: 12px; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
+/* A4: an automated knob wears a small "A"; the selected lane's automation strip sits under its steps */
+.gauge { position: relative; } .gauge .g-mark { position: absolute; top: 0; right: 2px; font: 700 9px/1 'Space Grotesk', system-ui, sans-serif; font-style: normal; color: var(--void-black, #050208); background: var(--signal-cyan); border-radius: 3px; padding: 1px 2px; }
+.auto-strip { margin: 2px 0 8px; } .auto-cv { display: block; width: 100%; height: 44px; border-radius: 6px; background: rgba(236,233,247,.06); }
+.ctl-lbl.wrap { display: block; white-space: normal; margin-top: 6px; }   /* a label as long as a sentence: its own line, wrapping on a phone (no sideways scroll) */
+.auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; } .auto-row .hint { margin: 0; } .auto-pick { font-size: 12px; color: var(--muted); }
 
 /* launcher credit */
 .credit { margin: -14px 0 26px; font: 400 12px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(236,233,247,.8); }
@@ -390,7 +437,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 
 /* Orbits: slots, record, evolve, MIDI, step locks */
 .slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0 2px; }
-.slots .slot { padding: 4px 0; font-size: 11px; border-radius: 6px; background: rgba(236,233,247,.06); color: var(--muted); border: 1px dashed rgba(236,233,247,.2); }
+.slots .slot { padding: 4px 0; min-height: 32px; font-size: 12px; border-radius: 6px; background: rgba(236,233,247,.06); color: var(--muted); border: 1px dashed rgba(236,233,247,.2); }
 .slots .slot.filled { background: rgba(167,139,250,.35); color: #fff; border-style: solid; border-color: rgba(167,139,250,.6); }
 .slots .slot.chain { border-color: var(--ember-magenta); box-shadow: inset 0 0 0 1px var(--ember-magenta); }
 .slots .slot.cur { background: var(--star-white); color: var(--void-black); font-weight: 700; }
@@ -406,8 +453,22 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .rec-btn.armed { background: #ef4444; border-color: #ef4444; color: #fff; box-shadow: 0 0 16px rgba(239,68,68,.45); }
 #btn-evolve.armed { background: var(--ember-magenta); border-color: var(--ember-magenta); color: var(--void-black); box-shadow: 0 0 16px rgba(240,171,252,.4); }
 .evo-lanes { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; margin: 4px 0; }
+.evo-sub > summary { font-size: 12px; color: var(--muted); cursor: pointer; margin: 2px 0; }
+/* V2 coupling matrix: row = the lane that hits, column = the lane it lifts */
+.couple-matrix { display: grid; grid-template-columns: auto repeat(calc(var(--n, 5) - 1), minmax(32px, 1fr)); gap: 3px; margin: 4px 0; font-size: 11px; align-items: center; }
+.couple-matrix[hidden] { display: none; }
+/* V3: a step you set that the euclid mask (AND / XOR) silences: an outline, not a fill */
+.stepsui .st.mk { box-shadow: inset 0 0 0 2px rgba(103,232,249,.55); }
+#trig-shape[hidden], #gen-mod-gauges[hidden], .gauge[hidden] { display: none; }
+.couple-matrix .cm-head { color: var(--muted); text-align: center; white-space: nowrap; }
+.couple-matrix .cm-cell { min-height: 32px; padding: 0; border-radius: 6px; font-size: 11px; background: color-mix(in srgb, var(--chip) calc(var(--a, 0) * 70%), transparent); }
 .midi-lanes input { width: 56px; }
 .stepsui .st.lk { box-shadow: inset 0 -3px 0 var(--signal-cyan); }
+/* G4 ghost tier: a dim, half-filled step */
+.stepsui .st.on.gh, .stepsui .st.on.gh:hover { background: linear-gradient(to top, var(--signal-cyan) 45%, rgba(103,232,249,.22) 45%); }
+/* G6 swing template: a segmented row spanning the gauge grid */
+.gauges .swing-tpl { grid-column: span 3; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.gauges .swing-tpl .seg { flex-wrap: wrap; border-radius: 12px; }   /* a pill looks lumpy once it wraps to two rows */
 .stepsui .st.sel { outline: 2px solid var(--signal-cyan); outline-offset: 1px; }
 .lockpanel { border: 1px solid rgba(103,232,249,.45); border-radius: 10px; padding: 6px 8px; margin: 4px 0 8px; background: rgba(103,232,249,.05); }
 .lock-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--signal-cyan); gap: 8px; }
@@ -415,28 +476,25 @@ button.small { padding: 3px 10px; font-size: 11px; }
 /* Orbits layout: the left column is placed by JS between the readout and the bottom-left panel (layoutHud) */
 #hud-left { max-height: none; }
 /* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
-.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgba(18, 12, 40, 0.97); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
-.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgba(18, 12, 40, 0.97); padding: 8px 0; }
-.keys-pop .pop-x { display: none; float: right; font-size: 10px; color: var(--muted); letter-spacing: .1em; }
+.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgb(18, 12, 40); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
+.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgb(18, 12, 40); padding: 8px 0; }
+.keys-pop .pop-x { display: none; float: right; font-size: 11px; color: var(--muted); letter-spacing: .1em; }
 .keys-pop[open] .pop-x { display: inline; }
 .gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
 @media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } #hud-left { top: auto !important; bottom: auto !important; } }
-body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: hidden; }   /* never runs under the lane panel */
 /* Orbits on narrow windows: stack everything in one scrolling column over the fixed canvas */
 @media (max-width: 1100px) {
   body:has(#hud-left) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
-  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .readout { order: 1; } body:has(#hud-left) .hud { order: 2; }
+  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .hud { order: 2; }
   body:has(#hud-left) #hud-left { order: 3; } body:has(#hud-left) #hud-bl { order: 4; }
-  body:has(#hud-left) .readout { position: static; margin: 0 16px 12px; max-width: none; overflow-x: auto; }
-  body:has(#hud-left) .hud { position: static; max-width: none; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
+  body:has(#hud-left) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
   body:has(#hud-left) .hud-row { justify-content: flex-start; }
   body:has(#hud-left) #hud-left { position: static; width: auto; margin: 0 16px 12px; overflow: visible; }
   body:has(#hud-left) #hud-bl { position: static; width: auto; margin: 0 16px 16px; }
   /* the orbits get their own square stage right under the header, so the rings are visible and tappable instead of
      sitting behind the panels; the scene measures the canvas box, not the viewport */
   body:has(#hud-left) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
-  body:has(#hud-left) .readout { order: 2; }
-  body:has(#hud-left) .lane-tabs { justify-content: flex-start; }
+  body:has(#hud-left) .lane-tabs, body:has(#hud-left) .grooves-row .chips { justify-content: flex-start; }
 }
 /* lane buttons: the touch way to pick a ring */
 .lane-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -444,27 +502,41 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 .lane-tab.sel { background: color-mix(in srgb, var(--lane) 22%, transparent); border-color: var(--lane); box-shadow: 0 0 12px color-mix(in srgb, var(--lane) 35%, transparent); }
 /* phone */
 @media (max-width: 760px) {
-  body:has(#hud-left) .readout { display: none; }
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
+  /* C1 on a phone: play floats in the thumb zone, over the bottom of the screen; the page scrolls clear of it */
+  body:has(#hud-left) #btn-play { position: fixed; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); z-index: 8; width: 76px; height: 76px; min-width: 0; padding: 0; border-radius: 50%; font-size: 14px; line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px rgba(14,10,32,.85), 0 0 26px rgba(103,232,249,.45); }
+  body:has(#hud-left) { padding-bottom: 104px; }
+  /* the button lives in the header: the header's layer must sit over the panels (flex items with a z-index, like
+     .hud, stack even when static), or a panel scrolled under the button takes its taps */
+  body:has(#hud-left) .chaos-bar { z-index: 8; }
+  body:has(#hud-left) .toast { bottom: 108px; }
   body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
-  body:has(#hud-left) .stepsui { gap: 3px; } body:has(#hud-left) .stepsui .st { height: 28px; }
+  body:has(#hud-left) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
+  body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
-  body:has(#hud-left) .big-btn { flex: 1; }
   body:has(#hud-left) .gtable.keys { font-size: 11px; }
+  body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
+  body:has(#hud-left) .welcome > span { flex-basis: 100%; }
+  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 44px; }
+  body:has(#hud-left) .welcome .wb-x { min-width: 40px; margin-left: auto; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
-.stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto 0 -13px 0; font-size: 8px; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
-.stepsui { margin-bottom: 14px; }
+.stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto -2px -15px -2px; font-size: 11px; line-height: 1.2; color: var(--ember-magenta); text-align: center; white-space: nowrap; overflow: hidden; }
+.stepsui { margin-bottom: 16px; row-gap: 20px; }   /* a row: the condition labels under it (15 px), then the next row's playhead bar (4 px over it) */
 .trig-row { border-top: 1px solid rgba(103,232,249,.2); padding-top: 6px; }
 .sample-row .subh { margin: 0; } .sample-row select { max-width: 200px; }
 #btn-solo.armed { background: #fde047; border-color: #fde047; color: var(--void-black); }
+#btn-mute.armed { background: var(--star-white); border-color: var(--star-white); color: var(--void-black); }
+#live-mode, #btn-latch, #btn-throw { white-space: nowrap; }   /* P1 / P3 / P6: one line each, also on a phone */
+#btn-latch.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
+.lane-tab.pend { border-style: dashed; border-color: var(--signal-cyan); }   /* P2: a mute waits for the next bar line */
 #btn-fill.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); }
 #btn-dice.armed { background: var(--signal-cyan); border-color: var(--signal-cyan); color: var(--void-black); box-shadow: 0 0 14px rgba(103,232,249,.4); }
 #dice-seed { width: 80px; }
 /* ---- src/ui.js controls: segmented bars, chips, toggle chips (no dropdowns) ---- */
 .ctl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctl-col { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
-.ctl-lbl { font: 400 9.5px var(--font-display); letter-spacing: .16em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
+.ctl-lbl { font: 600 11px var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
 .seg-ui button { padding: 5px 10px; font-size: 11.5px; }
 .seg-ui button.on { background: var(--signal-cyan); color: var(--void-black); }
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -476,7 +548,7 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 /* condition picker: "1 in N" + loop dots */
 .cond-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }
 .loop-dots { display: flex; gap: 6px; }
-.ldot { --chip: var(--signal-cyan); width: 26px; height: 26px; padding: 0; border-radius: 50%; font-size: 11px; background: transparent; color: var(--muted); border: 1.5px dashed color-mix(in srgb, var(--chip) 60%, transparent); box-shadow: none; }
+.ldot { --chip: var(--signal-cyan); width: 32px; height: 32px; padding: 0; border-radius: 50%; font-size: 11px; background: transparent; color: var(--muted); border: 1.5px dashed color-mix(in srgb, var(--chip) 60%, transparent); box-shadow: none; }
 .ldot.on { background: var(--chip); color: var(--void-black); border-style: solid; font-weight: 700; box-shadow: 0 0 10px color-mix(in srgb, var(--chip) 45%, transparent); }
 .trig-row { flex-direction: column; align-items: flex-start; gap: 8px; }
 /* Unassembler slices as waveform tiles */
@@ -485,11 +557,18 @@ body:has(#hud-left) .readout { max-width: calc(100vw - 24px - 470px); overflow: 
 .slice { position: relative; padding: 2px; border-radius: 6px; background: rgba(103,232,249,.06); border: 1px solid rgba(103,232,249,.25); box-shadow: none; }
 .slice:hover { background: rgba(103,232,249,.18); border-color: var(--signal-cyan); }
 .slice canvas { display: block; width: 100%; height: 22px; }
-.slice span { position: absolute; top: 1px; left: 4px; font-size: 8.5px; color: var(--muted); }
+.slice span { position: absolute; top: 1px; left: 4px; font-size: 11px; line-height: 1; color: var(--muted); }
+/* S1 slice picker in the lock panel: the locked slice lit, the step's own slice (no lock) outlined */
+.slice.on { background: rgba(103,232,249,.3); border-color: var(--signal-cyan); }
+.slice.on span { color: var(--fg); }
+.slice.dflt { border-style: dashed; border-color: var(--signal-cyan); }
+.lock-sample .slice-grid { margin-top: 6px; grid-template-columns: repeat(9, 1fr); }   /* "step" + 8 slices a row: 16 fit in two */
+@media (pointer: coarse) { .lock-sample .slice-grid { grid-template-columns: repeat(6, 1fr); } }   /* touch: 6 a row, tiles a finger wide */
+/* a display rule above beats the hidden attribute: the stroke row, the trim row and the slice picker hide for real */
+.row-ctl[hidden], .slice-grid[hidden] { display: none; }
 .evo-lanes { gap: 6px; }
 .midi-gauges { grid-template-columns: repeat(4, 1fr); }
 /* jam: the recorder is the loudest thing on the page while it runs */
-.top-row { align-items: center; }
 .jam-btn { border-color: #ef4444; color: #fca5a5; font-weight: 700; }
 .jam-btn.on { background: #ef4444; color: #fff; border-color: #ef4444; box-shadow: 0 0 22px rgba(239,68,68,.55); animation: jam-pulse 1s ease-in-out infinite; }
 @keyframes jam-pulse { 50% { box-shadow: 0 0 6px rgba(239,68,68,.3); } }
@@ -503,12 +582,119 @@ button.flash { background: var(--signal-cyan); color: var(--void-black); border-
 .lib-form input, .lib-rename { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: rgba(14,10,32,.7); color: var(--star-white); font: inherit; font-size: 13px; }
 .lib-form input:focus, .lib-rename:focus { outline: none; border-color: var(--signal-cyan); }
 .lib-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
-.lib-row { display: grid; grid-template-columns: 1fr auto; gap: 0 6px; align-items: center; padding: 5px 8px; border-radius: 8px; border: 1px solid transparent; background: rgba(236,233,247,.04); }
+.lib-row { display: grid; grid-template-columns: 48px 1fr auto; gap: 0 8px; align-items: center; padding: 5px 8px; border-radius: 8px; border: 1px solid transparent; background: rgba(236,233,247,.04); }
 .lib-row:hover { border-color: var(--hairline); }
 .lib-row.cur { border-color: var(--signal-cyan); background: rgba(103,232,249,.08); }
 .lib-name { justify-self: start; padding: 0; border: 0; background: none; box-shadow: none; color: var(--star-white); font-weight: 700; font-size: 13px; text-align: left; cursor: pointer; }
 .lib-name:hover { color: var(--signal-cyan); background: none; }
-.lib-meta { grid-column: 1 / -1; font-size: 10.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lib-meta { grid-column: 2 / -1; font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-acts { display: flex; gap: 3px; } .lib-acts button { padding: 2px 8px; min-width: 26px; }
+/* I4 the library as a gallery: each setup's rings, small, spanning its two lines (a tap loads it, like its name) */
+.lib-thumb { grid-row: span 2; width: 48px; height: 48px; border-radius: 8px; background: rgba(14,10,32,.6); cursor: pointer; }
+.lib-row.cur .lib-thumb { box-shadow: 0 0 0 1px var(--signal-cyan); }
 .lib-acts button.danger { background: #ef4444; border-color: #ef4444; color: #fff; }
 .install-btn { margin: 4px 0 10px; }
+/* screen-reader only: the polite live region that announces one changed value (the readout itself is silent) */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* slot menu: the long-press way to save, chain and erase */
+.slots .slot.menu { outline: 2px solid var(--signal-cyan); outline-offset: 1px; }
+.slot-menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid rgba(103,232,249,.45); border-radius: 10px; background: rgb(18, 12, 40); }
+.slot-menu[hidden] { display: none; }
+.slot-menu-title { font-size: 12px; color: var(--signal-cyan); margin-right: 2px; }
+.slot-menu button { padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
+@media (max-width: 760px) { .slot-menu-title { flex-basis: 100%; } }   /* title on its own line: the four buttons fit one row */
+/* playhead: the step of the selected lane sounding now */
+.stepsui .st { position: relative; }
+.stepsui .st.ph::before { content: ''; position: absolute; inset: -4px 0 auto 0; height: 3px; border-radius: 2px; background: var(--ember-magenta); box-shadow: 0 0 8px var(--ember-magenta); pointer-events: none; }
+.stepsui .st.ph:not(.on):not(.acc) { background: rgba(240,171,252,.28); }
+/* T2 / T7 target sizes on the Orbits page: drawer headers, buttons and steps 32 px (steps 32 wide too), 44 px for a
+   finger, all in this one block. A phone too narrow for 8 steps of 44 px (8 × 44 + gaps = 373 px of strip) lays them
+   out 4 in a row. */
+body:has(#hud-left) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
+body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 32px; }
+@media (pointer: coarse) {
+  body:has(#hud-left) .drawer > summary { min-height: 44px; padding: 13px 0; }
+  body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 44px; }
+  body:has(#hud-left) .stepsui .st { height: 44px; }
+  body:has(#hud-left) .ldot { width: 44px; height: 44px; }
+  .slot-menu [data-act=close] { min-width: 44px; }
+}
+@media (pointer: coarse) and (max-width: 440px) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(4, 1fr); } }
+/* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */
+@media (pointer: coarse) { body:has(#hud-left) .stepsui:not(.short) { grid-template-columns: repeat(8, 1fr); } }
+/* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
+   (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
+body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }
+/* ---- ORBIT2-04 calmer screen ---- */
+/* C4: the stress meter is a diagnostic (?debug only) */
+.stress-meter[hidden] { display: none; }
+/* C3: the "?" button and the help overlay */
+.help-btn { min-width: 32px; padding: 6px 0; font-weight: 700; }
+.help { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 48px); overflow-y: auto; padding: 12px 18px 16px; border: 1px solid var(--hairline); border-radius: 14px; background: rgb(18, 12, 40); color: var(--fg); box-shadow: 0 20px 60px rgba(0,0,0,.6); }
+.help::backdrop { background: rgba(6, 2, 18, .65); }
+.help-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
+.help-head h2 { margin: 0; font-size: 13px; }
+.help .gtable.keys th { width: 30%; white-space: normal; }
+/* C5: the ring legend (colour dot, voice, length × speed) */
+.ring-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 400 11px/1.6 var(--font-display); letter-spacing: .12em; text-transform: lowercase; color: rgba(236,233,247,.72); pointer-events: none; z-index: 3; }
+.ring-legend li { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; } .ring-legend li[hidden] { display: none; }   /* a 4-lane pattern: no dots for lanes 5–6 */
+.ring-legend li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 8px var(--lane); }
+.ring-legend li.sel { color: var(--lane); }
+.ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
+#legend { position: fixed; }   /* placed by layoutHud over the stage */
+@media (max-width: 1100px) { body:has(#hud-left) #legend { position: static; order: 1; margin: 8px 16px 12px; } }
+/* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps
+   its floating play (no Space bar there to stop the music) */
+body.focus-mode #topbar { visibility: hidden; }
+body.focus-mode .hud, body.focus-mode #hud-left, body.focus-mode #hud-bl, body.focus-mode #legend { display: none !important; }
+@media (max-width: 760px) { body.focus-mode:has(#hud-left) #btn-play { visibility: visible; } }
+body.focus-mode:has(#hud-left) { overflow: hidden; padding-bottom: 0; }
+body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+.focus-exit { position: fixed; top: 12px; right: 12px; z-index: 9; opacity: .55; }
+.focus-exit:hover, .focus-exit:focus-visible { opacity: 1; }
+.focus-exit[hidden] { display: none; }
+/* a finger: the strip's small buttons 44 px wide too, and the exit pill plain to see (there's no hover) */
+@media (pointer: coarse) { body:has(#hud-left) #transport button, body:has(#hud-left) .focus-exit { min-width: 44px; } .focus-exit { opacity: .9; } }
+/* I2 / I3 share in the transport: the link in one tap, … opens the other ways under it */
+.share-wrap { position: relative; display: inline-flex; }
+.share-wrap #btn-share { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.share-more { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; padding-left: 7px; padding-right: 7px; }
+.share-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; display: flex; flex-direction: column; gap: 4px; min-width: 170px; padding: 6px; border: 1px solid var(--hairline); border-radius: 12px; background: rgb(18, 12, 40); box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+.share-menu[hidden] { display: none; }
+.share-menu button { text-align: left; }
+/* I2: a shared beat opens as a gift: full screen, the rings small, one big tap to hear it */
+.gift { width: 100vw; height: 100dvh; max-width: none; max-height: none; margin: 0; padding: 24px; box-sizing: border-box; border: 0; background: radial-gradient(circle at 50% 40%, rgba(58, 36, 120, .96), rgba(14, 10, 32, .98) 70%); color: var(--fg); }
+/* safe center + scroll: on a short screen (a phone on its side) the top of the card stays reachable, never above the fold */
+.gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 10px; text-align: center; overflow-y: auto; }
+.gift::backdrop { background: rgba(6, 2, 18, .8); }
+.gift .gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
+.gift-kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.gift-rings { width: min(240px, 60vw, 34dvh); aspect-ratio: 1; flex: none; }
+@media (max-height: 500px) { .gift { padding: 12px 24px; } .gift[open] { gap: 6px; } .gift-hear { margin-top: 4px; } }
+.gift h2 { margin: 4px 0 0; font-size: 22px; overflow-wrap: anywhere; }
+.gift-meta, .gift-from { margin: 0; color: var(--muted); font-size: 13px; }
+.gift-from { font-style: italic; }
+.gift-hear { margin-top: 10px; padding: 14px 28px; font-size: 17px; border-radius: 999px; min-height: 52px; }
+.gift-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 44px; align-items: center; }
+@media (pointer: coarse) { .gift-acts button { min-height: 44px; } }
+/* I5 "today's seed": the one chip that changes every day, in the warm colour */
+.chips button.seed-chip { --chip: var(--ember-magenta); font-weight: 700; }
+/* I7 simple mode: the advanced drawers and panels step aside ("everything" brings them back) */
+body.simple .adv { display: none !important; }
+.view-row { display: flex; justify-content: flex-start; }
+.view-row .seg button { min-width: 84px; }
+/* I6 the quest card: what to try now; its drawer gets a light and a "quest n" tag */
+.quest { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; padding: 8px 10px 8px 12px; border: 1px solid rgba(253,224,71,.45); border-radius: 10px; background: rgba(22, 14, 46, 0.92); font-size: 12.5px; max-width: 520px; margin-left: auto; }
+.quest[hidden] { display: none; }
+.quest-k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.quest-title { color: #fde047; font-size: 14px; }
+.quest-hint { flex: 1 1 100%; color: var(--muted); line-height: 1.4; }
+.quest-acts { display: flex; gap: 6px; margin-left: auto; }
+.quest-acts button { padding: 2px 10px; }
+.quest.cheer { animation: quest-cheer 1.2s ease-out; }
+@keyframes quest-cheer { 0% { box-shadow: 0 0 0 0 rgba(253,224,71,.7); transform: scale(1.03); } 100% { box-shadow: 0 0 0 14px rgba(253,224,71,0); transform: none; } }
+@media (prefers-reduced-motion: reduce) { .quest.cheer { animation: none; box-shadow: 0 0 0 2px rgba(253,224,71,.8); } }
+/* an inner line, so the lane drawer keeps its lane-coloured border (an inline style) and still shows the light */
+.drawer.quest-lit { box-shadow: inset 0 0 0 1px rgba(253,224,71,.65); }
+.drawer.quest-lit > summary[data-quest]::after { content: attr(data-quest); margin-left: 8px; padding: 0 6px; border-radius: 6px; background: rgba(253,224,71,.18); color: #fde047; font-size: 11px; }
+@media (pointer: coarse) { .quest-acts button { min-height: 44px; min-width: 44px; } }

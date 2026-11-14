@@ -15,16 +15,26 @@ export class Library {
   list() { return [...this.items].sort((a, b) => b.t - a.t); }
   get(id) { return this.items.find(i => i.id === id) || null; }
   byName(name) { const n = norm(name); return this.items.find(i => norm(i.name) === n) || null; }
-  /** Save under a name; the same name (case-insensitive) overwrites. Returns the entry, or null if storage is full. */
+  /** Save under a name; the same name (case-insensitive) overwrites. Returns the entry, or null if storage is full.
+   *  Full: the cached thumbnails go first (they are drawn again), so a save never loses its room to them. */
   save(name, data, now = Date.now()) {
     name = (name || '').trim() || this.nextName(); const hit = this.byName(name);
-    const entry = { ...(hit || { id: uid() }), name, t: now, ...clone(data) };
+    const entry = { ...(hit || { id: uid() }), name, t: now, thumb: undefined, ...clone(data) };   // a new pattern: its old thumbnail goes (JSON drops undefined)
     if (hit) this.items[this.items.indexOf(hit)] = entry; else this.items.push(entry);
-    if (!this.persist()) { if (hit) this.items[this.items.indexOf(entry)] = hit; else this.items.pop(); return null; }
+    if (!this.persist() && !(this.dropThumbs() && this.persist())) { if (hit) this.items[this.items.indexOf(entry)] = hit; else this.items.pop(); return null; }
     return entry;
   }
   overwrite(id, data, now = Date.now()) { const e = this.get(id); return e ? this.save(e.name, data, now) : null; }
   rename(id, name) { const e = this.get(id); name = (name || '').trim(); if (!e || !name) return false; const other = this.byName(name); if (other && other !== e) return false; e.name = name; return this.persist(); }
+  /** I4: cache entries' thumbnails (data URLs), [[id, url], …] in one write. Storage full: none kept (a thumbnail must
+   *  never cost a save its room), so they are drawn again next time. */
+  setThumbs(pairs) {
+    const set = pairs.map(([id, url]) => { const e = this.get(id); if (e) e.thumb = url; return e; }).filter(Boolean);
+    if (set.length && this.persist()) return true; for (const e of set) delete e.thumb; return false;
+  }
+  setThumb(id, url) { return this.setThumbs([[id, url]]); }
+  /** Forget every cached thumbnail (the next write leaves them out); true if there was one. */
+  dropThumbs() { let n = 0; for (const e of this.items) if (e.thumb) { delete e.thumb; n++; } return n > 0; }
   remove(id) { const n = this.items.length; this.items = this.items.filter(i => i.id !== id); this.persist(); return this.items.length < n; }
   /** "pattern 3" — the first free number. */
   nextName() { let k = this.items.length + 1; while (this.byName(`pattern ${k}`)) k++; return `pattern ${k}`; }

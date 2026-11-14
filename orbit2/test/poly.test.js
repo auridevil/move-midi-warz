@@ -1586,3 +1586,13 @@ test('ORBIT2-10 r4: an early part\'s step gets the time its tick really came at:
   assert.equal((app.match(/early\.length = 0; pending\.clear\(\);/g) || []).length, 2, 'Play and the reset button restart the ticks');
   assert.match(app, /return logged;\n\}/);
 });
+test('saves and links stay readable by a page from before R2: ratioIndex points into the old 10-entry table', async () => {
+  const { Lane, RATIOS, OLD_RATIOS, ratioIndexOf } = await import('../src/poly/lanes.js');
+  for (const r of RATIOS) {
+    const l = new Lane('kick', { length: 4, ratioIndex: ratioIndexOf(r) }), j = JSON.parse(JSON.stringify(l));
+    assert.equal(j.ratio, r, 'the ratio itself is saved');
+    const old = OLD_RATIOS.findIndex(x => Math.abs(x - r) < 1e-9);
+    if (old >= 0) assert.equal(OLD_RATIOS[j.ratioIndex], r, `old page reads ${r} right`); else assert.equal(j.ratioIndex, undefined, `new ratio ${r}: old page falls back to x1`);
+    assert.equal(Lane.from(j).ratioIndex, ratioIndexOf(r), 'reading back is unchanged');
+  }
+});

@@ -12,6 +12,9 @@ export const RATIO_LABEL = ['¼', '⅓', '½', '⅔', '¾', '1', '5/4', '4/3', '
 export const OLD_RATIOS = [1 / 4, 1 / 3, 1 / 2, 2 / 3, 3 / 4, 1, 3 / 2, 2, 3, 4];
 /** Index of a ratio value in RATIOS (−1 when it isn't one). */
 export const ratioIndexOf = (r) => RATIOS.findIndex(x => Math.abs(x - r) < 1e-9);
+/** Saves and links keep `ratioIndex` in the OLD table, so a page from before R2 (a cached copy) still plays the right
+ *  speed; a new ratio leaves it out and that page falls back to ×1 instead of an undefined speed. `ratio` is what we read. */
+const oldRatioIndex = (r) => { const i = OLD_RATIOS.findIndex(x => Math.abs(x - r) < 1e-9); return i < 0 ? {} : { ratioIndex: i }; };
 /** Evolve's speed moves stay on the classic set (the range it always used), never onto ×7/4 by surprise. */
 const EVOLVE_RATIOS = [2 / 3, 3 / 4, 1, 3 / 2, 2, 3];
 /** Evolve's next speed: one step along the classic set; a lane outside it lands on the nearest end whatever the
@@ -668,7 +671,7 @@ export class Lane {
   }
   /** Put back what evolve may change, from a toJSON copy (the max cycle guard refusing a move). */
   restore(o) { const b = Lane.from(o); for (const k of EVOLVE_FIELDS) this[k] = b[k]; if (this.pos >= this.length) this.pos = 0; }
-  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ratioIndex, ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null, ...this.genJSON() }; }
+  toJSON() { const { name, length, ratioIndex, hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample } = this; return { name, length, ...oldRatioIndex(RATIOS[ratioIndex]), ratio: RATIOS[ratioIndex], hits, accents, rotation, swing, swingTpl, offsetMs, velHuman, prob, tune, muted, euclidK, sound, voice, locks, evolve, trigs, solo, choke, sample: sample || null, ...this.genJSON() }; }
   /** V3 / V5 settings and A2 curves, saved only when set (an older lane saves as it always did). */
   genJSON() { const o = {}; if (this.euclidMode !== 'replace') o.euclidMode = this.euclidMode; if (this.mod) o.mod = this.mod; if (this.tdice) o.tdice = this.tdice; if (this.scale !== 'off') o.scale = this.scale; if (this.auto) o.auto = autoJSON(this.auto); return o; }
   // copies everything it is given, so a lane loaded from a slot (or undo) never edits the stored one

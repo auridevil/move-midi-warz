@@ -11,6 +11,12 @@ related:
 
 # Orbit2 port-back plan
 
+> **Superseded 2026-11-14:** the conductor chose to promote the whole lab at once instead of the id-by-id port below.
+> Done in one commit: orbit2's `src/`, tests, `styles.css` and page copied over the shipped files (they had not changed
+> since the copy), keys renamed back (`midi-warz.poly.*`, shared `midi-warz.tempo`), `tools/cdp.mjs` moved to the root,
+> Commit 0 applied in both (old-table `ratioIndex`), `sw.js` cache `midi-warz-v2`. The risks and saved-data notes below
+> still describe what changed for users.
+
 This is a plan only. Nothing here has been ported. Inputs: the ten port-back lists and the per-id tally in
 [[ORBIT2-17]] ("Port-back lists"), the done ids in [[BACKLOG]] (B1–B12, F1–F5, T1–T7, C1–C5, G1–G6, R1–R4, L1–L5,
 S1–S3, E1–E6, P1–P7, V1–V6, I1–I7; 73 ids), and the Later entries the panel tied to the port ("Links and saves old
