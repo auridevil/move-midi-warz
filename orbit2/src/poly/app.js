@@ -1264,7 +1264,7 @@ function toggleSolo(li = m.selected) { m.lanes[li].solo = !m.lanes[li].solo; syn
 function buildMixUI() {
   $('btn-solo').onclick = () => toggleSolo(); $('btn-mute').onclick = () => toggleMute(m.selected);
   ui.muteBar = mount('mute-bar', toggleChip({ label: 'on next bar', on: perf.muteBar, title: INFO['mute next bar'], onChange: (v) => { perf.muteBar = v; saveSettings(); if (!v) flushMutes(); } }));
-  ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; saveSettings(); paintLeds(); } }));
+  ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; padHints = 3; saveSettings(); paintLeds(); } }));
   ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
 
@@ -1973,10 +1973,17 @@ function paintLeds() {
   blinkLed('record', rec.armed ? REC_LED : nearestPaletteIndex('#fb7185')); move.setButtonColor('left', LANE_DIM[m.selected]); move.setButtonColor('right', LANE_DIM[m.selected]);   // record (A3): blinks while a gesture records
   move.setButtonColor('loop', loopHeld ? COLOR.WHITE : bank.chain.length > 1 ? CYAN_LED : 16); move.setButtonColor('duplicate', dupHeld ? REC_LED : 16); move.setButtonColor('sampling', jam.state === 'rec' ? REC_LED : jam.state === 'armed' ? CYAN_LED : jam.state === 'done' ? COLOR.WHITE : 16);
 }
+// Live mode is on when the Move connects, so the first pads play and write nothing: say how to write, a few times a
+// visit (not more than every 15 s), and never again once you switched live mode yourself (then you know it's there).
+let padHints = 0, padHintAt = -Infinity;
+function liveModeHint() {
+  const now = performance.now(); if (padHints >= 3 || now - padHintAt < 15000) return; padHints++; padHintAt = now;
+  toast('live mode: pads play, they don\'t write · tap a step button, arm Record and play them in, or switch live mode off', 4500);
+}
 move.addEventListener('pad', (e) => {
   if (!e.detail.on) return; const { col, velocity } = e.detail, li = padBase() + e.detail.row;   // the row's lane in the window (selecting it keeps the window)
   if (mute.held) { mute.used = true; toggleMute(li); return; }   // P2: hold Mute + a pad of a row = that lane's mute (no sound, no step)
-  if (rec.armed || perf.live) return liveHit(li, col, velocity);   // P1 live mode: the pad plays its step's sound, with velocity; it writes only with Record armed
+  if (rec.armed || perf.live) { if (!rec.armed) liveModeHint(); return liveHit(li, col, velocity); }   // P1 live mode: the pad plays its step's sound, with velocity; it writes only with Record armed
   const lane = m.lanes[li], i = pages.padFirst(lane, playing) + col; if (i >= lane.length) return; if (shift) lane.toggleAccent(lane.stepIndex(i)); else lane.toggle(lane.stepIndex(i)); if (!awake) wake(); if (awake && !playing) hitSound(lane, T.now(), false, lane.lockAt(i), null, kit, lane.sliceAt(lane.stepIndex(i), lane.lockAt(i))); m.select(li); sync();
 });
 move.addEventListener('step', (e) => {
