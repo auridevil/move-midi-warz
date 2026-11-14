@@ -834,3 +834,21 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **The simulated Move looks unplugged** (RD-01 baseline sets): the session tools set `move.transport` and
   `inControl`, not the page's connect state, so the pill reads "Move: not connected" in every set and glance shot.
   Nothing reads it today; RD-5's Move pill and "MOVE ⇢" chip will, so the tools need the connected state then.
+- **What the setlog misses or splits** (RD-01 round 1: verifier, kai, rio, architect): a knob turn that rests over
+  0.7 s logs twice (the gesture's own start and end could close it); a step is logged by its stored index, not the
+  step pressed on a rotated lane; throw, fill, fill next bar, volume, engine and jam are not logged, so a slip onto
+  them is invisible, and a slot saved over a filled one is silent; after a Move byte the source stays `move` until the
+  next pointer, key or wheel; loads log word summaries only (a short hash would make their reversal exact); a hand
+  edit that a clock save swallows is not counted; a phone has no way to save the log (key L only); the 8 load-style
+  hooks could share one helper.
+- **Session tools: open-loop edges** (RD-01 round 1: verifier, kai, noor): the performer presses steps past the
+  lane's length (nothing happens, the action still counts); a slipped evolve is harmless in A3's words although it
+  reshapes the pattern over time; the RD-9 sets must replay the baseline commands (seeds, intents, slips) to compare.
+- **What the face audit counts** (RD-01 round 1: verifier, rio, sound): A5 counts a control with a 5 px strip in view
+  (a minimum visible area?); on the phone it reports 16 in view at scroll 0 and 102 drawn, so RD-10 must say which
+  one its ceiling means; the frame metric is the rAF callback only, blind to style, layout and paint (add
+  `Performance.getMetrics` before RD-5's DOM console); with `?setlog`, one Tone.Loop callback in about a thousand ran
+  one block later (still 26 ms early): watch it in the RD-5+ gate runs.
+- **A9's and A5's wording** (RD-01 round 1: sound, noor; for Noor): "bit-identical" cannot hold for an unchanged page
+  (both engines wobble by 1 LSB): "the same fingerprint and a null test within 1 LSB" (`baselines.md`, A9); A5's
+  "160 / 189" is the brief's box count, the audit's is 79 visible at 1512×860.

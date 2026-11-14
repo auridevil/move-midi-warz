@@ -4,9 +4,10 @@
 // script meant to change. No browser here: unit-tested in orbit2/test/session.test.js.
 import { mulberry32 } from '../src/poly/dice.js';
 import { SOUND_KEYS } from '../src/poly/lanes.js';
+import { PAD_FIRST, STEP_FIRST, ENCODER_FIRST_CC, WHEEL_CC, BUTTON } from '../../node_modules/movewire/src/protocol.js';
 
 // ---- the Move on the wire (movewire's protocol: pads 68+, steps 16+, encoders CC 71–78 relative, buttons by CC) ----
-export const MOVE = { PAD: 68, STEP: 16, ENC: 71, WHEEL: 14, BTN: { shift: 49, layout: 50, back: 51, capture: 52, minus: 54, plus: 55, undo: 56, loop: 58, duplicate: 60, left: 62, right: 63, play: 85, record: 86, mute: 88, sampling: 118, delete: 119, track1: 43, track2: 42, track3: 41, track4: 40 } };
+export const MOVE = { PAD: PAD_FIRST, STEP: STEP_FIRST, ENC: ENCODER_FIRST_CC, WHEEL: WHEEL_CC, BTN: BUTTON };
 export const bytes = {
   btn: (name, down) => [0xB0, MOVE.BTN[name], down ? 127 : 0],
   step: (i, down) => [down ? 0x90 : 0x80, MOVE.STEP + i, down ? 100 : 0],
@@ -23,16 +24,20 @@ export const KNOB_TARGETS = ['length', 'euclidK', 'rotation', 'ratio', 'swing', 
 export const MOUSE_GAUGE = { length: 1, euclidK: 2, rotation: 3, ratio: 4, prob: 5, tune: 6, offsetMs: 7, velHuman: 8, swing: 9 };
 
 // ---- what counts as what (DECISION A3) ----
-const DESTRUCTIVE = new Set(['init', 'randomize', 'clear', 'load', 'slot']);   // slot: a recall replaces the pattern, like a load
-const SILENT = new Set(['select', 'export', 'slot.save', 'record', 'chain']);
-/** A lane left with no hits (the hits knob at 0; one click down on a hand-made lane re-fills it from E(0)): a clear by another route. */
+const DESTRUCTIVE = new Set(['init', 'randomize', 'clear', 'load', 'slot', 'chain']);   // a slot recall or a chain loads a slot: a load
+const SILENT = new Set(['select', 'export', 'slot.save', 'record']);
+/**
+ * A lane left with no hits (the hits knob at 0; one click down on a hand-drawn lane re-fills it from E(0)). Not one of
+ * A3's classes, so it never changes one: the tags and the summary report it beside them, for Noor to weigh.
+ */
 export const emptied = (e) => (/^lane\d+\.hits$/.test(e.target) && /x/.test(e.before ?? '') && !/x/.test(e.after ?? '')) || (/^lane\d+\.euclidK$/.test(e.target) && e.before > 0 && e.after === 0);
-/** destructive (stop, load, init, randomize, clear, a lane emptied, a kick muted) | silent (nothing heard changes) | harmless (all else that sounds). */
+const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** A3's words: destructive (stop, load, init, randomize, clear, a kick muted) | silent (nothing heard changes) | harmless (all else that sounds). */
 export function classOf(e) {
   if (e.target === 'transport') return e.after === 'stopped' ? 'destructive' : 'harmless';
-  if (DESTRUCTIVE.has(e.target) || emptied(e)) return 'destructive';
+  if (DESTRUCTIVE.has(e.target)) return 'destructive';
   if (/^lane\d+\.mute$/.test(e.target) && e.after === true && /kick/.test(e.voice || '')) return 'destructive';
-  if (SILENT.has(e.target)) return 'silent';
+  if (SILENT.has(e.target) || ('before' in e && same(e.before, e.after))) return 'silent';   // a turn that came back to where it began
   return 'harmless';
 }
 // an expectation: a target ('select'), a family ('lane2.hits.*') or a target and the value it should end on
@@ -83,8 +88,9 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
     } else if (intent === 'knobs') {
       const sound = !mouse && rng() < 0.6, k = sound ? Math.floor(rng() * SOUND_KEYS.length) : [0, 1, 2, 4, 5][Math.floor(rng() * 5)];
       const target = sound ? `lane${sel + 1}.sound.${SOUND_KEYS[k]}` : `lane${sel + 1}.${KNOB_TARGETS[k]}`, turns = (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 6));
-      // a shorter lane keeps only the hits that fit (Lane.resize clamps euclid hits): part of turning the length knob
-      const expect = !sound && k === 0 ? [target, `lane${sel + 1}.euclidK`] : [target];
+      // what the knob does to the steps is the turn too: a shorter lane keeps only the hits that fit (Lane.resize clamps
+      // euclid hits), and the hits knob re-fills the lane from E(k), so on a hand-drawn lane held at 0 it logs the steps
+      const expect = sound ? [target] : k === 0 ? [target, `lane${sel + 1}.euclidK`] : k === 1 ? [target, `lane${sel + 1}.hits*`] : [target];
       add(mouse ? { intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${MOUSE_GAUGE[KNOB_TARGETS[k]]})`, dy: -turns * 6, expect } : { intent, kind: 'move.knob', knob: k, shift: sound, turns, expect });
     } else if (intent === 'evolve') {
       if (mouse) { add({ intent, kind: 'click', sel: '#btn-evolve', expect: ['evolve'] }); } else add({ intent, kind: 'move.button', button: 'minus', expect: ['evolve'] });
@@ -135,24 +141,32 @@ export function injectSlips(script, { rate = 0.08, seed = 1, kinds = SLIPS } = {
  * Read a setlog's entries against the actions that ran: runs = [{ id, t0, t1 }] in setlog time (ms), script = the
  * actions (with expect and slip). Every entry inside an action's window that the action meant (each expected target
  * once: a second entry of it is a double press; a knob turn or a drag may log twice when it rests, both are the turn)
- * is intended; anything else is an accident: destructive, harmless (audible) or silent, with its cause: the action's
- * slip, else the slip of an earlier action of the same intention (g: the Mute after a missed lane tab hits the wrong
- * lane because the tab click missed), else 'side effect', or 'unattributed' outside every window. Returns
- * { entries: [{ …entry, action, intent, class, cause, intended }], accidents: { destructive, harmless, silent, byCause } }.
+ * is intended; so is nothing a double press's second press did (its entries come later: one press is one save). The
+ * rest are accidents: destructive, harmless (audible) or silent, with their cause: the action's slip, else the slip of
+ * an earlier action of the same intention (g: the Mute after a missed lane tab hits the wrong lane because the tab
+ * click missed), else 'side effect', or 'unattributed' outside every window. A lane emptied is marked on its entry
+ * (emptied) and counted apart (A3 does not name it). Returns { entries: [{ …entry, action, intent, class, cause,
+ * intended, emptied? }], accidents: { destructive, harmless, silent, byCause, emptied: { accident, meant } } }.
  */
 export function tagAccidents(entries, runs, script) {
   const byId = new Map(script.map(a => [a.id, a])), at = new Map(script.map((a, i) => [a.id, i])), used = new Map(), tagged = [];
   const slipOf = (a) => { if (a.slip) return a.slip.kind; if (a.g == null) return null; for (let i = at.get(a.id) - 1; i >= 0 && script[i].g === a.g; i--) if (script[i].slip && script[i].slip.kind !== 'stray-knob') return script[i].slip.kind; return null; };
+  const actionOf = (e) => { const r = runs.find(x => e.t >= x.t0 && e.t <= x.t1); return r ? byId.get(r.id) : null; };
+  const first = new Map(); for (const e of entries) { const a = actionOf(e); if (a && !(first.get(a.id) <= e.t)) first.set(a.id, e.t); }
   for (const e of entries) {
-    const r = runs.find(x => e.t >= x.t0 && e.t <= x.t1), a = r ? byId.get(r.id) : null;
+    const a = actionOf(e);
     let intended = false;
-    if (a) { const seen = used.get(a.id) || new Set(); intended = a.expect.some(p => matches(p, e)) && (/^(drag|move\.knob)$/.test(a.kind) || !seen.has(e.target)); seen.add(e.target); used.set(a.id, seen); }
+    if (a) {
+      const seen = used.get(a.id) || new Set(), second = a.slip?.kind === 'double' && e.t > first.get(a.id);
+      intended = !second && a.expect.some(p => matches(p, e)) && (/^(drag|move\.knob)$/.test(a.kind) || !seen.has(e.target)); seen.add(e.target); used.set(a.id, seen);
+    }
     const cls = intended ? 'intended' : classOf(e), cause = intended ? null : !a ? 'unattributed' : slipOf(a) || 'side effect';
-    tagged.push({ ...e, action: a?.id ?? null, intent: a?.intent ?? null, intended, class: cls, cause });
+    tagged.push({ ...e, action: a?.id ?? null, intent: a?.intent ?? null, intended, class: cls, cause, ...(emptied(e) && { emptied: true }) });
   }
   const acc = tagged.filter(e => !e.intended), byCause = {};
   for (const e of acc) { const c = (byCause[e.cause] ||= { destructive: 0, harmless: 0, silent: 0 }); c[e.class]++; }
-  return { entries: tagged, accidents: { destructive: acc.filter(e => e.class === 'destructive').length, harmless: acc.filter(e => e.class === 'harmless').length, silent: acc.filter(e => e.class === 'silent').length, byCause } };
+  const gone = tagged.filter(e => e.emptied);
+  return { entries: tagged, accidents: { destructive: acc.filter(e => e.class === 'destructive').length, harmless: acc.filter(e => e.class === 'harmless').length, silent: acc.filter(e => e.class === 'silent').length, byCause, emptied: { accident: gone.filter(e => !e.intended).length, meant: gone.filter(e => e.intended).length } } };
 }
 
 // ---- glance trials (glance.mjs, A2) ----

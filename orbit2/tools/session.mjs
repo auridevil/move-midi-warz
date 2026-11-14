@@ -8,12 +8,14 @@
 //   node orbit2/tools/session.mjs --persona kai --minutes 40 --speed 8 --prove 3   # compress the rests, once a 3-minute
 //        prefix gave the same tags at speed 1 and at speed 8 (else it plays the set in real time)
 //   --port 5400 --debug-port 9400 (yours)   --groove techno (the set starts from it)   --script plan.json (your own actions)
+//   node orbit2/tools/session.mjs --retag set.json [--out new.json]   # today's tagger on a saved set (in place by default)
 //
 // Output (--out): the page's setlog JSON plus { session: { persona, seed, minutes, mouse, slips, speed, script, runs },
 // tags: [per entry: action, intent, intended, class, cause], accidents: { destructive, harmless, silent, byCause } }.
 import { launch } from './cdp.mjs';
 import { performer, injectSlips, tagAccidents, bytes, trackOf } from './session-core.mjs';
-import { writeFileSync, readFileSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const SETTLE = 350;   // the setlog diffs a save on the next task; a knob turn folds for 0.7 s, but its entry exists by then
@@ -91,8 +93,19 @@ export async function playSet({ port = 5400, debugPort = 9400, path, groove, per
     const p = await openSet(b, { path, groove: groove || (persona === 'kai' ? 'techno' : 'poly345') });
     const { log, runs } = await runScript(p, plan, { speed, onAction: verbose ? (a, r) => console.error(`${(r.t0 / 1000).toFixed(1)} s · ${a.intent} · ${a.kind}${a.slip ? ` · SLIP ${a.slip.kind}` : ''}${r.skipped ? ` · skipped: ${r.skipped}` : ''}`) : null });
     const t = tagAccidents(log.entries, runs, plan);
-    return { ...log, session: { tool: 'orbit2/tools/session.mjs', persona, seed, minutes, mouse, slips, speed, groove: groove || null, intents, errors: p.errors, script: plan, runs }, tags: t.entries.map(e => ({ id: e.id, action: e.action, intent: e.intent, intended: e.intended, class: e.class, cause: e.cause })), accidents: t.accidents };
+    return { ...log, session: { tool: 'orbit2/tools/session.mjs', persona, seed, minutes, mouse, slips, speed, groove: groove || null, intents, errors: p.errors, script: plan, runs }, tags: t.entries.map(tagOf), accidents: t.accidents };
   } finally { await b.close(); }
+}
+const tagOf = (e) => ({ id: e.id, action: e.action, intent: e.intent, intended: e.intended, class: e.class, cause: e.cause, ...(e.emptied && { emptied: true }) });
+
+/** A saved set tagged again by today's tagger. Its plan is made again from its own seed, intents and slips; when that
+ *  gives the very same actions, today's expectations apply, else the saved script is kept. The page's log is untouched. */
+export function retag(set) {
+  const s = set.session, act = (a) => JSON.stringify({ ...a, expect: undefined });
+  const plan = s.intents !== undefined && injectSlips(performer({ seed: s.seed, minutes: s.minutes, persona: s.persona, mouse: s.mouse, intents: s.intents }), { rate: s.slips, seed: s.seed });
+  const fresh = plan && plan.length === s.script.length && plan.every((a, i) => act(a) === act(s.script[i]));
+  const script = fresh ? plan : s.script, t = tagAccidents(set.entries, s.runs, script);
+  return { ...set, session: { ...s, script, retagged: { at: new Date().toISOString(), plan: fresh ? 'made again' : 'saved' } }, tags: t.entries.map(tagOf), accidents: t.accidents };
 }
 
 /** The accidents of a set as comparable rows (for --prove): what, from which action, of which class and cause. */
@@ -103,6 +116,7 @@ export function summarize(set) {
   const L = [`${s.persona} · seed ${s.seed} · ${s.minutes} min${s.mouse ? ' · mouse only' : ' · Move'} · ${s.script.length} actions, ${slipped} slips · speed ${s.speed}${s.errors.length ? ` · ${s.errors.length} page errors` : ''}`,
     `setlog: ${set.entries.length} entries · accidents: ${a.destructive} destructive, ${a.harmless} harmless audible, ${a.silent} silent`];
   for (const [c, v] of Object.entries(a.byCause)) L.push(`  ${c}: ${v.destructive} destructive, ${v.harmless} harmless, ${v.silent} silent`);
+  if (a.emptied && (a.emptied.accident || a.emptied.meant)) L.push(`  lanes emptied (beside A3's classes): ${a.emptied.accident} by accident, ${a.emptied.meant} by a turn the hand meant`);
   const skipped = {}; for (const r of s.runs) if (r.skipped) skipped[r.skipped] = (skipped[r.skipped] || 0) + 1;
   for (const [why, n] of Object.entries(skipped)) L.push(`  ${n} actions not played: ${why === 'already so' ? 'the lane already was as the hand wanted (an earlier accident)' : why}`);
   for (const t of set.tags.filter(t => !t.intended && t.class === 'destructive')) { const e = set.entries.find(x => x.id === t.id); L.push(`  DESTRUCTIVE at ${(e.t / 1000).toFixed(1)} s: ${e.target} ${JSON.stringify(e.before)} → ${JSON.stringify(e.after)} (${t.cause}, intent ${t.intent})`); }
@@ -111,6 +125,12 @@ export function summarize(set) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
+  if (has('--retag')) {
+    const file = arg('--retag'), set = retag(JSON.parse(readFileSync(file, 'utf8')));
+    writeFileSync(arg('--out', file), JSON.stringify(set, null, 1)); console.log(`${summarize(set)}\n  (re-tagged, plan ${set.session.retagged.plan})`);
+    process.exit(0);
+  }
+  if (arg('--out', null)) mkdirSync(dirname(arg('--out')), { recursive: true });   // before the set, not after 40 minutes
   const intents = arg('--intents', null) && Object.fromEntries(arg('--intents').split(',').map(s => { const [k, v] = s.split(':'); return [k, +v || 1]; }));
   const opt = { port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), path: arg('--path', 'orbit2/index.html'), groove: arg('--groove', null), persona: arg('--persona', 'noor'), seed: +arg('--seed', 1), minutes: +arg('--minutes', 40), mouse: has('--mouse'), slips: +arg('--slips', 0.08), intents, script: arg('--script', null) && JSON.parse(readFileSync(arg('--script'), 'utf8')), verbose: has('--verbose') };
   let speed = +arg('--speed', 1);

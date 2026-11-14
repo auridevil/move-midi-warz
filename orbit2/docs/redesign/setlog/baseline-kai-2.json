@@ -5268,7 +5268,8 @@
     "shift": false,
     "turns": 5,
     "expect": [
-     "lane2.euclidK"
+     "lane2.euclidK",
+     "lane2.hits*"
     ]
    },
    {
@@ -5690,7 +5691,8 @@
     "shift": false,
     "turns": 2,
     "expect": [
-     "lane3.euclidK"
+     "lane3.euclidK",
+     "lane3.hits*"
     ]
    },
    {
@@ -6423,7 +6425,8 @@
     "shift": false,
     "turns": -2,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -6841,7 +6844,8 @@
     "shift": false,
     "turns": 4,
     "expect": [
-     "lane1.euclidK"
+     "lane1.euclidK",
+     "lane1.hits*"
     ]
    },
    {
@@ -7626,7 +7630,8 @@
     "shift": false,
     "turns": 5,
     "expect": [
-     "lane3.euclidK"
+     "lane3.euclidK",
+     "lane3.hits*"
     ]
    },
    {
@@ -8651,7 +8656,8 @@
     "shift": false,
     "turns": -6,
     "expect": [
-     "lane2.euclidK"
+     "lane2.euclidK",
+     "lane2.hits*"
     ]
    },
    {
@@ -8958,7 +8964,8 @@
     "shift": false,
     "turns": 2,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -8971,7 +8978,8 @@
     "shift": false,
     "turns": 3,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -9910,7 +9918,8 @@
     "shift": false,
     "turns": -6,
     "expect": [
-     "lane1.euclidK"
+     "lane1.euclidK",
+     "lane1.hits*"
     ]
    },
    {
@@ -10104,7 +10113,8 @@
     "shift": false,
     "turns": -5,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -12876,7 +12886,11 @@
     "t0": 2408116.1,
     "t1": 2408638.2
    }
-  ]
+  ],
+  "retagged": {
+   "at": "2026-11-14T19:10:54.036Z",
+   "plan": "made again"
+  }
  },
  "tags": [
   {
@@ -13204,8 +13218,9 @@
    "action": 504,
    "intent": "build",
    "intended": false,
-   "class": "destructive",
-   "cause": "stray-knob"
+   "class": "harmless",
+   "cause": "stray-knob",
+   "emptied": true
   },
   {
    "id": 48,
@@ -14187,9 +14202,10 @@
    "id": 170,
    "action": 179,
    "intent": "knobs",
-   "intended": false,
-   "class": "destructive",
-   "cause": "side effect"
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
   },
   {
    "id": 171,
@@ -14276,8 +14292,9 @@
    "action": 511,
    "intent": "fill",
    "intended": false,
-   "class": "destructive",
-   "cause": "stray-knob"
+   "class": "harmless",
+   "cause": "stray-knob",
+   "emptied": true
   },
   {
    "id": 182,
@@ -15411,9 +15428,10 @@
    "id": 323,
    "action": 365,
    "intent": "knobs",
-   "intended": false,
-   "class": "destructive",
-   "cause": "side effect"
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
   },
   {
    "id": 324,
@@ -16179,9 +16197,10 @@
    "id": 419,
    "action": 472,
    "intent": "knobs",
-   "intended": false,
-   "class": "destructive",
-   "cause": "side effect"
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
   },
   {
    "id": 420,
@@ -16307,9 +16326,10 @@
    "id": 435,
    "action": 489,
    "intent": "knobs",
-   "intended": false,
-   "class": "destructive",
-   "cause": "side effect"
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
   },
   {
    "id": 436,
@@ -16369,13 +16389,13 @@
   }
  ],
  "accidents": {
-  "destructive": 7,
-  "harmless": 21,
+  "destructive": 1,
+  "harmless": 23,
   "silent": 0,
   "byCause": {
    "stray-knob": {
-    "destructive": 2,
-    "harmless": 16,
+    "destructive": 0,
+    "harmless": 18,
     "silent": 0
    },
    "double": {
@@ -16387,12 +16407,11 @@
     "destructive": 0,
     "harmless": 2,
     "silent": 0
-   },
-   "side effect": {
-    "destructive": 4,
-    "harmless": 0,
-    "silent": 0
    }
+  },
+  "emptied": {
+   "accident": 2,
+   "meant": 4
   }
  }
 }

@@ -64,23 +64,32 @@ brief) and judges A5 by what is drawn and in view: **79**.
 ## A9 audio baseline
 
 Groove `house` (124 bpm) with dice locked at seed 4127, `exportWav` with a fresh profile's export settings (16-bit,
-44.1 kHz, 4 bars, loop), rendered twice per engine in one page. Raw numbers and the per-window levels:
+44.1 kHz, 4 bars, loop). Each render is **render #1 of a fresh page** whose `Math.random` is seeded (mulberry32, 12345)
+before the page's first script and seeded again, with the frames held, just before `exportWav`; two fresh pages per
+engine, two launches (`node orbit2/tools/face-audit.mjs --sizes none --audio`). Raw numbers and the per-window levels:
 `baseline/rd01-a9.json`.
 
-| engine | SHA-256 (first render) | two renders | fingerprint (20 ms RMS, 0.1 dB) |
-|---|---|---|---|
-| **dsp** (worklet) | `aa3db6e1a64566743208a1545d71173bc88c328eea77dca484c0a5c6f98bd10a` | differ in 30–54 samples by **1 LSB** (from ~0.24–0.63 s) | **`acf20b4e977cb76c`**, the same on every render and every launch (3 launches, 6 renders) |
-| synth (Tone, the default) | `38f18855…` (changes every render) | differ almost everywhere, up to ~11 600 LSB, from 0 s: the noise voices are random | changes every render |
+| engine | fingerprint (per 20 ms: RMS of L, R and mid, 0.1 dB) | the same on | null test: two fresh pages | SHA-256 |
+|---|---|---|---|---|
+| synth (Tone, the default) | **`fee43cee9cc5fe56`** | 4 of 4 renders (2 launches) | differ in 22–36 samples by **1 LSB** | moves with the 1-LSB wobble (4 different) |
+| **dsp** (worklet) | **`96c2672430aa9851`** | 4 of 4 renders | identical in both launches | moves between launches (1-LSB wobble) |
 
-- **Neither engine renders bit-identically twice today**, so A9's "bit-identical to the RD-1 baseline" cannot be met
-  as written even by an unchanged page. What a later phase can check: the **dsp fingerprint `acf20b4e977cb76c` stays
-  the same** (a 1-LSB wobble keeps it; a level, timing or sound change moves it; unit-tested), and the synth render is
-  judged by ear and level (Sofia) against `windowsDb` in `rd01-a9.json`. Seeding `Math.random` in the harness did
-  not make the synth render repeat, so the randomness is not only Tone's noise buffers. This is a finding for Noor
-  and Sofia (A9's wording), not a defect of this phase: the audio files are out of scope for the redesign.
-- **Clock while playing** (synth, `?debug`, 10 s at 1512×860): **Tone.Loop lateness p95 −46.2 ms** (callbacks run
-  46 ms before their audio time; the worst block −36.8 ms: never late), **stress p95 0** (max 0), frame callback p95
-  0.6 ms, frame interval p95 16.7 ms. Five earlier runs the same day: lateness p95 between −47.8 and −48.6 ms, stress 0.
+- **What a later phase checks (A9):** the same command gives the **same two fingerprints** and the null test holds
+  (≤ 1 LSB between two fresh pages); a level, timing, pan or sound change moves the fingerprint (unit-tested: +1 dB,
+  an L/R swap, one channel's polarity). Bit-identical renders are out of reach for an unchanged page (both engines
+  wobble by 1 LSB in a few dozen samples, around −90 dBFS), so A9's "bit-identical" is read as this; the wording is
+  Noor's to change (BACKLOG Later).
+- **Why render #1 of a fresh page** (Sofia, round 1): the synth's noise voices fill Tone's noise buffers from
+  `Math.random` on the first render; a second render in the same page plays that cache, so it never matched the first
+  one. The task-3 baseline rendered twice in one page and concluded the synth could not repeat: wrong, and replaced.
+  Its numbers (stereo-sum fingerprint dsp `acf20b4e977cb76c`, unseeded synth `38f18855…`) stay in `rd01-a9.json`
+  under `previous`.
+- **Clock while playing** (synth, `?debug`, 1512×860): **Tone.Loop lateness p95 between −43 and −49 ms** over every
+  run on 2026-11-14 (HEAD and the phase start; −46.2 ms in the 10 s baseline run, −44.7 and −44.0 ms in the two
+  launches above): callbacks run 43–49 ms before their audio time and are never late (max < 0). Judge a later phase
+  by "never late, p95 inside the band", not by one number. **Stress p95 0**; the audio **headroom** (`stress.headMs`)
+  p5 66–69 ms, the stress meter only moves under 30 ms. Frame callback p95 0.1–0.6 ms, frame interval p95 16.7 ms.
+  The probe needs the synth engine (it counts Tone.Loop callbacks; on dsp it sees almost none).
 
 ## How the audit measures (so later numbers compare)
 
@@ -119,66 +128,73 @@ sonnet) that chose the musical intentions, seeds and grooves; played by `orbit2/
 (`?setlog`, 1512×860, slips at 0.08, the Move simulated as connected). One JSON per set in
 `setlog/baseline-<player>-<n>.json`: the page's setlog, the script (with each slip), the action windows and the tags.
 The players' own runs were a first take that found defects in the tool (see "First take"); the sets below are their
-exact commands, re-run on the fixed tool.
+exact commands, re-run on the fixed tool, and tagged again after review round 1 (`session.mjs --retag`: the same
+page logs, today's tagger; the plan is made again from each set's seed and intents and came out action for action).
 
-| set | input | groove | seed | intents (weights) | actions · slips | entries | **destructive** | harmless audible | silent | presses not made |
-|---|---|---|---|---|---|---|---|---|---|---|
-| noor-1 | Move | poly345 | 11 | knobs 5, evolve 4, listen 6, build 1, slots 1, mute 1 | 119 · 9 | 102 | **1** | 8 | 0 | 2 |
-| noor-2 | Move | dnb | 22 | build 3, knobs 3, evolve 2, slots 3, mute 2, drop 1, tempo 1, listen 3 | 174 · 8 | 169 | **3** | 6 | 0 | 3 |
-| noor-3 | mouse | afro | 33 | knobs 4, evolve 2, build 2, mute 1, tempo 1, listen 5 | 143 · 8 | 147 | **0** | 4 | 0 | 0 |
-| kai-1 | Move | techno | 11 | build 2, knobs 2, evolve 0.5, slots 3, mute 5, drop 2, fill 4, tempo 0.5, listen 1 | 520 · 44 | 393 | **2** | 36 | 0 | 23 |
-| kai-2 | Move | dnb | 22 | build 3, knobs 4, evolve 2, slots 2, mute 3, drop 1, fill 3, tempo 1, listen 2 | 523 · 29 | 436 | **7** | 21 | 0 | 17 |
-| kai-3 | mouse | house | 33 | build 2, knobs 2, evolve 0.5, mute 5, drop 1, fill 4, tempo 0.5, listen 1 | 569 · 39 | 411 | **0** | 17 | 0 | 10 |
+| set | input | groove | seed | intents (weights) | actions · slips | entries | **destructive** | harmless audible | silent | lanes emptied (accident · meant) | presses not made |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| noor-1 | Move | poly345 | 11 | knobs 5, evolve 4, listen 6, build 1, slots 1, mute 1 | 119 · 9 | 102 | **0** | 7 | 0 | 0 · 1 | 2 |
+| noor-2 | Move | dnb | 22 | build 3, knobs 3, evolve 2, slots 3, mute 2, drop 1, tempo 1, listen 3 | 174 · 8 | 169 | **1** | 7 | 0 | 1 · 1 | 3 |
+| noor-3 | mouse | afro | 33 | knobs 4, evolve 2, build 2, mute 1, tempo 1, listen 5 | 143 · 8 | 147 | **0** | 4 | 0 | 0 · 0 | 0 |
+| kai-1 | Move | techno | 11 | build 2, knobs 2, evolve 0.5, slots 3, mute 5, drop 2, fill 4, tempo 0.5, listen 1 | 520 · 44 | 393 | **0** | 36 | 0 | 0 · 2 | 23 |
+| kai-2 | Move | dnb | 22 | build 3, knobs 4, evolve 2, slots 2, mute 3, drop 1, fill 3, tempo 1, listen 2 | 523 · 29 | 436 | **1** | 23 | 0 | 2 · 4 | 17 |
+| kai-3 | mouse | house | 33 | build 2, knobs 2, evolve 0.5, mute 5, drop 1, fill 4, tempo 0.5, listen 1 | 569 · 39 | 411 | **0** | 18 | 0 | 0 · 1 | 10 |
 
-By cause, destructive / harmless (the slip of the action, or of an earlier action of the same intention; "side
-effect" = the action had no slip):
+By cause, destructive / harmless (the slip of the action, or of an earlier action of the same intention; no accident
+of these sets is a "side effect" of an action that had no slip):
 
-| set | stray-knob | double | wrong-row | offset | side effect |
-|---|---|---|---|---|---|
-| noor-1 | 0 / 6 | 0 / 1 | | | 1 / 1 |
-| noor-2 | 1 / 5 | 1 / 1 | | | 1 / 0 |
-| noor-3 | 0 / 3 | | | 0 / 1 | |
-| kai-1 | 0 / 27 | 0 / 7 | 0 / 2 | | 2 / 0 |
-| kai-2 | 2 / 16 | 1 / 3 | 0 / 2 | | 4 / 0 |
-| kai-3 | 0 / 13 | 0 / 1 | | 0 / 3 | |
+| set | stray-knob | double | wrong-row | offset |
+|---|---|---|---|---|
+| noor-1 | 0 / 6 | 0 / 1 | | |
+| noor-2 | 0 / 6 | 1 / 1 | | |
+| noor-3 | 0 / 3 | | | 0 / 1 |
+| kai-1 | 0 / 27 | 0 / 7 | 0 / 2 | |
+| kai-2 | 0 / 18 | 1 / 3 | 0 / 2 | |
+| kai-3 | 0 / 13 | 0 / 2 | | 0 / 3 |
 
-**Today's page fails A3** (0 destructive and ≤ 1 harmless audible per set): 4 of 6 sets have a destructive accident,
+**Today's page fails A3** (0 destructive and ≤ 1 harmless audible per set): 2 of 6 sets have a destructive accident,
 all 6 have more than one harmless one.
-- **11 of the 13 destructive accidents are a lane emptied by the "euclid hits" knob.** On a lane drawn by hand
-  (euclid hits 0), one click down calls `Lane.setEuclid(0)`, which in replace mode re-fills the lane from E(0): every
-  hit is gone (8 from turns of that knob the hand meant, 3 from a stray touch). Noor, first take: "I would hear a lane
-  vanish and regret it, because I only meant to thin the pattern." This is the model's behaviour (`lanes.js`), which
-  DECISION §3 keeps out of the redesign: with the same scripts the RD-9 sets will meet it again (BACKLOG Later, for
-  Noor).
-- The other 2: a double press on the drop's "bring the kick back" left the kick muted (noor-2 at 651.8 s, kai-2 at
-  2269.1 s).
+- **The 2 destructive accidents:** a double press on the drop's "bring the kick back" left the kick muted (noor-2 at
+  651.8 s, kai-2 at 2269.1 s).
 - Harmless accidents are mostly **stray-knob** slips (3–27 per set): a knob brushed on the way changes a value on any
   page that has knobs. With slips injected at 0.08, "≤ 1 harmless" is out of reach by construction; RD-9 can compare
-  by cause (BACKLOG Later, for Noor). Then **wrong-row** (a neighbouring lane muted, the kick did not drop: Kai, "a
-  missed drop, not a kick loss") and **offset** (a missed lane tab, then Mute on the lane still selected).
+  by cause (BACKLOG Later, for Noor). Then **double** (a step or a Mute pressed twice), **wrong-row** (a neighbouring
+  lane muted, the kick did not drop: Kai, "a missed drop, not a kick loss") and **offset** (a missed lane tab, then
+  Mute on the lane still selected).
+- **Lanes emptied by the "euclid hits" knob** (beside A3's classes, which do not name it): on a lane drawn by hand
+  (euclid hits 0), one click down calls `Lane.setEuclid(0)`, which in replace mode re-fills the lane from E(0): every
+  hit is gone. 12 times in the six sets: 9 by turns of that knob the hand meant (its own effect, so not an accident),
+  3 by a stray touch (harmless, by A3's words). Noor, first take: "I would hear a lane vanish and regret it, because I
+  only meant to thin the pattern." The model's behaviour (`lanes.js`), which DECISION §3 keeps out of the redesign:
+  the RD-9 sets will meet it again (BACKLOG Later, for Noor).
 - **Presses not made** (55): the script is open-loop, a player is not: a Mute press whose lane already is as the
   hand wants (heard) is not made. 35 follow a slot recall (a slot brings its own mutes), 20 an earlier press that
   missed the Mute button or landed on another lane (the hand believed the lane had changed).
 
 **What is tagged how** (`tagAccidents` in `session-core.mjs`): an entry inside an action's window is intended when the
-action expected that target (a Mute also the value it ends on: `lane1.mute=false`; a knob turn or drag may log twice
-when it rests: both are the turn; the length knob also clamps euclid hits). Anything else is an accident:
-**destructive** = stop, load, init, randomize, clear, a slot recall, a lane emptied (every hit gone), a kick muted;
-**silent** = select, export, slot save, record, chain; **harmless** = everything else that sounds.
+action expected it: a Mute also names the value it ends on (`lane1.mute=false`); a knob turn or drag may log twice
+when it rests (both are the turn); what a knob does to the steps is the turn (the length knob clamps euclid hits, the
+hits knob re-fills the lane); nothing a double press's second press did is intended. Anything else is an accident, in
+A3's words: **destructive** = stop, load (a groove, a setup, a link, a slot recall, a chain), init, randomize, clear,
+a kick muted; **silent** = select, export, slot save, record, and a change that came back to where it began;
+**harmless** = everything else that sounds. A lane emptied is marked on its tag (`emptied`) and counted apart.
 
 **First take** (the players' own runs, same commands, before the fixes): noor 0 / 1 / 0 destructive (9 / 8 / 20
 harmless), kai 0 / 1 / 0 (40 / 28 / 37). Reading their accidents, the players found what the tool got wrong, fixed
 before the six sets above (+1 unit test): the mouse dragged the gauge after the one it meant for swing and chance
 (`nth-child` in the Move's knob order; 16 and 19 false accidents in the mouse sets); a Mute's expectation had no
-direction, so a drop whose "bring it back" muted the kick counted as intended (twice in kai-1); an emptied lane
-counted harmless; a Mute after a missed lane tab was blamed on the Mute; a drag that rested was counted twice; two of
-six launches died before the page's modules ran (six Chromes at once). A first re-run was cut at minute 26 by the Mac
-sleeping (`caffeinate -is` now).
+direction, so a drop whose "bring it back" muted the kick counted as intended (twice in kai-1); a Mute after a missed
+lane tab was blamed on the Mute; a drag that rested was counted twice; two of six launches died before the page's
+modules ran (six Chromes at once). A first re-run was cut at minute 26 by the Mac sleeping (`caffeinate -is` now).
+Review round 1 then corrected the tagger once more (`session.mjs --retag`, no new runs): a double click on a mouse
+step cell was half missed (the second click changes another field of the step), the hits knob's own re-fill was
+counted as a destructive accident, and "lane emptied" had been made a destructive class A3 does not name (13
+destructive before the re-tag, 2 after).
 
-**Known limits.** A lane with a single hit emptied by a side effect logs as one step (`lane4.hits.2 true → false`,
-noor-1 at 1984 s), so it counts harmless: the setlog does not say the lane went quiet (BACKLOG Later). The simulated
-Move does not run the page's connect flow: the pill reads "Move: not connected" (in the glance shots too). These are
-simulations: no USB, no LEDs, no human (DECISION, "Run by agents").
+**Known limits.** A lane with a single hit emptied logs as one step (`lane4.hits.2 true → false`, noor-1 at 1984 s,
+a turn the hand meant), so it is not marked `emptied`: the setlog does not say the lane went quiet (BACKLOG Later).
+The simulated Move does not run the page's connect flow: the pill reads "Move: not connected" (in the glance shots
+too). These are simulations: no USB, no LEDs, no human (DECISION, "Run by agents").
 
 Reproduce a set (each JSON's `session` block holds persona, seed, groove, intents, slips; keep an idle Mac awake):
 

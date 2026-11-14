@@ -2410,7 +2410,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": -24,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -3902,7 +3903,11 @@
     "t0": 2415998.6,
     "t1": 2416448
    }
-  ]
+  ],
+  "retagged": {
+   "at": "2026-11-14T19:10:53.963Z",
+   "plan": "made again"
+  }
  },
  "tags": [
   {
@@ -5097,6 +5102,10 @@
     "harmless": 3,
     "silent": 0
    }
+  },
+  "emptied": {
+   "accident": 0,
+   "meant": 0
   }
  }
 }

@@ -107,6 +107,24 @@ test('RD-1 the page hooks: sources from the window, an action absorbs its own di
   const j = JSON.parse(f.text); assert.equal(j.format, SETLOG_FORMAT); assert.equal(j.tempo, 120); assert.ok(j.started); assert.equal(j.entries.length, 3);
 });
 
+test('RD-1 hooks: the page\'s own start is not a hand: nothing is logged before the first input, and what it did is absorbed', () => {
+  const m = new Machine(); let clock = 0; const later = [], ls = {};
+  const win = { addEventListener: (type, fn) => { (ls[type] ||= []).push(fn); } };
+  const s = attachSetlog({ win, model: () => m.toJSON(), now: () => clock, defer: (f) => later.push(f) });
+  const run = () => { while (later.length) later.shift()(); };
+  assert.equal(s.source, null);
+  // the default pattern written after the log began, saved; a first visit's demo groove; a shared link opened
+  clock = 11; m.lanes[0].setEuclid(2); m.lanes[1].rotation = 1; s.dirty(false);
+  clock = 13; const was = patternWords(m.toJSON()); m.lanes[2].setEuclid(5); s.act('load', was, patternWords(m.toJSON()), { what: 'groove poly345', absorb: true });
+  clock = 35; s.act('load', 'a', 'b', { what: 'link', absorb: true }); run();
+  assert.equal(s.log.size, 0, 'nobody touched anything yet');
+  // the first hand: from here on everything is logged, and only what the hand changed
+  clock = 900; ls.pointerdown[0]({ pointerType: 'mouse' }); m.lanes[3].hits[0] = !m.lanes[3].hits[0]; s.dirty(false); run();
+  assert.deepEqual(s.log.entries().map(e => [e.target, e.source, e.t]), [['lane4.hits.1', 'pointer', 900]]);
+  const s2 = attachSetlog({ win: null, model: () => m.toJSON(), now: () => clock, defer: (f) => later.push(f) });
+  s2.from('move'); s2.act('transport', 'stopped', 'playing'); assert.equal(s2.log.entries()[0].source, 'move', 'a Move byte is a hand');
+});
+
 test('RD-1 hooks: a hand edit made just before an action (same task) is still logged; an action that leaves the pattern alone absorbs nothing', () => {
   const m = new Machine(); let clock = 0; const later = [];
   const s = attachSetlog({ win: null, model: () => m.toJSON(), now: () => clock, defer: (f) => later.push(f) });

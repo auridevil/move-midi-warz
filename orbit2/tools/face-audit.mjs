@@ -125,6 +125,8 @@ const PAGE = String.raw`(() => {
 })()`;
 
 async function settle(p, ms = 120) { await p.eval('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))'); await p.sleep(ms); }
+// a busy machine can take longer than open()'s 3.5 s to run the page's modules
+async function ready(p) { for (let i = 0; i < 80 && !(await p.eval('!!window.__poly && !window.__faOld')); i++) await p.sleep(250); }
 async function shot64(p) { const { result } = await p.send('Page.captureScreenshot', { format: 'png' }); return result.data; }
 const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
 
@@ -132,7 +134,7 @@ const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
 export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'orbit2/index.html', shots = null, playSec = 6 } = {}) {
   const [, w, h, m] = /^(\d+)x(\d+)(m?)$/.exec(size), mobile = !!m, b = await launch({ port, debugPort });
   try {
-    const p = await b.open(path, { width: +w, height: +h, mobile }); await p.eval(PAGE); await p.eval('__fa.hideText(false)'); await settle(p, 400);
+    const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)'); await settle(p, 400);
     const out = { size, errors: p.errors };
     out.controls = await p.eval('__fa.controls()');
     // text: the background with every text transparent, then the page as it is
@@ -174,33 +176,52 @@ export function pcm16(u) {
 }
 /** Two renders sample by sample: how many differ, by how much (LSB), and where the first one is (s, stereo frames at 44.1 kHz). */
 export function pcmDiff(a, b) { let n = 0, max = 0, first = -1; for (let i = 0; i < Math.max(a.length, b.length); i++) { const x = Math.abs((a[i] ?? 0) - (b[i] ?? 0)); if (x) { n++; if (x > max) max = x; if (first < 0) first = i; } } return { samples: n, maxLsb: max, firstSec: first < 0 ? null : Math.round(first / 2 / 44100 * 1e4) / 1e4 }; }
-/** A9 fingerprint that a 1-LSB render wobble does not move: RMS of the stereo sum per 20 ms window, in dB to 0.1 (floor
- *  −90), hashed. Two renders of the same pattern give the same fingerprint; a level, timing or sound change does not. */
+/** A9 fingerprint that a 1-LSB render wobble does not move: per 20 ms window the RMS of the left, the right and their
+ *  mid (so a swap, a pan or one channel's polarity moves it), in dB to 0.1 (floor −90), hashed. Two renders of the same
+ *  pattern give the same fingerprint; a level, timing or sound change does not. */
 export function fingerprint(s, sr = 44100, ms = 20) {
-  const w = Math.round(sr * ms / 1000) * 2, out = [];
-  for (let i = 0; i < s.length; i += w) { let e = 0, n = 0; for (let j = i; j < Math.min(s.length, i + w); j++) { e += (s[j] / 32768) ** 2; n++; } out.push(Math.max(-90, Math.round(10 * Math.log10(e / n || 1e-12) * 10) / 10)); }
-  return { hash: sha(out.join(',')).slice(0, 16), windows: out.length, db: out };
+  const w = Math.round(sr * ms / 1000) * 2, out = [], db = (e, n) => Math.max(-90, Math.round(10 * Math.log10(e / n || 1e-12) * 10) / 10);
+  for (let i = 0; i < s.length; i += w) {
+    let l = 0, r = 0, m = 0, n = 0; const end = Math.min(s.length, i + w);
+    for (let j = i; j < end - 1; j += 2) { const a = s[j] / 32768, c = s[j + 1] / 32768; l += a * a; r += c * c; m += ((a + c) / 2) ** 2; n++; }
+    out.push(db(l, n), db(r, n), db(m, n));
+  }
+  return { hash: sha(out.join(',')).slice(0, 16), windows: out.length / 3, db: out };
 }
-/** A9: a fixed seed and pattern rendered by exportWav, twice per engine → SHA-256 (exact), how much the two renders
- *  differ, and the fingerprint; and the clock while playing with ?debug: Tone.Loop lateness, stress p95, frame time. */
+// A9 renders that repeat: Math.random seeded before the page's first script, and again just before exportWav with the
+// frames held (the canvas draws with it). Render #1 of a fresh page each time: the first render fills Tone's noise
+// buffers from the random stream, so a second render in the same page plays the cache, not the page
+export const A9_RANDOM = 12345;
+const SEEDED = `(() => { let a = ${A9_RANDOM}; window.__faSeed = (s) => { a = s >>> 0; }; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })()`;
+async function seededRender(b, { path, engine, groove, seed }) {
+  const p = await b.open(`${path}?debug`, { width: 1512, height: 860 }); await ready(p);
+  await p.send('Page.addScriptToEvaluateOnNewDocument', { source: SEEDED }); await p.eval('window.__faOld = 1'); await p.send('Page.reload', {}); await p.sleep(500); await ready(p);
+  await p.eval(PAGE);
+  await p.eval(`(async () => { await __poly.wake(); __poly.setEngine(${JSON.stringify(engine)}); if (${JSON.stringify(engine)} === 'dsp') await __poly.ensureDsp(); const d = __poly.dice; d.locked = true; d.seed = ${seed}; d.repeat = 1; __poly.loadGroove(${JSON.stringify(groove)}); })()`);
+  await settle(p, 300); await p.captureDownloads();
+  await p.eval(`(async () => { const raf = window.requestAnimationFrame; window.requestAnimationFrame = () => 0; __faSeed(${A9_RANDOM}); try { await __poly.exportWav(); } finally { window.requestAnimationFrame = raf; } })()`);
+  return { p, file: (await p.downloads())[0] };
+}
+/** A9: a fixed seed and pattern rendered by exportWav on two fresh seeded pages per engine → SHA-256 (exact), how much
+ *  the two differ (≤ 1 LSB is the null test), and the fingerprint; and the clock while playing with ?debug: Tone.Loop
+ *  lateness, stress p95 and the audio headroom, frame time. */
 export async function auditAudio({ port = 5400, debugPort = 9400, path = 'orbit2/index.html', groove = 'house', seed = 4127, playSec = 10 } = {}) {
   const b = await launch({ port, debugPort });
   try {
-    const out = { groove, seed, renders: {} };
+    const out = { groove, seed, random: A9_RANDOM, renders: {} };
     for (const engine of ['synth', 'dsp']) {
-      const p = await b.open(`${path}?debug`, { width: 1512, height: 860 }); await p.eval(PAGE);
-      await p.eval(`(async () => { await __poly.wake(); __poly.setEngine(${JSON.stringify(engine)}); if (${JSON.stringify(engine)} === 'dsp') await __poly.ensureDsp(); const d = __poly.dice; d.locked = true; d.seed = ${seed}; d.repeat = 1; __poly.loadGroove(${JSON.stringify(groove)}); })()`);
-      await settle(p, 300); p.captureDownloads(); const files = [];
-      for (let k = 0; k < 2; k++) { await p.eval('__poly.exportWav()'); files.push((await p.downloads())[0]); }
+      const one = await seededRender(b, { path, engine, groove, seed }); one.p.send('Page.close'); one.p.close();   // a closed page never answers: not awaited
+      const two = await seededRender(b, { path, engine, groove, seed }), p = two.p, files = [one.file, two.file];
       const [a, b2] = files.map(f => pcm16(f.bytes)), d = pcmDiff(a, b2);
-      out.renders[engine] = { sha256: sha(files[0].bytes), again: sha(files[1].bytes), file: files[0].name.replace(/-\d{4}-\d\d-\d\d-\d{6}/, ''), bytes: files[0].bytes.length, identical: sha(files[0].bytes) === sha(files[1].bytes), renderDiff: d, fingerprint: fingerprint(a), fingerprintAgain: fingerprint(b2) };
+      out.renders[engine] = { sha256: sha(files[0].bytes), again: sha(files[1].bytes), file: files[0].name.replace(/-\d{4}-\d\d-\d\d-\d{6}/, ''), bytes: files[0].bytes.length, identical: sha(files[0].bytes) === sha(files[1].bytes), renderDiff: d, nullTest: d.maxLsb <= 1, fingerprint: fingerprint(a), fingerprintAgain: fingerprint(b2) };
       if (engine === 'synth') {   // the clock: the page's default engine, playing the same groove
-        await p.eval('window.__faLate = __fa.lateness(); window.__faStop = __fa.frames(); window.__faStress = []; window.__faStressT = setInterval(() => __faStress.push(__poly.stress.level), 300)');
-        await play(p); await p.sleep(playSec * 1000); await play(p);
+        await p.eval('window.__faLate = __fa.lateness(); window.__faStop = __fa.frames(); window.__faStress = []; window.__faHead = []; window.__faStressT = setInterval(() => { __faStress.push(__poly.stress.level); __faHead.push(__poly.stress.headMs); }, 300)');
+        await play(p); await p.sleep(playSec * 1000);
+        const head = await p.eval('__faHead.slice(5)'); await play(p);   // the headroom once it settled, while playing
         const late = await p.eval('window.__faLate()'), frames = await p.eval('window.__faStop()'), stress = await p.eval('(clearInterval(__faStressT), __faStress)');
-        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n } };
+        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, headroomMs: { p5: r2(pct(head, 5)), min: r2(Math.min(...head)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n } };
       }
-      out.errors = [...(out.errors || []), ...p.errors]; p.close();
+      out.errors = [...(out.errors || []), ...one.p.errors, ...p.errors]; p.send('Page.close'); p.close();
     }
     return out;
   } finally { await b.close(); }
@@ -242,7 +263,7 @@ export function summary(report) {
     for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
     L.push(`frames while playing: callback p95 ${r2(s.frames.cost)} ms, interval p95 ${r2(s.frames.gap)} ms (${s.frames.n} frames)`, '');
   }
-  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'a second render is identical' : `a second render differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second render)' : ` (second render: ${r.fingerprintAgain.hash})`}`); if (a.clock) L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · frame callback p95 ${a.clock.frameMs.cost95} ms, interval p95 ${a.clock.frameMs.gap95} ms`); L.push(''); }
+  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame callback p95 ${a.clock.frameMs.cost95} ms, interval p95 ${a.clock.frameMs.gap95} ms`); L.push(''); }
   const v = report.verdicts; L.push(v.length ? `## thresholds: ${v.length} failing\n${v.map(f => `- ${f.test} ${f.size}: ${f.what}`).join('\n')}` : '## thresholds: all pass');
   return L.join('\n');
 }
@@ -259,5 +280,5 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   console.log(summary(report));
   const errs = report.sizes.flatMap(s => s.errors).concat(report.audio?.errors || []);
   if (errs.length) { console.error(`page errors: ${errs.join(' | ')}`); process.exitCode = 2; }
-  if (has('--assert') && report.verdicts.length) process.exitCode = 1;
+  else if (has('--assert') && report.verdicts.length) process.exitCode = 1;   // page errors stay 2: they say more
 }

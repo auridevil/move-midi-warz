@@ -96,9 +96,11 @@ test('RD-1 baseline-set fixes: the mouse finds the knob it means, a drop says wh
     { id: 1, g: 1, intent: 'drop', kind: 'move.mute', lane: 0, expect: ['lane1.mute=false'] },
     { id: 2, g: 2, intent: 'mute', kind: 'click', sel: '#lane-tabs button:nth-child(3)', expect: ['select'], slip: { kind: 'offset', dx: 30, dy: 0 } },
     { id: 3, g: 2, intent: 'mute', kind: 'click', sel: '#btn-mute', expect: ['lane3.mute=true'] },
-    { id: 4, g: 3, intent: 'knobs', kind: 'drag', sel: '#sliders .gauge:nth-child(2)', expect: ['lane2.euclidK'] },
-    { id: 5, g: 4, intent: 'knobs', kind: 'move.knob', knob: 1, turns: -1, expect: ['lane4.euclidK'] },
+    { id: 4, g: 3, intent: 'knobs', kind: 'drag', sel: '#sliders .gauge:nth-child(2)', expect: ['lane2.euclidK', 'lane2.hits*'] },
+    { id: 5, g: 4, intent: 'knobs', kind: 'move.knob', knob: 1, turns: -1, expect: ['lane4.euclidK', 'lane4.hits*'] },
     { id: 6, g: 5, intent: 'build', kind: 'move.step', step: 2, expect: ['lane2.hits.*'] },
+    { id: 7, g: 6, intent: 'build', kind: 'click', sel: '#stepsui button:nth-child(4)', expect: ['lane3.hits.*', 'lane3.accents.*', 'lane3.locks.*'], slip: { kind: 'double' } },
+    { id: 8, g: 6, intent: 'build', kind: 'move.knob', knob: 1, turns: -2, expect: [], slip: { kind: 'stray-knob', of: 7 } },
   ];
   const runs = script.map((a, i) => ({ id: a.id, t0: i * 1000, t1: i * 1000 + 900 }));
   const { entries: t, accidents } = tagAccidents([
@@ -106,21 +108,28 @@ test('RD-1 baseline-set fixes: the mouse finds the knob it means, a drop says wh
     e(1, 1100, 'lane1.mute', false, true, { voice: 'kick' }),       // "bring it back" muted the kick: the hand meant false
     e(2, 3100, 'lane2.mute', false, true, { voice: 'snare' }),      // the tab click missed: Mute hit the lane still selected
     e(3, 4100, 'lane2.euclidK', 1, 3), e(4, 4850, 'lane2.euclidK', 3, 5),   // one drag that rested: both are the drag
-    e(5, 5100, 'lane4.hits', 'xx.x............', '................'),     // one click down on a hand-made lane emptied it
+    e(5, 5100, 'lane4.hits', 'xx.x............', '................'),     // the hits knob down on a hand-drawn lane: its own re-fill
     e(6, 6100, 'lane2.hits.3', false, true), e(7, 6300, 'lane2.hits.3', true, false),
+    e(8, 7100, 'lane3.hits.4', false, true), e(9, 7190, 'lane3.accents.4', false, true),   // a double click on an empty cell: on, then accent
+    e(10, 8100, 'lane3.hits', '.x.x', '....'),                       // the brushed hits knob emptied the lane
   ], runs, script), by = (id) => t.find(x => x.id === id);
   assert.deepEqual([by(0).class, by(0).cause], ['harmless', 'wrong-row']);
   assert.deepEqual([by(1).intended, by(1).class, by(1).cause], [false, 'destructive', 'wrong-row'], 'the kick muted by the unmute, caused by the earlier wrong row');
   assert.deepEqual([by(2).class, by(2).cause], ['harmless', 'offset'], 'the wrong-lane mute is the missed click\'s');
   assert.equal(by(3).intended, true); assert.equal(by(4).intended, true);
-  assert.deepEqual([by(5).class, by(5).cause], ['destructive', 'side effect']);
+  assert.deepEqual([by(5).intended, by(5).emptied], [true, true], 'what the turned knob does to the steps is the turn');
   assert.equal(by(6).intended, true); assert.deepEqual([by(7).class, by(7).cause], ['harmless', 'side effect'], 'a step entered twice by one press is still the second press');
-  assert.deepEqual([accidents.destructive, accidents.harmless], [2, 3]);
-  // an emptied lane is a clear by another route; thinning it is not
+  assert.equal(by(8).intended, true); assert.deepEqual([by(9).intended, by(9).class, by(9).cause], [false, 'harmless', 'double'], 'the second click of a double is the accident, whatever field it changed');
+  assert.deepEqual([by(10).class, by(10).cause, by(10).emptied], ['harmless', 'stray-knob', true], 'an emptied lane is reported beside A3\'s classes, not as one');
+  assert.deepEqual([accidents.destructive, accidents.harmless], [1, 5]); assert.deepEqual(accidents.emptied, { accident: 1, meant: 1 });
+  // an emptied lane: every hit gone; thinning it is not
   assert.equal(emptied({ target: 'lane1.hits', before: 'x.x.', after: '....' }), true); assert.equal(emptied({ target: 'lane1.hits', before: 'x.x.', after: 'x...' }), false);
   assert.equal(emptied({ target: 'lane3.euclidK', before: 2, after: 0 }), true); assert.equal(emptied({ target: 'lane3.euclidK', before: 0, after: 0 }), false);
-  assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 0 }), 'destructive'); assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 1 }), 'harmless');
-  assert.equal(KNOB_TARGETS[0], 'length');
+  assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 0 }), 'harmless'); assert.equal(classOf({ target: 'chain', before: [1], after: [1, 2] }), 'destructive', 'a chain loads a slot');
+  assert.equal(classOf({ target: 'lane1.locks.3', before: null, after: null }), 'silent', 'a turn that came back changed nothing');
+  // the hits knob expects its re-fill too (Move and mouse); the Move protocol comes from movewire
+  for (const x of performer({ seed: 5, minutes: 30, persona: 'kai' }).filter(x => x.kind === 'move.knob' && !x.shift && x.knob === 1)) assert.match(x.expect[1], /^lane\d\.hits\*$/);
+  assert.equal(MOVE.PAD, 68); assert.equal(MOVE.BTN.track1, 43); assert.equal(KNOB_TARGETS[0], 'length');
 });
 
 test('RD-1 Move bytes, glance trials and scoring, the Move drawing', () => {

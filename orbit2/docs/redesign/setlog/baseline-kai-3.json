@@ -4757,7 +4757,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": -12,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -7016,7 +7017,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": -18,
     "expect": [
-     "lane3.euclidK"
+     "lane3.euclidK",
+     "lane3.hits*"
     ]
    },
    {
@@ -7370,7 +7372,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": 30,
     "expect": [
-     "lane4.euclidK"
+     "lane4.euclidK",
+     "lane4.hits*"
     ]
    },
    {
@@ -7687,7 +7690,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": 6,
     "expect": [
-     "lane2.euclidK"
+     "lane2.euclidK",
+     "lane2.hits*"
     ]
    },
    {
@@ -8355,7 +8359,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": 12,
     "expect": [
-     "lane2.euclidK"
+     "lane2.euclidK",
+     "lane2.hits*"
     ]
    },
    {
@@ -9179,7 +9184,8 @@
     "sel": "#sliders .gauge:nth-child(2)",
     "dy": -24,
     "expect": [
-     "lane1.euclidK"
+     "lane1.euclidK",
+     "lane1.hits*"
     ]
    },
    {
@@ -13600,7 +13606,11 @@
     "t0": 2408342.1,
     "t1": 2408794.7
    }
-  ]
+  ],
+  "retagged": {
+   "at": "2026-11-14T19:10:54.070Z",
+   "plan": "made again"
+  }
  },
  "tags": [
   {
@@ -14047,9 +14057,9 @@
    "id": 62,
    "action": 74,
    "intent": "build",
-   "intended": true,
-   "class": "intended",
-   "cause": null
+   "intended": false,
+   "class": "harmless",
+   "cause": "double"
   },
   {
    "id": 63,
@@ -15241,7 +15251,8 @@
    "intent": "knobs",
    "intended": true,
    "class": "intended",
-   "cause": null
+   "cause": null,
+   "emptied": true
   },
   {
    "id": 212,
@@ -16894,7 +16905,7 @@
  ],
  "accidents": {
   "destructive": 0,
-  "harmless": 17,
+  "harmless": 18,
   "silent": 0,
   "byCause": {
    "stray-knob": {
@@ -16902,16 +16913,20 @@
     "harmless": 13,
     "silent": 0
    },
+   "double": {
+    "destructive": 0,
+    "harmless": 2,
+    "silent": 0
+   },
    "offset": {
     "destructive": 0,
     "harmless": 3,
     "silent": 0
-   },
-   "double": {
-    "destructive": 0,
-    "harmless": 1,
-    "silent": 0
    }
+  },
+  "emptied": {
+   "accident": 0,
+   "meant": 1
   }
  }
 }

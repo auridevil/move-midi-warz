@@ -1515,9 +1515,9 @@ async function shareAudio() {
 const POSTCARD_BARS = 4; let postcarding = false;
 const sleep = (sec) => new Promise(r => setTimeout(r, Math.max(0, sec * 1000)));
 async function recordPostcard() {
-  slog?.act('export', null, 'postcard');
   if (postcarding) return; const cv = $('cv');
   if (!window.MediaRecorder || !cv.captureStream) throw new Error('this browser cannot record video');
+  slog?.act('export', null, 'postcard');   // only a postcard that starts
   postcarding = true; $('share-postcard').disabled = true;
   const raw = T.getContext().rawContext, dest = raw.createMediaStreamDestination(), gate = raw.createGain(); let out = null, ours = false, stream = null, mr = null;
   try {

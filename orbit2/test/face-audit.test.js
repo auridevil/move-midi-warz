@@ -43,4 +43,7 @@ test('RD-1 A9: the WAV reader, the render diff, and a fingerprint that a 1-LSB w
   assert.equal(fingerprint(a).hash, fingerprint(b).hash, '1-LSB wobble: same fingerprint');
   const loud = a.map(x => Math.round(x * 1.122)); assert.notEqual(fingerprint(a).hash, fingerprint(loud).hash, '+1 dB: another fingerprint');
   assert.equal(fingerprint(a).windows, 50);
+  // the channels count: left and right swapped, or one channel's polarity flipped, is another sound
+  const swap = a.slice(), flip = a.slice(); for (let i = 0; i < a.length; i += 2) { swap[i] = a[i + 1]; swap[i + 1] = a[i]; flip[i + 1] = -a[i + 1]; }
+  assert.notEqual(fingerprint(swap).hash, fingerprint(a).hash, 'L/R swap'); assert.notEqual(fingerprint(flip).hash, fingerprint(a).hash, 'polarity of one channel');
 });
