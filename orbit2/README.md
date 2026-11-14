@@ -21,6 +21,9 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `node tools/smoke.mjs` loads `orbit2/index.html` with the other pages.
 - After editing `orbit2/src/poly/dsp-core.js`, regenerate the worklet: `node orbit2/tools/build-worklet.mjs`.
 - Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
+- Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll, A7 rings, A9
+  audio; `--assert` fails on a threshold; baselines in `docs/redesign/baselines.md`), `?setlog` on the page (the
+  action log, key L saves it).
 - Browser checks: `orbit2/tools/cdp.mjs` (headless Chrome helper: open, eval, click/tap/key, screenshot, capture
   downloads, `parseWav`, `unzipStored`).
 
