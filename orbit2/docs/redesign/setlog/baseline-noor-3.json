@@ -1,0 +1,5102 @@
+{
+ "format": "orbits-setlog",
+ "v": 1,
+ "started": "2026-11-14T17:30:03.065Z",
+ "dropped": 0,
+ "entries": [
+  {
+   "id": 7,
+   "t": 5332.7,
+   "source": "key",
+   "target": "transport",
+   "before": "stopped",
+   "after": "playing",
+   "reversed": false
+  },
+  {
+   "id": 8,
+   "t": 5783.8,
+   "source": "pointer",
+   "target": "select",
+   "before": 1,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 9,
+   "t": 6347.2,
+   "source": "pointer",
+   "target": "lane3.hits.4",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 10,
+   "t": 7000.9,
+   "source": "pointer",
+   "target": "lane3.hits.2",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 11,
+   "t": 7476,
+   "source": "pointer",
+   "target": "lane3.accents.2",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 12,
+   "t": 8110.9,
+   "source": "pointer",
+   "target": "lane3.accents.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 13,
+   "t": 8906.8,
+   "source": "pointer",
+   "target": "lane3.accents.4",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 14,
+   "t": 55810.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 15,
+   "t": 67372,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 118,
+   "after": 126,
+   "reversed": false,
+   "end": 67605.3
+  },
+  {
+   "id": 16,
+   "t": 92760.8,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 17,
+   "t": 164520.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 18,
+   "t": 195124,
+   "source": "pointer",
+   "target": "lane3.accents.8",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 19,
+   "t": 195821.7,
+   "source": "pointer",
+   "target": "lane3.swingTpl",
+   "before": "mpc",
+   "after": "aksak",
+   "reversed": false
+  },
+  {
+   "id": 20,
+   "t": 196526.3,
+   "source": "pointer",
+   "target": "lane3.accents.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 21,
+   "t": 261526,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 22,
+   "t": 273697.4,
+   "source": "pointer",
+   "target": "lane3.length",
+   "before": 12,
+   "after": 5,
+   "reversed": false,
+   "end": 273895.8
+  },
+  {
+   "id": 23,
+   "t": 295755,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 24,
+   "t": 296657.1,
+   "source": "pointer",
+   "target": "lane2.hits.10",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 25,
+   "t": 297480.1,
+   "source": "pointer",
+   "target": "lane2.hits.9",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 26,
+   "t": 314045.6,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 126,
+   "after": 118,
+   "reversed": false,
+   "end": 314277.9
+  },
+  {
+   "id": 27,
+   "t": 344327.7,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 118,
+   "after": 110,
+   "reversed": false,
+   "end": 344559.5
+  },
+  {
+   "id": 28,
+   "t": 409207.4,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 14,
+   "after": 4,
+   "reversed": false,
+   "end": 409441
+  },
+  {
+   "id": 29,
+   "t": 419690.9,
+   "source": "pointer",
+   "target": "lane2.accents.4",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 30,
+   "t": 420343.8,
+   "source": "pointer",
+   "target": "lane2.hits.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 31,
+   "t": 508438.3,
+   "source": "pointer",
+   "target": "lane2.swing",
+   "before": 0,
+   "after": 0.12,
+   "reversed": false,
+   "end": 508669.4
+  },
+  {
+   "id": 32,
+   "t": 529935.6,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 1,
+   "after": 0.8,
+   "reversed": false,
+   "end": 530170.6
+  },
+  {
+   "id": 33,
+   "t": 551503.3,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 34,
+   "t": 552356.2,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 35,
+   "t": 611817.1,
+   "source": "pointer",
+   "target": "lane4.length",
+   "before": 16,
+   "after": 12,
+   "reversed": false,
+   "end": 612017.9
+  },
+  {
+   "id": 36,
+   "t": 623092,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 37,
+   "t": 624021.4,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 38,
+   "t": 638648.5,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 39,
+   "t": 667172.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 40,
+   "t": 793151.5,
+   "source": "pointer",
+   "target": "select",
+   "before": 1,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 41,
+   "t": 793624.7,
+   "source": "pointer",
+   "target": "lane4.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 42,
+   "t": 794282.4,
+   "source": "pointer",
+   "target": "lane4.hits.11",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 43,
+   "t": 794282.4,
+   "source": "pointer",
+   "target": "lane4.locks.11",
+   "before": {
+    "vel": 0.4
+   },
+   "after": null,
+   "reversed": false
+  },
+  {
+   "id": 44,
+   "t": 794996.5,
+   "source": "pointer",
+   "target": "lane4.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 45,
+   "t": 795692.6,
+   "source": "pointer",
+   "target": "lane4.hits.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 46,
+   "t": 796369.6,
+   "source": "pointer",
+   "target": "lane4.hits.4",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 47,
+   "t": 796369.6,
+   "source": "pointer",
+   "target": "lane4.locks.4",
+   "before": {
+    "vel": 0.4
+   },
+   "after": null,
+   "reversed": false
+  },
+  {
+   "id": 48,
+   "t": 811946.6,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 49,
+   "t": 812441.3,
+   "source": "pointer",
+   "target": "lane1.length",
+   "before": 4,
+   "after": 6,
+   "reversed": false,
+   "end": 812576
+  },
+  {
+   "id": 50,
+   "t": 813556.6,
+   "source": "pointer",
+   "target": "lane1.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 51,
+   "t": 814004.4,
+   "source": "pointer",
+   "target": "lane1.accents.4",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 52,
+   "t": 814004.4,
+   "source": "pointer",
+   "target": "lane1.locks.4",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 53,
+   "t": 842849.5,
+   "source": "pointer",
+   "target": "select",
+   "before": 1,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 54,
+   "t": 843545.2,
+   "source": "pointer",
+   "target": "lane4.accents.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 55,
+   "t": 844471.4,
+   "source": "pointer",
+   "target": "lane4.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 56,
+   "t": 844966.1,
+   "source": "pointer",
+   "target": "lane4.hits.12",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 57,
+   "t": 845844,
+   "source": "pointer",
+   "target": "lane4.accents.3",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 54
+  },
+  {
+   "id": 58,
+   "t": 845844,
+   "source": "pointer",
+   "target": "lane4.locks.3",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 59,
+   "t": 846696.9,
+   "source": "pointer",
+   "target": "lane4.hits.11",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 60,
+   "t": 859494,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 61,
+   "t": 882835.7,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 62,
+   "t": 883728,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "clave",
+   "queued": false
+  },
+  {
+   "id": 63,
+   "t": 923403.5,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 64,
+   "t": 923937.5,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 65,
+   "t": 938795.5,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 66,
+   "t": 967735.1,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 110,
+   "after": 118,
+   "reversed": false,
+   "end": 967967.9
+  },
+  {
+   "id": 67,
+   "t": 989927.5,
+   "source": "pointer",
+   "target": "lane3.rotation",
+   "before": 11,
+   "after": 3,
+   "reversed": false,
+   "end": 990034.9
+  },
+  {
+   "id": 68,
+   "t": 1029079.8,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 69,
+   "t": 1029589,
+   "source": "pointer",
+   "target": "lane2.accents.4",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 70,
+   "t": 1029589,
+   "source": "pointer",
+   "target": "lane2.locks.4",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 71,
+   "t": 1030278.8,
+   "source": "pointer",
+   "target": "lane2.accents.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 72,
+   "t": 1030728.8,
+   "source": "pointer",
+   "target": "lane2.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 73,
+   "t": 1031176.7,
+   "source": "pointer",
+   "target": "lane2.accents.7",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 74,
+   "t": 1059428.4,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 75,
+   "t": 1060123.2,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 76,
+   "t": 1074297.2,
+   "source": "pointer",
+   "target": "lane4.swing",
+   "before": 0.1,
+   "after": 0,
+   "reversed": false,
+   "end": 1074397.1
+  },
+  {
+   "id": 77,
+   "t": 1075114.1,
+   "source": "pointer",
+   "target": "lane4.ratio",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 78,
+   "t": 1113449.4,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 79,
+   "t": 1178377.7,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 118,
+   "after": 126,
+   "reversed": false,
+   "end": 1178610.9
+  },
+  {
+   "id": 80,
+   "t": 1189693.7,
+   "source": "pointer",
+   "target": "lane4.euclidK",
+   "before": 0,
+   "after": 5,
+   "reversed": false,
+   "end": 1189926.1
+  },
+  {
+   "id": 81,
+   "t": 1318238.4,
+   "source": "pointer",
+   "target": "lane4.swing",
+   "before": 0,
+   "after": 0.12,
+   "reversed": false,
+   "end": 1318471.8
+  },
+  {
+   "id": 82,
+   "t": 1335540.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 83,
+   "t": 1358854,
+   "source": "pointer",
+   "target": "lane4.prob",
+   "before": 1,
+   "after": 0.92,
+   "reversed": false,
+   "end": 1359087.4
+  },
+  {
+   "id": 84,
+   "t": 1371936.8,
+   "source": "pointer",
+   "target": "lane4.rotation",
+   "before": 1,
+   "after": 3,
+   "reversed": false,
+   "end": 1372034.9
+  },
+  {
+   "id": 85,
+   "t": 1445450.8,
+   "source": "pointer",
+   "target": "lane4.swing",
+   "before": 0.12,
+   "after": 0,
+   "reversed": false,
+   "end": 1445616.8
+  },
+  {
+   "id": 86,
+   "t": 1461036,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 87,
+   "t": 1483601.9,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 88,
+   "t": 1484421.9,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "clave",
+   "queued": false
+  },
+  {
+   "id": 89,
+   "t": 1501057.4,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 90,
+   "t": 1501937.8,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 91,
+   "t": 1537446.7,
+   "source": "pointer",
+   "target": "lane4.swing",
+   "before": 0,
+   "after": 0.16,
+   "reversed": false,
+   "end": 1537680.2
+  },
+  {
+   "id": 92,
+   "t": 1569869.1,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 93,
+   "t": 1570866.9,
+   "source": "pointer",
+   "target": "lane3.accents.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 94,
+   "t": 1570866.9,
+   "source": "pointer",
+   "target": "lane3.locks.3",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 95,
+   "t": 1571509,
+   "source": "pointer",
+   "target": "lane3.accents.2",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 96,
+   "t": 1571509,
+   "source": "pointer",
+   "target": "lane3.locks.2",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 97,
+   "t": 1572491,
+   "source": "pointer",
+   "target": "lane3.accents.1",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 98,
+   "t": 1572491,
+   "source": "pointer",
+   "target": "lane3.locks.1",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 99,
+   "t": 1616143.5,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 126,
+   "after": 134,
+   "reversed": false,
+   "end": 1616375.7
+  },
+  {
+   "id": 100,
+   "t": 1626669.4,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 101,
+   "t": 1627295.9,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 102,
+   "t": 1656559,
+   "source": "pointer",
+   "target": "lane4.prob",
+   "before": 0.92,
+   "after": 1,
+   "reversed": false,
+   "end": 1656624.2
+  },
+  {
+   "id": 103,
+   "t": 1668240.3,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 134,
+   "after": 126,
+   "reversed": false,
+   "end": 1668474.7
+  },
+  {
+   "id": 104,
+   "t": 1705055.2,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 126,
+   "after": 118,
+   "reversed": false,
+   "end": 1705290
+  },
+  {
+   "id": 105,
+   "t": 1730237.9,
+   "source": "pointer",
+   "target": "lane4.rotation",
+   "before": 3,
+   "after": 9,
+   "reversed": false,
+   "end": 1730470.8
+  },
+  {
+   "id": 106,
+   "t": 1777818.8,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 118,
+   "after": 110,
+   "reversed": false,
+   "end": 1778052.7
+  },
+  {
+   "id": 107,
+   "t": 1790387.2,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 108,
+   "t": 1791028.4,
+   "source": "pointer",
+   "target": "lane2.accents.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 109,
+   "t": 1791028.4,
+   "source": "pointer",
+   "target": "lane2.locks.3",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 110,
+   "t": 1791632.9,
+   "source": "pointer",
+   "target": "lane2.hits.4",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 111,
+   "t": 1791632.9,
+   "source": "pointer",
+   "target": "lane2.locks.4",
+   "before": {
+    "vel": 0.35
+   },
+   "after": null,
+   "reversed": false
+  },
+  {
+   "id": 112,
+   "t": 1792307.7,
+   "source": "pointer",
+   "target": "lane2.hits.4",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 110
+  },
+  {
+   "id": 113,
+   "t": 1793192.5,
+   "source": "pointer",
+   "target": "lane2.hits.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 114,
+   "t": 1793192.5,
+   "source": "pointer",
+   "target": "lane2.locks.3",
+   "before": {
+    "vel": 0.35
+   },
+   "after": null,
+   "reversed": true,
+   "reverses": 109
+  },
+  {
+   "id": 115,
+   "t": 1807184.4,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 1,
+   "after": 5,
+   "reversed": false,
+   "end": 1807386.1
+  },
+  {
+   "id": 116,
+   "t": 1825168.4,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 0.8,
+   "after": 0.72,
+   "reversed": false,
+   "end": 1825402.1
+  },
+  {
+   "id": 117,
+   "t": 1843250.2,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 16,
+   "after": 18,
+   "reversed": false,
+   "end": 1843350.2
+  },
+  {
+   "id": 118,
+   "t": 1866984.7,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 119,
+   "t": 1891031.5,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 5,
+   "after": 12,
+   "reversed": false,
+   "end": 1891231.5
+  },
+  {
+   "id": 120,
+   "t": 1929212.1,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 121,
+   "t": 1929792.4,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 122,
+   "t": 1995853,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 123,
+   "t": 2013678,
+   "source": "pointer",
+   "target": "lane4.swing",
+   "before": 0.16,
+   "after": 0.28,
+   "reversed": false,
+   "end": 2013909.9
+  },
+  {
+   "id": 124,
+   "t": 2029577.1,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 125,
+   "t": 2030025.7,
+   "source": "pointer",
+   "target": "lane2.accents.16",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 126,
+   "t": 2030614,
+   "source": "pointer",
+   "target": "lane2.accents.9",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 127,
+   "t": 2042074,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 128,
+   "t": 2043013.8,
+   "source": "pointer",
+   "target": "lane3.hits.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 129,
+   "t": 2043013.8,
+   "source": "pointer",
+   "target": "lane3.locks.3",
+   "before": {
+    "vel": 0.35
+   },
+   "after": null,
+   "reversed": false
+  },
+  {
+   "id": 130,
+   "t": 2043754.1,
+   "source": "pointer",
+   "target": "lane3.accents.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 131,
+   "t": 2052742.3,
+   "source": "pointer",
+   "target": "lane3.rotation",
+   "before": 3,
+   "after": 0,
+   "reversed": false,
+   "end": 2052843
+  },
+  {
+   "id": 132,
+   "t": 2078737.4,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 133,
+   "t": 2079512.7,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "clave",
+   "queued": false
+  },
+  {
+   "id": 134,
+   "t": 2107357,
+   "source": "pointer",
+   "target": "lane2.swing",
+   "before": 0.12,
+   "after": 0.36,
+   "reversed": false,
+   "end": 2107605.7
+  },
+  {
+   "id": 135,
+   "t": 2154116.4,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 136,
+   "t": 2154605.5,
+   "source": "pointer",
+   "target": "lane4.length",
+   "before": 12,
+   "after": 14,
+   "reversed": false,
+   "end": 2154705.5
+  },
+  {
+   "id": 137,
+   "t": 2155188.3,
+   "source": "pointer",
+   "target": "lane4.accents.8",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 138,
+   "t": 2155636.5,
+   "source": "pointer",
+   "target": "lane4.hits.14",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 139,
+   "t": 2156082.8,
+   "source": "pointer",
+   "target": "lane4.accents.13",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 140,
+   "t": 2156815.7,
+   "source": "pointer",
+   "target": "lane4.accents.8",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 137
+  },
+  {
+   "id": 141,
+   "t": 2156815.7,
+   "source": "pointer",
+   "target": "lane4.locks.8",
+   "before": null,
+   "after": {
+    "vel": 0.35
+   },
+   "reversed": false
+  },
+  {
+   "id": 142,
+   "t": 2157699,
+   "source": "pointer",
+   "target": "lane4.hits.12",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 143,
+   "t": 2203844.3,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 144,
+   "t": 2230337.1,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "conga",
+   "queued": false
+  },
+  {
+   "id": 145,
+   "t": 2252855.2,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 146,
+   "t": 2253425.6,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "clave",
+   "queued": false
+  },
+  {
+   "id": 147,
+   "t": 2280750.5,
+   "source": "pointer",
+   "target": "lane2.swing",
+   "before": 0.36,
+   "after": 0.16,
+   "reversed": false,
+   "end": 2280981.9
+  },
+  {
+   "id": 148,
+   "t": 2291000.2,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 0.72,
+   "after": 0.92,
+   "reversed": false,
+   "end": 2291232.3
+  },
+  {
+   "id": 149,
+   "t": 2319471.3,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 150,
+   "t": 2383564.7,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 151,
+   "t": 2400501.6,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 152,
+   "t": 2401416.8,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "cowbell",
+   "queued": false
+  },
+  {
+   "id": 153,
+   "t": 2416001.5,
+   "source": "key",
+   "target": "transport",
+   "before": "playing",
+   "after": "stopped",
+   "reversed": false
+  }
+ ],
+ "session": {
+  "tool": "orbit2/tools/session.mjs",
+  "persona": "noor",
+  "seed": 33,
+  "minutes": 40,
+  "mouse": true,
+  "slips": 0.08,
+  "speed": 1,
+  "groove": "afro",
+  "intents": {
+   "knobs": 4,
+   "evolve": 2,
+   "build": 2,
+   "mute": 1,
+   "tempo": 1,
+   "listen": 5
+  },
+  "errors": [],
+  "script": [
+   {
+    "id": 0,
+    "at": 1000,
+    "g": 0,
+    "intent": "start",
+    "kind": "key",
+    "sel": "#btn-play",
+    "key": " ",
+    "expect": [
+     "transport"
+    ]
+   },
+   {
+    "id": 1,
+    "at": 1430,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 2,
+    "at": 2017,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 3,
+    "at": 2671,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 4,
+    "at": 3146,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 5,
+    "at": 3781,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(6)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 6,
+    "at": 4577,
+    "g": 1,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 7,
+    "at": 51479,
+    "g": 3,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 8,
+    "at": 63035,
+    "g": 4,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 9,
+    "at": 73425,
+    "g": 5,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 12,
+    "expect": [
+     "lane3.swing"
+    ]
+   },
+   {
+    "id": 10,
+    "at": 88429,
+    "g": 6,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 11,
+    "at": 160189,
+    "g": 11,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 12,
+    "at": 190795,
+    "g": 12,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 13,
+    "at": 191491,
+    "g": 12,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ],
+    "slip": {
+     "kind": "offset",
+     "dx": -17,
+     "dy": -35
+    }
+   },
+   {
+    "id": 14,
+    "at": 192196,
+    "g": 12,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 15,
+    "at": 213743,
+    "g": 13,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": -36,
+    "expect": [
+     "lane3.prob"
+    ]
+   },
+   {
+    "id": 16,
+    "at": 257195,
+    "g": 15,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=false"
+    ]
+   },
+   {
+    "id": 17,
+    "at": 269367,
+    "g": 16,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(1)",
+    "dy": 36,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 139,
+    "at": 269667,
+    "g": 16,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(2)",
+    "dy": 12,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 17
+    }
+   },
+   {
+    "id": 18,
+    "at": 291425,
+    "g": 17,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 19,
+    "at": 292325,
+    "g": 17,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 20,
+    "at": 293150,
+    "g": 17,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 21,
+    "at": 309713,
+    "g": 18,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 22,
+    "at": 339994,
+    "g": 19,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 23,
+    "at": 364361,
+    "g": 20,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "offset",
+     "dx": -1,
+     "dy": -27
+    }
+   },
+   {
+    "id": 24,
+    "at": 404866,
+    "g": 22,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -30,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 25,
+    "at": 415362,
+    "g": 23,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 26,
+    "at": 416014,
+    "g": 23,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 27,
+    "at": 504095,
+    "g": 27,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": -18,
+    "expect": [
+     "lane2.swing"
+    ]
+   },
+   {
+    "id": 28,
+    "at": 525607,
+    "g": 28,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": 30,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 29,
+    "at": 547172,
+    "g": 29,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 30,
+    "at": 548025,
+    "g": 29,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 31,
+    "at": 607451,
+    "g": 32,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(1)",
+    "dy": 18,
+    "expect": [
+     "lane4.length",
+     "lane4.euclidK"
+    ],
+    "slip": {
+     "kind": "offset",
+     "dx": -27,
+     "dy": 6
+    }
+   },
+   {
+    "id": 32,
+    "at": 618763,
+    "g": 33,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 33,
+    "at": 619693,
+    "g": 33,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 34,
+    "at": 634320,
+    "g": 34,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(1)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 35,
+    "at": 634797,
+    "g": 34,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 36,
+    "at": 635531,
+    "g": 34,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 37,
+    "at": 650160,
+    "g": 35,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 12,
+    "expect": [
+     "lane1.swing"
+    ]
+   },
+   {
+    "id": 38,
+    "at": 662843,
+    "g": 36,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 39,
+    "at": 765910,
+    "g": 41,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 6,
+    "expect": [
+     "lane1.swing"
+    ]
+   },
+   {
+    "id": 40,
+    "at": 788822,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 41,
+    "at": 789296,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 42,
+    "at": 789954,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 43,
+    "at": 790668,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(3)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 44,
+    "at": 791364,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 45,
+    "at": 792042,
+    "g": 42,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(6)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 46,
+    "at": 807619,
+    "g": 43,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(1)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 140,
+    "at": 807919,
+    "g": 43,
+    "intent": "build",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(1)",
+    "dy": -11,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 46
+    }
+   },
+   {
+    "id": 47,
+    "at": 808517,
+    "g": 43,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 48,
+    "at": 809229,
+    "g": 43,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 49,
+    "at": 809680,
+    "g": 43,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 50,
+    "at": 838522,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 51,
+    "at": 839217,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 52,
+    "at": 840144,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 53,
+    "at": 840639,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 54,
+    "at": 841517,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 55,
+    "at": 842370,
+    "g": 44,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 56,
+    "at": 855166,
+    "g": 45,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=false"
+    ]
+   },
+   {
+    "id": 57,
+    "at": 878508,
+    "g": 46,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 58,
+    "at": 879400,
+    "g": 46,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 59,
+    "at": 919075,
+    "g": 48,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 60,
+    "at": 919610,
+    "g": 48,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=false"
+    ]
+   },
+   {
+    "id": 61,
+    "at": 934468,
+    "g": 49,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 62,
+    "at": 963398,
+    "g": 51,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 63,
+    "at": 985551,
+    "g": 52,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -12,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 64,
+    "at": 1024751,
+    "g": 54,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 65,
+    "at": 1025263,
+    "g": 54,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 66,
+    "at": 1025952,
+    "g": 54,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 67,
+    "at": 1026393,
+    "g": 54,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 68,
+    "at": 1026795,
+    "g": 54,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 69,
+    "at": 1055101,
+    "g": 55,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 70,
+    "at": 1055798,
+    "g": 55,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 71,
+    "at": 1069965,
+    "g": 56,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 30,
+    "expect": [
+     "lane4.swing"
+    ]
+   },
+   {
+    "id": 141,
+    "at": 1070265,
+    "g": 56,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(4)",
+    "dy": 7,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 71
+    }
+   },
+   {
+    "id": 72,
+    "at": 1109123,
+    "g": 58,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 73,
+    "at": 1174049,
+    "g": 61,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 74,
+    "at": 1185352,
+    "g": 62,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(2)",
+    "dy": -24,
+    "expect": [
+     "lane4.euclidK"
+    ]
+   },
+   {
+    "id": 75,
+    "at": 1313899,
+    "g": 69,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": -18,
+    "expect": [
+     "lane4.swing"
+    ]
+   },
+   {
+    "id": 76,
+    "at": 1331217,
+    "g": 70,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 77,
+    "at": 1354523,
+    "g": 71,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": 12,
+    "expect": [
+     "lane4.prob"
+    ]
+   },
+   {
+    "id": 78,
+    "at": 1367567,
+    "g": 72,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -12,
+    "expect": [
+     "lane4.rotation"
+    ]
+   },
+   {
+    "id": 79,
+    "at": 1441116,
+    "g": 75,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 24,
+    "expect": [
+     "lane4.swing"
+    ]
+   },
+   {
+    "id": 80,
+    "at": 1456712,
+    "g": 76,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 81,
+    "at": 1479276,
+    "g": 77,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 82,
+    "at": 1480096,
+    "g": 77,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 83,
+    "at": 1496732,
+    "g": 78,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 84,
+    "at": 1497612,
+    "g": 78,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=false"
+    ]
+   },
+   {
+    "id": 85,
+    "at": 1533119,
+    "g": 80,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": -24,
+    "expect": [
+     "lane4.swing"
+    ]
+   },
+   {
+    "id": 86,
+    "at": 1565544,
+    "g": 82,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 87,
+    "at": 1566543,
+    "g": 82,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 88,
+    "at": 1567185,
+    "g": 82,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 89,
+    "at": 1568166,
+    "g": 82,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 90,
+    "at": 1611820,
+    "g": 84,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 91,
+    "at": 1622346,
+    "g": 85,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 92,
+    "at": 1622972,
+    "g": 85,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 93,
+    "at": 1652230,
+    "g": 86,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": -30,
+    "expect": [
+     "lane4.prob"
+    ]
+   },
+   {
+    "id": 94,
+    "at": 1663914,
+    "g": 87,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 95,
+    "at": 1700719,
+    "g": 90,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 96,
+    "at": 1725900,
+    "g": 91,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -30,
+    "expect": [
+     "lane4.rotation"
+    ]
+   },
+   {
+    "id": 97,
+    "at": 1773480,
+    "g": 93,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": ".tstrip-tempo .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 98,
+    "at": 1786063,
+    "g": 94,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 99,
+    "at": 1786705,
+    "g": 94,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 100,
+    "at": 1787309,
+    "g": 94,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 101,
+    "at": 1787984,
+    "g": 94,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(5)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 102,
+    "at": 1788869,
+    "g": 94,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(4)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 103,
+    "at": 1802824,
+    "g": 95,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -18,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 104,
+    "at": 1820829,
+    "g": 96,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": 12,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 105,
+    "at": 1838881,
+    "g": 97,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(1)",
+    "dy": -12,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 106,
+    "at": 1862662,
+    "g": 98,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 107,
+    "at": 1886698,
+    "g": 99,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": -36,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 108,
+    "at": 1924890,
+    "g": 101,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 109,
+    "at": 1925469,
+    "g": 101,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=false"
+    ]
+   },
+   {
+    "id": 110,
+    "at": 1991531,
+    "g": 104,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 111,
+    "at": 2009339,
+    "g": 105,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": -18,
+    "expect": [
+     "lane4.swing"
+    ]
+   },
+   {
+    "id": 112,
+    "at": 2025253,
+    "g": 106,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 113,
+    "at": 2025694,
+    "g": 106,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 114,
+    "at": 2026293,
+    "g": 106,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane2.hits.*",
+     "lane2.accents.*",
+     "lane2.locks.*"
+    ]
+   },
+   {
+    "id": 115,
+    "at": 2037748,
+    "g": 107,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 116,
+    "at": 2038692,
+    "g": 107,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 117,
+    "at": 2039432,
+    "g": 107,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(3)",
+    "expect": [
+     "lane3.hits.*",
+     "lane3.accents.*",
+     "lane3.locks.*"
+    ]
+   },
+   {
+    "id": 118,
+    "at": 2048414,
+    "g": 108,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(3)",
+    "dy": 30,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 119,
+    "at": 2074413,
+    "g": 109,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 120,
+    "at": 2075189,
+    "g": 109,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 121,
+    "at": 2103031,
+    "g": 110,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": -36,
+    "expect": [
+     "lane2.swing"
+    ]
+   },
+   {
+    "id": 122,
+    "at": 2149795,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(4)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 142,
+    "at": 2150095,
+    "g": 113,
+    "intent": "build",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(1)",
+    "dy": -12,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 122
+    }
+   },
+   {
+    "id": 123,
+    "at": 2150496,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 124,
+    "at": 2150896,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(8)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 125,
+    "at": 2151662,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 126,
+    "at": 2152494,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(2)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 127,
+    "at": 2153377,
+    "g": 113,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(6)",
+    "expect": [
+     "lane4.hits.*",
+     "lane4.accents.*",
+     "lane4.locks.*"
+    ]
+   },
+   {
+    "id": 128,
+    "at": 2199524,
+    "g": 116,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 129,
+    "at": 2226015,
+    "g": 117,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 130,
+    "at": 2248534,
+    "g": 118,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(2)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 131,
+    "at": 2249103,
+    "g": 118,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 132,
+    "at": 2276422,
+    "g": 119,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(9)",
+    "dy": 30,
+    "expect": [
+     "lane2.swing"
+    ]
+   },
+   {
+    "id": 133,
+    "at": 2286672,
+    "g": 120,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#sliders .gauge:nth-child(5)",
+    "dy": -30,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 134,
+    "at": 2315150,
+    "g": 121,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 135,
+    "at": 2379244,
+    "g": 124,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 136,
+    "at": 2396180,
+    "g": 125,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#lane-tabs button:nth-child(3)",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 137,
+    "at": 2397095,
+    "g": 125,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=false"
+    ]
+   },
+   {
+    "id": 138,
+    "at": 2411679,
+    "g": 126,
+    "intent": "end",
+    "kind": "key",
+    "sel": "#btn-play",
+    "key": " ",
+    "expect": [
+     "transport"
+    ]
+   }
+  ],
+  "runs": [
+   {
+    "id": 0,
+    "t0": 5328.5,
+    "t1": 5779.7
+   },
+   {
+    "id": 1,
+    "t0": 5780.2,
+    "t1": 6229.6
+   },
+   {
+    "id": 2,
+    "t0": 6344.1,
+    "t1": 6792.9
+   },
+   {
+    "id": 3,
+    "t0": 6998.6,
+    "t1": 7446.4
+   },
+   {
+    "id": 4,
+    "t0": 7473.6,
+    "t1": 7922.4
+   },
+   {
+    "id": 5,
+    "t0": 8109,
+    "t1": 8557
+   },
+   {
+    "id": 6,
+    "t0": 8904.1,
+    "t1": 9352.2
+   },
+   {
+    "id": 7,
+    "t0": 55807.5,
+    "t1": 56255.5
+   },
+   {
+    "id": 8,
+    "t0": 67362.4,
+    "t1": 67985.9
+   },
+   {
+    "id": 9,
+    "t0": 77752.7,
+    "t1": 78384.3
+   },
+   {
+    "id": 10,
+    "t0": 92757.5,
+    "t1": 93206.2
+   },
+   {
+    "id": 11,
+    "t0": 164518.3,
+    "t1": 164966.7
+   },
+   {
+    "id": 12,
+    "t0": 195121.1,
+    "t1": 195569.9
+   },
+   {
+    "id": 13,
+    "t0": 195818.6,
+    "t1": 196266.9
+   },
+   {
+    "id": 14,
+    "t0": 196523.5,
+    "t1": 196971.2
+   },
+   {
+    "id": 15,
+    "t0": 218069.9,
+    "t1": 218695.4
+   },
+   {
+    "id": 16,
+    "t0": 261522.5,
+    "t1": 261972.6
+   },
+   {
+    "id": 17,
+    "t0": 273692.6,
+    "t1": 274310.5
+   },
+   {
+    "id": 139,
+    "t0": 274311,
+    "t1": 274926
+   },
+   {
+    "id": 18,
+    "t0": 295752.1,
+    "t1": 296201.9
+   },
+   {
+    "id": 19,
+    "t0": 296652.7,
+    "t1": 297104.7
+   },
+   {
+    "id": 20,
+    "t0": 297477.4,
+    "t1": 297926.5
+   },
+   {
+    "id": 21,
+    "t0": 314040,
+    "t1": 314656.7
+   },
+   {
+    "id": 22,
+    "t0": 344321.2,
+    "t1": 344939.8
+   },
+   {
+    "id": 23,
+    "t0": 368686.8,
+    "t1": 369132.3
+   },
+   {
+    "id": 24,
+    "t0": 409191,
+    "t1": 409821.8
+   },
+   {
+    "id": 25,
+    "t0": 419688.6,
+    "t1": 420137.5
+   },
+   {
+    "id": 26,
+    "t0": 420341.6,
+    "t1": 420788.8
+   },
+   {
+    "id": 27,
+    "t0": 508421.5,
+    "t1": 509050
+   },
+   {
+    "id": 28,
+    "t0": 529932.3,
+    "t1": 530553.2
+   },
+   {
+    "id": 29,
+    "t0": 551498.3,
+    "t1": 551949.3
+   },
+   {
+    "id": 30,
+    "t0": 552351.2,
+    "t1": 552800.7
+   },
+   {
+    "id": 31,
+    "t0": 611777.3,
+    "t1": 612395.4
+   },
+   {
+    "id": 32,
+    "t0": 623089.3,
+    "t1": 623537.3
+   },
+   {
+    "id": 33,
+    "t0": 624018.6,
+    "t1": 624465.2
+   },
+   {
+    "id": 34,
+    "t0": 638646,
+    "t1": 639093.3
+   },
+   {
+    "id": 35,
+    "t0": 639122.5,
+    "t1": 639568.6
+   },
+   {
+    "id": 36,
+    "t0": 639857.1,
+    "t1": 640303.6
+   },
+   {
+    "id": 37,
+    "t0": 654485.2,
+    "t1": 655111.6
+   },
+   {
+    "id": 38,
+    "t0": 667169,
+    "t1": 667618.4
+   },
+   {
+    "id": 39,
+    "t0": 770235,
+    "t1": 770855.9
+   },
+   {
+    "id": 40,
+    "t0": 793147.4,
+    "t1": 793597.1
+   },
+   {
+    "id": 41,
+    "t0": 793620.3,
+    "t1": 794070.6
+   },
+   {
+    "id": 42,
+    "t0": 794279.2,
+    "t1": 794726.4
+   },
+   {
+    "id": 43,
+    "t0": 794993.2,
+    "t1": 795442.3
+   },
+   {
+    "id": 44,
+    "t0": 795688.8,
+    "t1": 796138.8
+   },
+   {
+    "id": 45,
+    "t0": 796367.5,
+    "t1": 796816.2
+   },
+   {
+    "id": 46,
+    "t0": 811944.4,
+    "t1": 812393.6
+   },
+   {
+    "id": 140,
+    "t0": 812394.1,
+    "t1": 813022.8
+   },
+   {
+    "id": 47,
+    "t0": 813023.2,
+    "t1": 813468.7
+   },
+   {
+    "id": 48,
+    "t0": 813554.2,
+    "t1": 814002.1
+   },
+   {
+    "id": 49,
+    "t0": 814002.6,
+    "t1": 814449.1
+   },
+   {
+    "id": 50,
+    "t0": 842846.9,
+    "t1": 843295.7
+   },
+   {
+    "id": 51,
+    "t0": 843542.5,
+    "t1": 843990.8
+   },
+   {
+    "id": 52,
+    "t0": 844469.4,
+    "t1": 844916.4
+   },
+   {
+    "id": 53,
+    "t0": 844964,
+    "t1": 845411.8
+   },
+   {
+    "id": 54,
+    "t0": 845842.1,
+    "t1": 846288
+   },
+   {
+    "id": 55,
+    "t0": 846694.7,
+    "t1": 847140.1
+   },
+   {
+    "id": 56,
+    "t0": 859490.6,
+    "t1": 859940.7
+   },
+   {
+    "id": 57,
+    "t0": 882832.9,
+    "t1": 883376.1
+   },
+   {
+    "id": 58,
+    "t0": 883724.6,
+    "t1": 884174.9
+   },
+   {
+    "id": 59,
+    "t0": 923399.9,
+    "t1": 923848.5
+   },
+   {
+    "id": 60,
+    "t0": 923934.2,
+    "t1": 924383.9
+   },
+   {
+    "id": 61,
+    "t0": 938792.7,
+    "t1": 939242.2
+   },
+   {
+    "id": 62,
+    "t0": 967723.6,
+    "t1": 968347.8
+   },
+   {
+    "id": 63,
+    "t0": 989874.6,
+    "t1": 990516.1
+   },
+   {
+    "id": 64,
+    "t0": 1029076.6,
+    "t1": 1029526.7
+   },
+   {
+    "id": 65,
+    "t0": 1029586.8,
+    "t1": 1030035.7
+   },
+   {
+    "id": 66,
+    "t0": 1030276.4,
+    "t1": 1030724.6
+   },
+   {
+    "id": 67,
+    "t0": 1030725,
+    "t1": 1031173.5
+   },
+   {
+    "id": 68,
+    "t0": 1031174,
+    "t1": 1031622.1
+   },
+   {
+    "id": 69,
+    "t0": 1059425.5,
+    "t1": 1059874.1
+   },
+   {
+    "id": 70,
+    "t0": 1060120.3,
+    "t1": 1060569.9
+   },
+   {
+    "id": 71,
+    "t0": 1074289.5,
+    "t1": 1074909.7
+   },
+   {
+    "id": 141,
+    "t0": 1074910.2,
+    "t1": 1075527.8
+   },
+   {
+    "id": 72,
+    "t0": 1113447.2,
+    "t1": 1113893.8
+   },
+   {
+    "id": 73,
+    "t0": 1178372,
+    "t1": 1178990.7
+   },
+   {
+    "id": 74,
+    "t0": 1189675.5,
+    "t1": 1190306
+   },
+   {
+    "id": 75,
+    "t0": 1318221.3,
+    "t1": 1318852.4
+   },
+   {
+    "id": 76,
+    "t0": 1335538.6,
+    "t1": 1335987.7
+   },
+   {
+    "id": 77,
+    "t0": 1358845.1,
+    "t1": 1359470.4
+   },
+   {
+    "id": 78,
+    "t0": 1371888.5,
+    "t1": 1372514.1
+   },
+   {
+    "id": 79,
+    "t0": 1445439.3,
+    "t1": 1446064.4
+   },
+   {
+    "id": 80,
+    "t0": 1461034.4,
+    "t1": 1461482
+   },
+   {
+    "id": 81,
+    "t0": 1483599.2,
+    "t1": 1484047.4
+   },
+   {
+    "id": 82,
+    "t0": 1484419.2,
+    "t1": 1484868.1
+   },
+   {
+    "id": 83,
+    "t0": 1501054.8,
+    "t1": 1501504.2
+   },
+   {
+    "id": 84,
+    "t0": 1501934.9,
+    "t1": 1502384.3
+   },
+   {
+    "id": 85,
+    "t0": 1537441.2,
+    "t1": 1538060.9
+   },
+   {
+    "id": 86,
+    "t0": 1569866.6,
+    "t1": 1570315.5
+   },
+   {
+    "id": 87,
+    "t0": 1570864.7,
+    "t1": 1571312.4
+   },
+   {
+    "id": 88,
+    "t0": 1571507.1,
+    "t1": 1571953.9
+   },
+   {
+    "id": 89,
+    "t0": 1572488.9,
+    "t1": 1572937.3
+   },
+   {
+    "id": 90,
+    "t0": 1616141.1,
+    "t1": 1616754.2
+   },
+   {
+    "id": 91,
+    "t0": 1626666.9,
+    "t1": 1627115.8
+   },
+   {
+    "id": 92,
+    "t0": 1627293.2,
+    "t1": 1627741.6
+   },
+   {
+    "id": 93,
+    "t0": 1656552,
+    "t1": 1657172.5
+   },
+   {
+    "id": 94,
+    "t0": 1668235.1,
+    "t1": 1668855.2
+   },
+   {
+    "id": 95,
+    "t0": 1705040.9,
+    "t1": 1705670.4
+   },
+   {
+    "id": 96,
+    "t0": 1730222.4,
+    "t1": 1730851.3
+   },
+   {
+    "id": 97,
+    "t0": 1777802.1,
+    "t1": 1778431.5
+   },
+   {
+    "id": 98,
+    "t0": 1790384.4,
+    "t1": 1790833.8
+   },
+   {
+    "id": 99,
+    "t0": 1791025.8,
+    "t1": 1791473.1
+   },
+   {
+    "id": 100,
+    "t0": 1791630.9,
+    "t1": 1792079.2
+   },
+   {
+    "id": 101,
+    "t0": 1792305.9,
+    "t1": 1792754
+   },
+   {
+    "id": 102,
+    "t0": 1793190.6,
+    "t1": 1793637.5
+   },
+   {
+    "id": 103,
+    "t0": 1807145.5,
+    "t1": 1807766.2
+   },
+   {
+    "id": 104,
+    "t0": 1825151.4,
+    "t1": 1825784.2
+   },
+   {
+    "id": 105,
+    "t0": 1843203,
+    "t1": 1843830.9
+   },
+   {
+    "id": 106,
+    "t0": 1866982.6,
+    "t1": 1867430.4
+   },
+   {
+    "id": 107,
+    "t0": 1891019.5,
+    "t1": 1891643.1
+   },
+   {
+    "id": 108,
+    "t0": 1929209.7,
+    "t1": 1929658.8
+   },
+   {
+    "id": 109,
+    "t0": 1929789.5,
+    "t1": 1930237.5
+   },
+   {
+    "id": 110,
+    "t0": 1995850.6,
+    "t1": 1996298.9
+   },
+   {
+    "id": 111,
+    "t0": 2013659.5,
+    "t1": 2014289.8
+   },
+   {
+    "id": 112,
+    "t0": 2029573.8,
+    "t1": 2030023.1
+   },
+   {
+    "id": 113,
+    "t0": 2030023.7,
+    "t1": 2030471.8
+   },
+   {
+    "id": 114,
+    "t0": 2030612.2,
+    "t1": 2031060.3
+   },
+   {
+    "id": 115,
+    "t0": 2042069.3,
+    "t1": 2042522
+   },
+   {
+    "id": 116,
+    "t0": 2043011.8,
+    "t1": 2043458.9
+   },
+   {
+    "id": 117,
+    "t0": 2043751.7,
+    "t1": 2044200.3
+   },
+   {
+    "id": 118,
+    "t0": 2052735.2,
+    "t1": 2053354.2
+   },
+   {
+    "id": 119,
+    "t0": 2078734.8,
+    "t1": 2079185
+   },
+   {
+    "id": 120,
+    "t0": 2079509.4,
+    "t1": 2079958
+   },
+   {
+    "id": 121,
+    "t0": 2107352.1,
+    "t1": 2107986.2
+   },
+   {
+    "id": 122,
+    "t0": 2154113.5,
+    "t1": 2154561.9
+   },
+   {
+    "id": 142,
+    "t0": 2154562.4,
+    "t1": 2155185.2
+   },
+   {
+    "id": 123,
+    "t0": 2155185.7,
+    "t1": 2155634.5
+   },
+   {
+    "id": 124,
+    "t0": 2155634.9,
+    "t1": 2156080.3
+   },
+   {
+    "id": 125,
+    "t0": 2156080.8,
+    "t1": 2156529
+   },
+   {
+    "id": 126,
+    "t0": 2156813.8,
+    "t1": 2157259.5
+   },
+   {
+    "id": 127,
+    "t0": 2157696.9,
+    "t1": 2158144.5
+   },
+   {
+    "id": 128,
+    "t0": 2203842.3,
+    "t1": 2204288.9
+   },
+   {
+    "id": 129,
+    "t0": 2230333.9,
+    "t1": 2230780.9
+   },
+   {
+    "id": 130,
+    "t0": 2252852.7,
+    "t1": 2253300.8
+   },
+   {
+    "id": 131,
+    "t0": 2253422.7,
+    "t1": 2253870.7
+   },
+   {
+    "id": 132,
+    "t0": 2280740.7,
+    "t1": 2281361.2
+   },
+   {
+    "id": 133,
+    "t0": 2290992.2,
+    "t1": 2291613
+   },
+   {
+    "id": 134,
+    "t0": 2319469.6,
+    "t1": 2319916.6
+   },
+   {
+    "id": 135,
+    "t0": 2383562.3,
+    "t1": 2384010.9
+   },
+   {
+    "id": 136,
+    "t0": 2400499.1,
+    "t1": 2400946.5
+   },
+   {
+    "id": 137,
+    "t0": 2401413.9,
+    "t1": 2401861.9
+   },
+   {
+    "id": 138,
+    "t0": 2415998.6,
+    "t1": 2416448
+   }
+  ]
+ },
+ "tags": [
+  {
+   "id": 7,
+   "action": 0,
+   "intent": "start",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 8,
+   "action": 1,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 9,
+   "action": 2,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 10,
+   "action": 3,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 11,
+   "action": 4,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 12,
+   "action": 5,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 13,
+   "action": 6,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 14,
+   "action": 7,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 15,
+   "action": 8,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 16,
+   "action": 10,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 17,
+   "action": 11,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 18,
+   "action": 12,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 19,
+   "action": 13,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "offset"
+  },
+  {
+   "id": 20,
+   "action": 14,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 21,
+   "action": 16,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 22,
+   "action": 17,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 23,
+   "action": 18,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 24,
+   "action": 19,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 25,
+   "action": 20,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 26,
+   "action": 21,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 27,
+   "action": 22,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 28,
+   "action": 24,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 29,
+   "action": 25,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 30,
+   "action": 26,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 31,
+   "action": 27,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 32,
+   "action": 28,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 33,
+   "action": 29,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 34,
+   "action": 30,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 35,
+   "action": 31,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 36,
+   "action": 32,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 37,
+   "action": 33,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 38,
+   "action": 34,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 39,
+   "action": 38,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 40,
+   "action": 40,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 41,
+   "action": 41,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 42,
+   "action": 42,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 43,
+   "action": 42,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 44,
+   "action": 43,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 45,
+   "action": 44,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 46,
+   "action": 45,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 47,
+   "action": 45,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 48,
+   "action": 46,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 49,
+   "action": 140,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 50,
+   "action": 48,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 51,
+   "action": 49,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 52,
+   "action": 49,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 53,
+   "action": 50,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 54,
+   "action": 51,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 55,
+   "action": 52,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 56,
+   "action": 53,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 57,
+   "action": 54,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 58,
+   "action": 54,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 59,
+   "action": 55,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 60,
+   "action": 56,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 61,
+   "action": 57,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 62,
+   "action": 58,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 63,
+   "action": 59,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 64,
+   "action": 60,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 65,
+   "action": 61,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 66,
+   "action": 62,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 67,
+   "action": 63,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 68,
+   "action": 64,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 69,
+   "action": 65,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 70,
+   "action": 65,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 71,
+   "action": 66,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 72,
+   "action": 67,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 73,
+   "action": 68,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 74,
+   "action": 69,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 75,
+   "action": 70,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 76,
+   "action": 71,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 77,
+   "action": 141,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 78,
+   "action": 72,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 79,
+   "action": 73,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 80,
+   "action": 74,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 81,
+   "action": 75,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 82,
+   "action": 76,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 83,
+   "action": 77,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 84,
+   "action": 78,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 85,
+   "action": 79,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 86,
+   "action": 80,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 87,
+   "action": 81,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 88,
+   "action": 82,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 89,
+   "action": 83,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 90,
+   "action": 84,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 91,
+   "action": 85,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 92,
+   "action": 86,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 93,
+   "action": 87,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 94,
+   "action": 87,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 95,
+   "action": 88,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 96,
+   "action": 88,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 97,
+   "action": 89,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 98,
+   "action": 89,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 99,
+   "action": 90,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 100,
+   "action": 91,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 101,
+   "action": 92,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 102,
+   "action": 93,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 103,
+   "action": 94,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 104,
+   "action": 95,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 105,
+   "action": 96,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 106,
+   "action": 97,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 107,
+   "action": 98,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 108,
+   "action": 99,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 109,
+   "action": 99,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 110,
+   "action": 100,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 111,
+   "action": 100,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 112,
+   "action": 101,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 113,
+   "action": 102,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 114,
+   "action": 102,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 115,
+   "action": 103,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 116,
+   "action": 104,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 117,
+   "action": 105,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 118,
+   "action": 106,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 119,
+   "action": 107,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 120,
+   "action": 108,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 121,
+   "action": 109,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 122,
+   "action": 110,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 123,
+   "action": 111,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 124,
+   "action": 112,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 125,
+   "action": 113,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 126,
+   "action": 114,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 127,
+   "action": 115,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 128,
+   "action": 116,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 129,
+   "action": 116,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 130,
+   "action": 117,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 131,
+   "action": 118,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 132,
+   "action": 119,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 133,
+   "action": 120,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 134,
+   "action": 121,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 135,
+   "action": 122,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 136,
+   "action": 142,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 137,
+   "action": 123,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 138,
+   "action": 124,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 139,
+   "action": 125,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 140,
+   "action": 126,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 141,
+   "action": 126,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 142,
+   "action": 127,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 143,
+   "action": 128,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 144,
+   "action": 129,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 145,
+   "action": 130,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 146,
+   "action": 131,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 147,
+   "action": 132,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 148,
+   "action": 133,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 149,
+   "action": 134,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 150,
+   "action": 135,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 151,
+   "action": 136,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 152,
+   "action": 137,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 153,
+   "action": 138,
+   "intent": "end",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  }
+ ],
+ "accidents": {
+  "destructive": 0,
+  "harmless": 4,
+  "silent": 0,
+  "byCause": {
+   "offset": {
+    "destructive": 0,
+    "harmless": 1,
+    "silent": 0
+   },
+   "stray-knob": {
+    "destructive": 0,
+    "harmless": 3,
+    "silent": 0
+   }
+  }
+ }
+}

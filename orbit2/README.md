@@ -25,7 +25,8 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   audio; `--assert` fails on a threshold; baselines in `docs/redesign/baselines.md`), `?setlog` on the page (the
   action log, key L saves it). Player-agent runs (A2 / A3 / A10 by agents): `orbit2/tools/session.mjs` (a seeded
   performer plays a set as Move MIDI or mouse-only, with slips, and tags the setlog's accidents), `glance.mjs` (300 ms
-  darkened screenshots + answer key + `score`), `moveview.mjs` (the Move's LEDs drawn as the device).
+  darkened screenshots + answer key + `score`), `moveview.mjs` (the Move's LEDs drawn as the device). The RD-1
+  baseline sets and glance trials are in `docs/redesign/setlog/` (summary in `docs/redesign/baselines.md`).
 - Browser checks: `orbit2/tools/cdp.mjs` (headless Chrome helper: open, eval, click/tap/key, screenshot, capture
   downloads, `parseWav`, `unzipStored`).
 

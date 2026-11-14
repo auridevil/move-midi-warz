@@ -2,7 +2,8 @@
 // tagger (DECISION A3's classes), the glance scorer (A2) and the Move drawing (A10). Pure; the browser runs are the tools'.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { performer, injectSlips, tagAccidents, classOf, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS } from '../tools/session-core.mjs';
+import { readFileSync } from 'node:fs';
+import { performer, injectSlips, tagAccidents, classOf, emptied, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS, MOUSE_GAUGE, KNOB_TARGETS } from '../tools/session-core.mjs';
 
 test('RD-1 performer: seeded, timed, persona-shaped, and every action names what it means to change', () => {
   const a = performer({ seed: 3, minutes: 10, persona: 'kai' }), b = performer({ seed: 3, minutes: 10, persona: 'kai' });
@@ -10,7 +11,7 @@ test('RD-1 performer: seeded, timed, persona-shaped, and every action names what
   assert.notDeepEqual(a, performer({ seed: 4, minutes: 10, persona: 'kai' }));
   assert.equal(a[0].kind, 'move.play'); assert.equal(a.at(-1).intent, 'end'); assert.ok(a.at(-2).at < 10 * 60000);
   for (let i = 1; i < a.length; i++) assert.ok(a[i].at > a[i - 1].at, 'in time order');
-  for (const x of a) { assert.ok(Array.isArray(x.expect)); if (x.kind === 'move.mute') assert.match(x.expect[0], /^lane\d\.mute$/); }
+  for (const x of a) { assert.ok(Array.isArray(x.expect)); if (x.kind === 'move.mute') assert.match(x.expect[0], /^lane\d\.mute=(true|false)$/, 'a mute names the state it wants'); }
   const noor = performer({ seed: 3, minutes: 10, persona: 'noor' });
   assert.ok(noor.length < a.length, 'noor rests longer between moves than kai');
   const mouse = performer({ seed: 3, minutes: 10, persona: 'kai', mouse: true });
@@ -69,6 +70,57 @@ test('RD-1 accident tagger: intended, a double press, a slip, a side effect, out
   assert.equal(classOf({ target: 'lane3.mute', after: true, voice: 'kick909' }), 'destructive'); assert.equal(classOf({ target: 'lane3.mute', after: true, voice: 'hat' }), 'harmless');
   assert.equal(classOf({ target: 'lane1.mute', after: false, voice: 'kick' }), 'harmless', 'unmuting the kick brings it back');
   for (const k of ['select', 'export', 'slot.save', 'record']) assert.equal(classOf({ target: k }), 'silent');
+});
+
+test('RD-1 baseline-set fixes: the mouse finds the knob it means, a drop says which way, chained slips, turns, emptied lanes', () => {
+  // the mouse drags the gauge the expectation names: #sliders holds app.js PARAMS in order (euclid = euclidK, offset = offsetMs)
+  const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), block = src.slice(src.indexOf('const PARAMS = ['), src.indexOf('];', src.indexOf('const PARAMS = [')));
+  const order = [...block.matchAll(/\{ k: '(\w+)'/g)].map(x => ({ euclid: 'euclidK', offset: 'offsetMs' })[x[1]] || x[1]);
+  for (const [t, n] of Object.entries(MOUSE_GAUGE)) assert.equal(order[n - 1], t, `#sliders .gauge:nth-child(${n}) is ${t}`);
+  const mouse = performer({ seed: 5, minutes: 30, persona: 'kai', mouse: true }), drags = mouse.filter(x => x.kind === 'drag' && x.intent === 'knobs');
+  assert.ok(drags.length > 5);
+  for (const d of drags) { const n = +/nth-child\((\d+)\)/.exec(d.sel)[1]; assert.equal(`.${order[n - 1]}`, d.expect[0].slice(d.expect[0].indexOf('.'))); }
+  // the length knob also clamps the hit count (Lane.resize): both are the turn
+  const knobs = performer({ seed: 5, minutes: 30, persona: 'kai' }).filter(x => x.kind === 'move.knob' && !x.shift && x.knob === 0);
+  assert.ok(knobs.length && knobs.every(x => /\.length$/.test(x.expect[0]) && /\.euclidK$/.test(x.expect[1])));
+  // a drop is one intention: the mute and the unmute share g and say which way they go
+  const drops = performer({ seed: 2, minutes: 30, persona: 'kai', intents: { drop: 1, listen: 1 } }).filter(x => x.intent === 'drop');
+  assert.ok(drops.length >= 4 && drops.length % 2 === 0);
+  for (let i = 0; i < drops.length; i += 2) { assert.equal(drops[i].g, drops[i + 1].g); assert.deepEqual([drops[i].expect, drops[i + 1].expect], [['lane1.mute=true'], ['lane1.mute=false']]); }
+  const slipped = injectSlips(performer({ seed: 9, minutes: 20, persona: 'kai' }), { rate: 1, seed: 1 });
+  for (const x of slipped.filter(x => x.slip?.kind === 'stray-knob')) assert.equal(x.g, slipped.find(o => o.id === x.slip.of).g, 'a stray touch belongs to the intention it brushed past');
+
+  const e = (id, t, target, before, after, o = {}) => ({ id, t, source: 'move', target, before, after, reversed: false, ...o });
+  const script = [
+    { id: 0, g: 1, intent: 'drop', kind: 'move.mute', lane: 0, expect: ['lane1.mute=true'], slip: { kind: 'wrong-row', row: 1 } },
+    { id: 1, g: 1, intent: 'drop', kind: 'move.mute', lane: 0, expect: ['lane1.mute=false'] },
+    { id: 2, g: 2, intent: 'mute', kind: 'click', sel: '#lane-tabs button:nth-child(3)', expect: ['select'], slip: { kind: 'offset', dx: 30, dy: 0 } },
+    { id: 3, g: 2, intent: 'mute', kind: 'click', sel: '#btn-mute', expect: ['lane3.mute=true'] },
+    { id: 4, g: 3, intent: 'knobs', kind: 'drag', sel: '#sliders .gauge:nth-child(2)', expect: ['lane2.euclidK'] },
+    { id: 5, g: 4, intent: 'knobs', kind: 'move.knob', knob: 1, turns: -1, expect: ['lane4.euclidK'] },
+    { id: 6, g: 5, intent: 'build', kind: 'move.step', step: 2, expect: ['lane2.hits.*'] },
+  ];
+  const runs = script.map((a, i) => ({ id: a.id, t0: i * 1000, t1: i * 1000 + 900 }));
+  const { entries: t, accidents } = tagAccidents([
+    e(0, 100, 'lane2.mute', false, true, { voice: 'clap' }),        // the wrong row: the clap went, the kick stayed
+    e(1, 1100, 'lane1.mute', false, true, { voice: 'kick' }),       // "bring it back" muted the kick: the hand meant false
+    e(2, 3100, 'lane2.mute', false, true, { voice: 'snare' }),      // the tab click missed: Mute hit the lane still selected
+    e(3, 4100, 'lane2.euclidK', 1, 3), e(4, 4850, 'lane2.euclidK', 3, 5),   // one drag that rested: both are the drag
+    e(5, 5100, 'lane4.hits', 'xx.x............', '................'),     // one click down on a hand-made lane emptied it
+    e(6, 6100, 'lane2.hits.3', false, true), e(7, 6300, 'lane2.hits.3', true, false),
+  ], runs, script), by = (id) => t.find(x => x.id === id);
+  assert.deepEqual([by(0).class, by(0).cause], ['harmless', 'wrong-row']);
+  assert.deepEqual([by(1).intended, by(1).class, by(1).cause], [false, 'destructive', 'wrong-row'], 'the kick muted by the unmute, caused by the earlier wrong row');
+  assert.deepEqual([by(2).class, by(2).cause], ['harmless', 'offset'], 'the wrong-lane mute is the missed click\'s');
+  assert.equal(by(3).intended, true); assert.equal(by(4).intended, true);
+  assert.deepEqual([by(5).class, by(5).cause], ['destructive', 'side effect']);
+  assert.equal(by(6).intended, true); assert.deepEqual([by(7).class, by(7).cause], ['harmless', 'side effect'], 'a step entered twice by one press is still the second press');
+  assert.deepEqual([accidents.destructive, accidents.harmless], [2, 3]);
+  // an emptied lane is a clear by another route; thinning it is not
+  assert.equal(emptied({ target: 'lane1.hits', before: 'x.x.', after: '....' }), true); assert.equal(emptied({ target: 'lane1.hits', before: 'x.x.', after: 'x...' }), false);
+  assert.equal(emptied({ target: 'lane3.euclidK', before: 2, after: 0 }), true); assert.equal(emptied({ target: 'lane3.euclidK', before: 0, after: 0 }), false);
+  assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 0 }), 'destructive'); assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 1 }), 'harmless');
+  assert.equal(KNOB_TARGETS[0], 'length');
 });
 
 test('RD-1 Move bytes, glance trials and scoring, the Move drawing', () => {

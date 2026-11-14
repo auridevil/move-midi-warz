@@ -23,6 +23,8 @@ export const SIM_MOVE = '__poly.move.transport = { send: () => {} }; __poly.move
 /** Open the page as a set starts: ?setlog, everything view, the Move simulated as connected (LEDs painted), a groove. */
 export async function openSet(b, { path = 'orbit2/index.html', groove = 'techno', width = 1512, height = 860 } = {}) {
   const p = await b.open(`${path}?setlog`, { width, height });
+  // a busy machine (six sets at once) can take longer than open()'s 3.5 s to run the page's modules
+  for (let i = 0; i < 80 && !(await p.eval('!!window.__poly')); i++) await sleep(250);
   await p.eval(`(async () => { await __poly.wake(); __poly.setView('everything'); ${SIM_MOVE} __poly.loadGroove(${JSON.stringify(groove)}); __poly.sync(); })()`);
   await sleep(1200);   // past the welcome bar's click guard
   return p;
@@ -32,9 +34,13 @@ export async function openSet(b, { path = 'orbit2/index.html', groove = 'techno'
 const center = (p, sel) => p.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; for (let d = e.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true; if (!e.checkVisibility()) return null; e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 const mouse = (p, type, x, y) => p.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
 
-/** Play one action on the page. Returns null, or why it could not be played ('not on screen'). */
+/** Play one action on the page. Returns null, or why it was not played ('not on screen', 'already so'). */
 export async function perform(p, a) {
   const send = (b) => p.eval(`__poly.move.receive(new Uint8Array(${JSON.stringify(b)}))`);
+  // the script is open-loop, the ears are not: a hand that wants a lane muted (or back) and hears it already is doesn't
+  // press, so one accident (a double press left the kick muted) is not replayed into every later drop
+  const want = a.expect?.length === 1 && /^lane(\d+)\.mute=(true|false)$/.exec(a.expect[0]);
+  if (want && (await p.eval(`(() => { const li = ${want[1] - 1}, q = __poly.muteQ; return q.has(li) ? q.target(li) : !!__poly.m.lanes[li]?.muted; })()`)) === (want[2] === 'true')) return 'already so';
   const tap = async (down, up, n = a.slip?.kind === 'double' ? 2 : 1) => { for (let k = 0; k < n; k++) { await send(down); await sleep(70); await send(up); await sleep(90); } };
   switch (a.kind) {
     case 'move.step': return void await tap(bytes.step(a.step, true), bytes.step(a.step, false));
@@ -85,7 +91,7 @@ export async function playSet({ port = 5400, debugPort = 9400, path, groove, per
     const p = await openSet(b, { path, groove: groove || (persona === 'kai' ? 'techno' : 'poly345') });
     const { log, runs } = await runScript(p, plan, { speed, onAction: verbose ? (a, r) => console.error(`${(r.t0 / 1000).toFixed(1)} s · ${a.intent} · ${a.kind}${a.slip ? ` · SLIP ${a.slip.kind}` : ''}${r.skipped ? ` · skipped: ${r.skipped}` : ''}`) : null });
     const t = tagAccidents(log.entries, runs, plan);
-    return { ...log, session: { tool: 'orbit2/tools/session.mjs', persona, seed, minutes, mouse, slips, speed, groove: groove || null, errors: p.errors, script: plan, runs }, tags: t.entries.map(e => ({ id: e.id, action: e.action, intent: e.intent, intended: e.intended, class: e.class, cause: e.cause })), accidents: t.accidents };
+    return { ...log, session: { tool: 'orbit2/tools/session.mjs', persona, seed, minutes, mouse, slips, speed, groove: groove || null, intents, errors: p.errors, script: plan, runs }, tags: t.entries.map(e => ({ id: e.id, action: e.action, intent: e.intent, intended: e.intended, class: e.class, cause: e.cause })), accidents: t.accidents };
   } finally { await b.close(); }
 }
 
@@ -97,7 +103,8 @@ export function summarize(set) {
   const L = [`${s.persona} · seed ${s.seed} · ${s.minutes} min${s.mouse ? ' · mouse only' : ' · Move'} · ${s.script.length} actions, ${slipped} slips · speed ${s.speed}${s.errors.length ? ` · ${s.errors.length} page errors` : ''}`,
     `setlog: ${set.entries.length} entries · accidents: ${a.destructive} destructive, ${a.harmless} harmless audible, ${a.silent} silent`];
   for (const [c, v] of Object.entries(a.byCause)) L.push(`  ${c}: ${v.destructive} destructive, ${v.harmless} harmless, ${v.silent} silent`);
-  const skipped = s.runs.filter(r => r.skipped).length; if (skipped) L.push(`  ${skipped} actions could not be played (not on screen)`);
+  const skipped = {}; for (const r of s.runs) if (r.skipped) skipped[r.skipped] = (skipped[r.skipped] || 0) + 1;
+  for (const [why, n] of Object.entries(skipped)) L.push(`  ${n} actions not played: ${why === 'already so' ? 'the lane already was as the hand wanted (an earlier accident)' : why}`);
   for (const t of set.tags.filter(t => !t.intended && t.class === 'destructive')) { const e = set.entries.find(x => x.id === t.id); L.push(`  DESTRUCTIVE at ${(e.t / 1000).toFixed(1)} s: ${e.target} ${JSON.stringify(e.before)} → ${JSON.stringify(e.after)} (${t.cause}, intent ${t.intent})`); }
   return L.join('\n');
 }

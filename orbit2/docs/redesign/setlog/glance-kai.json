@@ -1,0 +1,245 @@
+{
+ "format": "orbits-glance",
+ "v": 1,
+ "player": "kai",
+ "page": "orbit2/index.html",
+ "commit": "74813d9",
+ "tool": "orbit2/tools/glance.mjs",
+ "judges": "one fresh sub-agent per image (model sonnet), shown brief.txt and that image only",
+ "run": {
+  "seed": 2,
+  "groove": "techno",
+  "exposure": 0.55,
+  "gamma": 1.5,
+  "scale": 0.71,
+  "errors": []
+ },
+ "brief": "You are shown ONE photo of a laptop screen, taken in a dark room from about 70 cm, 300 ms after the player\ntouched or held something on a hardware controller (an Ableton Move) connected to this drum-machine web app. Look at\nthe image only. Answer two things, as JSON on one line: {\"page\": \"...\", \"lane\": N}\n- page: what the controller's eight knobs edit right now, as the screen shows it: \"rhythm\" (the lane's pattern: length,\n  hits, shift, speed, chance…), \"sound\" (the lane's sound: tune, decay, tone, drive…), \"step\" (one held step's own\n  values) or \"slots\" (the pattern slots). If you cannot tell, give your best guess.\n- lane: the number (1–6) of the lane the controls belong to. If you cannot tell, give your best guess.",
+ "score": {
+  "right": 8,
+  "of": 20,
+  "pass": false,
+  "pageRight": 8,
+  "laneRight": 20,
+  "byPage": {
+   "sound": {
+    "right": 4,
+    "of": 7
+   },
+   "slots": {
+    "right": 0,
+    "of": 5
+   },
+   "step": {
+    "right": 0,
+    "of": 4
+   },
+   "rhythm": {
+    "right": 4,
+    "of": 4
+   }
+  }
+ },
+ "trials": [
+  {
+   "trial": 1,
+   "page": "sound",
+   "lane": 4,
+   "said": {
+    "page": "sound",
+    "lane": 4
+   },
+   "ok": true
+  },
+  {
+   "trial": 2,
+   "page": "slots",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2
+   },
+   "ok": false
+  },
+  {
+   "trial": 3,
+   "page": "sound",
+   "lane": 2,
+   "said": {
+    "page": "sound",
+    "lane": 2
+   },
+   "ok": true
+  },
+  {
+   "trial": 4,
+   "page": "slots",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4
+   },
+   "ok": false
+  },
+  {
+   "trial": 5,
+   "page": "step",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1
+   },
+   "ok": false
+  },
+  {
+   "trial": 6,
+   "page": "sound",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1
+   },
+   "ok": false
+  },
+  {
+   "trial": 7,
+   "page": "slots",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1
+   },
+   "ok": false
+  },
+  {
+   "trial": 8,
+   "page": "sound",
+   "lane": 1,
+   "said": {
+    "page": "sound",
+    "lane": 1
+   },
+   "ok": true
+  },
+  {
+   "trial": 9,
+   "page": "step",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2
+   },
+   "ok": false
+  },
+  {
+   "trial": 10,
+   "page": "step",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4
+   },
+   "ok": false
+  },
+  {
+   "trial": 11,
+   "page": "rhythm",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1
+   },
+   "ok": true
+  },
+  {
+   "trial": 12,
+   "page": "sound",
+   "lane": 3,
+   "said": {
+    "page": "sound",
+    "lane": 3
+   },
+   "ok": true
+  },
+  {
+   "trial": 13,
+   "page": "rhythm",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4
+   },
+   "ok": true
+  },
+  {
+   "trial": 14,
+   "page": "sound",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2
+   },
+   "ok": false
+  },
+  {
+   "trial": 15,
+   "page": "slots",
+   "lane": 3,
+   "said": {
+    "page": "rhythm",
+    "lane": 3
+   },
+   "ok": false
+  },
+  {
+   "trial": 16,
+   "page": "slots",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2
+   },
+   "ok": false
+  },
+  {
+   "trial": 17,
+   "page": "step",
+   "lane": 3,
+   "said": {
+    "page": "rhythm",
+    "lane": 3
+   },
+   "ok": false
+  },
+  {
+   "trial": 18,
+   "page": "rhythm",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2
+   },
+   "ok": true
+  },
+  {
+   "trial": 19,
+   "page": "rhythm",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1
+   },
+   "ok": true
+  },
+  {
+   "trial": 20,
+   "page": "sound",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4
+   },
+   "ok": false
+  }
+ ]
+}

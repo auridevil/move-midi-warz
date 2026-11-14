@@ -19,19 +19,25 @@ export const bytes = {
 export const trackOf = (li) => `track${4 - li}`;
 /** The Move's knob row without Shift (app.js 'encoder'), as setlog targets of the selected lane. */
 export const KNOB_TARGETS = ['length', 'euclidK', 'rotation', 'ratio', 'swing', 'prob', 'tune', null];   // knob 8 = tempo
+/** The lane gauges in #sliders (app.js PARAMS, grid order: swing last), as the 1-based nth-child of each setlog target. */
+export const MOUSE_GAUGE = { length: 1, euclidK: 2, rotation: 3, ratio: 4, prob: 5, tune: 6, offsetMs: 7, velHuman: 8, swing: 9 };
 
 // ---- what counts as what (DECISION A3) ----
 const DESTRUCTIVE = new Set(['init', 'randomize', 'clear', 'load', 'slot']);   // slot: a recall replaces the pattern, like a load
 const SILENT = new Set(['select', 'export', 'slot.save', 'record', 'chain']);
-/** destructive (stop, load, init, randomize, clear, a kick muted) | silent (nothing heard changes) | harmless (all else that sounds). */
+/** A lane left with no hits (the hits knob at 0; one click down on a hand-made lane re-fills it from E(0)): a clear by another route. */
+export const emptied = (e) => (/^lane\d+\.hits$/.test(e.target) && /x/.test(e.before ?? '') && !/x/.test(e.after ?? '')) || (/^lane\d+\.euclidK$/.test(e.target) && e.before > 0 && e.after === 0);
+/** destructive (stop, load, init, randomize, clear, a lane emptied, a kick muted) | silent (nothing heard changes) | harmless (all else that sounds). */
 export function classOf(e) {
   if (e.target === 'transport') return e.after === 'stopped' ? 'destructive' : 'harmless';
-  if (DESTRUCTIVE.has(e.target)) return 'destructive';
+  if (DESTRUCTIVE.has(e.target) || emptied(e)) return 'destructive';
   if (/^lane\d+\.mute$/.test(e.target) && e.after === true && /kick/.test(e.voice || '')) return 'destructive';
   if (SILENT.has(e.target)) return 'silent';
   return 'harmless';
 }
-const matches = (pat, target) => pat === target || (pat.endsWith('*') && target.startsWith(pat.slice(0, -1)));
+// an expectation: a target ('select'), a family ('lane2.hits.*') or a target and the value it should end on
+// ('lane1.mute=false': a press meant to bring the kick back that mutes it instead is not what the hand meant)
+const matches = (pat, e) => { const [p, v] = pat.split('='); return (p === e.target || (p.endsWith('*') && e.target.startsWith(p.slice(0, -1)))) && (v === undefined || String(e.after) === v); };
 
 // ---- the performer ----
 /** Persona weights: how often each intention comes up, and the rests between them (s). */
@@ -45,19 +51,22 @@ function weighted(rng, w) { const e = Object.entries(w).filter(([, x]) => x > 0)
 /**
  * A set as a list of timed actions. opts: { seed, minutes, persona ('noor' | 'kai' or { rest, intents }), mouse (no Move:
  * clicks and keys only), intents (weights that replace the persona's), lanes (4) }. Each action: { id, at (ms from the
- * start, before speed), intent, kind, …args, expect: [setlog targets it means to change ('lane2.hits.*' = any step)],
- * hold (ms the hands keep something down) }. The selected lane is tracked, so the expectations name the right lane.
+ * start, before speed), g (which intention it belongs to: a drop's mute and unmute share one), intent, kind, …args,
+ * expect: [setlog targets it means to change ('lane2.hits.*' = any step, 'lane1.mute=false' = and the value it ends on)],
+ * hold (ms the hands keep something down) }. The selected lane and the mutes are tracked, so the expectations name the
+ * right lane and direction.
  */
 export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = false, intents = null, lanes = 4 } = {}) {
   const rng = mulberry32(seed * 7919 + 17), p = typeof persona === 'string' ? PERSONAS[persona] : persona, w = intents || p.intents;
-  const out = [], end = minutes * 60000; let t = 1000, sel = 0, playing = false, evolving = false, id = 0;
+  const out = [], end = minutes * 60000; let t = 1000, sel = 0, playing = false, evolving = false, id = 0, g = 0;
   const muted = new Set(), saved = new Set();
-  const add = (o) => { out.push({ id: id++, at: Math.round(t), ...o }); t += (o.hold || 0) + 400 + rng() * 600; };
+  const add = (o) => { out.push({ id: id++, at: Math.round(t), g, ...o }); t += (o.hold || 0) + 400 + rng() * 600; };
   const select = (li, intent) => { if (li === sel) return; sel = li; add(mouse ? { intent, kind: 'click', sel: `#lane-tabs button:nth-child(${li + 1})`, expect: ['select'] } : { intent, kind: 'move.select', lane: li, expect: ['select'] }); };
   const play = (intent) => { playing = !playing; add(mouse ? { intent, kind: pick(rng, ['click', 'key']), sel: '#btn-play', key: ' ', expect: ['transport'] } : { intent, kind: 'move.play', expect: ['transport'] }); };
+  const muteAct = (li, on, intent) => mouse ? { intent, kind: 'click', sel: '#btn-mute', expect: [`lane${li + 1}.mute=${on}`] } : { intent, kind: 'move.mute', lane: li, expect: [`lane${li + 1}.mute=${on}`] };
   play('start');
   while (t < end) {
-    const intent = weighted(rng, w);
+    const intent = weighted(rng, w); g++;
     if (intent === 'build') {
       const li = Math.floor(rng() * lanes); select(li, intent);
       for (let k = 0, n = 2 + Math.floor(rng() * 4); k < n; k++) {
@@ -66,15 +75,17 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
       }
     } else if (intent === 'mute' || intent === 'drop') {
       const li = intent === 'drop' ? 0 : 1 + Math.floor(rng() * (lanes - 1)), on = !muted.has(li); on ? muted.add(li) : muted.delete(li);
-      if (mouse) { select(li, intent); add({ intent, kind: 'click', sel: '#btn-mute', expect: [`lane${li + 1}.mute`] }); }
-      else add({ intent, kind: 'move.mute', lane: li, expect: [`lane${li + 1}.mute`] });
-      if (intent === 'drop') { t += 2000 + rng() * 4000; muted.delete(li); add(mouse ? { intent, kind: 'click', sel: '#btn-mute', expect: [`lane${li + 1}.mute`] } : { intent, kind: 'move.mute', lane: li, expect: [`lane${li + 1}.mute`] }); }
+      if (mouse) select(li, intent);
+      add(muteAct(li, on, intent));
+      if (intent === 'drop') { t += 2000 + rng() * 4000; muted.delete(li); add(muteAct(li, false, intent)); }
     } else if (intent === 'fill') {
       add(mouse ? { intent, kind: 'hold', sel: '#btn-fill', hold: 1500 + rng() * 1500, expect: [] } : { intent, kind: 'move.hold', button: 'layout', hold: 1500 + rng() * 1500, expect: [] });
     } else if (intent === 'knobs') {
       const sound = !mouse && rng() < 0.6, k = sound ? Math.floor(rng() * SOUND_KEYS.length) : [0, 1, 2, 4, 5][Math.floor(rng() * 5)];
       const target = sound ? `lane${sel + 1}.sound.${SOUND_KEYS[k]}` : `lane${sel + 1}.${KNOB_TARGETS[k]}`, turns = (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 6));
-      add(mouse ? { intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${k + 1})`, dy: -turns * 6, expect: [target] } : { intent, kind: 'move.knob', knob: k, shift: sound, turns, expect: [target] });
+      // a shorter lane keeps only the hits that fit (Lane.resize clamps euclid hits): part of turning the length knob
+      const expect = !sound && k === 0 ? [target, `lane${sel + 1}.euclidK`] : [target];
+      add(mouse ? { intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${MOUSE_GAUGE[KNOB_TARGETS[k]]})`, dy: -turns * 6, expect } : { intent, kind: 'move.knob', knob: k, shift: sound, turns, expect });
     } else if (intent === 'evolve') {
       if (mouse) { add({ intent, kind: 'click', sel: '#btn-evolve', expect: ['evolve'] }); } else add({ intent, kind: 'move.button', button: 'minus', expect: ['evolve'] });
       evolving = !evolving;
@@ -88,7 +99,7 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
     }
     t += between(rng, p.rest) * 1000;   // listening
   }
-  if (playing) play('end');
+  g++; if (playing) play('end');
   return out;
 }
 
@@ -112,8 +123,8 @@ export function injectSlips(script, { rate = 0.08, seed = 1, kinds = SLIPS } = {
     else {   // stray-knob: the hand brushes another knob on its way
       out.push(a);
       const mouse = /^(click|key|hold|drag)$/.test(a.kind);
-      out.push(mouse ? { id: id++, at: a.at + 300, intent: a.intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${1 + Math.floor(rng() * 5)})`, dy: (rng() < 0.5 ? -1 : 1) * (6 + Math.floor(rng() * 12)), expect: [], slip: { kind: k, of: a.id } }
-        : { id: id++, at: a.at + 300, intent: a.intent, kind: 'move.knob', knob: Math.floor(rng() * 7), shift: rng() < 0.4, turns: (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 3)), expect: [], slip: { kind: k, of: a.id } });
+      out.push(mouse ? { id: id++, at: a.at + 300, g: a.g, intent: a.intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${1 + Math.floor(rng() * 5)})`, dy: (rng() < 0.5 ? -1 : 1) * (6 + Math.floor(rng() * 12)), expect: [], slip: { kind: k, of: a.id } }
+        : { id: id++, at: a.at + 300, g: a.g, intent: a.intent, kind: 'move.knob', knob: Math.floor(rng() * 7), shift: rng() < 0.4, turns: (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 3)), expect: [], slip: { kind: k, of: a.id } });
     }
   }
   return out;
@@ -123,19 +134,20 @@ export function injectSlips(script, { rate = 0.08, seed = 1, kinds = SLIPS } = {
 /**
  * Read a setlog's entries against the actions that ran: runs = [{ id, t0, t1 }] in setlog time (ms), script = the
  * actions (with expect and slip). Every entry inside an action's window that the action meant (each expected target
- * once: a second entry of it is a double press) is intended; anything else is an accident: destructive, harmless
- * (audible) or silent, with its cause (the slip kind, 'side effect' when the action had no slip, 'unattributed' outside
- * every window). Returns { entries: [{ …entry, action, intent, class, cause, intended }], accidents: { destructive,
- * harmless, silent, byCause } }.
+ * once: a second entry of it is a double press; a knob turn or a drag may log twice when it rests, both are the turn)
+ * is intended; anything else is an accident: destructive, harmless (audible) or silent, with its cause: the action's
+ * slip, else the slip of an earlier action of the same intention (g: the Mute after a missed lane tab hits the wrong
+ * lane because the tab click missed), else 'side effect', or 'unattributed' outside every window. Returns
+ * { entries: [{ …entry, action, intent, class, cause, intended }], accidents: { destructive, harmless, silent, byCause } }.
  */
 export function tagAccidents(entries, runs, script) {
-  const byId = new Map(script.map(a => [a.id, a])), used = new Map(), tagged = [];
+  const byId = new Map(script.map(a => [a.id, a])), at = new Map(script.map((a, i) => [a.id, i])), used = new Map(), tagged = [];
+  const slipOf = (a) => { if (a.slip) return a.slip.kind; if (a.g == null) return null; for (let i = at.get(a.id) - 1; i >= 0 && script[i].g === a.g; i--) if (script[i].slip && script[i].slip.kind !== 'stray-knob') return script[i].slip.kind; return null; };
   for (const e of entries) {
     const r = runs.find(x => e.t >= x.t0 && e.t <= x.t1), a = r ? byId.get(r.id) : null;
-    // each target an action meant counts once: the same target again in its window (a double press) was not meant
     let intended = false;
-    if (a) { const seen = used.get(a.id) || new Set(); intended = a.expect.some(p => matches(p, e.target)) && !seen.has(e.target); seen.add(e.target); used.set(a.id, seen); }
-    const cls = intended ? 'intended' : classOf(e), cause = intended ? null : !a ? 'unattributed' : a.slip ? a.slip.kind : 'side effect';
+    if (a) { const seen = used.get(a.id) || new Set(); intended = a.expect.some(p => matches(p, e)) && (/^(drag|move\.knob)$/.test(a.kind) || !seen.has(e.target)); seen.add(e.target); used.set(a.id, seen); }
+    const cls = intended ? 'intended' : classOf(e), cause = intended ? null : !a ? 'unattributed' : slipOf(a) || 'side effect';
     tagged.push({ ...e, action: a?.id ?? null, intent: a?.intent ?? null, intended, class: cls, cause });
   }
   const acc = tagged.filter(e => !e.intended), byCause = {};

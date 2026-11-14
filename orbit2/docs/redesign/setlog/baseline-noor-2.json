@@ -1,0 +1,5905 @@
+{
+ "format": "orbits-setlog",
+ "v": 1,
+ "started": "2026-11-14T17:29:55.118Z",
+ "dropped": 0,
+ "entries": [
+  {
+   "id": 7,
+   "t": 5249.1,
+   "source": "move",
+   "target": "transport",
+   "before": "stopped",
+   "after": "playing",
+   "reversed": false
+  },
+  {
+   "id": 8,
+   "t": 5925.5,
+   "source": "move",
+   "target": "lane1.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 9,
+   "t": 6445.3,
+   "source": "move",
+   "target": "lane1.hits.8",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 10,
+   "t": 7272.1,
+   "source": "move",
+   "target": "lane1.hits.1",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 11,
+   "t": 8148.8,
+   "source": "move",
+   "target": "lane1.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 12,
+   "t": 18257.3,
+   "source": "move",
+   "target": "lane1.rotation",
+   "before": 0,
+   "after": 14,
+   "reversed": false,
+   "end": 18304.7
+  },
+  {
+   "id": 13,
+   "t": 37636.3,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 14,
+   "t": 67457.9,
+   "source": "move",
+   "target": "lane1.prob",
+   "before": 1,
+   "after": 0.9,
+   "reversed": false,
+   "end": 67651.8
+  },
+  {
+   "id": 15,
+   "t": 83547.2,
+   "source": "move",
+   "target": "lane1.prob",
+   "before": 0.9,
+   "after": 0.78,
+   "reversed": false,
+   "end": 83788.5
+  },
+  {
+   "id": 16,
+   "t": 109622.5,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 17,
+   "t": 130437.6,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 18,
+   "t": 185587.8,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 19,
+   "t": 209226.9,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 20,
+   "t": 239178.5,
+   "source": "move",
+   "target": "lane1.sound.send",
+   "before": 0.15,
+   "after": 0.19,
+   "reversed": false,
+   "end": 239227.6
+  },
+  {
+   "id": 21,
+   "t": 267968.7,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 22,
+   "t": 273740,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 23,
+   "t": 283555.8,
+   "source": "move",
+   "target": "lane1.sound.send",
+   "before": 0.19,
+   "after": 0.31,
+   "reversed": false,
+   "end": 283794.7
+  },
+  {
+   "id": 24,
+   "t": 309976,
+   "source": "move",
+   "target": "tempo",
+   "before": 174,
+   "after": 172,
+   "reversed": false,
+   "end": 310024.3
+  },
+  {
+   "id": 25,
+   "t": 328063.3,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 26,
+   "t": 341249.7,
+   "source": "move",
+   "target": "lane1.sound.snap",
+   "before": 0.5,
+   "after": 0.56,
+   "reversed": false,
+   "end": 341346.4
+  },
+  {
+   "id": 27,
+   "t": 371515.1,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 28,
+   "t": 390789.2,
+   "source": "move",
+   "target": "slot",
+   "before": 4,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 29,
+   "t": 401394.3,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 30,
+   "t": 410893,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 31,
+   "t": 429057.1,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 32,
+   "t": 442497.5,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 33,
+   "t": 443277.1,
+   "source": "move",
+   "target": "lane3.hits.7",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 34,
+   "t": 443794.7,
+   "source": "move",
+   "target": "lane3.hits.2",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 35,
+   "t": 456950.7,
+   "source": "move",
+   "target": "select",
+   "before": 3,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 36,
+   "t": 457999.4,
+   "source": "move",
+   "target": "lane1.hits.5",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 37,
+   "t": 458926.8,
+   "source": "move",
+   "target": "lane1.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 36
+  },
+  {
+   "id": 38,
+   "t": 459447.9,
+   "source": "move",
+   "target": "lane1.hits.4",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 39,
+   "t": 489389.1,
+   "source": "move",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "tamb",
+   "queued": false
+  },
+  {
+   "id": 40,
+   "t": 511814.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 41,
+   "t": 527995.2,
+   "source": "move",
+   "target": "tempo",
+   "before": 172,
+   "after": 174,
+   "reversed": false,
+   "end": 528043
+  },
+  {
+   "id": 42,
+   "t": 608401.1,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 43,
+   "t": 611663.5,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "voice": "kick",
+   "queued": false,
+   "reverses": 42
+  },
+  {
+   "id": 44,
+   "t": 630881.1,
+   "source": "move",
+   "target": "lane1.prob",
+   "before": 0.78,
+   "after": 0.84,
+   "reversed": false,
+   "end": 630978.4
+  },
+  {
+   "id": 45,
+   "t": 646610.3,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 46,
+   "t": 651665.1,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 47,
+   "t": 651832.7,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "voice": "kick",
+   "queued": false,
+   "reverses": 46
+  },
+  {
+   "id": 48,
+   "t": 678260.9,
+   "source": "move",
+   "target": "lane1.length",
+   "before": 16,
+   "after": 17,
+   "reversed": false
+  },
+  {
+   "id": 49,
+   "t": 700282.6,
+   "source": "move",
+   "target": "lane1.length",
+   "before": 17,
+   "after": 11,
+   "reversed": false,
+   "end": 700524.3
+  },
+  {
+   "id": 50,
+   "t": 723617,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 51,
+   "t": 748319.8,
+   "source": "move",
+   "target": "lane1.sound.snap",
+   "before": 0.5,
+   "after": 0.56,
+   "reversed": false,
+   "end": 748417
+  },
+  {
+   "id": 52,
+   "t": 769178.1,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 53,
+   "t": 795804,
+   "source": "move",
+   "target": "lane1.sound.send",
+   "before": 0.15,
+   "after": 0.09,
+   "reversed": false,
+   "end": 795901.4
+  },
+  {
+   "id": 54,
+   "t": 832060.2,
+   "source": "move",
+   "target": "lane1.sound.color",
+   "before": 0.5,
+   "after": 0.44,
+   "reversed": false,
+   "end": 832157.9
+  },
+  {
+   "id": 55,
+   "t": 900902.9,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 56,
+   "t": 931371.4,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 57,
+   "t": 931973.1,
+   "source": "move",
+   "target": "lane1.hits",
+   "before": "x..xx.....xxx...................",
+   "after": "................................",
+   "reversed": false
+  },
+  {
+   "id": 58,
+   "t": 936555.3,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 59,
+   "t": 947436.6,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 60,
+   "t": 948315.4,
+   "source": "move",
+   "target": "lane4.hits.15",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 61,
+   "t": 948917.3,
+   "source": "move",
+   "target": "lane4.hits.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 62,
+   "t": 949451.2,
+   "source": "move",
+   "target": "lane4.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 63,
+   "t": 949968.6,
+   "source": "move",
+   "target": "lane4.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 64,
+   "t": 969689.4,
+   "source": "move",
+   "target": "select",
+   "before": 4,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 65,
+   "t": 970317.6,
+   "source": "move",
+   "target": "lane1.hits.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 66,
+   "t": 970835.2,
+   "source": "move",
+   "target": "lane1.hits.11",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 67,
+   "t": 971759.9,
+   "source": "move",
+   "target": "lane1.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 68,
+   "t": 981889.1,
+   "source": "move",
+   "target": "lane1.euclidK",
+   "before": 0,
+   "after": 2,
+   "reversed": false,
+   "end": 981937.7
+  },
+  {
+   "id": 69,
+   "t": 1009862.1,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 70,
+   "t": 1018968.3,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 71,
+   "t": 1033820.9,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 72,
+   "t": 1034754.4,
+   "source": "move",
+   "target": "lane2.hits.2",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 73,
+   "t": 1035372.1,
+   "source": "move",
+   "target": "lane2.hits.7",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 74,
+   "t": 1036371.7,
+   "source": "move",
+   "target": "lane2.hits.2",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 72
+  },
+  {
+   "id": 75,
+   "t": 1079576.7,
+   "source": "move",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "ride",
+   "queued": false
+  },
+  {
+   "id": 76,
+   "t": 1115371.6,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 77,
+   "t": 1121106.6,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 78,
+   "t": 1142986.5,
+   "source": "move",
+   "target": "lane2.rotation",
+   "before": 13,
+   "after": 10,
+   "reversed": false,
+   "end": 1143084.1
+  },
+  {
+   "id": 79,
+   "t": 1174134.2,
+   "source": "move",
+   "target": "slot",
+   "before": 1,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 80,
+   "t": 1195009.4,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 81,
+   "t": 1211240.7,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 82,
+   "t": 1250204.6,
+   "source": "move",
+   "target": "lane2.sound.drive",
+   "before": 0.25,
+   "after": 0.31,
+   "reversed": false,
+   "end": 1250302.7
+  },
+  {
+   "id": 83,
+   "t": 1276646.4,
+   "source": "move",
+   "target": "slot",
+   "before": 1,
+   "after": 2,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 84,
+   "t": 1287165.7,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 85,
+   "t": 1300578.9,
+   "source": "move",
+   "target": "lane2.sound.pan",
+   "before": 0.5,
+   "after": 0.6,
+   "reversed": false,
+   "end": 1300771.6
+  },
+  {
+   "id": 86,
+   "t": 1316343.5,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 87,
+   "t": 1330809.9,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 88,
+   "t": 1344548.1,
+   "source": "move",
+   "target": "slot",
+   "before": 2,
+   "after": 1,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 89,
+   "t": 1364022.8,
+   "source": "move",
+   "target": "select",
+   "before": 2,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 90,
+   "t": 1364952.4,
+   "source": "move",
+   "target": "lane1.hits.11",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 91,
+   "t": 1365634.8,
+   "source": "move",
+   "target": "lane1.hits.5",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 92,
+   "t": 1385913.9,
+   "source": "move",
+   "target": "lane1.rotation",
+   "before": 12,
+   "after": 6,
+   "reversed": false,
+   "end": 1386159.8
+  },
+  {
+   "id": 93,
+   "t": 1410389.1,
+   "source": "move",
+   "target": "slot",
+   "before": 1,
+   "after": 3,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 94,
+   "t": 1433716.7,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 95,
+   "t": 1434326.1,
+   "source": "move",
+   "target": "lane2.hits.5",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 96,
+   "t": 1435153.3,
+   "source": "move",
+   "target": "lane2.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 97,
+   "t": 1462574.3,
+   "source": "move",
+   "target": "slot",
+   "before": 3,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 98,
+   "t": 1482427.9,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 99,
+   "t": 1527146.6,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 100,
+   "t": 1556549.1,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 101,
+   "t": 1610196.3,
+   "source": "move",
+   "target": "lane2.sound.tone",
+   "before": 0.85,
+   "after": 0.95,
+   "reversed": false,
+   "end": 1610395.9
+  },
+  {
+   "id": 102,
+   "t": 1630868.6,
+   "source": "move",
+   "target": "slot",
+   "before": 4,
+   "after": 3,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 103,
+   "t": 1667691.3,
+   "source": "move",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 104,
+   "t": 1668320.5,
+   "source": "move",
+   "target": "lane4.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 105,
+   "t": 1668849.3,
+   "source": "move",
+   "target": "lane4.euclidK",
+   "before": 0,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 106,
+   "t": 1669444.9,
+   "source": "move",
+   "target": "lane4.hits.1",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 107,
+   "t": 1681034.7,
+   "source": "move",
+   "target": "select",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 108,
+   "t": 1681930.7,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 109,
+   "t": 1682704.3,
+   "source": "move",
+   "target": "lane3.hits.8",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 110,
+   "t": 1683600.6,
+   "source": "move",
+   "target": "lane3.hits.7",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 111,
+   "t": 1709963.2,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 112,
+   "t": 1720939.9,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 113,
+   "t": 1746594.6,
+   "source": "move",
+   "target": "slot",
+   "before": 1,
+   "after": 2,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 114,
+   "t": 1790150.8,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 115,
+   "t": 1808385.1,
+   "source": "move",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 116,
+   "t": 1808977.3,
+   "source": "move",
+   "target": "lane2.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 117,
+   "t": 1809901.7,
+   "source": "move",
+   "target": "lane2.hits.3",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 118,
+   "t": 1810736.9,
+   "source": "move",
+   "target": "lane2.hits.6",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 116
+  },
+  {
+   "id": 119,
+   "t": 1811321.4,
+   "source": "move",
+   "target": "lane2.hits.7",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 120,
+   "t": 1836658.4,
+   "source": "move",
+   "target": "lane2.hits",
+   "before": "....x.......x.x.................",
+   "after": "................................",
+   "reversed": false
+  },
+  {
+   "id": 121,
+   "t": 1864005.3,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 122,
+   "t": 1864688.3,
+   "source": "move",
+   "target": "lane2.rotation",
+   "before": 15,
+   "after": 1,
+   "reversed": false,
+   "end": 1864737.4
+  },
+  {
+   "id": 123,
+   "t": 1884950.5,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 124,
+   "t": 1898307.8,
+   "source": "move",
+   "target": "lane2.sound.send",
+   "before": 0.15,
+   "after": 0.27,
+   "reversed": false,
+   "end": 1898550.3
+  },
+  {
+   "id": 125,
+   "t": 1965117.1,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 126,
+   "t": 1965282.8,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "voice": "kick",
+   "queued": false,
+   "reverses": 125
+  },
+  {
+   "id": 127,
+   "t": 1984952.4,
+   "source": "move",
+   "target": "slot",
+   "before": 2,
+   "after": 3,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 128,
+   "t": 2005214.2,
+   "source": "move",
+   "target": "tempo",
+   "before": 174,
+   "after": 172,
+   "reversed": false,
+   "end": 2005262.2
+  },
+  {
+   "id": 129,
+   "t": 2021696.7,
+   "source": "move",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 130,
+   "t": 2022689.2,
+   "source": "move",
+   "target": "lane4.hits.4",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 131,
+   "t": 2023460,
+   "source": "move",
+   "target": "lane4.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 132,
+   "t": 2024083.8,
+   "source": "move",
+   "target": "lane4.hits.9",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 133,
+   "t": 2024677.7,
+   "source": "move",
+   "target": "lane4.hits.8",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 134,
+   "t": 2047969.2,
+   "source": "move",
+   "target": "select",
+   "before": 4,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 135,
+   "t": 2048677.3,
+   "source": "move",
+   "target": "lane1.hits.6",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 136,
+   "t": 2049237.4,
+   "source": "move",
+   "target": "lane1.hits.6",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 135
+  },
+  {
+   "id": 137,
+   "t": 2050135.5,
+   "source": "move",
+   "target": "lane1.hits.12",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 138,
+   "t": 2050979.2,
+   "source": "move",
+   "target": "lane1.hits.8",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 139,
+   "t": 2051892,
+   "source": "move",
+   "target": "lane1.hits.10",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 140,
+   "t": 2080548.9,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 141,
+   "t": 2092426.7,
+   "source": "move",
+   "target": "lane1.rotation",
+   "before": 11,
+   "after": 10,
+   "reversed": false
+  },
+  {
+   "id": 142,
+   "t": 2093034.3,
+   "source": "move",
+   "target": "lane1.sound.color",
+   "before": 0.5,
+   "after": 0.46,
+   "reversed": false,
+   "end": 2093082.6
+  },
+  {
+   "id": 143,
+   "t": 2121565.2,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 144,
+   "t": 2122455.5,
+   "source": "move",
+   "target": "lane2.hits.10",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 145,
+   "t": 2122985.3,
+   "source": "move",
+   "target": "lane2.hits.9",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 146,
+   "t": 2123808.5,
+   "source": "move",
+   "target": "lane2.hits.8",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 147,
+   "t": 2133811.7,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 148,
+   "t": 2157073.6,
+   "source": "move",
+   "target": "slot",
+   "before": 3,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 149,
+   "t": 2170497.9,
+   "source": "move",
+   "target": "select",
+   "before": 2,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 150,
+   "t": 2171406,
+   "source": "move",
+   "target": "lane3.hits.7",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 151,
+   "t": 2172055.9,
+   "source": "move",
+   "target": "lane3.hits.2",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 152,
+   "t": 2172595.6,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 153,
+   "t": 2173271.9,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 152
+  },
+  {
+   "id": 154,
+   "t": 2173789.2,
+   "source": "move",
+   "target": "lane3.hits.7",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 150
+  },
+  {
+   "id": 155,
+   "t": 2197714.3,
+   "source": "move",
+   "target": "slot",
+   "before": 4,
+   "after": 1,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 156,
+   "t": 2208311.4,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare",
+   "queued": false
+  },
+  {
+   "id": 157,
+   "t": 2218442.6,
+   "source": "move",
+   "target": "tempo",
+   "before": 172,
+   "after": 170,
+   "reversed": false,
+   "end": 2218488.6
+  },
+  {
+   "id": 158,
+   "t": 2237914.7,
+   "source": "move",
+   "target": "tempo",
+   "before": 170,
+   "after": 168,
+   "reversed": false,
+   "end": 2237962.7
+  },
+  {
+   "id": 159,
+   "t": 2263887.3,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 160,
+   "t": 2273918.3,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 161,
+   "t": 2300796.2,
+   "source": "move",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "ride",
+   "queued": false
+  },
+  {
+   "id": 162,
+   "t": 2320787.3,
+   "source": "move",
+   "target": "select",
+   "before": 3,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 163,
+   "t": 2321732.1,
+   "source": "move",
+   "target": "lane4.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 164,
+   "t": 2322619.5,
+   "source": "move",
+   "target": "lane4.hits.2",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 165,
+   "t": 2323270.1,
+   "source": "move",
+   "target": "lane4.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 166,
+   "t": 2339867.5,
+   "source": "move",
+   "target": "tempo",
+   "before": 168,
+   "after": 170,
+   "reversed": false,
+   "end": 2339915.5
+  },
+  {
+   "id": 167,
+   "t": 2368482.1,
+   "source": "move",
+   "target": "select",
+   "before": 4,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 168,
+   "t": 2369304.8,
+   "source": "move",
+   "target": "lane1.hits.5",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 169,
+   "t": 2369832.3,
+   "source": "move",
+   "target": "lane1.sound.color",
+   "before": 0.5,
+   "after": 0.44,
+   "reversed": false,
+   "end": 2369928.8
+  },
+  {
+   "id": 170,
+   "t": 2370525.7,
+   "source": "move",
+   "target": "lane1.hits.10",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 171,
+   "t": 2371192.6,
+   "source": "move",
+   "target": "lane1.hits.7",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 172,
+   "t": 2383996.8,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 173,
+   "t": 2389518.1,
+   "source": "move",
+   "target": "lane1.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "kick",
+   "queued": false
+  },
+  {
+   "id": 174,
+   "t": 2400751.8,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 175,
+   "t": 2417842.2,
+   "source": "move",
+   "target": "transport",
+   "before": "playing",
+   "after": "stopped",
+   "reversed": false
+  }
+ ],
+ "session": {
+  "tool": "orbit2/tools/session.mjs",
+  "persona": "noor",
+  "seed": 22,
+  "minutes": 40,
+  "mouse": false,
+  "slips": 0.08,
+  "speed": 1,
+  "groove": "dnb",
+  "intents": {
+   "build": 3,
+   "knobs": 3,
+   "evolve": 2,
+   "slots": 3,
+   "mute": 2,
+   "drop": 1,
+   "tempo": 1,
+   "listen": 3
+  },
+  "errors": [],
+  "script": [
+   {
+    "id": 0,
+    "at": 1000,
+    "g": 0,
+    "intent": "start",
+    "kind": "move.play",
+    "expect": [
+     "transport"
+    ]
+   },
+   {
+    "id": 1,
+    "at": 1608,
+    "g": 1,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 2,
+    "at": 2019,
+    "g": 1,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 3,
+    "at": 2955,
+    "g": 1,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 4,
+    "at": 3831,
+    "g": 1,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 5,
+    "at": 13932,
+    "g": 2,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "lane1.rotation"
+    ]
+   },
+   {
+    "id": 6,
+    "at": 33392,
+    "g": 3,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 7,
+    "at": 63131,
+    "g": 4,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": -5,
+    "expect": [
+     "lane1.prob"
+    ]
+   },
+   {
+    "id": 8,
+    "at": 79220,
+    "g": 5,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": -6,
+    "expect": [
+     "lane1.prob"
+    ]
+   },
+   {
+    "id": 9,
+    "at": 105296,
+    "g": 6,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 3,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 10,
+    "at": 126194,
+    "g": 7,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 11,
+    "at": 181281,
+    "g": 9,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 12,
+    "at": 204985,
+    "g": 10,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 13,
+    "at": 234851,
+    "g": 11,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": 2,
+    "expect": [
+     "lane1.sound.send"
+    ]
+   },
+   {
+    "id": 14,
+    "at": 263661,
+    "g": 12,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 15,
+    "at": 269434,
+    "g": 12,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 16,
+    "at": 279232,
+    "g": 13,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane1.sound.send"
+    ]
+   },
+   {
+    "id": 17,
+    "at": 305651,
+    "g": 14,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 18,
+    "at": 323757,
+    "g": 15,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 19,
+    "at": 336924,
+    "g": 16,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 3,
+    "shift": true,
+    "turns": 3,
+    "expect": [
+     "lane1.sound.snap"
+    ]
+   },
+   {
+    "id": 20,
+    "at": 367273,
+    "g": 17,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 21,
+    "at": 386218,
+    "g": 18,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 22,
+    "at": 397088,
+    "g": 19,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 23,
+    "at": 406569,
+    "g": 20,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 0,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 24,
+    "at": 424733,
+    "g": 21,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 1,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 25,
+    "at": 438255,
+    "g": 22,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 2,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 26,
+    "at": 438962,
+    "g": 22,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 27,
+    "at": 439428,
+    "g": 22,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 28,
+    "at": 452708,
+    "g": 23,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 29,
+    "at": 453686,
+    "g": 23,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 30,
+    "at": 454607,
+    "g": 23,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 31,
+    "at": 455099,
+    "g": 23,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 32,
+    "at": 485084,
+    "g": 24,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 3,
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 33,
+    "at": 507572,
+    "g": 25,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 34,
+    "at": 523670,
+    "g": 26,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 35,
+    "at": 604096,
+    "g": 29,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 36,
+    "at": 607360,
+    "g": 29,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 37,
+    "at": 626556,
+    "g": 30,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": 3,
+    "expect": [
+     "lane1.prob"
+    ]
+   },
+   {
+    "id": 38,
+    "at": 642306,
+    "g": 31,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 39,
+    "at": 647360,
+    "g": 31,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 40,
+    "at": 673089,
+    "g": 32,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": false,
+    "turns": -6,
+    "expect": [
+     "lane1.swing"
+    ]
+   },
+   {
+    "id": 168,
+    "at": 673389,
+    "g": 32,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": false,
+    "turns": 1,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 40
+    }
+   },
+   {
+    "id": 41,
+    "at": 695959,
+    "g": 33,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": false,
+    "turns": -6,
+    "expect": [
+     "lane1.length",
+     "lane1.euclidK"
+    ]
+   },
+   {
+    "id": 42,
+    "at": 719295,
+    "g": 34,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 43,
+    "at": 743998,
+    "g": 35,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 3,
+    "shift": true,
+    "turns": 3,
+    "expect": [
+     "lane1.sound.snap"
+    ]
+   },
+   {
+    "id": 44,
+    "at": 764874,
+    "g": 36,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 45,
+    "at": 791480,
+    "g": 37,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": -3,
+    "expect": [
+     "lane1.sound.send"
+    ]
+   },
+   {
+    "id": 46,
+    "at": 827737,
+    "g": 39,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": -3,
+    "expect": [
+     "lane1.sound.color"
+    ]
+   },
+   {
+    "id": 47,
+    "at": 892465,
+    "g": 43,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 48,
+    "at": 896599,
+    "g": 43,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 49,
+    "at": 927068,
+    "g": 45,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 169,
+    "at": 927368,
+    "g": 45,
+    "intent": "drop",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": false,
+    "turns": -3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 49
+    }
+   },
+   {
+    "id": 50,
+    "at": 932251,
+    "g": 45,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 51,
+    "at": 943197,
+    "g": 46,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 3,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 52,
+    "at": 944002,
+    "g": 46,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 53,
+    "at": 944604,
+    "g": 46,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 54,
+    "at": 945138,
+    "g": 46,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 55,
+    "at": 945549,
+    "g": 46,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 56,
+    "at": 965449,
+    "g": 47,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 57,
+    "at": 966006,
+    "g": 47,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 58,
+    "at": 966526,
+    "g": 47,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 59,
+    "at": 967448,
+    "g": 47,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 60,
+    "at": 977566,
+    "g": 48,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "lane1.euclidK"
+    ]
+   },
+   {
+    "id": 61,
+    "at": 1005540,
+    "g": 49,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 62,
+    "at": 1014644,
+    "g": 50,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 0,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 63,
+    "at": 1029581,
+    "g": 51,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 1,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 64,
+    "at": 1030444,
+    "g": 51,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 65,
+    "at": 1031061,
+    "g": 51,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 66,
+    "at": 1032061,
+    "g": 51,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 67,
+    "at": 1075273,
+    "g": 53,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 2,
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 68,
+    "at": 1094284,
+    "g": 54,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": false,
+    "turns": -3,
+    "expect": [
+     "lane2.swing"
+    ]
+   },
+   {
+    "id": 69,
+    "at": 1111069,
+    "g": 55,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 70,
+    "at": 1116804,
+    "g": 55,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 71,
+    "at": 1138662,
+    "g": 56,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": -3,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 72,
+    "at": 1169566,
+    "g": 57,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 73,
+    "at": 1190687,
+    "g": 58,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 74,
+    "at": 1206920,
+    "g": 59,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 0,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 75,
+    "at": 1245881,
+    "g": 61,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": true,
+    "turns": 3,
+    "expect": [
+     "lane2.sound.drive"
+    ]
+   },
+   {
+    "id": 76,
+    "at": 1272063,
+    "g": 62,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 1,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 77,
+    "at": 1282922,
+    "g": 63,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 78,
+    "at": 1296257,
+    "g": 64,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 6,
+    "shift": true,
+    "turns": 5,
+    "expect": [
+     "lane2.sound.pan"
+    ]
+   },
+   {
+    "id": 79,
+    "at": 1312104,
+    "g": 65,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 80,
+    "at": 1326571,
+    "g": 66,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 81,
+    "at": 1339969,
+    "g": 67,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 0,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 82,
+    "at": 1359783,
+    "g": 68,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 83,
+    "at": 1360642,
+    "g": 68,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 84,
+    "at": 1361325,
+    "g": 68,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 85,
+    "at": 1381593,
+    "g": 69,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": -6,
+    "expect": [
+     "lane1.rotation"
+    ]
+   },
+   {
+    "id": 86,
+    "at": 1405822,
+    "g": 70,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 2,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 87,
+    "at": 1429478,
+    "g": 71,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 1,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 88,
+    "at": 1430015,
+    "g": 71,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 89,
+    "at": 1430842,
+    "g": 71,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 90,
+    "at": 1458008,
+    "g": 72,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 91,
+    "at": 1478190,
+    "g": 73,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 92,
+    "at": 1522844,
+    "g": 75,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 93,
+    "at": 1552312,
+    "g": 76,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 94,
+    "at": 1569197,
+    "g": 77,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 2,
+    "expect": [
+     "lane3.mute=false"
+    ]
+   },
+   {
+    "id": 95,
+    "at": 1605874,
+    "g": 79,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": true,
+    "turns": 5,
+    "expect": [
+     "lane2.sound.tone"
+    ]
+   },
+   {
+    "id": 96,
+    "at": 1626302,
+    "g": 80,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 2,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 97,
+    "at": 1663454,
+    "g": 82,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 3,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 98,
+    "at": 1663935,
+    "g": 82,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 170,
+    "at": 1664235,
+    "g": 82,
+    "intent": "build",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": false,
+    "turns": 1,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 98
+    }
+   },
+   {
+    "id": 99,
+    "at": 1664576,
+    "g": 82,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 100,
+    "at": 1676797,
+    "g": 83,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 2,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 101,
+    "at": 1677622,
+    "g": 83,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 102,
+    "at": 1678395,
+    "g": 83,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 103,
+    "at": 1679290,
+    "g": 83,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 104,
+    "at": 1705727,
+    "g": 84,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 105,
+    "at": 1716620,
+    "g": 85,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 0,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 106,
+    "at": 1742030,
+    "g": 86,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 1,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 107,
+    "at": 1785831,
+    "g": 89,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 108,
+    "at": 1804148,
+    "g": 90,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 1,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 109,
+    "at": 1804620,
+    "g": 90,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 110,
+    "at": 1805592,
+    "g": 90,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 111,
+    "at": 1806429,
+    "g": 90,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 112,
+    "at": 1807011,
+    "g": 90,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 113,
+    "at": 1832340,
+    "g": 91,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": false,
+    "turns": -3,
+    "expect": [
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 114,
+    "at": 1859686,
+    "g": 92,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 171,
+    "at": 1859986,
+    "g": 92,
+    "intent": "slots",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": 2,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 114
+    }
+   },
+   {
+    "id": 115,
+    "at": 1880633,
+    "g": 93,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 1,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 116,
+    "at": 1893990,
+    "g": 94,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane2.sound.send"
+    ]
+   },
+   {
+    "id": 117,
+    "at": 1938478,
+    "g": 96,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane2.sound.level"
+    ]
+   },
+   {
+    "id": 118,
+    "at": 1960818,
+    "g": 97,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 119,
+    "at": 1965706,
+    "g": 97,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 120,
+    "at": 1980389,
+    "g": 98,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 2,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 121,
+    "at": 2000895,
+    "g": 100,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 122,
+    "at": 2017461,
+    "g": 101,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 3,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 123,
+    "at": 2018382,
+    "g": 101,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 124,
+    "at": 2019152,
+    "g": 101,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 125,
+    "at": 2019776,
+    "g": 101,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 126,
+    "at": 2020370,
+    "g": 101,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 127,
+    "at": 2032773,
+    "g": 102,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": 4,
+    "expect": [
+     "lane4.prob"
+    ]
+   },
+   {
+    "id": 128,
+    "at": 2043733,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 129,
+    "at": 2044368,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 130,
+    "at": 2044927,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 131,
+    "at": 2045821,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 132,
+    "at": 2046656,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 133,
+    "at": 2047584,
+    "g": 103,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 134,
+    "at": 2076249,
+    "g": 104,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 135,
+    "at": 2088107,
+    "g": 105,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": -1,
+    "expect": [
+     "lane1.rotation"
+    ]
+   },
+   {
+    "id": 172,
+    "at": 2088407,
+    "g": 105,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": -2,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 135
+    }
+   },
+   {
+    "id": 136,
+    "at": 2117329,
+    "g": 106,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 1,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 137,
+    "at": 2118118,
+    "g": 106,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 138,
+    "at": 2118550,
+    "g": 106,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 139,
+    "at": 2119472,
+    "g": 106,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane2.hits.*"
+    ]
+   },
+   {
+    "id": 140,
+    "at": 2129576,
+    "g": 107,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 141,
+    "at": 2152477,
+    "g": 108,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 142,
+    "at": 2166263,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 2,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 143,
+    "at": 2167065,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 144,
+    "at": 2167749,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 145,
+    "at": 2168154,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 146,
+    "at": 2168965,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 147,
+    "at": 2169416,
+    "g": 109,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 148,
+    "at": 2193146,
+    "g": 110,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 0,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 149,
+    "at": 2204012,
+    "g": 111,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 150,
+    "at": 2214124,
+    "g": 112,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 151,
+    "at": 2233596,
+    "g": 113,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 152,
+    "at": 2259653,
+    "g": 115,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 153,
+    "at": 2269683,
+    "g": 116,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 154,
+    "at": 2296498,
+    "g": 117,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 2,
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 155,
+    "at": 2316552,
+    "g": 118,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 3,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 156,
+    "at": 2317425,
+    "g": 118,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 157,
+    "at": 2318313,
+    "g": 118,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 158,
+    "at": 2318963,
+    "g": 118,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane4.hits.*"
+    ]
+   },
+   {
+    "id": 159,
+    "at": 2335550,
+    "g": 119,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 160,
+    "at": 2364248,
+    "g": 121,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 161,
+    "at": 2364998,
+    "g": 121,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 173,
+    "at": 2365298,
+    "g": 121,
+    "intent": "build",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": -3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 161
+    }
+   },
+   {
+    "id": 162,
+    "at": 2365959,
+    "g": 121,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 163,
+    "at": 2366870,
+    "g": 121,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 164,
+    "at": 2379699,
+    "g": 122,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=true"
+    ]
+   },
+   {
+    "id": 165,
+    "at": 2385191,
+    "g": 122,
+    "intent": "drop",
+    "kind": "move.mute",
+    "lane": 0,
+    "expect": [
+     "lane1.mute=false"
+    ]
+   },
+   {
+    "id": 166,
+    "at": 2396438,
+    "g": 123,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 3,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 167,
+    "at": 2413608,
+    "g": 124,
+    "intent": "end",
+    "kind": "move.play",
+    "expect": [
+     "transport"
+    ]
+   }
+  ],
+  "runs": [
+   {
+    "id": 0,
+    "t0": 5246.3,
+    "t1": 5767.6
+   },
+   {
+    "id": 1,
+    "t0": 5851.7,
+    "t1": 6371.3
+   },
+   {
+    "id": 2,
+    "t0": 6371.7,
+    "t1": 6891.4
+   },
+   {
+    "id": 3,
+    "t0": 7198.3,
+    "t1": 7717
+   },
+   {
+    "id": 4,
+    "t0": 8074.9,
+    "t1": 8594.1
+   },
+   {
+    "id": 5,
+    "t0": 18173.6,
+    "t1": 18824
+   },
+   {
+    "id": 6,
+    "t0": 37635.6,
+    "t1": 38153.4
+   },
+   {
+    "id": 7,
+    "t0": 67373.8,
+    "t1": 68173.1
+   },
+   {
+    "id": 8,
+    "t0": 83463.4,
+    "t1": 84312.6
+   },
+   {
+    "id": 9,
+    "t0": 109539.1,
+    "t1": 110221.6
+   },
+   {
+    "id": 10,
+    "t0": 130437,
+    "t1": 130954.4
+   },
+   {
+    "id": 11,
+    "t0": 185523.7,
+    "t1": 186106.8
+   },
+   {
+    "id": 12,
+    "t0": 209226.4,
+    "t1": 209745.6
+   },
+   {
+    "id": 13,
+    "t0": 239093.5,
+    "t1": 239752.2
+   },
+   {
+    "id": 14,
+    "t0": 267904,
+    "t1": 268487.7
+   },
+   {
+    "id": 15,
+    "t0": 273676.1,
+    "t1": 274257.4
+   },
+   {
+    "id": 16,
+    "t0": 283473.2,
+    "t1": 284322.4
+   },
+   {
+    "id": 17,
+    "t0": 309893.2,
+    "t1": 310546.6
+   },
+   {
+    "id": 18,
+    "t0": 327998.7,
+    "t1": 328581.9
+   },
+   {
+    "id": 19,
+    "t0": 341165.3,
+    "t1": 341870.8
+   },
+   {
+    "id": 20,
+    "t0": 371514.5,
+    "t1": 372032.3
+   },
+   {
+    "id": 21,
+    "t0": 390459.6,
+    "t1": 391141.5
+   },
+   {
+    "id": 22,
+    "t0": 401329.8,
+    "t1": 401912.7
+   },
+   {
+    "id": 23,
+    "t0": 410810.3,
+    "t1": 411493.8
+   },
+   {
+    "id": 24,
+    "t0": 428973.8,
+    "t1": 429655
+   },
+   {
+    "id": 25,
+    "t0": 442496.3,
+    "t1": 443015.6
+   },
+   {
+    "id": 26,
+    "t0": 443203.4,
+    "t1": 443722
+   },
+   {
+    "id": 27,
+    "t0": 443722.4,
+    "t1": 444239.8
+   },
+   {
+    "id": 28,
+    "t0": 456948.8,
+    "t1": 457468.7
+   },
+   {
+    "id": 29,
+    "t0": 457925.8,
+    "t1": 458443.7
+   },
+   {
+    "id": 30,
+    "t0": 458852.9,
+    "t1": 459373.3
+   },
+   {
+    "id": 31,
+    "t0": 459374,
+    "t1": 459892.9
+   },
+   {
+    "id": 32,
+    "t0": 489324.8,
+    "t1": 489905.8
+   },
+   {
+    "id": 33,
+    "t0": 511814.3,
+    "t1": 512331.3
+   },
+   {
+    "id": 34,
+    "t0": 527911,
+    "t1": 528564.8
+   },
+   {
+    "id": 35,
+    "t0": 608336.3,
+    "t1": 608919.2
+   },
+   {
+    "id": 36,
+    "t0": 611599.3,
+    "t1": 612182.3
+   },
+   {
+    "id": 37,
+    "t0": 630797.3,
+    "t1": 631500.9
+   },
+   {
+    "id": 38,
+    "t0": 646546.2,
+    "t1": 647127.4
+   },
+   {
+    "id": 39,
+    "t0": 651600.7,
+    "t1": 652349.4
+   },
+   {
+    "id": 40,
+    "t0": 677327.6,
+    "t1": 678176.4
+   },
+   {
+    "id": 168,
+    "t0": 678177.1,
+    "t1": 678784.6
+   },
+   {
+    "id": 41,
+    "t0": 700198.9,
+    "t1": 701046.7
+   },
+   {
+    "id": 42,
+    "t0": 723533.6,
+    "t1": 724217
+   },
+   {
+    "id": 43,
+    "t0": 748236.8,
+    "t1": 748941.5
+   },
+   {
+    "id": 44,
+    "t0": 769114.2,
+    "t1": 769695.7
+   },
+   {
+    "id": 45,
+    "t0": 795720,
+    "t1": 796423.6
+   },
+   {
+    "id": 46,
+    "t0": 831976.8,
+    "t1": 832680.9
+   },
+   {
+    "id": 47,
+    "t0": 896704.2,
+    "t1": 897057.2,
+    "skipped": "already so"
+   },
+   {
+    "id": 48,
+    "t0": 900838.7,
+    "t1": 901421
+   },
+   {
+    "id": 49,
+    "t0": 931307.6,
+    "t1": 931889.1
+   },
+   {
+    "id": 169,
+    "t0": 931889.6,
+    "t1": 932593.1
+   },
+   {
+    "id": 50,
+    "t0": 936490.9,
+    "t1": 937073.6
+   },
+   {
+    "id": 51,
+    "t0": 947435.5,
+    "t1": 947954.6
+   },
+   {
+    "id": 52,
+    "t0": 948241.2,
+    "t1": 948760.8
+   },
+   {
+    "id": 53,
+    "t0": 948843.5,
+    "t1": 949360.8
+   },
+   {
+    "id": 54,
+    "t0": 949377.4,
+    "t1": 949894.3
+   },
+   {
+    "id": 55,
+    "t0": 949894.9,
+    "t1": 950413.7
+   },
+   {
+    "id": 56,
+    "t0": 969688.4,
+    "t1": 970208
+   },
+   {
+    "id": 57,
+    "t0": 970245.5,
+    "t1": 970762.4
+   },
+   {
+    "id": 58,
+    "t0": 970762.8,
+    "t1": 971280
+   },
+   {
+    "id": 59,
+    "t0": 971686.3,
+    "t1": 972204.7
+   },
+   {
+    "id": 60,
+    "t0": 981805,
+    "t1": 982460.3
+   },
+   {
+    "id": 61,
+    "t0": 1009778.7,
+    "t1": 1010462.1
+   },
+   {
+    "id": 62,
+    "t0": 1018885.8,
+    "t1": 1019564.5
+   },
+   {
+    "id": 63,
+    "t0": 1033819.6,
+    "t1": 1034338.8
+   },
+   {
+    "id": 64,
+    "t0": 1034682.1,
+    "t1": 1035200.3
+   },
+   {
+    "id": 65,
+    "t0": 1035298.5,
+    "t1": 1035816.9
+   },
+   {
+    "id": 66,
+    "t0": 1036299,
+    "t1": 1036817
+   },
+   {
+    "id": 67,
+    "t0": 1079512.4,
+    "t1": 1080092.7
+   },
+   {
+    "id": 68,
+    "t0": 1098521,
+    "t1": 1099225
+   },
+   {
+    "id": 69,
+    "t0": 1115307.7,
+    "t1": 1115889.9
+   },
+   {
+    "id": 70,
+    "t0": 1121042.2,
+    "t1": 1121624.1
+   },
+   {
+    "id": 71,
+    "t0": 1142901.1,
+    "t1": 1143606.8
+   },
+   {
+    "id": 72,
+    "t0": 1173804.2,
+    "t1": 1174487
+   },
+   {
+    "id": 73,
+    "t0": 1194925.7,
+    "t1": 1195618.1
+   },
+   {
+    "id": 74,
+    "t0": 1211158.4,
+    "t1": 1211839.9
+   },
+   {
+    "id": 75,
+    "t0": 1250120.5,
+    "t1": 1250825.8
+   },
+   {
+    "id": 76,
+    "t0": 1276315.1,
+    "t1": 1276999.2
+   },
+   {
+    "id": 77,
+    "t0": 1287163.7,
+    "t1": 1287681.1
+   },
+   {
+    "id": 78,
+    "t0": 1300496.1,
+    "t1": 1301293.9
+   },
+   {
+    "id": 79,
+    "t0": 1316341.3,
+    "t1": 1316861.8
+   },
+   {
+    "id": 80,
+    "t0": 1330809.4,
+    "t1": 1331327.7
+   },
+   {
+    "id": 81,
+    "t0": 1344206.8,
+    "t1": 1344900.9
+   },
+   {
+    "id": 82,
+    "t0": 1364021.6,
+    "t1": 1364548
+   },
+   {
+    "id": 83,
+    "t0": 1364879.8,
+    "t1": 1365398
+   },
+   {
+    "id": 84,
+    "t0": 1365561.4,
+    "t1": 1366079.8
+   },
+   {
+    "id": 85,
+    "t0": 1385830.2,
+    "t1": 1386681
+   },
+   {
+    "id": 86,
+    "t0": 1410059.9,
+    "t1": 1410742
+   },
+   {
+    "id": 87,
+    "t0": 1433715.7,
+    "t1": 1434234.3
+   },
+   {
+    "id": 88,
+    "t0": 1434252.7,
+    "t1": 1434771.8
+   },
+   {
+    "id": 89,
+    "t0": 1435079.5,
+    "t1": 1435598.1
+   },
+   {
+    "id": 90,
+    "t0": 1462245.8,
+    "t1": 1462926.6
+   },
+   {
+    "id": 91,
+    "t0": 1482427.3,
+    "t1": 1482946.9
+   },
+   {
+    "id": 92,
+    "t0": 1527082.5,
+    "t1": 1527673.3
+   },
+   {
+    "id": 93,
+    "t0": 1556548.6,
+    "t1": 1557066.3
+   },
+   {
+    "id": 94,
+    "t0": 1573434.2,
+    "t1": 1573786.9,
+    "skipped": "already so"
+   },
+   {
+    "id": 95,
+    "t0": 1610112.3,
+    "t1": 1610918
+   },
+   {
+    "id": 96,
+    "t0": 1630539.1,
+    "t1": 1631221.6
+   },
+   {
+    "id": 97,
+    "t0": 1667690.4,
+    "t1": 1668246.7
+   },
+   {
+    "id": 98,
+    "t0": 1668247.1,
+    "t1": 1668765.7
+   },
+   {
+    "id": 170,
+    "t0": 1668766.2,
+    "t1": 1669370.9
+   },
+   {
+    "id": 99,
+    "t0": 1669371.4,
+    "t1": 1669889.6
+   },
+   {
+    "id": 100,
+    "t0": 1681033.7,
+    "t1": 1681552.9
+   },
+   {
+    "id": 101,
+    "t0": 1681858.5,
+    "t1": 1682373.8
+   },
+   {
+    "id": 102,
+    "t0": 1682630.4,
+    "t1": 1683148.2
+   },
+   {
+    "id": 103,
+    "t0": 1683526.9,
+    "t1": 1684045.5
+   },
+   {
+    "id": 104,
+    "t0": 1709962.7,
+    "t1": 1710481.1
+   },
+   {
+    "id": 105,
+    "t0": 1720856.8,
+    "t1": 1721537.7
+   },
+   {
+    "id": 106,
+    "t0": 1746266.1,
+    "t1": 1746947.4
+   },
+   {
+    "id": 107,
+    "t0": 1790067.6,
+    "t1": 1790749.5
+   },
+   {
+    "id": 108,
+    "t0": 1808384.2,
+    "t1": 1808903.5
+   },
+   {
+    "id": 109,
+    "t0": 1808903.9,
+    "t1": 1809422
+   },
+   {
+    "id": 110,
+    "t0": 1809828.8,
+    "t1": 1810346.6
+   },
+   {
+    "id": 111,
+    "t0": 1810663.3,
+    "t1": 1811182.9
+   },
+   {
+    "id": 112,
+    "t0": 1811247.8,
+    "t1": 1811766.2
+   },
+   {
+    "id": 113,
+    "t0": 1836576.1,
+    "t1": 1837275.1
+   },
+   {
+    "id": 114,
+    "t0": 1863921,
+    "t1": 1864604.3
+   },
+   {
+    "id": 171,
+    "t0": 1864604.8,
+    "t1": 1865259.3
+   },
+   {
+    "id": 115,
+    "t0": 1884867.4,
+    "t1": 1885548.9
+   },
+   {
+    "id": 116,
+    "t0": 1898225.5,
+    "t1": 1899074.6
+   },
+   {
+    "id": 117,
+    "t0": 1942714,
+    "t1": 1943565.4
+   },
+   {
+    "id": 118,
+    "t0": 1965053.1,
+    "t1": 1965821.9
+   },
+   {
+    "id": 119,
+    "t0": 1969942.3,
+    "t1": 1970293.9,
+    "skipped": "already so"
+   },
+   {
+    "id": 120,
+    "t0": 1984624.5,
+    "t1": 1985303.8
+   },
+   {
+    "id": 121,
+    "t0": 2005130.7,
+    "t1": 2005782.2
+   },
+   {
+    "id": 122,
+    "t0": 2021695.7,
+    "t1": 2022213.6
+   },
+   {
+    "id": 123,
+    "t0": 2022616.3,
+    "t1": 2023135
+   },
+   {
+    "id": 124,
+    "t0": 2023387.5,
+    "t1": 2023904.4
+   },
+   {
+    "id": 125,
+    "t0": 2024011.1,
+    "t1": 2024528.3
+   },
+   {
+    "id": 126,
+    "t0": 2024604.3,
+    "t1": 2025123
+   },
+   {
+    "id": 127,
+    "t0": 2037014.4,
+    "t1": 2037766.4
+   },
+   {
+    "id": 128,
+    "t0": 2047968.2,
+    "t1": 2048487
+   },
+   {
+    "id": 129,
+    "t0": 2048603.5,
+    "t1": 2049120.6
+   },
+   {
+    "id": 130,
+    "t0": 2049162.6,
+    "t1": 2049681.9
+   },
+   {
+    "id": 131,
+    "t0": 2050057.1,
+    "t1": 2050581.2
+   },
+   {
+    "id": 132,
+    "t0": 2050905.4,
+    "t1": 2051422.1
+   },
+   {
+    "id": 133,
+    "t0": 2051819.8,
+    "t1": 2052335.3
+   },
+   {
+    "id": 134,
+    "t0": 2080484.8,
+    "t1": 2081067.8
+   },
+   {
+    "id": 135,
+    "t0": 2092342.8,
+    "t1": 2092950
+   },
+   {
+    "id": 172,
+    "t0": 2092950.5,
+    "t1": 2093605.8
+   },
+   {
+    "id": 136,
+    "t0": 2121564.3,
+    "t1": 2122083.9
+   },
+   {
+    "id": 137,
+    "t0": 2122353.6,
+    "t1": 2122912.5
+   },
+   {
+    "id": 138,
+    "t0": 2122913.4,
+    "t1": 2123430
+   },
+   {
+    "id": 139,
+    "t0": 2123706.6,
+    "t1": 2124252
+   },
+   {
+    "id": 140,
+    "t0": 2133811.2,
+    "t1": 2134339.1
+   },
+   {
+    "id": 141,
+    "t0": 2156712.3,
+    "t1": 2157451.2
+   },
+   {
+    "id": 142,
+    "t0": 2170496.6,
+    "t1": 2171015.9
+   },
+   {
+    "id": 143,
+    "t0": 2171298.3,
+    "t1": 2171850.9
+   },
+   {
+    "id": 144,
+    "t0": 2171983.6,
+    "t1": 2172521.8
+   },
+   {
+    "id": 145,
+    "t0": 2172522.2,
+    "t1": 2173040.4
+   },
+   {
+    "id": 146,
+    "t0": 2173200,
+    "t1": 2173716.8
+   },
+   {
+    "id": 147,
+    "t0": 2173717.3,
+    "t1": 2174234
+   },
+   {
+    "id": 148,
+    "t0": 2197381.4,
+    "t1": 2198066.6
+   },
+   {
+    "id": 149,
+    "t0": 2208247.4,
+    "t1": 2208830.5
+   },
+   {
+    "id": 150,
+    "t0": 2218359,
+    "t1": 2219009.8
+   },
+   {
+    "id": 151,
+    "t0": 2237830.5,
+    "t1": 2238482.6
+   },
+   {
+    "id": 152,
+    "t0": 2263886.8,
+    "t1": 2264404.9
+   },
+   {
+    "id": 153,
+    "t0": 2273917.8,
+    "t1": 2274434.6
+   },
+   {
+    "id": 154,
+    "t0": 2300731.9,
+    "t1": 2301316.3
+   },
+   {
+    "id": 155,
+    "t0": 2320786.2,
+    "t1": 2321305.5
+   },
+   {
+    "id": 156,
+    "t0": 2321659.1,
+    "t1": 2322176.5
+   },
+   {
+    "id": 157,
+    "t0": 2322547.2,
+    "t1": 2323062.8
+   },
+   {
+    "id": 158,
+    "t0": 2323196.7,
+    "t1": 2323713.2
+   },
+   {
+    "id": 159,
+    "t0": 2339784.1,
+    "t1": 2340446.6
+   },
+   {
+    "id": 160,
+    "t0": 2368481,
+    "t1": 2368999.9
+   },
+   {
+    "id": 161,
+    "t0": 2369232.4,
+    "t1": 2369749.7
+   },
+   {
+    "id": 173,
+    "t0": 2369750.2,
+    "t1": 2370452.1
+   },
+   {
+    "id": 162,
+    "t0": 2370452.4,
+    "t1": 2370969.8
+   },
+   {
+    "id": 163,
+    "t0": 2371118.8,
+    "t1": 2371634.7
+   },
+   {
+    "id": 164,
+    "t0": 2383932.9,
+    "t1": 2384518
+   },
+   {
+    "id": 165,
+    "t0": 2389453.5,
+    "t1": 2390037.2
+   },
+   {
+    "id": 166,
+    "t0": 2400670.1,
+    "t1": 2401349.9
+   },
+   {
+    "id": 167,
+    "t0": 2417841.1,
+    "t1": 2418358.1
+   }
+  ]
+ },
+ "tags": [
+  {
+   "id": 7,
+   "action": 0,
+   "intent": "start",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 8,
+   "action": 1,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 9,
+   "action": 2,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 10,
+   "action": 3,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 11,
+   "action": 4,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 12,
+   "action": 5,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 13,
+   "action": 6,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 14,
+   "action": 7,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 15,
+   "action": 8,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 16,
+   "action": 9,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 17,
+   "action": 10,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 18,
+   "action": 11,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 19,
+   "action": 12,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 20,
+   "action": 13,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 21,
+   "action": 14,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 22,
+   "action": 15,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 23,
+   "action": 16,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 24,
+   "action": 17,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 25,
+   "action": 18,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 26,
+   "action": 19,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 27,
+   "action": 20,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 28,
+   "action": 21,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 29,
+   "action": 22,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 30,
+   "action": 23,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 31,
+   "action": 24,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 32,
+   "action": 25,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 33,
+   "action": 26,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 34,
+   "action": 27,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 35,
+   "action": 28,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 36,
+   "action": 29,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 37,
+   "action": 30,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 38,
+   "action": 31,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 39,
+   "action": 32,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 40,
+   "action": 33,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 41,
+   "action": 34,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 42,
+   "action": 35,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 43,
+   "action": 36,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 44,
+   "action": 37,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 45,
+   "action": 38,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 46,
+   "action": 39,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 47,
+   "action": 39,
+   "intent": "drop",
+   "intended": false,
+   "class": "destructive",
+   "cause": "double"
+  },
+  {
+   "id": 48,
+   "action": 168,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 49,
+   "action": 41,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 50,
+   "action": 42,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 51,
+   "action": 43,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 52,
+   "action": 44,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 53,
+   "action": 45,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 54,
+   "action": 46,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 55,
+   "action": 48,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 56,
+   "action": 49,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 57,
+   "action": 169,
+   "intent": "drop",
+   "intended": false,
+   "class": "destructive",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 58,
+   "action": 50,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 59,
+   "action": 51,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 60,
+   "action": 52,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 61,
+   "action": 53,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 62,
+   "action": 54,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 63,
+   "action": 55,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 64,
+   "action": 56,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 65,
+   "action": 57,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 66,
+   "action": 58,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 67,
+   "action": 59,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 68,
+   "action": 60,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 69,
+   "action": 61,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 70,
+   "action": 62,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 71,
+   "action": 63,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 72,
+   "action": 64,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 73,
+   "action": 65,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 74,
+   "action": 66,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 75,
+   "action": 67,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 76,
+   "action": 69,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 77,
+   "action": 70,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 78,
+   "action": 71,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 79,
+   "action": 72,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 80,
+   "action": 73,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 81,
+   "action": 74,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 82,
+   "action": 75,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 83,
+   "action": 76,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 84,
+   "action": 77,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 85,
+   "action": 78,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 86,
+   "action": 79,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 87,
+   "action": 80,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 88,
+   "action": 81,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 89,
+   "action": 82,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 90,
+   "action": 83,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 91,
+   "action": 84,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 92,
+   "action": 85,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 93,
+   "action": 86,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 94,
+   "action": 87,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 95,
+   "action": 88,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 96,
+   "action": 89,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 97,
+   "action": 90,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 98,
+   "action": 91,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 99,
+   "action": 92,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 100,
+   "action": 93,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 101,
+   "action": 95,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 102,
+   "action": 96,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 103,
+   "action": 97,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 104,
+   "action": 98,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 105,
+   "action": 170,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 106,
+   "action": 99,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 107,
+   "action": 100,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 108,
+   "action": 101,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 109,
+   "action": 102,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 110,
+   "action": 103,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 111,
+   "action": 104,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 112,
+   "action": 105,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 113,
+   "action": 106,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 114,
+   "action": 107,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 115,
+   "action": 108,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 116,
+   "action": 109,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 117,
+   "action": 110,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 118,
+   "action": 111,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 119,
+   "action": 112,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 120,
+   "action": 113,
+   "intent": "knobs",
+   "intended": false,
+   "class": "destructive",
+   "cause": "side effect"
+  },
+  {
+   "id": 121,
+   "action": 114,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 122,
+   "action": 171,
+   "intent": "slots",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 123,
+   "action": 115,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 124,
+   "action": 116,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 125,
+   "action": 118,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 126,
+   "action": 118,
+   "intent": "drop",
+   "intended": false,
+   "class": "harmless",
+   "cause": "double"
+  },
+  {
+   "id": 127,
+   "action": 120,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 128,
+   "action": 121,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 129,
+   "action": 122,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 130,
+   "action": 123,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 131,
+   "action": 124,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 132,
+   "action": 125,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 133,
+   "action": 126,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 134,
+   "action": 128,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 135,
+   "action": 129,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 136,
+   "action": 130,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 137,
+   "action": 131,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 138,
+   "action": 132,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 139,
+   "action": 133,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 140,
+   "action": 134,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 141,
+   "action": 135,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 142,
+   "action": 172,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 143,
+   "action": 136,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 144,
+   "action": 137,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 145,
+   "action": 138,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 146,
+   "action": 139,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 147,
+   "action": 140,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 148,
+   "action": 141,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 149,
+   "action": 142,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 150,
+   "action": 143,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 151,
+   "action": 144,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 152,
+   "action": 145,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 153,
+   "action": 146,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 154,
+   "action": 147,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 155,
+   "action": 148,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 156,
+   "action": 149,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 157,
+   "action": 150,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 158,
+   "action": 151,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 159,
+   "action": 152,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 160,
+   "action": 153,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 161,
+   "action": 154,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 162,
+   "action": 155,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 163,
+   "action": 156,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 164,
+   "action": 157,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 165,
+   "action": 158,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 166,
+   "action": 159,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 167,
+   "action": 160,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 168,
+   "action": 161,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 169,
+   "action": 173,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 170,
+   "action": 162,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 171,
+   "action": 163,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 172,
+   "action": 164,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 173,
+   "action": 165,
+   "intent": "drop",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 174,
+   "action": 166,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 175,
+   "action": 167,
+   "intent": "end",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  }
+ ],
+ "accidents": {
+  "destructive": 3,
+  "harmless": 6,
+  "silent": 0,
+  "byCause": {
+   "double": {
+    "destructive": 1,
+    "harmless": 1,
+    "silent": 0
+   },
+   "stray-knob": {
+    "destructive": 1,
+    "harmless": 5,
+    "silent": 0
+   },
+   "side effect": {
+    "destructive": 1,
+    "harmless": 0,
+    "silent": 0
+   }
+  }
+ }
+}

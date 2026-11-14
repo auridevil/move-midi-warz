@@ -20,7 +20,8 @@ node orbit2/tools/face-audit.mjs --assert          # exit 1 while a threshold fa
 node orbit2/tools/face-audit.mjs --sizes 1512x860 --port 5411 --debug-port 9411   # a reviewer, on its own ports
 ```
 
-The agent-run baseline sets (A3) and glance trials (A2) are added below by the "Baseline sets" task.
+The agent-run baseline sets (A3) and glance trials (A2) are at the end: [A3 baseline sets](#a3-baseline-sets-player-agents),
+[A2 glance trials](#a2-baseline-glance-trials).
 
 ## Summary (first load, 4 lanes, nothing open)
 
@@ -110,3 +111,100 @@ Groove `house` (124 bpm) with dice locked at seed 4127, `exportWav` with a fresh
 
 Screenshots: `baseline/01…04` (the brief, 1512×860), `baseline/rd01-first-load-1280x720.png`,
 `baseline/rd01-first-load-390x844.png`.
+
+## A3 baseline sets (player agents)
+
+Six 40-minute sets on today's page, by two player agents (fresh sub-agents in the `noor` and `kai` personas, model
+sonnet) that chose the musical intentions, seeds and grooves; played by `orbit2/tools/session.mjs` in real time
+(`?setlog`, 1512×860, slips at 0.08, the Move simulated as connected). One JSON per set in
+`setlog/baseline-<player>-<n>.json`: the page's setlog, the script (with each slip), the action windows and the tags.
+The players' own runs were a first take that found defects in the tool (see "First take"); the sets below are their
+exact commands, re-run on the fixed tool.
+
+| set | input | groove | seed | intents (weights) | actions · slips | entries | **destructive** | harmless audible | silent | presses not made |
+|---|---|---|---|---|---|---|---|---|---|---|
+| noor-1 | Move | poly345 | 11 | knobs 5, evolve 4, listen 6, build 1, slots 1, mute 1 | 119 · 9 | 102 | **1** | 8 | 0 | 2 |
+| noor-2 | Move | dnb | 22 | build 3, knobs 3, evolve 2, slots 3, mute 2, drop 1, tempo 1, listen 3 | 174 · 8 | 169 | **3** | 6 | 0 | 3 |
+| noor-3 | mouse | afro | 33 | knobs 4, evolve 2, build 2, mute 1, tempo 1, listen 5 | 143 · 8 | 147 | **0** | 4 | 0 | 0 |
+| kai-1 | Move | techno | 11 | build 2, knobs 2, evolve 0.5, slots 3, mute 5, drop 2, fill 4, tempo 0.5, listen 1 | 520 · 44 | 393 | **2** | 36 | 0 | 23 |
+| kai-2 | Move | dnb | 22 | build 3, knobs 4, evolve 2, slots 2, mute 3, drop 1, fill 3, tempo 1, listen 2 | 523 · 29 | 436 | **7** | 21 | 0 | 17 |
+| kai-3 | mouse | house | 33 | build 2, knobs 2, evolve 0.5, mute 5, drop 1, fill 4, tempo 0.5, listen 1 | 569 · 39 | 411 | **0** | 17 | 0 | 10 |
+
+By cause, destructive / harmless (the slip of the action, or of an earlier action of the same intention; "side
+effect" = the action had no slip):
+
+| set | stray-knob | double | wrong-row | offset | side effect |
+|---|---|---|---|---|---|
+| noor-1 | 0 / 6 | 0 / 1 | | | 1 / 1 |
+| noor-2 | 1 / 5 | 1 / 1 | | | 1 / 0 |
+| noor-3 | 0 / 3 | | | 0 / 1 | |
+| kai-1 | 0 / 27 | 0 / 7 | 0 / 2 | | 2 / 0 |
+| kai-2 | 2 / 16 | 1 / 3 | 0 / 2 | | 4 / 0 |
+| kai-3 | 0 / 13 | 0 / 1 | | 0 / 3 | |
+
+**Today's page fails A3** (0 destructive and ≤ 1 harmless audible per set): 4 of 6 sets have a destructive accident,
+all 6 have more than one harmless one.
+- **11 of the 13 destructive accidents are a lane emptied by the "euclid hits" knob.** On a lane drawn by hand
+  (euclid hits 0), one click down calls `Lane.setEuclid(0)`, which in replace mode re-fills the lane from E(0): every
+  hit is gone (8 from turns of that knob the hand meant, 3 from a stray touch). Noor, first take: "I would hear a lane
+  vanish and regret it, because I only meant to thin the pattern." This is the model's behaviour (`lanes.js`), which
+  DECISION §3 keeps out of the redesign: with the same scripts the RD-9 sets will meet it again (BACKLOG Later, for
+  Noor).
+- The other 2: a double press on the drop's "bring the kick back" left the kick muted (noor-2 at 651.8 s, kai-2 at
+  2269.1 s).
+- Harmless accidents are mostly **stray-knob** slips (3–27 per set): a knob brushed on the way changes a value on any
+  page that has knobs. With slips injected at 0.08, "≤ 1 harmless" is out of reach by construction; RD-9 can compare
+  by cause (BACKLOG Later, for Noor). Then **wrong-row** (a neighbouring lane muted, the kick did not drop: Kai, "a
+  missed drop, not a kick loss") and **offset** (a missed lane tab, then Mute on the lane still selected).
+- **Presses not made** (55): the script is open-loop, a player is not: a Mute press whose lane already is as the
+  hand wants (heard) is not made. 35 follow a slot recall (a slot brings its own mutes), 20 an earlier press that
+  missed the Mute button or landed on another lane (the hand believed the lane had changed).
+
+**What is tagged how** (`tagAccidents` in `session-core.mjs`): an entry inside an action's window is intended when the
+action expected that target (a Mute also the value it ends on: `lane1.mute=false`; a knob turn or drag may log twice
+when it rests: both are the turn; the length knob also clamps euclid hits). Anything else is an accident:
+**destructive** = stop, load, init, randomize, clear, a slot recall, a lane emptied (every hit gone), a kick muted;
+**silent** = select, export, slot save, record, chain; **harmless** = everything else that sounds.
+
+**First take** (the players' own runs, same commands, before the fixes): noor 0 / 1 / 0 destructive (9 / 8 / 20
+harmless), kai 0 / 1 / 0 (40 / 28 / 37). Reading their accidents, the players found what the tool got wrong, fixed
+before the six sets above (+1 unit test): the mouse dragged the gauge after the one it meant for swing and chance
+(`nth-child` in the Move's knob order; 16 and 19 false accidents in the mouse sets); a Mute's expectation had no
+direction, so a drop whose "bring it back" muted the kick counted as intended (twice in kai-1); an emptied lane
+counted harmless; a Mute after a missed lane tab was blamed on the Mute; a drag that rested was counted twice; two of
+six launches died before the page's modules ran (six Chromes at once). A first re-run was cut at minute 26 by the Mac
+sleeping (`caffeinate -is` now).
+
+**Known limits.** A lane with a single hit emptied by a side effect logs as one step (`lane4.hits.2 true → false`,
+noor-1 at 1984 s), so it counts harmless: the setlog does not say the lane went quiet (BACKLOG Later). The simulated
+Move does not run the page's connect flow: the pill reads "Move: not connected" (in the glance shots too). These are
+simulations: no USB, no LEDs, no human (DECISION, "Run by agents").
+
+Reproduce a set (each JSON's `session` block holds persona, seed, groove, intents, slips; keep an idle Mac awake):
+
+```sh
+caffeinate -is node orbit2/tools/session.mjs --persona kai --minutes 40 --slips 0.08 --seed 22 --groove dnb \
+  --intents build:3,knobs:4,evolve:2,slots:2,mute:3,drop:1,fill:3,tempo:1,listen:2 --out /tmp/kai-2.json
+```
+
+## A2 baseline: glance trials
+
+20 trials per player on today's page (`orbit2/tools/glance.mjs`, 1512×860, playing, exposure 0.55, gamma 1.5, scale
+0.71), each image judged by a fresh sub-agent (model sonnet) that saw only the brief and that one image. Every
+trial and answer: `setlog/glance-noor.json`, `setlog/glance-kai.json`. One shot: `baseline/rd01-glance-step-held.png`
+(step 1 of lane 3 held; judged "rhythm, lane 3").
+
+| player (groove, seed) | right (pass ≥ 18) | page right | lane right | rhythm | sound | step | slots |
+|---|---|---|---|---|---|---|---|
+| noor (poly345, 1) | **3 / 20** | 3 | 20 | 2 / 2 | 1 / 4 | 0 / 5 | 0 / 9 |
+| kai (techno, 2) | **8 / 20** | 8 | 20 | 4 / 4 | 4 / 7 | 0 / 4 | 0 / 5 |
+
+The lane always reads (the lane drawer's title, the lit lane tab). The page does not: a held step or a held Loop
+changes nothing in view but the step cell (the lock panel and the slots are not in view at 1512×860), so the judges
+said "rhythm"; Shift's sound page was read 5 times of 11 (the drawer's "shift held: knobs sculpt the sound"). One judge
+changed its answer mid-reply (kai trial 10; the last answer counts).
+
+```sh
+node orbit2/tools/glance.mjs --trials 20 --seed 1 --groove poly345 --out /tmp/glance-noor/   # kai: --seed 2 --groove techno
+node orbit2/tools/glance.mjs score /tmp/glance-noor/key.json answers.json
+```

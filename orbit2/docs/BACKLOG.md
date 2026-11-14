@@ -818,3 +818,19 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Gestures across a slot switch or a fill** (ORBIT2-18 round 1, kai): measured (a slot ends the gesture, its undo
   step keeps its load flag) but untested; in touch mode a finger resting on a Move knob writes the played value (by
   design, said in the Move panel).
+
+- **The hits knob empties a hand-drawn lane** (RD-01 baseline sets, noor + kai; a decision for Noor): one click down
+  on "euclid hits" at 0 calls `Lane.setEuclid(0)`, which in replace mode re-fills the lane from E(0) and wipes every
+  hit. 11 of the 13 destructive accidents in the A3 baseline (`redesign/baselines.md`). `lanes.js` is outside the
+  redesign (DECISION §3), so the RD-9 sets will meet it again: the knob could stop at 0 without re-filling, or keep
+  the hand-drawn hits until it is turned up.
+- **The A3 harmless budget and injected slips** (RD-01 baseline sets, noor; a decision for Noor): with slips at 0.08,
+  stray-knob slips alone give 3–27 harmless accidents per set (a brushed knob changes a value on any page with
+  knobs), so "≤ 1 harmless audible" cannot be met by construction; RD-9 could judge it by cause (offset, double,
+  wrong-row, side effect), or say what a stray touch should do.
+- **The setlog could say when a lane went quiet** (RD-01 baseline sets): a lane with one hit that loses it to a side
+  effect logs as one step (`lane4.hits.2 true → false`), so the accident tagger counts it harmless (noor-1 at
+  1984 s); an `emptied` mark on the diff (or the lane's hit count) would let it count as destructive.
+- **The simulated Move looks unplugged** (RD-01 baseline sets): the session tools set `move.transport` and
+  `inControl`, not the page's connect state, so the pill reads "Move: not connected" in every set and glance shot.
+  Nothing reads it today; RD-5's Move pill and "MOVE ⇢" chip will, so the tools need the connected state then.
