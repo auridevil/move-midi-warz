@@ -41,6 +41,7 @@ let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null'));
 const slog = new URLSearchParams(location.search).has('setlog') ? attachSetlog({ win: window, model: () => m.toJSON(), now: () => performance.now(), defer: (f) => setTimeout(f, 0) }) : null;
 if (slog) { const recv = move.receive.bind(move); move.receive = (b, t) => { slog.from('move'); return recv(b, t); }; }
 const slogWords = () => patternWords(m.toJSON());
+const slogBefore = () => { slog.begin(); return slogWords(); };   // an action that replaces the pattern: hand edits first
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
 // every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step).
@@ -431,11 +432,11 @@ function onTick(t, time, cyc, ts) {
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
 function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
-  await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
+  slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
-  slog?.act('transport', playing ? 'stopped' : 'playing', playing ? 'playing' : 'stopped');
+  slog?.act('transport', playing ? 'stopped' : 'playing', playing ? 'playing' : 'stopped', { absorb: true });   // a stop lands the waiting mutes
 }
 $('btn-play').onclick = togglePlay;
 for (const ev of ['pointerdown', 'keydown']) window.addEventListener(ev, () => { if (!awake) wake(); }, { once: true });
@@ -765,8 +766,8 @@ function setLaneCount(n) {
 }
 function saveSlot(i) { slog?.act('slot.save', null, i + 1); bank.save(i, m.toJSON()); evoSnap = m.snapshot(); evoCount = 0; renderSlots(); paintLeds(); readout(); questEvent({ type: 'slot-save', slot: i }); }
 /** Stopped: load at once. Playing: queue for the next boundary (now / bar / cycle). */
-function recallSlot(i) { const was = bank.current; if (!bank.recall(i)) return; slog?.act('slot', was + 1 || null, i + 1, { queued: playing }); if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); }
-function chainSlots(list) { slog?.act('chain', bank.chain.map(i => i + 1), list.map(i => i + 1)); bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); }
+function recallSlot(i) { slog?.begin(); const was = bank.current; if (!bank.recall(i)) return; if (!playing) { bank.take(i); loadSlot(i); } renderSlots(); readout(); paintLeds(); slog?.act('slot', was + 1 || null, i + 1, { queued: playing, absorb: true }); }
+function chainSlots(list) { slog?.begin(); const was = slog && bank.chain.map(i => i + 1); bank.setChain(list); if (!playing && bank.chain.length) { bank.take(bank.chain[0]); loadSlot(bank.chain[0]); } renderSlots(); readout(); paintLeds(); slog?.act('chain', was, list.map(i => i + 1), { absorb: true }); }
 // Slot buttons are built once (a clock-driven slot switch repaints them mid-press). A long press (or right-click)
 // opens a small menu under the grid: the touch way to save, chain and erase.
 const slotBtns = []; let slotMenuFor = -1;
@@ -1067,7 +1068,7 @@ function autoEdit(fn, li = m.selected) {
 // ---- evolve: every N bars, nudge some lanes; optionally come back home ----
 let lastEvolve = '';
 /** Clearing or randomizing is a fresh start: evolve stops (it would mutate the new pattern away from you). */
-function clearLane() { const was = slog && slogWords(); if (evo.on) setEvolve(false); m.lane.clear(); sync(); slog?.act('clear', was, slogWords(), { lane: m.selected + 1 }); }
+function clearLane() { const was = slog && slogBefore(); if (evo.on) setEvolve(false); m.lane.clear(); sync(); slog?.act('clear', was, slogWords(), { lane: m.selected + 1, absorb: true }); }
 /**
  * Every load (init, a groove, a link, a setup) goes through here: the pattern with its voices and sounds, one undo
  * step of its own, and its tempo when it brings one (undo puts the tempo you had back too). Once the beat is
@@ -1081,8 +1082,8 @@ function loadMachine(json, { bpm = null, exact = false, selected = 0 } = {}) {
 }
 /** Init: every lane empty (as many lanes as now), length 4 at ×1, default voices and sounds; one kick on step 1 of lane 1. Undoable. */
 function initPattern() {
-  const was = slog && slogWords(), n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
-  loadMachine(n.toJSON()); freshBeat(); slog?.act('init', was, slogWords());
+  const was = slog && slogBefore(), n = new Machine(m.lanes.length); n.lanes.forEach(l => { l.clear(); l.setLength(4); l.setRatio(ratioIndexOf(1)); }); n.lanes[0].hits[0] = true;
+  loadMachine(n.toJSON()); freshBeat(); slog?.act('init', was, slogWords(), { absorb: true });
 }
 /** The beat on screen is no longer the library setup last loaded or saved: a share stops using its name (shareName),
  *  and its row its mark. */
@@ -1092,7 +1093,7 @@ function freshBeat() { setLineage(null); leaveSetup(); }
 /** A starter groove (grooves.js): pattern + kit + swing and its tempo, one undo step; the toast names it with its
  *  one-liner (the chips' tooltips never show on touch). */
 function loadGroove(key) {
-  const g = grooveByKey(key); if (!g) return; const was = slog && slogWords(); loadMachine(g.m, { bpm: g.tempo }); slog?.act('load', was, slogWords(), { what: `groove ${key}` }); freshBeat(); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
+  const g = grooveByKey(key); if (!g) return; const was = slog && slogBefore(); loadMachine(g.m, { bpm: g.tempo }); slog?.act('load', was, slogWords(), { what: `groove ${key}`, absorb: true }); freshBeat(); toast(`${g.name} · ${g.tempo} bpm · ${g.desc}`, 5000);
 }
 /**
  * Randomize: musical by default (a groove family, named in a toast); wild = the old anything-goes roll (Shift+click,
@@ -1106,19 +1107,19 @@ function randomizeAll(wild = false) {
 /** A roll, its own undo step, named in a toast. seeded: from the dice seed's first stream (also with free dice, for
  *  "pattern from seed"), so a seed always makes the same groove. A roll is a fresh start. */
 function rollPattern(wild, seeded = dice.locked) {
-  gestEnd(true); if (evo.on) setEvolve(false); const was = slog && slogWords();
+  gestEnd(true); if (evo.on) setEvolve(false); const was = slog && slogBefore();
   const rng = seeded ? Dice.take(dice.seed).stream(0) : Math.random, name = wild ? (m.randomize(rng), 'wild') : m.randomizeMusical(rng).name;
-  loadNext = true; hideWelcome(); freshBeat(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`); slog?.act('randomize', was, slogWords(), { what: name });
+  loadNext = true; hideWelcome(); freshBeat(); sync(); toast(`${name}${seeded ? ` · dice ${dice.seed}` : ''}`); slog?.act('randomize', was, slogWords(), { what: name, absorb: true });
 }
 // ---- undo / redo ----
 /** Put back an undo / redo step. Live mutes and solos stay as they are (keepPerf), unless the step crosses a load;
  *  a load that set the tempo takes its tempo with it. */
 function applyState(step, what) {
-  if (!step) return; const was = slog && slogWords(); restoring = true; const live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
+  if (!step) return; const was = slog && slogBefore(); restoring = true; const live = m.lanes.map(l => ({ muted: l.muted, solo: l.solo }));
   m.assign(JSON.parse(step.json), { keep: true, selected: m.selected });   // keep: loops go on counting (R4)
   if (step.keepPerf) m.lanes.forEach((l, i) => { l.muted = !!live[i]?.muted; l.solo = !!live[i]?.solo; });
   if (step.tempo != null) applyTempo(step.tempo, true, { exact: true });
-  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false; slog?.act(what, was, slogWords());
+  rebuildVoices(); lockStep = -1; sync(); renderLanesEvolve(); restoring = false; slog?.act(what, was, slogWords(), { absorb: true });
 }
 // A3: a gesture going on ends first (its one undo step is then what undo takes back)
 const undo = () => { gestEnd(true); applyState(hist.undo({ tempo }), 'undo'); }, redo = () => { gestEnd(true); applyState(hist.redo(), 'redo'); };
@@ -1136,9 +1137,9 @@ function renderFill() {
  *  performance move: never an undo step (perfKey). */
 function toggleMute(li) {
   if (li < 0 || li >= m.lanes.length) return;
-  const muteNow = () => (muteQ.has(li) ? muteQ.target(li) : !!m.lanes[li].muted), was = slog && muteNow();
+  const muteNow = () => (muteQ.has(li) ? muteQ.target(li) : !!m.lanes[li].muted), was = slog && (slog.begin(), muteNow());
   if (perf.muteBar && playing) muteQ.toggle(li, !m.lanes[li].muted); else m.lanes[li].muted = !m.lanes[li].muted;
-  sync(); slog?.act(`lane${li + 1}.mute`, was, muteNow(), { voice: m.lanes[li].voice, queued: muteQ.has(li) });
+  sync(); slog?.act(`lane${li + 1}.mute`, was, muteNow(), { voice: m.lanes[li].voice, queued: muteQ.has(li), absorb: true });
 }
 /** What a waiting mute does to lane li, in words ("mutes" / "unmutes"). */
 const muteWord = (li) => (muteQ.target(li) ? 'mutes' : 'unmutes');
@@ -1549,9 +1550,9 @@ async function recordPostcard() {
  *  4-lane machine) with the dice locked to that seed, so its chance and humanize roll the same for everyone. One undo
  *  step; the seed becomes its lineage, so what you share from it says where it started. */
 function loadDaySeed() {
-  const s = seedOfDay(utcDay()), was = slog && slogWords();
+  const s = seedOfDay(utcDay()), was = slog && slogBefore();
   dice.locked = true; dice.seed = s.seed; dice.repeat = 1; saveSettings(); renderDice();
-  loadMachine(s.m, { bpm: s.tempo }); leaveSetup(); setLineage(s.title); slog?.act('load', was, slogWords(), { what: 'seed of the day' });
+  loadMachine(s.m, { bpm: s.tempo }); leaveSetup(); setLineage(s.title); slog?.act('load', was, slogWords(), { what: 'seed of the day', absorb: true });
   toast(`today's seed · ${s.family} · dice ${s.seed} · ${s.tempo} bpm · make it yours, then share it`, 5000);
 }
 async function exportWav() {
@@ -1622,7 +1623,7 @@ async function exportKit() {
 async function loadShared({ first = false } = {}) {
   const mm = /#p=([\w-]+)/.exec(location.hash); if (!mm) return; history.replaceState(null, '', location.pathname + location.search);
   try {
-    const o = await decodeShare(mm[1]), was = slog && slogWords(); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup(); slog?.act('load', was, slogWords(), { what: 'link' });
+    const o = await decodeShare(mm[1]), was = slog && slogBefore(); loadMachine(o.m, { bpm: o.tempo, exact: true }); leaveSetup(); slog?.act('load', was, slogWords(), { what: 'link', absorb: true });
     if (first) hist.restart();
     $('exp-status').textContent = 'loaded from the link (undo brings your pattern back)'; showGift(o, first);
   } catch (e) { $('exp-status').textContent = `link: ${e.message}`; toast(`link: ${e.message}`, 4000); }   // decodeShare's words are for people
@@ -1901,9 +1902,9 @@ for (const g of GROOVES) {
 const setupData = () => ({ m: m.toJSON(), tempo, vol, dice: dice.toJSON(), from: lineage });
 const flash = (id, txt) => { const b = $(id), was = b.dataset.label || b.textContent; b.dataset.label = was; b.textContent = txt; b.classList.add('flash'); setTimeout(() => { b.textContent = was; b.classList.remove('flash'); }, 1200); };
 function loadSetup(id) {
-  const e = lib.get(id); if (!e?.m) return; const was = slog && slogWords();
+  const e = lib.get(id); if (!e?.m) return; const was = slog && slogBefore();
   if (e.vol != null) { vol = e.vol; kit?.master.gain.rampTo(vol, 0.05); } if (e.dice) { dice.fromJSON(e.dice); saveSettings(); renderDice(); }
-  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); setLineage(e.from); renderLib(); flash('btn-load', `“${e.name}” ✓`); slog?.act('load', was, slogWords(), { what: 'setup' });
+  libCurrent = id; loadMachine(e.m, { bpm: e.tempo, exact: true, selected: m.selected }); setLineage(e.from); renderLib(); flash('btn-load', `“${e.name}” ✓`); slog?.act('load', was, slogWords(), { what: 'setup', absorb: true });
 }
 function saveSetup(name) {
   const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }

@@ -96,7 +96,7 @@ test('RD-1 the page hooks: sources from the window, an action absorbs its own di
   assert.deepEqual(s.log.entries().map(x => [x.target, x.source, x.t]), [['lane1.hits.2', 'key', 100]]);
   // a touch init: one 'init' entry, the hundred fields it changed absorbed
   clock = 2000; ls.pointerdown[0]({ pointerType: 'touch' }); const was = patternWords(m.toJSON());
-  m.lanes.forEach(l => l.clear()); s.dirty(false); s.act('init', was, patternWords(m.toJSON())); run();
+  s.begin(); m.lanes.forEach(l => l.clear()); s.dirty(false); s.act('init', was, patternWords(m.toJSON()), { absorb: true }); run();
   assert.deepEqual(s.log.entries().slice(1).map(x => [x.target, x.source]), [['init', 'touch']]);
   // the clock's change (evolve, a slot, a waiting mute) saves with hush: absorbed
   clock = 3000; m.lanes[1].rotation = 3; s.dirty(true); run(); assert.equal(s.log.size, 2);
@@ -105,4 +105,19 @@ test('RD-1 the page hooks: sources from the window, an action absorbs its own di
   const k = s.log.entries().at(-1); assert.equal(k.target, 'lane3.sound.decay'); assert.equal(k.source, 'move'); assert.equal(k.after, 0.8); assert.equal(s.log.size, 3);
   const f = s.file({ tempo: 120 }); assert.match(f.name, /^orbits-setlog-\d{4}-\d\d-\d\d-\d{6}\.json$/);
   const j = JSON.parse(f.text); assert.equal(j.format, SETLOG_FORMAT); assert.equal(j.tempo, 120); assert.ok(j.started); assert.equal(j.entries.length, 3);
+});
+
+test('RD-1 hooks: a hand edit made just before an action (same task) is still logged; an action that leaves the pattern alone absorbs nothing', () => {
+  const m = new Machine(); let clock = 0; const later = [];
+  const s = attachSetlog({ win: null, model: () => m.toJSON(), now: () => clock, defer: (f) => later.push(f) });
+  const run = () => { while (later.length) later.shift()(); };
+  // a step pressed, a knob turned, then clear lane: all in one task, before the deferred diff could run
+  s.from('move'); clock = 10; m.lanes[0].hits[2] = !m.lanes[0].hits[2]; s.dirty(false); clock = 20; m.lanes[0].sound.tone = 0.3; s.dirty(false);
+  clock = 30; s.begin(); const was = patternWords(m.toJSON()); m.lanes[0].clear(); s.dirty(false); s.act('clear', was, patternWords(m.toJSON()), { lane: 1, absorb: true }); run();
+  const got = s.log.entries().map(e => e.target);
+  assert.deepEqual(got.slice(0, 2).sort(), ['lane1.hits.3', 'lane1.sound.tone'], 'one diff: both edits'); assert.equal(got[2], 'clear');
+  assert.ok(!('absorb' in s.log.entries()[2]), 'absorb is an instruction, not logged');
+  // a tempo turn (not in the pattern) right after a hand edit: the edit stays
+  clock = 2000; m.lanes[1].sound.decay = 0.9; s.dirty(false); s.act('tempo', 120, 121, { merge: true }); run();
+  assert.deepEqual(s.log.entries().slice(3).map(e => e.target).sort(), ['lane2.sound.decay', 'tempo']);
 });

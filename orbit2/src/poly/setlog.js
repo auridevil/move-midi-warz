@@ -108,7 +108,8 @@ export function patternWords(j) {
  * The page's hooks, built only with ?setlog. env: { win (addEventListener target), model () → the pattern's toJSON,
  * now () → ms, defer (fn) → runs fn later, off the audio clock }. Returns:
  *   from(source)               the input that acts next (app.js wraps move.receive with 'move')
- *   act(target, before, after, extra)   a named action, logged at once; the pattern diff it caused is absorbed
+ *   begin()                    before an action that replaces the pattern: waiting hand edits are diffed now
+ *   act(target, before, after, { absorb, …extra })   a named action, logged at once; absorb: its pattern diff is not logged
  *   dirty(machine)             the pattern was saved; machine = the clock did it (evolve, a chain): absorbed, not logged
  *   log, file(meta) → { name, text }
  * Nothing here runs inside the Tone.Loop callback: a save there only marks the log dirty, and the diff runs deferred.
@@ -116,7 +117,7 @@ export function patternWords(j) {
 export function attachSetlog({ win, model, now, defer, cap } = {}) {
   const log = new Setlog({ cap }), t0 = now(), started = new Date().toISOString();
   const copy = () => JSON.parse(JSON.stringify(model()));   // toJSON hands out the lanes' own step arrays: keep a copy
-  let src = 'pointer', prev = copy(), pend = null, absorb = false, queued = false;
+  let src = 'pointer', prev = copy(), pend = null, queued = false;
   const at = () => Math.round((now() - t0) * 10) / 10;
   if (win) {
     win.addEventListener('pointerdown', (e) => { src = e.pointerType === 'touch' ? 'touch' : 'pointer'; }, true);
@@ -125,8 +126,8 @@ export function attachSetlog({ win, model, now, defer, cap } = {}) {
   }
   const flush = () => {
     queued = false; const p = pend; pend = null; const cur = copy();
-    if (p && !absorb && !p.machine) for (const d of diffPattern(prev, cur)) log.add({ t: p.t, source: p.source, ...d });
-    absorb = false; prev = cur;
+    if (p && !p.machine) for (const d of diffPattern(prev, cur)) log.add({ t: p.t, source: p.source, ...d });
+    prev = cur;
   };
   const later = () => { if (!queued) { queued = true; defer(flush); } };
   return {
@@ -134,8 +135,12 @@ export function attachSetlog({ win, model, now, defer, cap } = {}) {
     get source() { return src; },
     now: at,   // the log's clock (ms since it began): the session tools time their actions on it
     from(s) { src = s; },
-    // the pattern change an action made (a load's hundred fields) is the action: its diff is absorbed
-    act(target, before, after, extra = {}) { log.add({ t: at(), source: src, target, before, after, ...extra }); absorb = true; later(); },
+    // before an action that changes the pattern: the hand edits still waiting are logged now, as they were
+    begin() { if (pend && !pend.machine) flush(); },
+    // absorb (called after the action, from a hand's event, never the clock): the action changed the pattern (a load's
+    // hundred fields), and that change is the action: the log takes the pattern as it is now, so its diff is not logged
+    // again. An action that leaves the pattern alone (a tempo, an export) absorbs nothing
+    act(target, before, after, { absorb = false, ...extra } = {}) { log.add({ t: at(), source: src, target, before, after, ...extra }); if (absorb) { pend = null; prev = copy(); } },
     // never diffs here (a clock change saves inside the audio callback); a clock change in the same deferral as a hand
     // edit takes the hand edit with it (both are within one task: rare, and never a false accident)
     dirty(machine = false) { if (pend) pend.machine ||= machine; else pend = { t: at(), source: src, machine }; later(); },
