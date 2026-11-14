@@ -31,12 +31,15 @@ Personas (named per phase, from the panel that produced the backlog):
 | `tomi` | Tomi, 34, Afro-house/Amapiano producer + percussionist | Groove/feel, swing, 12/8, clave, cross-rhythms, percussion voices, dynamics |
 | `greta` | Greta, 50, minimalist UX/interaction designer | Hierarchy, cognitive load, consistency, accessibility (ARIA, focus, keyboard, contrast, targets) |
 | `rio` | Rio, 29, playful UX/product designer, mobile-first | Onboarding, delight, touch, sharing, coming back |
+| `noor` | Noor, 39, **product owner** and experimental / IDM / ambient musician (modular, Max, monome, Move; seated, dark rooms, 40-minute sets) | The instrument feeling like an instrument, playing a long set without fighting the UI, steerable generative depth, holding each phase to `orbit2/docs/redesign/DECISION.md` |
+| `nils` | Nils, 41, hardware-instrument designer (OP-1 / Elektron / Push school) | The screen as the Move's display, modes vs held controls, Nils's state table, LED feedback, big few numbers |
+| `yuki` | Yuki, 36, art director and creative technologist (NIME, TouchDesigner, monome) | The visual language (colour = sound, white = structure, red = rec), type on the canvas, light and motion, label legibility |
 
 ## Ports (never share them)
 
 Each reviewer uses `launch({ port, debugPort })` from `orbit2/tools/cdp.mjs` with:
 verifier 5401/9401, architect 5402/9402, sound 5403/9403, kai 5404/9404, maya 5405/9405, dex 5406/9406,
-ines 5407/9407, tomi 5408/9408, greta 5409/9409, rio 5410/9410. The implementing agent itself uses 5400/9400.
+ines 5407/9407, tomi 5408/9408, greta 5409/9409, rio 5410/9410, noor 5411/9411, nils 5412/9412, yuki 5413/9413. The implementing agent itself uses 5400/9400.
 Scratch files go to `/tmp/orbit2-<id>/`, deleted at the end. Always `await b.close()`.
 
 **Silence.** Every browser is muted: start it only through `cdp.mjs` `launch()` or `tools/headless-chrome.sh <port>`
@@ -60,6 +63,10 @@ closest to the phase. The playbook names them in its header. The final phase (OR
 | 07 32 steps, 6 lanes | tomi, kai | 16 learning | maya, greta |
 | 08 voices | tomi, dex | 17 final | all ten |
 | 09 samples | dex, maya | 18 automation | kai, dex |
+
+**Redesign phases (RD-1…RD-11, `orbit2/docs/redesign/DECISION.md`):** the 3 core reviewers + the 3 named in the
+phase's row of the decision (six in total). The decision is the spec: a defect against its rules or its acceptance
+tests (A1–A10) is in scope; a wish to change the decision is a SHOULD for Noor, never a MUST-FIX.
 
 ## What blocks HAPPY (the must-fix rule)
 

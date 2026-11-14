@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orbits — "Lumen Score" mock (Yuki) · main screen</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root { --void: #07050f; --ink: #ece9f7; --ink-2: rgba(236,233,247,.62); --ink-3: rgba(236,233,247,.34); --hair: rgba(236,233,247,.14);
+    --kick: #f0abfc; --rim: #67e8f9; --hat: #fde047; --wood: #a78bfa; --rec: #fb7185; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1512px; height: 860px; overflow: hidden; background: var(--void); color: var(--ink);
+    font: 400 12px/1.2 'Space Grotesk', system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+  svg#orbit { position: absolute; inset: 0; }
+  .t { font-family: 'Space Grotesk', system-ui, sans-serif; }
+  .caps { text-transform: uppercase; letter-spacing: .22em; font-weight: 500; }
+  /* the thin typographic layer: four corners, nothing else */
+  .corner { position: absolute; }
+  .tl { left: 34px; top: 26px; }
+  .tr { right: 34px; top: 28px; text-align: right; }
+  .bl { left: 34px; bottom: 26px; }
+  .br { right: 34px; bottom: 24px; text-align: right; }
+  .mark { font: 400 15px 'Major Mono Display', monospace; letter-spacing: .28em; color: var(--ink-2); }
+  .mark b { color: var(--ink); font-weight: 400; }
+  .tempo { margin-top: 18px; display: flex; align-items: baseline; gap: 10px; }
+  .tempo .num { font: 300 88px/0.8 'Space Grotesk'; letter-spacing: -.04em; }
+  .tempo .unit { font-size: 10px; color: var(--ink-2); letter-spacing: .24em; text-transform: uppercase; line-height: 1.6; }
+  .tempo .unit i { display: block; font-style: normal; color: var(--ink-3); }
+  .meter-line { margin-top: 14px; font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-3); }
+  .meter-line b { color: var(--ink-2); font-weight: 500; }
+  .play { margin-top: 18px; display: inline-flex; align-items: center; gap: 12px; font-size: 11px; letter-spacing: .26em; text-transform: uppercase; color: var(--ink); }
+  .play .sq { width: 10px; height: 10px; background: var(--ink); box-shadow: 0 0 14px rgba(236,233,247,.7); }
+  kbd { font: 500 9px 'Space Grotesk'; letter-spacing: .12em; color: var(--ink-3); border: 1px solid var(--hair); border-radius: 3px; padding: 2px 5px; }
+  .tr .row { display: flex; gap: 22px; justify-content: flex-end; align-items: center; font-size: 10px; letter-spacing: .24em; text-transform: uppercase; color: var(--ink-2); }
+  .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #5eead4; box-shadow: 0 0 10px #5eead4; margin-right: 8px; vertical-align: 1px; }
+  .lane-title { position: absolute; right: 34px; top: 132px; text-align: right; }
+  .lane-title .idx { font-size: 10px; letter-spacing: .3em; color: var(--ink-3); text-transform: uppercase; }
+  .lane-title .name { font: 300 76px/0.9 'Space Grotesk'; letter-spacing: -.03em; color: var(--rim); text-shadow: 0 0 30px rgba(103,232,249,.35); margin-top: 6px; }
+  .lane-title .voice { margin-top: 10px; font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--ink-2); }
+  .lane-title .voice span { color: var(--ink-3); padding: 0 8px; }
+  .lane-title .sound { margin-top: 18px; display: grid; grid-template-columns: repeat(4, 46px); gap: 10px 8px; justify-content: end; }
+  .snd { text-align: center; font-size: 8.5px; letter-spacing: .16em; text-transform: uppercase; color: var(--ink-3); }
+  .snd i { display: block; height: 30px; width: 30px; margin: 0 auto 4px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(103,232,249,var(--a)) 0, rgba(103,232,249,calc(var(--a)*.35)) 45%, transparent 70%); }
+  .verbs { display: flex; flex-direction: column; gap: 9px; align-items: flex-end; }
+  .verb { font: 500 13px 'Space Grotesk'; letter-spacing: .3em; text-transform: uppercase; color: var(--ink); display: flex; gap: 12px; align-items: baseline; }
+  .verb small { font-size: 9px; letter-spacing: .18em; color: var(--ink-3); font-weight: 400; }
+  .verb.jam { color: var(--rec); }
+  .verb.share::after { content: '↗'; letter-spacing: 0; color: var(--ink-2); }
+  .bl .ticker { font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); }
+  .bl .ticker b { color: var(--rim); font-weight: 500; }
+  .bl .quest { margin-top: 10px; font-size: 11px; color: var(--ink-3); letter-spacing: .04em; }
+  .bl .quest em { font-style: normal; color: #fde047; letter-spacing: .2em; text-transform: uppercase; font-size: 9.5px; margin-right: 10px; }
+  .bl .hint { margin-top: 12px; display: flex; gap: 16px; font-size: 9.5px; color: var(--ink-3); letter-spacing: .14em; text-transform: uppercase; }
+  /* edit state: the lane's score sheet, typeset, hairlines only */
+  .sheet { display: none; position: absolute; right: 0; top: 0; bottom: 0; width: 440px; padding: 84px 34px 26px 34px;
+    background: linear-gradient(90deg, rgba(7,5,15,0) 0, rgba(7,5,15,.88) 70px, rgba(7,5,15,.94)); }
+  body.edit .sheet { display: block; }
+  .tr { z-index: 2; }
+  body.edit .meter-line, body.edit .tempo .unit i, body.edit .lane-title, body.edit .bl .hint, body.edit .bl .quest, body.edit .br { display: none; }
+  .sheet h2 { font: 300 54px/0.9 'Space Grotesk'; color: var(--rim); letter-spacing: -.02em; }
+  .sheet h2 small { font-size: 10px; letter-spacing: .3em; color: var(--ink-3); text-transform: uppercase; display: block; margin-bottom: 8px; font-weight: 500; }
+  .sheet .line { display: flex; gap: 14px; flex-wrap: wrap; font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--ink-2); margin-top: 10px; }
+  .sheet .line b { color: var(--ink); font-weight: 500; } .sheet .line .on { color: var(--rim); }
+  .sheet h3 { margin-top: 22px; font-size: 9px; letter-spacing: .34em; color: var(--ink-3); text-transform: uppercase; font-weight: 500; border-top: 1px solid var(--hair); padding-top: 9px; display: flex; justify-content: space-between; }
+  .sheet h3 span { letter-spacing: .14em; }
+  .rows { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 26px; margin-top: 8px; }
+  .r { display: grid; grid-template-columns: 58px 1fr 30px; align-items: center; gap: 8px; font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-2); }
+  .r i { height: 1px; background: var(--hair); position: relative; }
+  .r i::after { content: ''; position: absolute; left: 0; top: -1px; height: 3px; width: var(--v); background: var(--rim); box-shadow: 0 0 8px var(--rim); }
+  .r b { text-align: right; font-weight: 400; color: var(--ink); letter-spacing: .04em; }
+  .r.auto b::before { content: 'A '; color: var(--rim); font-size: 8px; }
+  .note { position: absolute; left: 50%; top: 4px; transform: translateX(-50%); font-size: 9px; color: rgba(236,233,247,.18); letter-spacing: .3em; text-transform: uppercase; }
+</style>
+</head>
+<body>
+<svg id="orbit" width="1512" height="860" viewBox="0 0 1512 860" aria-hidden="true"></svg>
+
+<!-- top-left: identity + time -->
+<div class="corner tl">
+  <div class="mark">orbits <b>·</b> midi warz</div>
+  <div class="tempo"><span class="num">100</span><span class="unit">bpm<i>drag · scroll · knob 8</i></span></div>
+  <div class="meter-line"><b>4/4</b> &nbsp;·&nbsp; 4 lanes &nbsp;·&nbsp; humanize <b>12%</b> &nbsp;·&nbsp; tap</div>
+  <div class="play"><span class="sq"></span>playing <kbd>space</kbd></div>
+</div>
+
+<!-- top-right: the device + the one door to everything else -->
+<div class="corner tr">
+  <div class="row"><span><span class="dot"></span>move · live</span><span>undo <kbd>⌘z</kbd></span><span>everything <kbd>/</kbd></span><span>?</span></div>
+</div>
+
+<!-- the selected lane, set as type: voice + its sound as light -->
+<div class="lane-title">
+  <div class="idx">lane 02 / 04 · selected</div>
+  <div class="name">rim</div>
+  <div class="voice">◀<span>rim · common kit</span>▶</div>
+  <div class="sound">
+    <div class="snd" style="--a:.55"><i></i>decay</div><div class="snd" style="--a:.8"><i></i>tone</div><div class="snd" style="--a:.2"><i></i>drive</div><div class="snd" style="--a:.65"><i></i>snap</div>
+    <div class="snd" style="--a:.4"><i></i>color</div><div class="snd" style="--a:.3"><i></i>send</div><div class="snd" style="--a:.5"><i></i>pan</div><div class="snd" style="--a:.85"><i></i>level</div>
+  </div>
+</div>
+
+<!-- bottom-left: what just happened, the quest, as one line each -->
+<div class="corner bl">
+  <div class="ticker">rim · length <b>5</b> · aligns with kick every 5 beats</div>
+  <div class="quest"><em>quest 1/5</em>make 3 against 4 — pull a ring outward until it holds 3 steps</div>
+  <div class="hint"><span>tap tick = hit</span><span>drag along = shift</span><span>pull across = length</span><span>hold planet = locks</span></div>
+</div>
+
+<!-- bottom-right: the performance verbs, nothing else -->
+<div class="corner br">
+  <div class="verbs">
+    <div class="verb"><small>hold · 0</small>fill</div>
+    <div class="verb"><small>hold · +</small>throw</div>
+    <div class="verb"><small>scrub · wheel</small>filter · off</div>
+    <div class="verb jam"><small>256 beats</small>● jam</div>
+    <div class="verb share">share</div>
+  </div>
+</div>
+
+<!-- edit state (mock.html?edit): click a ring's name, or Move: Track button twice -->
+<aside class="sheet" aria-label="lane 2 · rim">
+  <h2><small>lane 02 · open · esc closes</small>rim</h2>
+  <div class="line"><span>◀ <b>rim</b> ▶</span><span>kit <b>common</b></span><span>chokes <b>3 hat</b></span></div>
+  <div class="line"><span class="on">mute</span><span>solo</span><span>on next bar <b>on</b></span><span>clear lane</span></div>
+  <h3>sound <span>shift + knobs</span></h3>
+  <div class="rows">
+    <div class="r auto"><span>decay</span><i style="--v:55%"></i><b>55</b></div><div class="r"><span>tone</span><i style="--v:80%"></i><b>80</b></div>
+    <div class="r"><span>drive</span><i style="--v:20%"></i><b>20</b></div><div class="r"><span>snap</span><i style="--v:65%"></i><b>65</b></div>
+    <div class="r"><span>color</span><i style="--v:40%"></i><b>40</b></div><div class="r"><span>send</span><i style="--v:30%"></i><b>30</b></div>
+    <div class="r"><span>pan</span><i style="--v:50%"></i><b>C</b></div><div class="r"><span>level</span><i style="--v:85%"></i><b>85</b></div>
+  </div>
+  <h3>groove <span>this lane</span></h3>
+  <div class="rows">
+    <div class="r"><span>push</span><i style="--v:63%"></i><b>+8</b></div><div class="r"><span>vel hum</span><i style="--v:10%"></i><b>10</b></div>
+  </div>
+  <div class="line"><span>swing</span><b>straight</b><span class="on">mpc 16</span><span>triplet</span><span>3-3-2</span><span>amapiano</span><span>aksak</span></div>
+  <h3>sample <span>or drop a file on the ring</span></h3>
+  <div class="line"><span>file…</span><span>● mic</span><span>break… <b>8</b> / 16</span><span>start · end · ◀ rev</span></div>
+  <h3>generative</h3>
+  <div class="line"><span>euclid <b>and</b></span><span>modulate <b>tone · 4 loops · 50</b></span></div>
+  <div class="line"><span>timbre dice <b>off</b></span><span>scale <b>minor pent.</b></span><span>evolves <b class="on">yes</b></span></div>
+  <h3>automation <span>the curve round the ring</span></h3>
+  <div class="line"><span><b>decay</b> ▾</span><span>½</span><span>×2</span><span>clear</span><span>clear lane</span></div>
+  <h3>step 04 <span>held · its flower is on the ring</span></h3>
+  <div class="line"><span>plays <b>1:3</b></span><span>repeats <b>×3</b> fade · speed-up</span><span>stroke <b>—</b></span><span>clear locks</span></div>
+</aside>
+
+<script>
+// Static drawing of one frame of the "Lumen Score" main screen. Everything below is geometry, no app logic.
+// mock.html = the main screen; mock.html?edit = the deep state of the selected lane (sheet + lock flower + shift crown).
+const EDIT = location.search.includes('edit'); if (EDIT) document.body.classList.add('edit');
+const S = document.getElementById('orbit'), NS = 'http://www.w3.org/2000/svg';
+let CUR = S;
+const el = (n, a = {}, p = CUR) => { const e = document.createElementNS(NS, n); for (const k in a) if (a[k] != null) e.setAttribute(k, a[k]); p.appendChild(e); return e; };
+const CX = EDIT ? 540 : 640, CY = 452, TAU = Math.PI * 2;
+const pt = (r, deg) => [CX + r * Math.cos(deg * Math.PI / 180), CY + r * Math.sin(deg * Math.PI / 180)];
+const arc = (r, a0, a1) => { const [x0, y0] = pt(r, a0), [x1, y1] = pt(r, a1); return `M${x0},${y0} A${r},${r} 0 ${Math.abs(a1 - a0) > 180 ? 1 : 0} 1 ${x1},${y1}`; };
+const stepDeg = (i, len) => -90 + (i / len) * 360;
+
+const defs = el('defs');
+defs.innerHTML = `
+  <radialGradient id="bg" cx="${CX}" cy="${CY}" r="900" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#140d2a"/><stop offset=".45" stop-color="#0a0718"/><stop offset="1" stop-color="#040309"/></radialGradient>
+  <radialGradient id="sun" cx="${CX}" cy="${CY}" r="120" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".12" stop-color="#f0abfc" stop-opacity=".6"/><stop offset=".45" stop-color="#a78bfa" stop-opacity=".16"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>
+  <filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+  <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>`;
+el('rect', { x: 0, y: 0, width: 1512, height: 860, fill: 'url(#bg)' });
+
+// stars
+let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+for (let i = 0; i < 180; i++) el('rect', { x: rnd() * 1512, y: rnd() * 860, width: 1.1, height: 1.1, fill: '#ece9f7', opacity: (0.08 + rnd() * 0.4).toFixed(2) });
+
+// ---------- macro ring: the set (bleeds off the top and bottom edges) ----------
+const MR = 580;
+el('circle', { cx: CX, cy: CY, r: MR, fill: 'none', stroke: 'rgba(236,233,247,.10)', 'stroke-width': 1 });
+el('circle', { cx: CX, cy: CY, r: MR + 6, fill: 'none', stroke: 'rgba(236,233,247,.05)', 'stroke-width': 1, 'stroke-dasharray': '1 7' });
+// right arc: 16 slots
+const slots = [1, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0], cur = 2, next = 4, chain = [2, 3, 4];
+const sDeg = (k) => -33 + k * 4.4;
+if (!EDIT) {
+el('path', { d: arc(MR, sDeg(chain[0]), sDeg(chain[chain.length - 1])), fill: 'none', stroke: 'rgba(240,171,252,.55)', 'stroke-width': 3, 'stroke-linecap': 'round' });
+slots.forEach((full, k) => {
+  const [x, y] = pt(MR, sDeg(k)), on = k === cur;
+  el('circle', { cx: x, cy: y, r: on ? 6 : 3.6, fill: full ? (on ? '#ece9f7' : 'rgba(236,233,247,.6)') : 'none', stroke: on ? '#fff' : 'rgba(236,233,247,.45)', 'stroke-width': 1, filter: on ? 'url(#glow)' : null });
+  if (k === next) el('circle', { cx: x, cy: y, r: 9, fill: 'none', stroke: '#f0abfc', 'stroke-width': 1, 'stroke-dasharray': '2 2' });
+  const [tx, ty] = pt(MR + 18, sDeg(k)); const t = el('text', { x: tx, y: ty + 3, 'font-size': 8.5, fill: on ? '#ece9f7' : 'rgba(236,233,247,.4)', class: 't', 'letter-spacing': '.1em' }); t.textContent = String(k + 1).padStart(2, '0');
+});
+el('path', { id: 'slotsLbl', d: arc(MR + 40, -36, 40), fill: 'none' });
+{ const t = el('text', { 'font-size': 9, fill: 'rgba(236,233,247,.42)', class: 't caps' }); const tp = el('textPath', { href: '#slotsLbl', startOffset: '0' }, t); tp.textContent = 'slots · 03 playing · 05 on the next bar · chain 03 → 05 · 2 bars each'; }
+}
+// left arc: the generative modes as words that light up
+el('path', { id: 'modesL', d: arc(MR - 2, 146, 214), fill: 'none' });
+{ const t = el('text', { 'font-size': 11.5, class: 't caps', fill: 'rgba(236,233,247,.3)' }); const tp = el('textPath', { href: '#modesL', startOffset: '0' }, t);
+  tp.innerHTML = `<tspan fill="#a78bfa" font-weight="700">◌ evolve 4 bars · gravity 40</tspan><tspan>   ·   ○ dice free   ·   </tspan><tspan fill="rgba(236,233,247,.55)">coupling 1 → 2</tspan><tspan>   ·   rec off</tspan>`; }
+// evolve countdown: a short lit arc under the word
+el('path', { d: arc(MR + 8, 146, 160), fill: 'none', stroke: '#a78bfa', 'stroke-width': 2, opacity: .8, 'stroke-linecap': 'round' });
+
+// ---------- lanes ----------
+const R = 412, radii = [0.25, 0.4667, 0.6833, 0.9].map(f => f * R * 0.95);
+const lanes = [
+  { name: 'kick', hex: '#f0abfc', len: 4, hits: [0, 1, 2, 3], acc: [0], ratio: '×1', ph: 1.35, prob: [1, 1, 1, 1] },
+  { name: 'rim', hex: '#67e8f9', len: 5, hits: [0, 2, 3], acc: [2], ratio: '×1', ph: 2.6, sel: true, prob: [1, 1, 1, 0.4, 1], lock: [3], cond: { 2: [true, false, false] } },
+  { name: 'hat', hex: '#fde047', len: 3, hits: [0, 1, 2], acc: [0], ratio: '×3/2', ph: 0.15, ghost: [1] },
+  { name: 'wood', hex: '#a78bfa', len: 7, hits: [0, 3, 5], acc: [], ratio: '×1', ph: 4.7, muted: false, ratchet: { 5: 3 } },
+];
+const rgba = (h, a) => { const n = parseInt(h.slice(1), 16); return `rgba(${n >> 16 & 255},${n >> 8 & 255},${n & 255},${a})`; };
+
+// sun / core
+el('circle', { cx: CX, cy: CY, r: 120, fill: 'url(#sun)' });
+// cycle arc (whole-cycle position), just outside the outer lane
+const cr = radii[3] + 16; el('circle', { cx: CX, cy: CY, r: cr, fill: 'none', stroke: 'rgba(236,233,247,.12)' });
+el('path', { d: arc(cr, -90, -90 + 360 * 0.62), fill: 'none', stroke: 'rgba(236,233,247,.55)', 'stroke-width': 1.5 });
+{ const [x, y] = pt(cr, -90 + 360 * 0.62); el('circle', { cx: x, cy: y, r: 2.4, fill: '#fff' }); }
+el('path', { id: 'cycL', d: arc(cr + 10, 60, 120), fill: 'none' });
+// bottom: write it counter-clockwise so it reads left to right along the bottom
+el('path', { id: 'cycB', d: (() => { const [x0, y0] = pt(cr + 18, 96), [x1, y1] = pt(cr + 18, 28); return `M${x0},${y0} A${cr + 18},${cr + 18} 0 0 0 ${x1},${y1}`; })(), fill: 'none' });
+{ const t = el('text', { 'font-size': 9, class: 't caps', fill: 'rgba(236,233,247,.45)', 'text-anchor': 'middle' }); const tp = el('textPath', { href: '#cycB', startOffset: '50%' }, t); tp.textContent = 'cycle · bar 4 of 5 · everything meets in 4 beats'; }
+
+lanes.forEach((L, li) => {
+  const r = radii[li], hex = L.hex, sel = !!L.sel;
+  CUR = el('g', { opacity: EDIT && !sel ? 0.28 : 1 }, S);
+  // selected lane: radar sweep (a lit wedge behind the comet)
+  if (sel) {
+    const a = stepDeg(L.ph, L.len), r0 = radii[li - 1] || 0;
+    const [ax, ay] = pt(r, a - 40), [bx, by] = pt(r, a), [cx2, cy2] = pt(r0, a), [dx, dy] = pt(r0, a - 40);
+    const g = el('linearGradient', { id: 'sw', x1: ax, y1: ay, x2: bx, y2: by, gradientUnits: 'userSpaceOnUse' }, defs);
+    el('stop', { offset: 0, 'stop-color': hex, 'stop-opacity': 0 }, g); el('stop', { offset: 1, 'stop-color': hex, 'stop-opacity': .18 }, g);
+    el('path', { d: `M${ax},${ay} A${r},${r} 0 0 1 ${bx},${by} L${cx2},${cy2} A${r0},${r0} 0 0 0 ${dx},${dy} Z`, fill: 'url(#sw)' });
+  }
+  // the orbit
+  el('circle', { cx: CX, cy: CY, r, fill: 'none', stroke: rgba(hex, sel ? .22 : .07), 'stroke-width': sel ? 10 : 6, filter: 'url(#soft)' });
+  el('circle', { cx: CX, cy: CY, r, fill: 'none', stroke: sel ? rgba(hex, .85) : 'rgba(236,233,247,.2)', 'stroke-width': sel ? 1.4 : 1 });
+  // the rhythm's polygon
+  const P = L.hits.map(i => pt(r, stepDeg(i, L.len)));
+  if (P.length >= 3) el('polygon', { points: P.map(p => p.join(',')).join(' '), fill: rgba(hex, .03), stroke: rgba(hex, sel ? .35 : .16), 'stroke-width': 1 });
+  // step ticks (swing: every 2nd step drawn where it sounds)
+  for (let i = 0; i < L.len; i++) {
+    if (L.hits.includes(i)) continue; const d = stepDeg(i, L.len) * Math.PI / 180, c = Math.cos(d), s = Math.sin(d);
+    el('line', { x1: CX + c * (r - 5), y1: CY + s * (r - 5), x2: CX + c * (r + 5), y2: CY + s * (r + 5), stroke: 'rgba(236,233,247,.35)' });
+  }
+  // planets
+  L.hits.forEach(i => {
+    const [x, y] = pt(r, stepDeg(i, L.len)), acc = L.acc.includes(i), ghost = L.ghost?.includes(i), pr = L.prob?.[i] ?? 1, a = 0.2 + 0.8 * pr;
+    el('circle', { cx: x, cy: y, r: acc ? 14 : ghost ? 6 : 10, fill: rgba(hex, .25 * a), filter: 'url(#soft)' });
+    el('circle', { cx: x, cy: y, r: acc ? 5.5 : ghost ? 2.8 : 4, fill: hex, opacity: a, filter: 'url(#glow)' });
+    if (acc) { const g = el('g', { stroke: rgba(hex, .7), 'stroke-width': 1, transform: `rotate(18 ${x} ${y})` }); el('line', { x1: x - 14, y1: y, x2: x + 14, y2: y }, g); el('line', { x1: x, y1: y - 14, x2: x, y2: y + 14 }, g); }
+    if (L.lock?.includes(i)) { el('circle', { cx: x + 9, cy: y - 7, r: 2.2, fill: '#67e8f9', filter: 'url(#glow)' }); }
+    if (L.cond?.[i]) { const n = L.cond[i].length; L.cond[i].forEach((on, k) => { const a0 = -90 + k * 360 / n + 8, a1 = a0 + 360 / n - 16, rr = 15; const p0 = [x + rr * Math.cos(a0 * Math.PI / 180), y + rr * Math.sin(a0 * Math.PI / 180)], p1 = [x + rr * Math.cos(a1 * Math.PI / 180), y + rr * Math.sin(a1 * Math.PI / 180)]; el('path', { d: `M${p0} A${rr},${rr} 0 0 1 ${p1}`, fill: 'none', stroke: k === 1 ? '#fff' : rgba(hex, on ? .9 : .25), 'stroke-width': 2 }); }); }
+    if (L.ratchet?.[i]) { const d = stepDeg(i, L.len) * Math.PI / 180; for (let k = 1; k < L.ratchet[i]; k++) el('circle', { cx: x + Math.cos(d) * (10 + k * 6), cy: y + Math.sin(d) * (10 + k * 6), r: 1.8, fill: rgba(hex, .8 - k * .2) }); }
+  });
+  // comet
+  { const a = stepDeg(L.ph, L.len), tail = Math.min(60, 360 / L.len * 0.8);
+    for (let k = 0; k < 12; k++) el('path', { d: arc(r, a - tail * (k + 1) / 12, a - tail * k / 12), fill: 'none', stroke: rgba(hex, .75 * (1 - k / 12) ** 2), 'stroke-width': 3.2 * (1 - k / 12) + .4, 'stroke-linecap': 'round' });
+    const [x, y] = pt(r, a); el('circle', { cx: x, cy: y, r: 9, fill: rgba(hex, .5), filter: 'url(#soft)' }); el('circle', { cx: x, cy: y, r: 3.4, fill: '#fff', filter: 'url(#glow)' }); }
+  // the label written ON the ring (lower-left quadrant, reading upward), the lane's numbers as type
+  // counter-clockwise along the lower-left, so it reads left to right with the letters standing on the ring
+  const id = 'lbl' + li, lr = r + (sel ? 14 : 12), [lx0, ly0] = pt(lr, 172 - li * 4), [lx1, ly1] = pt(lr, sel ? 62 : 96);
+  el('path', { id, d: `M${lx0},${ly0} A${lr},${lr} 0 0 0 ${lx1},${ly1}`, fill: 'none' });
+  const t = el('text', { class: 't', 'font-size': sel ? 11 : 9.5, 'letter-spacing': '.2em' });
+  const tp = el('textPath', { href: '#' + id, startOffset: '0' }, t);
+  const hitsN = L.hits.length;
+  tp.innerHTML = `<tspan fill="${sel ? hex : rgba(hex, .8)}" font-weight="700">0${li + 1} ${L.name.toUpperCase()}</tspan><tspan fill="rgba(236,233,247,${sel ? .7 : .42})">  ${L.len} STEPS · ${hitsN} HITS · ${L.ratio}${li === 1 ? ' · STEP 4 PLAYS 40% · PUSH +8 MS' : ''}${li === 2 ? ' · SWING 33' : ''}${li === 3 ? ' · RATCHET ON 6' : ''}</tspan>`;
+});
+
+CUR = S;
+// ---------- the crown: the Move's 8 knobs as 8 arcs over the top, left to right like the hardware ----------
+const KR = radii[3] + 44, sel = lanes[1], kn = EDIT ? [
+  ['decay', '55', .55], ['tone', '80', .8], ['drive', '20', .2], ['snap', '65', .65], ['color', '40', .4], ['send', '30', .3], ['pan', 'C', .5, true], ['level', '85', .85],
+] : [
+  ['length', '5', 5 / 32], ['hits', '3', 3 / 5], ['shift', '0', 0], ['speed', '×1', 0.42], ['swing', '12%', .12 / .66], ['chance', '100%', 1], ['tune', '+0', .5, true], ['tempo', '100', (100 - 40) / 200, false, '#ece9f7'],
+];
+if (EDIT) { const [x, y] = pt(KR + 58, 270); const t = el('text', { x, y, class: 't caps', 'font-size': 9, fill: '#67e8f9', 'text-anchor': 'middle' }); t.textContent = 'shift held · the knobs are the sound of 02 rim'; }
+const k0 = 208, kspan = 124, kseg = kspan / 8, kgap = 2.4;
+kn.forEach(([lbl, val, f, bip, col], k) => {
+  const a0 = k0 + k * kseg + kgap / 2, a1 = a0 + kseg - kgap, c = col || sel.hex;
+  el('path', { d: arc(KR, a0, a1), fill: 'none', stroke: 'rgba(236,233,247,.13)', 'stroke-width': 5, 'stroke-linecap': 'butt' });
+  const m = bip ? (a0 + a1) / 2 : a0, e = bip ? m + (f - .5) * (a1 - a0) : a0 + f * (a1 - a0);
+  if (Math.abs(e - m) > .3) el('path', { d: arc(KR, Math.min(m, e), Math.max(m, e)), fill: 'none', stroke: c, 'stroke-width': 5, filter: 'url(#glow)' });
+  else el('circle', { ...Object.fromEntries([['cx', pt(KR, m)[0]], ['cy', pt(KR, m)[1]]]), r: 2.5, fill: c });
+  // value (big) and label (small), set along the arc
+  const idv = 'kv' + k, idl = 'kl' + k;
+  el('path', { id: idv, d: arc(KR + 13, a0, a1), fill: 'none' }); el('path', { id: idl, d: arc(KR + 29, a0, a1), fill: 'none' });
+  const tv = el('text', { class: 't', 'font-size': 15, 'font-weight': 300, fill: k === 0 ? '#fff' : 'rgba(236,233,247,.88)', 'text-anchor': 'middle' }); el('textPath', { href: '#' + idv, startOffset: '50%' }, tv).textContent = val;
+  const tl = el('text', { class: 't caps', 'font-size': 8.5, fill: 'rgba(236,233,247,.45)', 'text-anchor': 'middle' }); el('textPath', { href: '#' + idl, startOffset: '50%' }, tl).textContent = `${k + 1} ${lbl}`;
+});
+// knob being turned: a light that runs out to the ring it changes
+{ const a = k0 + kseg * 0.5; const [x0, y0] = pt(KR - 6, a), [x1, y1] = pt(radii[1] + 6, a);
+  el('line', { x1: x0, y1: y0, x2: x1, y2: y1, stroke: rgba(sel.hex, .35), 'stroke-width': 1, 'stroke-dasharray': '2 4' }); }
+
+if (EDIT) {
+  // automation of decay, drawn as the ring's own breath: radius = value, the playhead runs along it
+  const r = radii[1], d = [];
+  for (let k = 0; k <= 360; k += 2) { const v = 0.5 + 0.45 * Math.sin(k * Math.PI / 180 * 2) * Math.cos(k * Math.PI / 180 * .5); const [x, y] = pt(r + 22 + v * 22, k - 90); d.push((k ? 'L' : 'M') + x.toFixed(1) + ',' + y.toFixed(1)); }
+  el('path', { d: d.join(' '), fill: 'none', stroke: 'rgba(103,232,249,.55)', 'stroke-width': 1.2 });
+  el('path', { id: 'autoL', d: arc(r + 54, -60, -10), fill: 'none' });
+  { const t = el('text', { class: 't caps', 'font-size': 8.5, fill: 'rgba(103,232,249,.85)' }); el('textPath', { href: '#autoL' }, t).textContent = 'automation · decay · 2 loops · a curve'; }
+  // the lock flower round a held planet (step 4 of rim): 8 petals = the 8 knobs while a step is held
+  const [px, py] = pt(r, stepDeg(3, 5)), petals = [['tune', .5, '+0'], ['chance', .4, '40%'], ['velocity', .7, '70'], ['decay', .3, '30'], ['tone', .8, '80'], ['snap', .65, '—'], ['color', .4, '—'], ['nudge', .5, '+0']];
+  el('circle', { cx: px, cy: py, r: 74, fill: 'rgba(7,5,15,.82)', stroke: 'rgba(103,232,249,.25)' });
+  petals.forEach(([lbl, f, val], k) => {
+    const a0 = -90 + k * 45 + 4, a1 = a0 + 37, rr = 34, P = (a) => [px + rr * Math.cos(a * Math.PI / 180), py + rr * Math.sin(a * Math.PI / 180)];
+    el('path', { d: `M${P(a0)} A${rr},${rr} 0 0 1 ${P(a1)}`, fill: 'none', stroke: 'rgba(236,233,247,.15)', 'stroke-width': 5 });
+    const locked = val !== '—', e = a0 + f * (a1 - a0);
+    if (locked) el('path', { d: `M${P(a0)} A${rr},${rr} 0 0 1 ${P(e)}`, fill: 'none', stroke: k === 1 ? '#fff' : '#67e8f9', 'stroke-width': 5, filter: 'url(#glow)' });
+    const am = (a0 + a1) / 2 * Math.PI / 180, tx = px + 56 * Math.cos(am), ty = py + 56 * Math.sin(am);
+    const t = el('text', { x: tx, y: ty - 1, class: 't caps', 'font-size': 7, fill: locked ? 'rgba(236,233,247,.75)' : 'rgba(236,233,247,.3)', 'text-anchor': 'middle' }); t.textContent = lbl;
+    const v = el('text', { x: tx, y: ty + 9, class: 't', 'font-size': 9.5, fill: locked ? '#fff' : 'rgba(236,233,247,.3)', 'text-anchor': 'middle' }); v.textContent = val;
+  });
+  el('circle', { cx: px, cy: py, r: 6, fill: '#67e8f9', filter: 'url(#glow)' });
+  // condition + repeats, as the planet's outer rings
+  [true, false, false].forEach((on, k) => { const rr = 18, a0 = -90 + k * 120 + 10, a1 = a0 + 100, P = (a) => [px + rr * Math.cos(a * Math.PI / 180), py + rr * Math.sin(a * Math.PI / 180)]; el('path', { d: `M${P(a0)} A${rr},${rr} 0 0 1 ${P(a1)}`, fill: 'none', stroke: on ? '#fff' : 'rgba(103,232,249,.35)', 'stroke-width': 2 }); });
+  { const t = el('text', { x: px, y: py + 92, class: 't caps', 'font-size': 8.5, fill: 'rgba(236,233,247,.7)', 'text-anchor': 'middle' }); t.textContent = 'step 4 · held · plays 1:3 · ×3 fade'; }
+}
+
+// core: countdown as a numeral of light
+{ const t = el('text', { x: CX, y: CY + 14, class: 't', 'font-size': 52, 'font-weight': 300, fill: '#fff', 'text-anchor': 'middle', filter: 'url(#glow)' }); t.textContent = '4';
+  const u = el('text', { x: CX, y: CY + 34, class: 't caps', 'font-size': 8, fill: 'rgba(236,233,247,.7)', 'text-anchor': 'middle' }); u.textContent = 'beats to align'; }
+</script>
+</body>
+</html>

@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orbits redesign · Rio · "the sky is the instrument"</title>
+<!-- Static mock, 1512×860. Main screen: mock.html · deep state (planet petal + far side + sound crown): mock.html#deep
+     The backdrops are frames of the real canvas (focus mode, playing, muted), captured with tools/cdp.mjs. -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Major+Mono+Display&family=Space+Grotesk:wght@300;400;500;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --void: #0e0a20; --white: #ece9f7; --dim: rgba(236,233,247,.62); --faint: rgba(236,233,247,.16);
+    --glass: rgba(14,10,32,.58); --cyan: #67e8f9; --mag: #f0abfc; --pur: #a78bfa; --yel: #fde047; --red: #fb7185;
+    --mono: 'Major Mono Display', ui-monospace, monospace; --body: 'Space Grotesk', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { width: 1512px; height: 860px; overflow: hidden; background: var(--void); color: var(--white); font: 13px/1.3 var(--body); }
+  .bg { position: absolute; inset: 0; width: 1512px; height: 860px; }
+  svg.ov { position: absolute; inset: 0; width: 1512px; height: 860px; pointer-events: none; }
+  .abs { position: absolute; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--faint);
+    background: var(--glass); backdrop-filter: blur(8px); color: var(--white); font: 500 13px var(--body); white-space: nowrap; }
+  .round { width: 34px; padding: 0; justify-content: center; font-size: 15px; }
+  .kbd { font: 11px var(--body); color: var(--dim); border: 1px solid var(--faint); border-radius: 5px; padding: 1px 5px; }
+
+  /* top-left: name of the beat + the constellation (command palette) */
+  .brand { left: 28px; top: 22px; }
+  .brand .mark { font: 15px var(--mono); letter-spacing: .32em; color: var(--dim); }
+  .brand .title { display: block; margin-top: 4px; font: 300 26px var(--body); letter-spacing: -.01em; }
+  .brand .title small { font-size: 12px; color: var(--dim); letter-spacing: 0; margin-left: 8px; font-weight: 400; }
+  .ask { left: 28px; top: 92px; width: 268px; justify-content: space-between; color: var(--dim); font-weight: 400; }
+  .ask b { color: var(--cyan); font-weight: 400; margin-right: 6px; }
+
+  /* top-right */
+  .tr { right: 24px; top: 24px; display: flex; gap: 10px; }
+  .send { background: linear-gradient(135deg, rgba(103,232,249,.22), rgba(240,171,252,.22)); border-color: rgba(103,232,249,.5); }
+
+  /* lane tags on the rings */
+  .tag { transform: translate(-50%, -50%); height: 24px; padding: 0 10px; border-radius: 12px; font: 500 12px var(--body); display: flex; align-items: center; gap: 6px;
+    background: rgba(14,10,32,.78); border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); color: var(--c); }
+  .tag i { font-style: normal; color: var(--dim); font-size: 11px; }
+  .tag.sel { background: color-mix(in srgb, var(--c) 22%, rgba(14,10,32,.85)); border-color: var(--c); box-shadow: 0 0 18px color-mix(in srgb, var(--c) 45%, transparent); color: var(--white); }
+  .ms { transform: translate(-50%, 0); display: flex; gap: 4px; }
+  .ms span { width: 22px; height: 20px; border-radius: 6px; border: 1px solid var(--faint); background: rgba(14,10,32,.8); font: 600 10px var(--body); display: grid; place-items: center; color: var(--dim); }
+
+  /* crown labels */
+  .klab { transform: translate(-50%, -50%); text-align: center; font: 11px var(--body); color: var(--dim); line-height: 1.15; }
+  .klab b { display: block; font: 14px var(--mono); color: var(--white); letter-spacing: .02em; }
+  .klab em { font-style: normal; font-size: 9px; color: rgba(236,233,247,.4); margin-right: 3px; }
+  .flip { transform: translate(-50%, -50%); height: 26px; font-size: 11px; padding: 0 10px; }
+  .flip.on { border-color: var(--c); color: var(--white); background: color-mix(in srgb, var(--c) 20%, rgba(14,10,32,.8)); }
+  .bubble { transform: translate(-50%, -100%); padding: 5px 10px; border-radius: 10px; background: var(--white); color: var(--void); font: 600 12px var(--body); white-space: nowrap; box-shadow: 0 6px 24px rgba(240,171,252,.45); }
+  .bubble small { font-weight: 400; opacity: .7; }
+  .bubble::after { content: ''; position: absolute; left: 50%; bottom: -5px; margin-left: -5px; border: 5px solid transparent; border-bottom: 0; border-top-color: var(--white); }
+
+  .bpm { left: 756px; top: 520px; transform: translate(-50%, -50%); font: 12px var(--mono); color: rgba(236,233,247,.78); letter-spacing: .12em; }
+
+  /* bottom-left */
+  .bl { left: 24px; bottom: 22px; display: flex; gap: 10px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+  .slots { gap: 6px; }
+  .slots s { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(236,233,247,.35); text-decoration: none; }
+  .slots s.f { background: rgba(236,233,247,.35); }
+  .slots s.on { background: var(--white); box-shadow: 0 0 8px var(--white); }
+  .slots s.next { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(103,232,249,.25); animation: none; }
+  .slots .lbl { color: var(--dim); font-size: 11px; margin-left: 4px; }
+
+  /* bottom-right: the four mode orbs */
+  .br { right: 24px; bottom: 14px; display: flex; gap: 16px; }
+  .orb { width: 52px; text-align: center; font: 11px var(--body); color: var(--dim); }
+  .orb span { display: grid; place-items: center; width: 46px; height: 46px; margin: 0 auto 4px; border-radius: 50%; border: 1px solid var(--faint); background: var(--glass); font-size: 18px; color: var(--white); }
+  .orb.rec span { color: var(--red); }
+  .orb.evo span { border-color: rgba(167,139,250,.8); box-shadow: 0 0 22px rgba(167,139,250,.55), inset 0 0 12px rgba(167,139,250,.35); color: var(--pur); }
+  .orb.evo { color: var(--white); }
+
+  /* quest whisper */
+  .quest { left: 756px; bottom: 18px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--dim); }
+  .quest b { color: var(--yel); font-weight: 500; }
+  .quest .x { color: rgba(236,233,247,.4); border: 1px solid var(--faint); border-radius: 50%; width: 22px; height: 22px; display: grid; place-items: center; font-size: 11px; }
+  .ghosthand { font-size: 20px; filter: drop-shadow(0 0 6px var(--yel)); }
+
+  /* deep: the far side sheet */
+  .far { left: 1128px; top: 72px; width: 360px; height: 690px; border-radius: 18px; border: 1px solid rgba(167,139,250,.35);
+    background: rgba(18,12,40,.86); backdrop-filter: blur(14px); padding: 16px 18px; display: none; box-shadow: -20px 0 60px rgba(0,0,0,.4); }
+  .far h2 { font: 400 12px var(--mono); letter-spacing: .2em; color: var(--dim); display: flex; justify-content: space-between; align-items: center; }
+  .far h2 b { color: var(--white); }
+  .rail { display: flex; flex-wrap: wrap; gap: 5px; margin: 12px 0 14px; }
+  .rail span { font-size: 11px; padding: 3px 8px; border-radius: 10px; border: 1px solid var(--faint); color: var(--dim); }
+  .rail span.on { border-color: var(--cyan); color: var(--void); background: var(--cyan); }
+  .take { display: flex; gap: 12px; align-items: center; padding: 10px; border-radius: 12px; background: rgba(103,232,249,.07); border: 1px solid rgba(103,232,249,.25); margin-bottom: 14px; }
+  .take svg { flex: none; }
+  .take p { font-size: 12px; color: var(--dim); } .take p b { color: var(--white); font-weight: 500; display: block; font-size: 14px; }
+  .row { display: flex; align-items: center; justify-content: space-between; margin: 9px 0; font-size: 12px; color: var(--dim); }
+  .seg { display: inline-flex; border: 1px solid var(--faint); border-radius: 9px; overflow: hidden; }
+  .seg span { padding: 4px 9px; font-size: 11px; color: var(--dim); border-left: 1px solid var(--faint); }
+  .seg span:first-child { border-left: 0; } .seg span.on { background: rgba(236,233,247,.88); color: var(--void); }
+  .chk { display: inline-flex; gap: 6px; align-items: center; } .chk i { width: 14px; height: 14px; border-radius: 4px; border: 1px solid rgba(236,233,247,.4); display: inline-block; }
+  .chk i.on { background: var(--cyan); border-color: var(--cyan); }
+  .dl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .dl span { text-align: center; padding: 9px 0; border-radius: 10px; border: 1px solid var(--faint); font-size: 12px; }
+  .dl span.all { grid-column: 1 / -1; background: linear-gradient(135deg, var(--cyan), var(--mag)); color: var(--void); font-weight: 700; border: 0; padding: 12px 0; font-size: 14px; }
+  .far .hint { font-size: 11px; color: rgba(236,233,247,.45); margin-top: 12px; line-height: 1.45; }
+
+  /* deep: planet petal labels */
+  .pl { transform: translate(-50%, -50%); font: 11px var(--body); color: var(--white); text-align: center; line-height: 1.1; text-shadow: 0 0 6px #000, 0 0 3px #000; }
+  .pl b { display: block; font: 12px var(--mono); }
+  .pl.lk { color: var(--cyan); }
+  .petal-more { transform: translate(-50%, -50%); height: 24px; font-size: 11px; padding: 0 10px; }
+
+  body.deep .far { display: block; }
+  body.deep .main-only { display: none !important; }
+  body:not(.deep) .deep-only { display: none !important; }
+</style>
+</head>
+<body>
+<img class="bg" id="bg" src="canvas-kick.png" alt="" />
+<svg class="ov" id="ov" viewBox="0 0 1512 860"></svg>
+
+<!-- top-left: the beat's name is the title (tap = rename, saves to the library); the sky = command palette -->
+<div class="abs brand"><span class="mark">orbits</span><span class="title" id="beat-title">3 vs 4 vs 5<small>✎ seed of 14 nov</small></span></div>
+<div class="abs pill ask"><span><b>✧</b>ask the sky… <span style="opacity:.6">"stems", "7/8", "trap"</span></span><span class="kbd">⌘K</span></div>
+
+<!-- top-right -->
+<div class="abs tr">
+  <span class="pill round" title="undo (hold = redo, scrub history)"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="#ece9f7" stroke-width="1.6" stroke-linecap="round"><path d="M5 3 L2 6 L5 9"/><path d="M2.5 6 H10 a3.5 3.5 0 0 1 0 7 H7"/></svg></span>
+  <span class="pill send">send ✦</span>
+  <span class="pill round">?</span>
+</div>
+
+<div class="abs bpm main-only">100 bpm</div>
+<div class="abs bpm deep-only" style="top:520px">100 bpm</div>
+
+<!-- bottom-left: Move + pattern slots -->
+<div class="abs bl">
+  <span class="pill"><span class="dot"></span>move · live</span>
+  <span class="pill slots" title="slots: tap = radial of 8"><s class="f"></s><s class="f"></s><s class="on"></s><s class="f"></s><s class="next"></s><s></s><s></s><s></s><span class="lbl">3 → 5</span></span>
+</div>
+
+<!-- bottom-right: mode orbs (long-press = their settings on the far side) -->
+<div class="abs br">
+  <div class="orb rec"><span>●</span>rec</div>
+  <div class="orb"><span>◉</span>jam</div>
+  <div class="orb evo"><span>◌</span>evolve</div>
+  <div class="orb"><span>⚄</span>roll</div>
+</div>
+
+<!-- quest whisper -->
+<div class="abs quest main-only"><span class="ghosthand">☝</span><span><b>quest 1/5 · 3 against 4</b> — pull the rim ring inward until it has 3 steps</span><span class="x">×</span></div>
+
+<!-- deep: the far side -->
+<div class="abs far">
+  <h2><span>far side · <b>export</b></span><span class="kbd">esc</span></h2>
+  <div class="rail"><span>library</span><span>patterns</span><span>record</span><span>evolve</span><span>dice</span><span class="on">export</span><span>midi</span><span>sound lab</span><span>automation</span><span>settings</span><span>move map</span><span>nerd</span></div>
+  <div class="take">
+    <svg width="58" height="58" viewBox="-29 -29 58 58"><circle r="6" fill="none" stroke="#f0abfc"/><circle r="12" fill="none" stroke="#67e8f9" opacity=".7"/><circle r="18" fill="none" stroke="#fde047" opacity=".8"/><circle r="24" fill="none" stroke="#a78bfa" opacity=".7"/><path d="M0,-18 L15.6,9 L-15.6,9Z" fill="rgba(253,224,71,.15)" stroke="#fde047" stroke-width=".8"/></svg>
+    <p><b>this take · 4 bars</b>100 bpm · dice roll 4127 · WAV, stems and MIDI share it</p>
+  </div>
+  <div class="row">length <span class="seg"><span>1</span><span class="on">4 bars</span><span>8</span><span>16</span><span>cycle</span></span></div>
+  <div class="row">loop file <span class="chk"><i class="on"></i>seamless</span><span class="chk"><i></i>ring-out</span></div>
+  <div class="row">format <span class="seg"><span>16</span><span class="on">24</span><span>32f</span></span><span class="seg"><span>44.1</span><span class="on">48</span></span></div>
+  <div class="row">stems <span class="chk"><i class="on"></i>dry + fx return</span><span class="chk"><i></i>print fx</span></div>
+  <div class="row">MIDI <span class="seg"><span class="on">pattern</span><span>chain</span></span><span class="seg"><span class="on">per lane</span><span>drum rack</span></span></div>
+  <div class="dl"><span>⤓ WAV</span><span>⤓ stems .zip</span><span>⤓ MIDI</span><span>⤓ kit .zip</span><span class="all">⤓ export all</span></div>
+  <div class="row" style="margin-top:12px"><span>↻ new roll</span><span style="color:rgba(236,233,247,.4)">automation CCs → far side · midi</span></div>
+  <p class="hint">The far side is the one deep place: every drawer of today, one section each. It slides over the right edge; the rings never move, the music never stops. Every section is also a line in ⌘K.</p>
+</div>
+
+<div id="labels"></div>
+
+<script>
+// ---- geometry of the real canvas at 1512×860 in focus mode (scene.geo() measured with tools/cdp.mjs) ----
+const C = { x: 756, y: 481.6 }, RINGS = [90.3, 162.54, 234.78, 307.02];
+const LANES = [['kick', '#f0abfc', '4 ×1'], ['rim', '#67e8f9', '5 ×1'], ['hat', '#fde047', '3 ×1'], ['wood', '#a78bfa', '2 ×1']];
+const deep = location.hash === '#deep'; if (deep) { document.body.classList.add('deep'); document.getElementById('bg').src = 'canvas-hat.png'; }
+const SEL = deep ? 2 : 0, HEX = LANES[SEL][1];
+const ov = document.getElementById('ov'), labels = document.getElementById('labels');
+const rad = (d) => (d * Math.PI) / 180, P = (r, deg, c = C) => [c.x + r * Math.sin(rad(deg)), c.y - r * Math.cos(rad(deg))];   // deg clockwise from 12
+const arc = (r, a0, a1, c = C) => { const [x0, y0] = P(r, a0, c), [x1, y1] = P(r, a1, c); return `M${x0.toFixed(1)},${y0.toFixed(1)} A${r},${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${x1.toFixed(1)},${y1.toFixed(1)}`; };
+const svg = (tag, a) => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in a) e.setAttribute(k, a[k]); ov.appendChild(e); return e; };
+const div = (cls, x, y, html, style = '') => { const d = document.createElement('div'); d.className = 'abs ' + cls; d.style.cssText = `left:${x}px;top:${y}px;${style}`; d.innerHTML = html; labels.appendChild(d); return d; };
+svg('defs', {}).innerHTML = `<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>`;
+
+// ---- the crown: the Move's 8 knobs, left to right, as 8 arc sliders hugging the system (Shift flips it to sound) ----
+const CROWN_R = 352, SPAN = 72, N = 8, SEG = (2 * SPAN) / N, GAP = 2.2;
+const LANE_KNOBS = [['length', '4', 4 / 32], ['hits', '1', 1 / 4], ['shift', '0', 0], ['speed', '×1', 0.42], ['swing', '0%', 0], ['chance', '100%', 1], ['tune', '0', 0.5, true], ['tempo', '100', 0.3]];
+const SOUND_KNOBS = [['decay', '38', 0.38], ['tone', '72', 0.72], ['drive', '10', 0.1], ['snap', '55', 0.55], ['color', '40', 0.4], ['send', '22', 0.22], ['pan', '20 ›', 0.6, true], ['level', '80', 0.8]];
+const knobs = deep ? SOUND_KNOBS : LANE_KNOBS, touched = deep ? -1 : 1;
+knobs.forEach(([name, val, v, bip], k) => {
+  const a0 = -SPAN + k * SEG + GAP / 2, a1 = a0 + SEG - GAP, hot = k === touched, col = k === 7 && !deep ? '#ece9f7' : HEX;
+  svg('path', { d: arc(CROWN_R, a0, a1), stroke: 'rgba(236,233,247,.14)', 'stroke-width': hot ? 10 : 7, fill: 'none', 'stroke-linecap': 'round' });
+  const from = bip ? (a0 + a1) / 2 : a0, to = a0 + (a1 - a0) * v, lo = Math.min(from, to), hi = Math.max(from, to);
+  if (hi - lo > 0.3) svg('path', { d: arc(CROWN_R, lo, hi), stroke: col, 'stroke-width': hot ? 10 : 5, fill: 'none', 'stroke-linecap': 'round', opacity: hot ? 1 : 0.85, filter: hot ? 'url(#glow)' : '' });
+  const [hx, hy] = P(CROWN_R, to); svg('circle', { cx: hx, cy: hy, r: hot ? 7 : 4.5, fill: '#fff', stroke: col, 'stroke-width': 2, filter: 'url(#glow)' });
+  const [lx, ly] = P(CROWN_R + 34, (a0 + a1) / 2); div('klab', lx, ly, `<em>${k + 1}</em>${name}<b>${val}</b>`);
+  if (hot) { const [bx, by] = P(CROWN_R + 62, (a0 + a1) / 2); div('bubble', bx, by, `hits 1 → 2 <small>· Move knob 2</small>`); }
+});
+const [fx, fy] = P(CROWN_R, 84); const flip = div('pill flip' + (deep ? ' on' : ''), fx + 8, fy + 6, deep ? '⇧ sound · hat' : '⇧ sound');
+flip.style.setProperty('--c', HEX);
+
+// ---- lane tags ride on their rings (8 o'clock), the selected one grows mute / solo ----
+const TAG_A = -105;
+LANES.forEach(([name, hex, meta], i) => {
+  const [x, y] = P(RINGS[i], TAG_A), sel = i === SEL;
+  const t = div('tag' + (sel ? ' sel' : ''), x, y, `${name}${sel ? ` <i>${meta}</i>` : ''}`); t.style.setProperty('--c', hex);
+  if (sel) div('ms', x, y + 16, '<span>M</span><span>S</span>');
+});
+
+// ---- the sun is play: a thin breathing rim shows it is touchable ----
+svg('circle', { cx: C.x, cy: C.y, r: 66, fill: 'none', stroke: 'rgba(236,233,247,.22)', 'stroke-dasharray': '2 6' });
+
+if (!deep) {
+  // ghost hand path for the quest: a dotted arrow pulling the rim ring inward
+  ov.querySelector('defs').innerHTML += `<marker id="ah" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#fde047"/></marker>`;
+  const A = 140, [ax, ay] = P(RINGS[1] + 4, A), [bx, by] = P(RINGS[1] - 44, A);
+  svg('circle', { cx: ax, cy: ay, r: 11, fill: 'rgba(253,224,71,.22)', stroke: '#fde047', 'stroke-width': 1.5, filter: 'url(#glow)' });
+  svg('path', { d: `M${ax},${ay} L${bx},${by}`, stroke: '#fde047', 'stroke-width': 2, 'stroke-dasharray': '2 5', 'stroke-linecap': 'round', fill: 'none', 'marker-end': 'url(#ah)' });
+}
+
+if (deep) {
+  // ---- planet petal: long-press a planet = its locks as arc sliders round it, drag along an arc to set it ----
+  const pc = { x: 959, y: 599 }, PR = 46, items = [['tune', '+3', 0.62, true, false], ['chance', '60%', 0.6, false, true], ['velocity', 'ghost', 0.3, false, true], ['nudge', '−8%', 0.42, true, false], ['stroke', 'open', 0.5, false, false]];
+  svg('circle', { cx: pc.x, cy: pc.y, r: PR + 26, fill: 'rgba(14,10,32,.72)', stroke: 'rgba(253,224,71,.35)' });
+  items.forEach(([name, val, v, bip, locked], k) => {
+    const s = 360 / items.length, a0 = k * s + 6, a1 = a0 + s - 12;
+    svg('path', { d: arc(PR, a0, a1, pc), stroke: 'rgba(236,233,247,.18)', 'stroke-width': 8, fill: 'none', 'stroke-linecap': 'round' });
+    const from = bip ? (a0 + a1) / 2 : a0, to = a0 + (a1 - a0) * v;
+    svg('path', { d: arc(PR, Math.min(from, to), Math.max(from, to), pc), stroke: locked ? '#67e8f9' : '#fde047', 'stroke-width': 8, fill: 'none', 'stroke-linecap': 'round' });
+    const [lx, ly] = P(PR + 46, (a0 + a1) / 2, pc); div('pl' + (locked ? ' lk' : ''), lx, ly, `${name}<b>${val}</b>`);
+  });
+  // condition: the 1:3 arcs round the planet itself, tap an arc = toggle that loop
+  [0, 1, 2].forEach((k) => { const a0 = k * 120 + 12, a1 = a0 + 96; svg('path', { d: arc(17, a0, a1, pc), stroke: k === 0 ? '#ffffff' : 'rgba(253,224,71,.35)', 'stroke-width': 3, fill: 'none' }); });
+  div('pill petal-more', pc.x, pc.y + 128, 'plays 1:3 · repeats · slice ⋯');
+  div('pl', pc.x - 30, pc.y + 156, '<span style="color:var(--dim)">hat · step 2 · inner arcs = its loops, tap one</span>', 'white-space:nowrap');
+}
+</script>
+</body>
+</html>

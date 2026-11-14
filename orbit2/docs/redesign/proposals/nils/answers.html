@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Nils · answers to Noor (round 1)</title>
+<!-- Static, self-contained. Two sheets at 1512×860, in the "Orbit console" direction (Greta's console, Yuki's light):
+     answers.html#states = Noor Q2: latched SOUND × a step held on the Move × Shift, moment by moment
+     answers.html#drift  = Noor Q1: the drift page and what the Move's own LEDs show with the screen off -->
+<style>
+  :root { --bg: #0b0818; --ink: #ece9f7; --mute: rgba(236,233,247,.62); --faint: rgba(236,233,247,.22); --line: rgba(236,233,247,.12);
+    --lane: #a78bfa; --rec: #fb7185; --sans: "Space Grotesk", "SF Pro Display", "Helvetica Neue", Arial, sans-serif; --mono: "SF Mono", Menlo, monospace; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1512px; height: 860px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--sans); font-variant-numeric: tabular-nums; }
+  .title { position: absolute; left: 24px; top: 16px; font-size: 15px; color: var(--mute); }
+  .title b { color: var(--ink); font-weight: 600; }
+  .row { position: absolute; left: 0; width: 1512px; height: 196px; border-top: 1px solid var(--line); }
+  .cap { position: absolute; left: 24px; top: 16px; width: 250px; }
+  .cap .t { font: 700 11px var(--mono); letter-spacing: 1.4px; color: var(--mute); }
+  .cap .h { font-size: 17px; font-weight: 600; margin-top: 6px; line-height: 1.25; }
+  .cap .e { font-size: 12px; color: var(--mute); margin-top: 6px; line-height: 1.4; }
+  .cap .e b { color: var(--ink); font-weight: 600; }
+  .con { position: absolute; left: 292px; top: 14px; width: 900px; }
+  .hdr { display: flex; align-items: baseline; gap: 12px; font-size: 14px; height: 22px; }
+  .hdr .ln { color: var(--lane); font-weight: 600; }
+  .hdr .pg { font-weight: 600; }
+  .hdr .mv { margin-left: auto; font: 600 11px var(--mono); letter-spacing: 1px; color: var(--mute); border: 1px solid var(--faint); border-radius: 4px; padding: 2px 6px; }
+  .hdr .mv.own { color: var(--ink); border-color: var(--ink); }
+  .knobs { display: grid; grid-template-columns: repeat(8, 1fr); margin-top: 8px; }
+  .k { position: relative; height: 62px; padding-left: 50px; }
+  .k svg { position: absolute; left: 4px; top: 6px; width: 40px; height: 40px; }
+  .k .v { font-size: 22px; font-weight: 500; padding-top: 6px; }
+  .k .l { font-size: 11.5px; color: var(--mute); }
+  .k .n { position: absolute; left: 0; top: 0; font: 600 9px var(--mono); color: var(--faint); }
+  .k.g .v { color: var(--faint); }
+  .k.ch { outline: 1px solid var(--ink); outline-offset: -1px; border-radius: 6px; }
+  .cells { display: grid; grid-template-columns: repeat(16, 1fr); gap: 6px; margin-top: 8px; height: 40px; }
+  .c { border: 1px solid var(--faint); border-radius: 5px; }
+  .c.on { background: color-mix(in srgb, var(--lane) 55%, transparent); border-color: transparent; }
+  .c.acc { background: var(--lane); border-color: transparent; }
+  .c.ph { box-shadow: 0 0 0 2px var(--ink); }
+  .c.held { box-shadow: 0 0 0 2px var(--ink); background: color-mix(in srgb, var(--lane) 55%, transparent); }
+  .c.lp { border-radius: 50%; width: 30px; height: 30px; margin: 5px auto 0; }
+  .c.lp.on { background: var(--lane); }
+  .c.lp.now { box-shadow: 0 0 0 2px var(--ink); }
+  .fixed { position: absolute; left: 1216px; top: 16px; width: 280px; font-size: 12.5px; color: var(--mute); line-height: 1.5; }
+  .fixed .t { font: 700 10px var(--mono); letter-spacing: 1.3px; color: var(--faint); margin-bottom: 6px; }
+  .fx { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+  .play { width: 30px; height: 30px; border-radius: 50%; border: 1.5px solid var(--ink); display: grid; place-items: center; font-size: 10px; }
+  .pos { font-size: 18px; font-weight: 500; color: var(--ink); }
+  .mute { display: inline-flex; gap: 6px; }
+  .mute i { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--faint); }
+  .mute i.m { background: var(--ink); border-color: var(--ink); }
+  .pill { font-size: 12px; border: 1px solid var(--rec); color: var(--rec); border-radius: 999px; padding: 2px 9px; }
+  .comet { width: 46px; height: 46px; }
+
+  /* drift sheet */
+  .move { position: absolute; border: 1px solid var(--faint); border-radius: 14px; width: 680px; height: 300px; }
+  .move .lbl { position: absolute; left: 18px; top: -26px; font: 700 11px var(--mono); letter-spacing: 1.3px; color: var(--mute); }
+  .enc { position: absolute; top: 24px; width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--faint); }
+  .enc.t { border-color: var(--ink); box-shadow: 0 0 0 4px rgba(236,233,247,.12); }
+  .pads { position: absolute; left: 160px; top: 84px; display: grid; grid-template-columns: repeat(8, 52px); gap: 6px; }
+  .pad { height: 26px; border-radius: 4px; background: rgba(255,255,255,.05); }
+  .stp { position: absolute; left: 160px; top: 222px; display: grid; grid-template-columns: repeat(16, 22.5px); gap: 4px; }
+  .sb { height: 14px; border-radius: 3px; background: rgba(255,255,255,.06); }
+  .btn { position: absolute; width: 50px; height: 22px; border-radius: 4px; border: 1px solid var(--faint); font: 700 9px var(--mono); color: var(--mute); display: grid; place-items: center; }
+  .note { position: absolute; font-size: 12.5px; color: var(--mute); line-height: 1.5; }
+  .note b { color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+const LANE = '#a78bfa';
+const arc = (f, ghost) => { const r = 16, c = 20, a0 = 135, sw = 270, p = a => [c + r * Math.cos(a * Math.PI / 180), c + r * Math.sin(a * Math.PI / 180)];
+  const d = (a, b) => { const [x1, y1] = p(a), [x2, y2] = p(b); return `M${x1} ${y1} A${r} ${r} 0 ${b - a > 180 ? 1 : 0} 1 ${x2} ${y2}`; };
+  return `<svg viewBox="0 0 40 40"><path d="${d(a0, a0 + sw)}" stroke="rgba(236,233,247,.14)" stroke-width="3" fill="none" stroke-linecap="round"/><path d="${d(a0, a0 + Math.max(.01, f) * sw)}" stroke="${ghost ? 'rgba(236,233,247,.3)' : LANE}" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`; };
+const knobs = (list) => `<div class="knobs">${list.map(([l, v, f, cls = ''], i) => `<div class="k ${cls}"><span class="n">${i + 1}</span>${arc(f, cls.includes('g'))}<div class="v">${v}</div><div class="l">${l}</div></div>`).join('')}</div>`;
+const HITS = { 0: 'acc', 2: 'on', 3: 'on', 6: 'on', 8: 'acc', 10: 'on', 12: 'on', 13: 'on' };
+const steps = (held) => `<div class="cells">${Array.from({ length: 16 }, (_, i) => `<div class="c ${HITS[i] || ''} ${i === 9 ? 'ph' : ''} ${held === i ? 'held' : ''}"></div>`).join('')}</div>`;
+const loops = () => `<div class="cells">${Array.from({ length: 16 }, (_, i) => `<div class="c lp ${i % 2 === 0 ? 'on' : ''} ${i === 4 ? 'now' : ''}"></div>`).join('')}</div>`;
+const SOUND = [['decay', '0.42', .42], ['tone', '0.75', .75], ['drive', '0.10', .1], ['snap', '0.55', .55], ['color', '0.30', .3], ['send', '0.20', .2], ['pan', 'L12', .38], ['level', '0.80', .8]];
+const STEP = (k8) => [['tune', '+3', .58], ['chance', '85%', .85, 'g'], ['velocity', '0.62', .62], ['decay', 'lane', .42, 'g'], ['tone', 'lane', .75, 'g'], ['snap', 'lane', .55, 'g'], ['color', 'lane', .3, 'g'], k8];
+const FIXED = (rec) => `<div class="fixed"><div class="t">NEVER REPAINTED BY A PAGE</div>
+  <div class="fx"><span class="play">■</span><span class="pos">03.2</span><svg class="comet" viewBox="0 0 46 46"><circle cx="23" cy="23" r="18" fill="none" stroke="${LANE}" stroke-opacity=".4"/><path d="M23 5 A18 18 0 0 1 41 23" stroke="${LANE}" stroke-width="2" fill="none"/><circle cx="41" cy="23" r="3.5" fill="#fff"/></svg><span>playing: ■, the bar.beat count, the comets</span></div>
+  <div class="fx"><span class="mute"><i></i><i></i><i class="m"></i><i></i></span><span>lane 3 muted: its M lamp and its ring at 35 %</span></div>
+  <div class="fx">${rec ? '<span class="pill">● rec armed ×</span><span>red is only ever this</span>' : '<span style="color:var(--faint)">(no rec pill: record is off)</span>'}</div></div>`;
+const row = (top, t, h, e, hdr, body, rec) => `<div class="row" style="top:${top}px"><div class="cap"><div class="t">${t}</div><div class="h">${h}</div><div class="e">${e}</div></div><div class="con">${hdr}${body}</div>${FIXED(rec)}</div>`;
+const H = (pg, move, own) => `<div class="hdr"><span class="ln">● 4 · conga</span><span class="pg">${pg}</span><span class="mv ${own ? 'own' : ''}">${move}</span></div>`;
+
+if (location.hash !== '#drift') {
+  document.getElementById('root').innerHTML = `<div class="title"><b>Noor Q2 · latched SOUND × step held on the Move × Shift.</b> Rule: <b>a held or touched Move control owns the knob row; on release it returns to the latched page.</b> The mouse drags what is drawn.</div>` +
+  row(48, 'T0 · SOUND LATCHED · NOTHING HELD', 'Screen: sound. Move knobs: rhythm.', 'Move knobs = <b>length … tempo</b> (mapping unchanged); the header says it: <b>Move ⇢ rhythm</b>. Touching a Move knob flips the row to rhythm while touched.', H('sound', 'MOVE ⇢ RHYTHM', false), knobs(SOUND) + steps(), true) +
+  row(248, 'T1 · + HOLD STEP 7 ON THE MOVE', 'Step page: locks of step 7.', 'Move knobs 1–7 = <b>locks</b>, 8 = <b>condition</b>, from the press. The row flips at <b>450 ms or the first turn</b> (until then it may be a tap; cell 7 is outlined at once). Cells = its 16 loops.', H('step 7 · held on Move', 'MOVE ⇢ STEP 7', true), knobs(STEP(['condition', '1:2', .2])) + loops(), true) +
+  row(448, 'T2 · + SHIFT, STEP STILL HELD', 'Same page; slot 8 = repeats.', 'Knobs 1–7 = <b>still the locks</b> (Shift is ignored there, today and after). Knob 8 = <b>repeats ×1–4</b>; only slot 8 repaints. No accent: that is Shift <i>before</i> the step press.', H('step 7 · held on Move ⇧', 'MOVE ⇢ STEP 7 ⇧', true), knobs(STEP(['repeats ⇧', '×2', .33, 'ch'])) + loops(), true) +
+  row(648, 'T3 · LET GO OF STEP 7, SHIFT HELD', 'Shift owns the row: sound.', 'No toggle (held ≥ 450 ms). Move knobs = <b>decay … level</b>; same page as the latch, only the header changes. <b>T4</b>, let go of Shift: Move knobs = rhythm, row stays sound = T0.', H('sound ⇧', 'MOVE ⇢ SOUND ⇧', true), knobs(SOUND) + steps(), true);
+} else {
+  const encs = Array.from({ length: 8 }, (_, i) => `<div class="enc ${i === 0 ? 't' : ''}" style="left:${160 + i * 58 + 6}px"></div>`).join('');
+  const pads = Array.from({ length: 32 }, (_, i) => { const r = Math.floor(i / 8), c = i % 8, cols = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa'], hit = [0, 3, 5, 6].includes((c + r * 3) % 8); return `<div class="pad" style="${hit ? `background:${cols[r]};opacity:${r === 2 ? .25 : .75}` : ''}"></div>`; }).reverse().join('');
+  const cols6 = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa', '#86efac', '#fdba74'];
+  const stepsHeld = Array.from({ length: 16 }, (_, i) => i < 6 ? `<div class="sb" style="background:${cols6[i]};opacity:${i === 2 || i === 4 ? .18 : .9}"></div>` : i >= 8 ? `<div class="sb" style="background:#fff;opacity:${i < 13 ? .85 : .08}"></div>` : `<div class="sb"></div>`).join('');
+  const stepsTouch = Array.from({ length: 16 }, (_, i) => `<div class="sb" style="${i < 8 ? 'background:#fff;opacity:.85' : ''}"></div>`).join('');
+  const move = (x, y, label, stp, t) => `<div class="move" style="left:${x}px;top:${y}px"><span class="lbl">${label}</span>
+    <div class="btn" style="left:24px;top:30px">◉ wheel</div>${t ? encs : encs.replace(' t', '')}<div class="pads">${pads}</div>
+    <div class="btn" style="left:24px;top:84px">track</div><div class="btn" style="left:24px;top:116px">track</div>
+    <div class="btn" style="left:24px;top:180px;border-color:#fff;color:#0b0818;background:#fff">− held</div>
+    <div class="btn" style="left:24px;top:212px">shift</div>
+    <div class="stp">${stp}</div></div>`;
+  document.getElementById('root').innerHTML = `<div class="title"><b>Noor Q1 · the drift page with the screen off.</b> The Move has no LEDs on its encoders, so the page has to be readable from the buttons. Its answer: <b>one page, held, no sub-pages; the 16 step LEDs carry the state, and the touched knob's value.</b></div>` +
+    move(40, 90, 'A · HOLD −  (NO KNOB TOUCHED)', stepsHeld, false) +
+    `<div class="note" style="left:40px;top:404px;width:680px"><b>How I know I'm on drift:</b> my finger is on −. There is no other way in and no latched sub-state (WORLD/LANE is dropped: a page you can be on without holding anything is exactly what fails screen-off).<br>
+    <b>− LED:</b> white while held; magenta when evolve is on, as today.<br>
+    <b>Steps 1–6:</b> lanes that evolve in lane colour, steady lanes dark (3 and 5 here). A tap toggles the lane (flagged chord).<br>
+    <b>Steps 9–16:</b> the countdown to the next mutation, draining one LED per 1/8 of "every". <b>Pads:</b> unchanged, they are the music.</div>` +
+    move(792, 90, 'B · HOLD − + TOUCH KNOB 1 ("EVERY")', stepsTouch, true) +
+    `<div class="note" style="left:792px;top:404px;width:680px"><b>The touched knob's value, on the step LEDs:</b> while a drift encoder is touched (touch notes 0–7), all 16 step LEDs become its meter: every = 8 bars → 8 lit; amount 50 % → 8 lit; gravity, coupling, humanize the same in 1/16ths. Let go of the knob and A comes back.<br>
+    <b>Why it's needed:</b> drift knobs have no audible result at once (a mutation every 8 bars), so unlike Shift + knobs you can't hear your way to a value. Without this meter, drift <b>is</b> "look at the screen", and it is not a Move feature.<br>
+    <b>Screen-off test (RD-10 gate):</b> blind, set every = 8, amount ≈ half, lanes 1 2 4 evolving; then check the screen. Pass = 5/5 tries, no glance.</div>` +
+    `<div class="note" style="left:40px;top:720px;width:1430px;border-top:1px solid rgba(236,233,247,.12);padding-top:14px"><b>Drift knobs (one page, hold −):</b> 1 every · 2 amount · 3 gravity · 4 home after · 5 max cycle · 6 coupling lift · 7 humanize · 8 dice repeat. <b>Dropped from my proposal:</b> the LANE sub-page (push/pull, vel humanize, swing template, euclid mask, modulation, scale → sheet › lane), hold Loop + knobs (pattern settings → sheet › pattern), Shift = step page 2 (nudge and stroke stay on the jog; the rest → sheet › lane step block). Hold Loop keeps today's meaning only: the cells show the 16 slots.</div>`;
+}
+</script>
+</body>
+</html>

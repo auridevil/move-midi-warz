@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Orbits redesign · Nils · "the Move's missing display"</title>
+<!-- Static mock, self-contained (no fonts, no images, no network). Two states:
+     mock.html        = PLAY mode, playing, Move connected, finger resting on knob 2
+     mock.html#step   = STEP mode (step 4 of the kick held): same 8 slots + 16 cells, new meaning -->
+<style>
+  :root {
+    --bg: #0b0818; --ink: #ece9f7; --mute: rgba(236,233,247,.52); --faint: rgba(236,233,247,.18); --line: rgba(236,233,247,.10);
+    --l1: #f0abfc; --l2: #67e8f9; --l3: #fde047; --l4: #a78bfa; --lane: var(--l1);
+    --sans: "SF Pro Display", "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    --mono: "SF Mono", ui-monospace, Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1512px; height: 860px; overflow: hidden; background: var(--bg); color: var(--ink); font-family: var(--sans); font-variant-numeric: tabular-nums; }
+  body { position: relative; background: radial-gradient(ellipse 60% 70% at 50% 48%, #1a1236 0%, #0f0b22 55%, var(--bg) 100%); }
+  .abs { position: absolute; }
+  button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+
+  /* ── top band: the "display" (mode) · 8 knob slots · transport ───────────────── */
+  .band-top { left: 0; top: 0; width: 1512px; height: 150px; border-bottom: 1px solid var(--line); }
+  .modebox { left: 24px; top: 20px; width: 200px; }
+  .mode-word { font-size: 46px; font-weight: 800; letter-spacing: -1px; line-height: 1; }
+  .mode-sub { font-size: 12px; color: var(--mute); margin-top: 6px; letter-spacing: .3px; }
+  .tabs { display: flex; gap: 4px; margin-top: 14px; }
+  .tabs button { font-size: 10px; font-weight: 700; letter-spacing: 1.2px; padding: 6px 0; width: 38px; border-radius: 4px; color: var(--mute); border: 1px solid var(--faint); }
+  .tabs button.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+
+  .knobs { left: 248px; top: 0; width: 1016px; height: 150px; display: grid; grid-template-columns: repeat(8, 1fr); }
+  .knob { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 1px solid var(--line); }
+  .knob:first-child { border-left: 1px solid var(--line); }
+  .knob .n { position: absolute; left: 10px; top: 10px; font: 600 10px var(--mono); color: var(--faint); }
+  .knob svg { width: 78px; height: 78px; }
+  .knob .v { position: absolute; top: 47px; width: 100%; text-align: center; font-size: 26px; font-weight: 700; letter-spacing: -.5px; }
+  .knob .v small { font-size: 13px; font-weight: 600; color: var(--mute); margin-left: 1px; }
+  .knob .l { margin-top: 6px; font-size: 11px; font-weight: 700; letter-spacing: 1.6px; color: var(--mute); text-transform: uppercase; }
+  .knob.touch { background: linear-gradient(180deg, color-mix(in srgb, var(--lane) 16%, transparent), transparent 85%); }
+  .knob.touch::after { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: var(--lane); }
+  .knob .auto { position: absolute; right: 10px; top: 9px; font: 700 10px var(--mono); color: var(--bg); background: var(--lane); border-radius: 3px; padding: 1px 4px; }
+  .knob.global .l::before { content: "◆ "; color: var(--ink); }
+  .knob.ghost .v { color: var(--faint); }
+
+  .transport { left: 1288px; top: 12px; width: 204px; }
+  .tp-row { display: flex; align-items: center; gap: 12px; }
+  .play { width: 64px; height: 64px; border-radius: 50%; background: var(--ink); color: var(--bg); font-size: 22px; display: grid; place-items: center; }
+  .play.on { box-shadow: 0 0 0 4px rgba(236,233,247,.15), 0 0 24px rgba(103,232,249,.35); }
+  .rec { width: 40px; height: 40px; border-radius: 50%; border: 2px solid #fb7185; color: #fb7185; font-size: 14px; display: grid; place-items: center; }
+  .pos { font-size: 30px; font-weight: 700; letter-spacing: -.5px; line-height: 1; }
+  .pos small { display: block; font: 600 10px var(--mono); color: var(--mute); letter-spacing: 1.2px; margin-top: 4px; }
+  .lamps { display: flex; gap: 14px; margin-top: 10px; font: 700 10px var(--mono); letter-spacing: 1px; color: var(--mute); }
+  .lamps i { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--faint); margin-right: 5px; vertical-align: 0; }
+  .lamps .on i { background: #5eead4; box-shadow: 0 0 8px #5eead4; }
+  .lamps .on { color: var(--ink); }
+  .corner { right: 16px; top: 112px; display: flex; gap: 6px; }
+  .corner button { min-width: 30px; height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--faint); font-size: 12px; color: var(--mute); }
+  .corner button.jam { color: #fb7185; border-color: rgba(251,113,133,.45); }
+
+  /* ── middle: lanes (= Move track buttons) · rings · perform cluster (= wheel, Layout, +) ── */
+  .lanes { left: 24px; top: 186px; width: 200px; }
+  .lane { --c: var(--l1); display: grid; grid-template-columns: 6px 1fr 28px; gap: 12px; align-items: center; height: 70px; padding: 0 10px 0 0; border-radius: 8px; margin-bottom: 8px; }
+  .lane .bar { width: 6px; height: 44px; border-radius: 3px; background: var(--c); }
+  .lane .name { font-size: 19px; font-weight: 800; letter-spacing: .5px; color: var(--c); }
+  .lane .name b { font: 600 11px var(--mono); color: var(--faint); margin-right: 6px; vertical-align: 2px; }
+  .lane .meta { font: 500 12px var(--mono); color: var(--mute); margin-top: 3px; }
+  .lane .m { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--faint); font: 700 10px var(--mono); color: var(--mute); }
+  .lane .m.on { background: #fb7185; border-color: #fb7185; color: var(--bg); }
+  .lane.sel { background: color-mix(in srgb, var(--c) 13%, transparent); }
+  .lane.muted .name, .lane.muted .bar { opacity: .35; }
+  .lanes .add { margin-top: 4px; font-size: 11px; color: var(--faint); letter-spacing: 1px; padding-left: 18px; }
+
+  .stage { left: 236px; top: 150px; width: 1040px; height: 552px; }
+  .stage svg { width: 100%; height: 100%; }
+
+  .peek { left: 1052px; top: 178px; width: 200px; text-align: right; }
+  .peek .k { font: 700 10px var(--mono); letter-spacing: 1.4px; color: var(--mute); }
+  .peek .big { font-size: 64px; font-weight: 800; letter-spacing: -2px; line-height: 1; color: var(--lane); }
+  .peek .s { font-size: 12px; color: var(--mute); margin-top: 4px; }
+
+  .perf { left: 1300px; top: 196px; width: 188px; }
+  .perf .h { font: 700 10px var(--mono); letter-spacing: 1.4px; color: var(--mute); margin-bottom: 10px; }
+  .wheel { width: 188px; height: 188px; border-radius: 50%; border: 1px solid var(--faint); position: relative; display: grid; place-items: center; background: radial-gradient(circle, rgba(255,255,255,.04), transparent 70%); }
+  .wheel .wv { font-size: 30px; font-weight: 800; text-align: center; line-height: 1; }
+  .wheel .wv small { display: block; font: 600 10px var(--mono); letter-spacing: 1.2px; color: var(--mute); margin-top: 6px; }
+  .wheel .lo, .wheel .hi { position: absolute; top: 84px; font: 700 10px var(--mono); color: var(--faint); }
+  .wheel .lo { left: 14px; } .wheel .hi { right: 14px; }
+  .holds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 18px; }
+  .holds button { height: 64px; border-radius: 10px; border: 1px solid var(--faint); background: rgba(255,255,255,.03); font-size: 13px; font-weight: 800; letter-spacing: 1.5px; }
+  .holds button small { display: block; font: 600 9px var(--mono); color: var(--faint); letter-spacing: 1px; margin-top: 4px; }
+
+  /* ── ticker (the display's one line: quest, toast, welcome) ───────────────── */
+  .ticker { left: 248px; top: 702px; width: 1016px; height: 22px; text-align: center; font-size: 13px; color: var(--mute); }
+  .ticker b { color: var(--l3); font-weight: 700; letter-spacing: 1px; font-size: 11px; margin-right: 8px; }
+  .ticker button { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; margin-left: 10px; font-size: 12px; }
+
+  /* ── bottom band: 16 cells (= the Move's step buttons) ────────────────────── */
+  .band-bot { left: 0; top: 732px; width: 1512px; height: 128px; border-top: 1px solid var(--line); }
+  .stepinfo { left: 24px; top: 20px; width: 200px; }
+  .stepinfo .t { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: var(--lane); }
+  .stepinfo .s { font: 500 12px var(--mono); color: var(--mute); margin-top: 6px; line-height: 1.5; }
+  .steps { left: 248px; top: 16px; width: 1016px; height: 80px; display: grid; grid-template-columns: repeat(16, 1fr); gap: 7px; }
+  .st { position: relative; border-radius: 7px; border: 1.5px solid var(--faint); background: rgba(255,255,255,.025); }
+  .st:nth-child(4n+1) { border-color: rgba(236,233,247,.32); }
+  .st.on { background: color-mix(in srgb, var(--lane) 62%, transparent); border-color: transparent; }
+  .st.acc { background: var(--lane); border-color: transparent; }
+  .st.acc::before { content: ""; position: absolute; left: 8px; right: 8px; top: 6px; height: 3px; border-radius: 2px; background: var(--bg); opacity: .55; }
+  .st.ghost { background: color-mix(in srgb, var(--lane) 26%, transparent); border-color: transparent; }
+  .st.ph { box-shadow: 0 0 0 3px var(--ink), 0 0 18px rgba(236,233,247,.4); }
+  .st.held { box-shadow: 0 0 0 3px var(--ink); transform: translateY(-3px); }
+  .st.out { border-style: dashed; opacity: .35; }
+  .st .no { position: absolute; left: 0; right: 0; bottom: -18px; text-align: center; font: 600 10px var(--mono); color: var(--faint); }
+  .st .lk { position: absolute; right: 6px; bottom: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ink); }
+  .st.loop { background: rgba(255,255,255,.02); }
+  .st.loop.on { background: color-mix(in srgb, var(--lane) 55%, transparent); }
+  .st.loop.now { background: var(--ink); }
+  .stepright { left: 1300px; top: 22px; width: 188px; font: 500 11px var(--mono); color: var(--mute); line-height: 1.7; }
+  .stepright b { color: var(--ink); font-weight: 700; }
+  .pages { display: flex; gap: 6px; margin-top: 8px; }
+  .pages button { padding: 3px 9px; border-radius: 4px; border: 1px solid var(--faint); font: 700 10px var(--mono); color: var(--mute); }
+  .pages button.on { background: var(--lane); border-color: var(--lane); color: var(--bg); }
+</style>
+</head>
+<body>
+
+<header class="abs band-top" aria-label="display">
+  <div class="abs modebox">
+    <div class="mode-word" id="mode-word">PLAY</div>
+    <div class="mode-sub" id="mode-sub">lane 1 · kick · rhythm</div>
+    <nav class="tabs" role="tablist" aria-label="mode" id="tabs">
+      <button role="tab" class="on">PLAY</button><button role="tab">SND</button><button role="tab">PAT</button><button role="tab">DRFT</button><button role="tab">OUT</button>
+    </nav>
+  </div>
+  <div class="abs knobs" id="knobs" role="group" aria-label="the 8 knobs"></div>
+  <div class="abs transport">
+    <div class="tp-row">
+      <button class="play on" aria-label="stop">■</button>
+      <button class="rec" aria-label="arm record">●</button>
+      <div class="pos">03.2<small>BAR · BEAT</small></div>
+    </div>
+    <div class="lamps"><span class="on"><i></i>MOVE</span><span class="on"><i></i>EVO</span><span><i></i>DICE</span><span><i></i>FILL</span></div>
+  </div>
+  <div class="abs corner"><button aria-label="undo">↶</button><button class="jam">● jam</button><button>share</button><button aria-label="all commands">⌘K</button><button aria-label="help">?</button></div>
+</header>
+
+<aside class="abs lanes" role="group" aria-label="lanes (Move: track 1–4)">
+  <div class="lane sel" style="--c:var(--l1)"><span class="bar"></span><div><div class="name"><b>1</b>KICK</div><div class="meta">16 · ×4 · 5 hits</div></div><button class="m">M</button></div>
+  <div class="lane" style="--c:var(--l2)"><span class="bar"></span><div><div class="name"><b>2</b>RIM</div><div class="meta">5 · ×1 · 4 hits</div></div><button class="m">M</button></div>
+  <div class="lane" style="--c:var(--l3)"><span class="bar"></span><div><div class="name"><b>3</b>HAT</div><div class="meta">3 · ×3 · 3 hits</div></div><button class="m">M</button></div>
+  <div class="lane muted" style="--c:var(--l4)"><span class="bar"></span><div><div class="name"><b>4</b>WOOD</div><div class="meta">7 · ×1 · 3 hits</div></div><button class="m on">M</button></div>
+  <div class="add">4 / 6 LANES</div>
+</aside>
+
+<main class="abs stage" aria-label="orbits"><svg id="rings" viewBox="0 0 1040 552"></svg></main>
+
+<div class="abs peek" id="peek"><div class="k">KNOB 2 · TOUCHED</div><div class="big">5</div><div class="s">hits on 16 steps</div></div>
+
+<aside class="abs perf" id="perf" aria-label="perform">
+  <div class="h">PERFORM · WHOLE MIX</div>
+  <div class="wheel" role="slider" aria-label="filter" aria-valuetext="off"><span class="lo">LP</span><div class="wv">off<small>FILTER · WHEEL</small></div><span class="hi">HP</span></div>
+  <div class="holds"><button>FILL<small>HOLD · 0</small></button><button>THROW<small>HOLD · +</small></button></div>
+</aside>
+
+<div class="abs ticker" id="ticker"><b>QUEST 1/5</b>make 3 against 4 — give one ring 3 steps and another 4 at the same speed<button>skip</button></div>
+
+<footer class="abs band-bot" aria-label="steps (Move: step buttons)">
+  <div class="abs stepinfo"><div class="t" id="si-t">KICK · STEPS</div><div class="s" id="si-s">1–16 of 16<br>tap on → accent → off<br>hold = STEP mode</div></div>
+  <div class="abs steps" id="steps" role="group" aria-label="steps"></div>
+  <div class="abs stepright" id="sr"><b>PADS</b> show steps 1–8<br>(the bright arc on the ring)<div class="pages"><button class="on">1–8</button><button>9–16</button><button>follow</button></div></div>
+</footer>
+
+<script>
+const STEP = location.hash === '#step';
+const LANE = getComputedStyle(document.documentElement).getPropertyValue('--l1').trim();
+
+/* knob slots: [label, value, unit, fraction 0–1, flags] */
+const PLAY_KNOBS = [
+  ['length', '16', '', 16/32], ['hits', '5', '', 5/16, 'touch'], ['shift', '0', '', 0], ['speed', '×4', '', .62],
+  ['swing', '12', '%', .18], ['chance', '100', '%', 1, 'auto'], ['tune', '0', '', .5], ['tempo', '100', '', .3, 'global'] ];
+const STEP_KNOBS = [
+  ['tune', '+3', '', .58], ['chance', '80', '%', .8], ['velocity', '100', '', 1], ['decay', '46', '', .46, 'ghost'],
+  ['tone', '62', '', .62, 'ghost'], ['snap', '30', '', .3, 'ghost'], ['color', '50', '', .5, 'ghost'], ['condition', '1:2', '', .2, 'touch'] ];
+
+const arc = (f, ghost) => {
+  const r = 32, c = 39, a0 = 135, sweep = 270, toXY = a => [c + r * Math.cos(a * Math.PI / 180), c + r * Math.sin(a * Math.PI / 180)];
+  const path = (from, to) => { const [x1, y1] = toXY(from), [x2, y2] = toXY(to); return `M${x1} ${y1} A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x2} ${y2}`; };
+  const end = a0 + Math.max(.001, f) * sweep;
+  return `<svg viewBox="0 0 78 78" aria-hidden="true"><path d="${path(a0, a0 + sweep)}" stroke="rgba(236,233,247,.12)" stroke-width="5" fill="none" stroke-linecap="round"/>` +
+    `<path d="${path(a0, end)}" stroke="${ghost ? 'rgba(236,233,247,.22)' : 'var(--kc)'}" stroke-width="5" fill="none" stroke-linecap="round"/></svg>`;
+};
+document.getElementById('knobs').innerHTML = (STEP ? STEP_KNOBS : PLAY_KNOBS).map(([l, v, u, f, fl = ''], i) =>
+  `<div class="knob ${fl}" role="slider" aria-label="${l}" style="--kc:${fl === 'global' ? 'var(--ink)' : 'var(--lane)'}"><span class="n">${i + 1}</span>` +
+  (fl === 'auto' ? '<span class="auto">A</span>' : '') + arc(f, fl === 'ghost') +
+  `<div class="v">${v}<small>${u}</small></div><div class="l">${l}</div></div>`).join('');
+
+/* 16 cells */
+const hits = { 0: 'acc', 3: 'on', 6: 'on', 8: 'acc', 10: 'ghost', 13: 'on' };
+const locks = new Set([3, 10]);
+const st = document.getElementById('steps');
+if (!STEP) {
+  st.innerHTML = Array.from({ length: 16 }, (_, i) => `<button class="st ${hits[i] || ''} ${i === 6 ? 'ph' : ''}" aria-label="step ${i + 1}">${locks.has(i) ? '<span class="lk"></span>' : ''}${i % 4 === 0 ? `<span class="no">${i + 1}</span>` : ''}</button>`).join('');
+} else {
+  // STEP mode: the 16 cells become the 16 loops of the held step (condition 1:2 → loops 1,3,5…; loop 7 is now)
+  st.innerHTML = Array.from({ length: 16 }, (_, i) => `<button class="st loop ${i % 2 === 0 ? 'on' : ''} ${i === 6 ? 'now' : ''}" aria-label="loop ${i + 1}"><span class="no">${i + 1}</span></button>`).join('');
+}
+
+/* rings */
+const W = 1040, H = 552, cx = W / 2, cy = H / 2;
+const RINGS = [
+  { c: '#f0abfc', r: 96, n: 16, hits: [0, 3, 6, 8, 10, 13], acc: [0, 8], head: 6.4, sel: true },
+  { c: '#67e8f9', r: 150, n: 5, hits: [0, 1, 2, 4], acc: [0], head: 2.6 },
+  { c: '#fde047', r: 204, n: 3, hits: [0, 1, 2], acc: [], head: 1.3, poly: true },
+  { c: '#a78bfa', r: 256, n: 7, hits: [0, 2, 5], acc: [], head: 4.1, muted: true } ];
+const ang = (i, n) => -Math.PI / 2 + (i / n) * Math.PI * 2;
+const P = (r, a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)];
+let s = `<defs><radialGradient id="core"><stop offset="0" stop-color="#e9d5ff" stop-opacity=".9"/><stop offset=".35" stop-color="#a78bfa" stop-opacity=".35"/><stop offset="1" stop-color="#a78bfa" stop-opacity="0"/></radialGradient>
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="4"/></filter></defs>`;
+// cycle arc (how far through the whole cycle)
+s += `<circle cx="${cx}" cy="${cy}" r="270" fill="none" stroke="rgba(236,233,247,.06)" stroke-width="1"/>`;
+{ const [x2, y2] = P(270, ang(.62, 1)); s += `<path d="M${cx} ${cy - 270} A270 270 0 1 1 ${x2} ${y2}" fill="none" stroke="rgba(236,233,247,.45)" stroke-width="1.5"/><circle cx="${x2}" cy="${y2}" r="3" fill="#ece9f7"/>`; }
+s += `<circle cx="${cx}" cy="${cy}" r="70" fill="url(#core)"/>`;
+for (const R of RINGS) {
+  const dim = (STEP && !R.sel) ? .18 : R.muted ? .3 : 1;
+  s += `<g opacity="${dim}">`;
+  s += `<circle cx="${cx}" cy="${cy}" r="${R.r}" fill="none" stroke="${R.c}" stroke-opacity="${R.sel ? .75 : .35}" stroke-width="${R.sel ? 2.5 : 1.5}"/>`;
+  if (R.sel && !STEP) { // pad window: steps 1–8 are on the Move's pad row → a bright band on the ring
+    const a0 = ang(-.5, 16), a1 = ang(7.5, 16), [x1, y1] = P(R.r, a0), [x2, y2] = P(R.r, a1);
+    s += `<path d="M${x1} ${y1} A${R.r} ${R.r} 0 0 1 ${x2} ${y2}" fill="none" stroke="${R.c}" stroke-opacity=".22" stroke-width="22" stroke-linecap="butt"/>`;
+    const [lx, ly] = P(R.r + 26, ang(4, 16)); s += `<text x="${lx}" y="${ly}" fill="${R.c}" fill-opacity=".8" font-family="SF Mono,Menlo,monospace" font-size="10" font-weight="700" letter-spacing="1.2">PADS</text>`;
+  }
+  for (let i = 0; i < R.n; i++) { const a = ang(i, R.n), [x1, y1] = P(R.r - 5, a), [x2, y2] = P(R.r + 5, a); s += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${R.c}" stroke-opacity=".45" stroke-width="1.2"/>`; }
+  if (R.poly) { const pts = R.hits.map(i => P(R.r, ang(i, R.n)).join(',')).join(' '); s += `<polygon points="${pts}" fill="${R.c}" fill-opacity=".04" stroke="${R.c}" stroke-opacity=".45" stroke-width="1"/>`; }
+  for (const i of R.hits) { const [x, y] = P(R.r, ang(i, R.n)), acc = R.acc.includes(i), rr = acc ? 7 : 5;
+    if (STEP && R.sel && i === 3) { s += `<circle cx="${x}" cy="${y}" r="26" fill="none" stroke="#ece9f7" stroke-width="2"/><circle cx="${x}" cy="${y}" r="38" fill="none" stroke="#ece9f7" stroke-opacity=".25" stroke-width="1"/>`; }
+    s += `<circle cx="${x}" cy="${y}" r="${rr + 6}" fill="${R.c}" opacity=".35" filter="url(#glow)"/><circle cx="${x}" cy="${y}" r="${rr}" fill="${R.c}"/>`; }
+  // comet = playhead with a tail
+  const ah = ang(R.head, R.n), at = ah - 0.9, [hx, hy] = P(R.r, ah), [tx, ty] = P(R.r, at);
+  s += `<path d="M${tx} ${ty} A${R.r} ${R.r} 0 0 1 ${hx} ${hy}" fill="none" stroke="${R.c}" stroke-opacity=".55" stroke-width="2.5" stroke-linecap="round"/>`;
+  s += `<circle cx="${hx}" cy="${hy}" r="9" fill="#fff" opacity=".35" filter="url(#glow)"/><circle cx="${hx}" cy="${hy}" r="4.5" fill="#fff"/>`;
+  s += `</g>`;
+}
+s += `<text x="${cx}" y="${cy + 4}" text-anchor="middle" fill="#ece9f7" fill-opacity=".85" font-family="SF Mono,Menlo,monospace" font-size="11" font-weight="700" letter-spacing="2">${STEP ? 'STEP 4' : 'ALIGNS IN 4 BARS'}</text>`;
+if (STEP) { const [x, y] = P(96, ang(3, 16)); s += `<text x="${x + 46}" y="${y + 4}" fill="#ece9f7" font-family="SF Pro Display,Helvetica Neue,Arial" font-size="15" font-weight="700">step 4 · locked: tune · chance · 1:2</text>`; }
+document.getElementById('rings').innerHTML = s;
+
+if (STEP) {
+  document.getElementById('mode-word').textContent = 'STEP 4';
+  document.getElementById('mode-sub').textContent = 'kick · held · let go = back to PLAY';
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.remove('on'));
+  document.getElementById('peek').innerHTML = '<div class="k">KNOB 8 · TOUCHED</div><div class="big">1:2</div><div class="s">plays on loops 1, 3, 5…<br>Shift + knob 8 = repeats</div>';
+  document.getElementById('si-t').textContent = 'STEP 4 · LOOPS';
+  document.getElementById('si-s').innerHTML = 'lit = it plays on that loop<br>white = the loop now (7)<br>Esc / let go = done';
+  document.getElementById('sr').innerHTML = '<b>SHIFT</b> = page 2<br>nudge · repeats · spacing<br>ramp · slice · start · end · stroke<div class="pages"><button class="on">locks</button><button>page 2</button><button>clear</button></div>';
+  document.getElementById('ticker').innerHTML = '<b>STEP</b>the knobs now set this step only · grey values = the lane’s own, not locked';
+  document.getElementById('perf').style.opacity = '.25';
+}
+</script>
+</body>
+</html>

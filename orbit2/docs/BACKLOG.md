@@ -190,6 +190,23 @@ pattern". Design first: `orbit2/docs/design/automation.md`.
 - **A7 MIDI export**: step automation as per-note values / CC, smooth automation as CC curves (CC per parameter,
   editable). ✅ ORBIT2-18
 
+## RD · Orbit console redesign (phases RD-1…RD-11)
+
+Decided 2026-11-14 by the product owner (Noor) with Greta, Rio, Nils and Yuki: `orbit2/docs/redesign/DECISION.md` is
+the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10, per-phase scope and panel).
+
+- **RD-1** Setlog and the gates: `?setlog` action log, `tools/face-audit.mjs` (A1, A5, A6, A7), baselines.
+- **RD-2** Light and type: dark-room tokens, no fills on controls, three type sizes, no layout change.
+- **RD-3** Stage and sheet: three-column grid + console row, rings fixed, drawers re-hosted (ids kept) in a 428 px sheet.
+- **RD-4** Find and one Escape: ⌘K / `/` search with synonyms and recents, one Esc order, sheet closed by default.
+- **RD-5** The console: the Move's face on screen (8 knobs, 16 cells, transport, MOVE ⇢ chip, peek, lane list).
+- **RD-6** Step page and the ring answers the hand: one lock editor, Nils's state table, read-only canvas answers.
+- **RD-7** Pills: one status region (max 4 + "+N more"), replaces welcome bar, quest card, jam panel; quest "show me".
+- **RD-8** Light on the canvas: sun numeral, generative arc, slot moons, one arc label, fill flare.
+- **RD-9** The set: F mode keeps state, night brightness, "?" draws the Move, final setlog sets (A3).
+- **RD-10** Phone, access and clean-up: phone layout, canvas tab stop, Tab order, dead DOM removed (A4).
+- **RD-11** Drift (`?drift`): hold − + knobs, LED state and meter, screen-off gate (A10).
+
 ## Deferred
 
 (In-scope MUST-FIX items the whole panel agreed to move to a follow-up playbook, see [[REVIEW-PANEL]] "Motion to
