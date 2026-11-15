@@ -195,7 +195,7 @@ pattern". Design first: `orbit2/docs/design/automation.md`.
 Decided 2026-11-14 by the product owner (Noor) with Greta, Rio, Nils and Yuki: `orbit2/docs/redesign/DECISION.md` is
 the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10, per-phase scope and panel).
 
-- **RD-1** Setlog and the gates: `?setlog` action log, `tools/face-audit.mjs` (A1, A5, A6, A7), the player-agent session tools (sets, glance proxy, Move LED view) and the baselines.
+- **RD-1** Setlog and the gates: `?setlog` action log, `tools/face-audit.mjs` (A1, A5, A6, A7), the player-agent session tools (sets, glance proxy, Move LED view) and the baselines. ✅
 - **RD-2** Light and type: dark-room tokens, no fills on controls, three type sizes, no layout change.
 - **RD-3** Stage and sheet: three-column grid + console row, rings fixed, drawers re-hosted (ids kept) in a 428 px sheet.
 - **RD-4** Find and one Escape: ⌘K / `/` search with synonyms and recents, one Esc order, sheet closed by default.
