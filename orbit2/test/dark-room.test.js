@@ -32,14 +32,31 @@ test('RD-2 lane ink: 80 % of every lane hue over the void is under the cap and r
   for (const h of LANES) assert.ok(lum(mix(h, 0.62, token('v'))) <= 0.475);
 });
 
-test('RD-2 type: Major Mono only in the wordmark, the font link has no unused weight, no 600 / 700 on the page', () => {
+// Sizes, weights and Major Mono on the page are measured where they render, by the face audit's TYPE gate (computed
+// styles of every drawn text, first load and everything shown, four sizes; its rules are tested in face-audit.test.js):
+// a stylesheet scan cannot tell the Orbits page's rules from the other pages' blocks this copy carries
+test('RD-2 type: the font link has no unused weight, and the canvas captions are not in Major Mono', () => {
   assert.match(html, /family=Major\+Mono\+Display&family=Space\+Grotesk:wght@400;500&/);
-  assert.doesNotMatch(readFileSync(here('../src/poly/scene.js'), 'utf8'), /"Major Mono/);   // no canvas text in it
-  // the rules the Orbits page uses run from the base controls to the end, minus the other pages' blocks copied along
-  const page = css.split('\n').filter(l => !/^\s*\.(pl|ua|pad|dgrid|kit|pm|lo|q|card|art|launch|credit|ptable|days|glossary|timeline|board|info|legend|stats|dlayout|glayout)\b/.test(l) && !/^body\.launcher|^\.launch/.test(l));
-  const display = page.filter(l => /var\(--font-display\)/.test(l) && !/^\s*--font-display/.test(l));
-  assert.deepEqual(display.map(l => l.trim().split(/\s*\{/)[0]), ['h1']);
-  assert.deepEqual(page.filter(l => /font-weight: (600|700)|font: (600|700) /.test(l) && /\b(button|chip|seg|slot|lane|gauge|quest|pill|subh|ctl|help|lib|jam)\b/.test(l)), []);
+  assert.doesNotMatch(readFileSync(here('../src/poly/scene.js'), 'utf8'), /"Major Mono/);
+});
+
+test('RD-2 red means recording: of the buttons in the record shape (.rec-btn), only the recorders turn red when armed', () => {
+  const RECORDERS = ['btn-rec', 'btn-mic'];   // arm record, the mic take; evolve and locked dice record nothing
+  const shaped = [...html.matchAll(/<button id="([\w-]+)" class="[^"]*\brec-btn\b/g)].map(m => m[1]);
+  assert.deepEqual(shaped.filter(id => RECORDERS.includes(id)), RECORDERS);
+  const plain = css.match(/^([^{\n]*)\{ color: var\(--l\); border-color: var\(--l\); box-shadow: inset 0 0 0 1px var\(--l\); \}/m);
+  assert.ok(plain, 'the plain "on" for a record-shaped button');
+  for (const id of shaped.filter(id => !RECORDERS.includes(id))) assert.ok(plain[1].includes(`#${id}.armed`), `${id} armed is the plain on, not red`);
+  // the record red's only rules: an armed recorder, jam while it records (button, panel, progress); nothing at rest
+  const red = css.split('\n').filter(l => /var\(--rec\)/.test(l) && !/^\s*--v:/.test(l)).map(l => l.trim().split(/\s*\{/)[0]);
+  assert.deepEqual(red, ['.rec-btn.armed', '.jam-btn.on', '.jam-panel', '.jam-bar i']);
+});
+
+test('RD-2 lock knobs: the lane\'s ink, dotted where the step follows the lane (no translucent colour under the track)', () => {
+  const app = readFileSync(here('../src/poly/app.js'), 'utf8'), at = app.indexOf('function renderLocks'), locks = app.slice(at, app.indexOf('\n}\n', at));
+  assert.doesNotMatch(locks, /setColor\([^)]*rgba\(/, 'no dim rgba: the 80 % toning sank it under the track');
+  assert.match(locks, /classList\.toggle\('follows', lk\[k\] == null\)/);
+  assert.match(css, /\.gauge\.follows \.g-fill \{ stroke-dasharray: [^;]+; \}/);
 });
 
 test('RD-2 no layout change: the position diff matches controls by element, name and order and flags a centre > 2 px off', () => {

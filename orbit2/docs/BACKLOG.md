@@ -861,3 +861,29 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **A9's and A5's wording** (RD-01 round 1: sound, noor; for Noor): "bit-identical" cannot hold for an unchanged page
   (both engines wobble by 1 LSB): "the same fingerprint and a null test within 1 LSB" (`baselines.md`, A9); A5's
   "160 / 189" is the brief's box count, the audit's is 79 visible at 1512×860.
+
+- **Hairline action words** (RD-02 round 1, verifier; RD-5's console places them): the action words are 2 px edges
+  (border + a 1 px inset, which A1's 3 px band can measure on a fractional pixel), not the decision's 1 px hairline;
+  the 40 px hit area is there (HIT). When RD-5 builds the console's words, decide the line with a measured edge band.
+- **"On" that a performer misses** (RD-02 round 1: kai, verifier, greta; for Noor): armed fill / fill next bar /
+  throw / latch differ from idle only by the 2 px `--l` outline (easy to miss at 70 cm in the dark); `button.primary`
+  draws a 1 px `--l` line at rest, toggle chips 2 px of 80 % `--l`, so off and on differ by a pixel and ○ / ●; drawer
+  summaries' 2 px edge reads like a lamp. A glyph or a heavier ring for stage-critical toggles; RD-5 / RD-7 restyle them.
+- **Old palette left in the lab stylesheet** (RD-02 round 1: architect, yuki, sound): `--signal-cyan`,
+  `--ember-magenta`, `--ok`, `--bad`, `--accent` and `rgba(184,180,199,…)` / `rgba(12,9,25,…)` copies of `--l` / `--v`;
+  old-palette backgrounds on `.toast`, `.help`, `.lib-thumb`, `--panel`; 600 / 700 / 800 weight rules (nothing renders
+  above 500: the TYPE gate); the other pages' blocks the copy carries. The `.gauge` block re-points the old accent
+  tokens to `--l` and every `--gc` is toned 80 % (20+ calls in `app.js` still pass `var(--ember-magenta)` etc.): pass
+  tokens or nothing from `app.js`, then drop the re-pointing; one `--ink` formula instead of `--gk` / `--o` / `.ldot`
+  copies; the lit-cell percentages as named tokens. RD-10's clean-up.
+- **Hues outside the lanes** (RD-02 round 1: architect, sound, yuki; for Noor / RD-8): the page background's nebula
+  (purple / teal haze over `--v`); the `?debug` stress meter paints `--signal-cyan` (0.69), `#fde047` and `--bad`
+  inline every 300 ms (`app.js` ~2325); `scene.js` canvas cyan / magenta / white flashes and the `#67e8f9` marker; the
+  coupling matrix cells fill by amount (`.couple-matrix .cm-cell`); the lit cells are the one solid fill on the face (by
+  the spec: a line in the decision would say so); the jam panel keeps its red border after the take is recorded.
+- **Canvas text the A9 clock never draws** (RD-02 round 1, sound; for RD-8): the house groove's 10 s never shows the
+  cycle caption or any canvas text, so frame p95 cannot see text cost; add a clock state that draws it (polymetric
+  lanes, jam on) when RD-8 brings the labels. Jam recalculates style every frame while it records (0.1 ms; RD-5 / RD-8).
+- **A drawer's inside with everything open** (RD-02 round 1, measured after the fixes): with the "everything" view and
+  every drawer open, 229 controls, none moved > 2 px at 1512×860 and 1280×720; on a phone "new roll" sits 3 px left
+  (the export row's buttons are 1–2 px narrower at weight 400 than at 500). The no-layout gate measures the first load.

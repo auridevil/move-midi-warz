@@ -140,8 +140,17 @@ before the page's first script and seeded again, with the frames held (and hande
     bottom, a drawer half scrolled away: the cut is not the control's edge);
   - `--tests A1` (only these gates count for `--assert`), `--diff baseline/rd01-controls.json` (RD-2's "no layout
     change": every visible control's centre vs the RD-1 first load, more than 2 px = moved, fails `--assert`).
-- **No-layout baseline:** `baseline/rd01-controls.json` = every visible control at first load (page px) at the four
-  sizes, from 07c2ba4 (RD-1 closed).
+  - (RD-2 review round 1) the diff compares **every drawn control in page px**, in view or not (`controls.drawn`; the
+    first viewport alone hid the phone's 86 controls under the legend that rose 20 px), and a control that is gone or
+    new fails `--assert` like one that moved; **TYPE** (computed family / size / weight of every drawn text, at first
+    load and with everything shown: Major Mono only in the wordmark, 11 / 13 / 15 px under 40 px, weights 400 / 500,
+    300 only from 40 px); **HIT** (the action words in view: `elementFromPoint` 19.5 px above and below the centre, at
+    both ends and the middle, lands on the button: a 40 px hit area); `--root <dir>` audits another checkout with this
+    tool. RD-2's gates: `--tests A1,TYPE,HIT --assert --diff orbit2/docs/redesign/baseline/rd01-controls.json`.
+- **No-layout baseline:** `baseline/rd01-controls.json` = every control at first load at the four sizes, from 07c2ba4
+  (RD-1 closed): `list` the part in view (viewport px), `drawn` every drawn control's whole box (page px). Measured
+  again in RD-2 round 1 by this tool on a `git archive 07c2ba4` (`--root`); `list` came out identical to the first
+  take. The phase start's own TYPE: 54–55 kinds off the rules (7 sizes, 700 on play, jam, help and bold).
 
 Screenshots: `baseline/01…04` (the brief, 1512×860), `baseline/rd01-first-load-1280x720.png`,
 `baseline/rd01-first-load-390x844.png`.

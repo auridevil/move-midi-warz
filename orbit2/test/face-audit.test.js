@@ -2,7 +2,7 @@
 // the A9 render diff and fingerprint (a 1-LSB wobble keeps the fingerprint, a level change does not), the WAV reader.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint, holdFrames } from '../tools/face-audit.mjs';
+import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint, holdFrames, typeCheck, positionDiff, layoutChanged } from '../tools/face-audit.mjs';
 import { encodeWav } from '../src/unasm/wav.js';
 
 const state = (o = {}) => ({ scroll: { scrollHeight: 860, innerHeight: 860, pageScrolls: false, inner: [] }, rings: { cx: 756, cy: 358, R: 330, outer: 315, diameter: 630, lanes: 4 }, ...o });
@@ -58,4 +58,35 @@ test('RD-1 A9: frames held during a render wait and are handed back, so a loop t
   assert.equal(drawn, 1, 'held during the render'); assert.equal(real.length, 1, 'the loop\'s next frame was handed back');
   frame(); frame(); assert.equal(drawn, 3, 'and it keeps drawing');
   await assert.rejects(holdFrames(win, async () => { throw new Error('render failed'); })); assert.equal(win.requestAnimationFrame, own);
+});
+
+test('RD-2 TYPE: three sizes under 40 px, 400 / 500, 300 only from 40 px, Major Mono only in the wordmark', () => {
+  const run = (o) => ({ el: 'span', family: 'Space Grotesk', size: 13, weight: 400, mark: false, ...o });
+  const ok = [run({ size: 11 }), run({ size: 13, weight: 500 }), run({ size: 15 }), run({ family: 'ui-monospace', size: 11 }), run({ size: 64, weight: 300 }), run({ el: 'a', family: 'Major Mono Display', size: 15, mark: true })];
+  assert.deepEqual(typeCheck(ok).fails, []);
+  const why = (o) => typeCheck([run(o)]).fails.map(f => f.what.split(': ').pop());
+  assert.deepEqual(why({ size: 12 }), ['size 12 px']); assert.deepEqual(why({ size: 11.5 }), ['size 11.5 px']); assert.deepEqual(why({ size: 14 }), ['size 14 px']);
+  assert.deepEqual(why({ weight: 700 }), ['weight 700']); assert.deepEqual(why({ size: 64, weight: 700 }), ['weight 700'], 'nothing heavier than 500, big or small');
+  assert.deepEqual(why({ weight: 300 }), ['weight 300 under 40 px']);
+  assert.deepEqual(why({ family: 'Major Mono Display', size: 11 }), ['Major Mono outside the wordmark'], 'the canvas captions and labels too');
+  const t = typeCheck([run({ size: 12 }), run({ size: 12 }), run({ size: 13 })]);
+  assert.equal(t.fails.length, 1); assert.equal(t.fails[0].n, 2, 'one kind, counted'); assert.deepEqual(t.sizes, { 'Space Grotesk 12': 2, 'Space Grotesk 13': 1 });
+  // the verdicts: TYPE at any size, HIT where an action word's 40 px hit area misses
+  const one = (o) => verdicts(report(o)).map(f => `${f.test} ${f.size}`);
+  assert.deepEqual(one({ '1512x982': { type: t } }), ['TYPE 1512x982']);
+  assert.deepEqual(one({ '1512x860': { hits: [{ el: 'button#btn-fill', w: 82, h: 32, ok: true, miss: [] }] } }), []);
+  assert.deepEqual(one({ '1280x720': { hits: [{ el: 'button#btn-undo', w: 58, h: 32, ok: false, miss: [[2, -4, 'div']] }] } }), ['HIT 1280x720']);
+});
+
+test('RD-2 no layout change: every drawn control in page px when both sides have it; gone and new fail like a move', () => {
+  const c = (el, name, x, y, w = 40, h = 32) => ({ el, name, x, y, w, h });
+  const base = { sizes: [{ size: '390x844m', controls: { list: [c('a', 'home', 18, 10)], drawn: [c('a', 'home', 18, 10), c('summary', 'library', 16, 900, 358, 32), c('button#quest-skip', 'skip', 200, 1100)] } }] };
+  const fell = { sizes: [{ size: '390x844m', controls: { list: [c('a', 'home', 18, 10), c('button#quest-skip', 'skip', 200, 830)], drawn: [c('a', 'home', 18, 10), c('summary', 'library', 16, 880, 358, 32), c('button#quest-skip', 'skip', 200, 1080)] } }] };
+  const d = positionDiff(base, fell);
+  assert.equal(d[0].basis, 'drawn'); assert.deepEqual(d[0].moved.map(m => [m.k, m.dy]), [['summary|library|0', -20], ['button#quest-skip|skip|0', -20]], 'below the fold counts');
+  assert.ok(layoutChanged(d));
+  const inView = positionDiff({ sizes: [{ size: '390x844m', controls: { list: base.sizes[0].controls.list } }] }, fell);
+  assert.equal(inView[0].basis, 'visible'); assert.deepEqual(inView[0].moved, []); assert.deepEqual(inView[0].added, ['button#quest-skip|skip|0']);
+  assert.ok(layoutChanged(inView), 'a control that came into view is a change too');
+  assert.ok(!layoutChanged(positionDiff(base, base)));
 });

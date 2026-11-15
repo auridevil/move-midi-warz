@@ -718,14 +718,17 @@ function renderLocks() {   // always after renderSteps, which closes a step a sh
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
   renderTrig(lane.trigAt(lockStep));
-  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dim = lane value)'}`;
+  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dotted = lane value)'}`;
   const arts = ARTICS[lane.voice]; $('artic-wrap').hidden = !arts;   // a sample lane has none
   if (arts) { if (articFor !== lane.voice) { articFor = lane.voice; ui.artic.setOptions([['lane', 'lane sound', 'no stroke lock: the lane\'s own sound'], ...arts.map((n, a) => [a, n])]); } ui.artic.set(articAt(lane.voice, lk) ?? 'lane'); }   // rebuilt only for a new voice: a click never lands on a detached button
-  for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); g.setColor(lk[k] != null ? 'var(--signal-cyan)' : 'rgba(236,233,247,.3)'); }
+  // RD-2: in the lane's ink, solid where this step is locked, dotted where it plays the lane's value (a dim colour sank
+  // under the knob track once the track became an edge)
+  const lockLook = (g, k) => { g.setColor(LANE_HEX[m.selected]); g.el.classList.toggle('follows', lk[k] == null); };
+  for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); lockLook(g, k); }
   const smp = lane.voice === 'sample' && !!lane.sample; $('lock-sample').hidden = !smp;   // S1 / S3
   if (smp) {
     renderSliceLock(lane, lk); const tr = lane.trimAt(lk);
-    for (const k of ['start', 'end']) { const g = sliders['lock:' + k]; g.set(Math.round(tr[k] * 100)); g.setColor(lk[k] != null ? 'var(--signal-cyan)' : 'rgba(236,233,247,.3)'); }
+    for (const k of ['start', 'end']) { const g = sliders['lock:' + k]; g.set(Math.round(tr[k] * 100)); lockLook(g, k); }
     ui.lockRev.set(lk.rev ?? 'lane');
   }
 }

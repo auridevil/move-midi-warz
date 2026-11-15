@@ -16,9 +16,13 @@
      0.4753, a hair over), text ≥ 4.5:1, edges ≥ 3:1 (--b 3.75:1 on --v). --l / --d are Greta's --v / --l (values / labels). --track is a knob's empty arc: as bright as an
      edge, because a knob at zero has nothing else to be seen by. Red only for record. */
   --v: #0c0919; --l: #b8b4c7; --d: #8d889e; --b: #6e6982; --track: #6a657e; --rec: #ff6b78;
-  /* three sizes: small (labels, hints), body (controls, text), large (titles, play); weight 300 only ≥ 40 px (none on
-     the face yet: the peek and the sun numeral bring it), 500 for values, 400 everywhere else */
-  --t-s: 11px; --t-m: 13px; --t-l: 15px;
+  /* three sizes: small (labels, hints, small controls: chips, tabs, drawer names), body (controls, text, values), large
+     (titles, play); weight 300 only ≥ 40 px (none on the face yet: the peek and the sun numeral bring it), 500 for values,
+     400 everywhere else. A text that came onto the scale from another size keeps its old box, so nothing moves (RD-2's no
+     layout change): its old line (line-height in px: 1.5 × the old size where it inherits the page's 1.5, 1.27 × it where
+     it was "normal", Space Grotesk's) and its old measure (tracking: + .05 em at 11 px for what was 12, + .025 em for 11.5,
+     − .02 em at 13 for 12.5; small type wants the air anyway). The face audit's TYPE gate checks the page */
+  --t-s: 11px; --t-m: 13px; --t-l: 15px; --tr-12: .05em; --tr-115: .025em;
   /* under a control: the void, nearly opaque. Not a fill (it is the page's own dark): a planet passing behind a button
      over the canvas must not light the button above the cap */
   --plate: rgba(12, 9, 25, 0.9);
@@ -55,7 +59,7 @@ h2 { font: 400 var(--t-s) var(--font-body); margin: 0 0 10px; color: var(--d); t
 h2 small { text-transform: none; letter-spacing: 0; margin-left: 8px; font-family: var(--font-body); color: var(--d); }
 b, strong, th { font-weight: 500; }   /* the browser's bold is 700: values and key names are 500, the rest 400 */
 .status { display: flex; gap: 8px; align-items: center; } .status[hidden] { display: none; }
-.pill { padding: 5px 12px; border-radius: 8px; font: 400 12px var(--font-body); border: 1px solid var(--b); box-shadow: inset 0 0 0 1px var(--b); background: transparent; }
+.pill { padding: 5px 12px; border-radius: 8px; font: 400 var(--t-s)/15.2px var(--font-body); letter-spacing: var(--tr-12); border: 1px solid var(--b); box-shadow: inset 0 0 0 1px var(--b); background: transparent; }
 .pill-off { color: var(--d); } .pill-on { color: var(--l); border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .pill-warn { color: var(--l); border-color: var(--l); border-style: dashed; }
 /* no fills on controls: type on a 1 px --b line; "on" is a 2 px --l outline (the second pixel inset, so nothing moves) */
 button, select, input { background: var(--plate); color: var(--l); border: 1px solid var(--b); border-radius: 8px; padding: 6px 12px; font: 400 var(--t-m) var(--font-body); }
@@ -72,12 +76,17 @@ button.primary { border-color: var(--l); padding: 8px 16px; font-size: var(--t-l
 button.primary:disabled, button.primary[aria-disabled=true] { border-color: var(--b); color: var(--d); }
 /* every "on" in one rule: a pressed toggle, an armed button, a lit chip */
 button.on, button.armed, button.flash, button[aria-pressed=true] { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }
+/* the action words (DECISION "Outlined boxes vs hairlines": fill, fill next, throw, undo, randomize, jam, share; redo
+   with undo) take a 40 px hit area round their 32 px box: a transparent ::after, so nothing moves and nothing is drawn.
+   The face audit's HIT gate probes it */
+:is(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share) { position: relative; }
+:is(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share)::after { content: ''; position: absolute; top: min(0px, (100% - 40px) / 2); bottom: min(0px, (100% - 40px) / 2); left: min(0px, (100% - 40px) / 2); right: min(0px, (100% - 40px) / 2); }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .panel-wide { grid-column: 1 / -1; }
 .row { display: flex; align-items: center; flex-wrap: wrap; } .gap { gap: 12px; }
 label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); letter-spacing: .04em; }
-.hint { color: var(--muted); font-size: 12px; }
+.hint { color: var(--muted); font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); }
 .pads { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; margin-bottom: 12px; aspect-ratio: 2 / 1; }
 .pad { background: var(--pad); border-radius: 6px; display: flex; align-items: flex-end; justify-content: flex-start; padding: 4px 6px; font-size: 11px; color: var(--muted); transition: background .08s, transform .08s; user-select: none; border: 1px solid var(--hairline-soft); }
 .pad.in-scale { background: var(--pad-scale); color: var(--fg); } .pad.root { background: var(--pad-root); }
@@ -237,7 +246,7 @@ body.chaos::before { display: none; }
    rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
 #cv { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .ring-menu { position: fixed; z-index: 60; width: 0; height: 0; }
-.ring-menu button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: 12px; color: var(--l); background: var(--v); border: 1px solid var(--b); box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
+.ring-menu button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: var(--t-s); letter-spacing: var(--tr-12); color: var(--l); background: var(--v); border: 1px solid var(--b); box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
 .ring-menu button.lk { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l), 0 2px 10px rgba(0, 0, 0, .5); }
 .ring-menu button:focus-visible { outline: 2px solid var(--l); outline-offset: 2px; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
@@ -248,11 +257,14 @@ body.chaos::before { display: none; }
 /* RD-2 holds the layout: weight 400 made the strip's words 2 px narrower, and the strip sits flush right, so every control
    in it slid 2 px right. This margin puts them back on the RD-1 positions until the console (RD-5) replaces the strip */
 @media (min-width: 1101px) { .tstrip { margin-right: 2px; } }
-.tstrip .big-btn { padding: 8px 18px; font-size: 14px; min-width: 96px; }
+.tstrip .big-btn { padding: 8px 18px; font-size: var(--t-l); line-height: 17.8px; min-width: 96px; }   /* play: the large size in its 14 px box */
 .tstrip-tempo .gauge, .tstrip-fx .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
-.tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; font-size: 13px; white-space: nowrap; } .tstrip-tempo .g-label { display: none; }
+.tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-label { display: none; }
+/* RD-2: "120 bpm" drew at 12 px (.gauge .g-val came later and won); at the values' 13 px it keeps its old measure, so
+   the strip does not move (desktop and phone) */
+.tstrip-tempo .g-val { margin: 0; white-space: nowrap; letter-spacing: -.04em; }
 /* P6: the performance filter knob, the tempo's shape; its value says "off" / "LP 40" / "HP 25" */
-.tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: 12px; white-space: nowrap; min-width: 3.4em; } .tstrip-fx .g-label { display: none; }
+.tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: var(--t-m); white-space: nowrap; min-width: 40.8px; } .tstrip-fx .g-label { display: none; }   /* 40.8: its old 3.4 em at 12 px */
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
 .hud { position: fixed; right: 24px; top: var(--hud-top, 74px); bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; width: 400px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
@@ -267,7 +279,7 @@ body.chaos::before { display: none; }
 @keyframes play-pulse { 50% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 7px rgba(184,180,199,.1); } }
 @media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
 /* one line on wide screens (the words wrap, the buttons don't); stacked with finger-sized buttons on a phone */
-.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--v); font-size: 12.5px; }
+.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--v); font-size: var(--t-m); line-height: 18.75px; letter-spacing: -.02em; }
 .welcome > span { flex: 1 1 auto; min-width: 0; }
 .welcome > button { flex: none; }
 .welcome[hidden] { display: none; }
@@ -280,10 +292,10 @@ body.chaos::before { display: none; }
 /* a long press is wild randomize: no text selection or callout menu on touch */
 #btn-random { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 .drawer { background: var(--panel); border: 1px solid var(--hairline); box-shadow: inset 0 0 0 1px var(--b); border-radius: 12px; padding: 8px 12px; width: 100%; backdrop-filter: blur(8px); }
-.drawer summary { cursor: pointer; color: var(--muted); font-size: 12px; }
+.drawer summary { cursor: pointer; color: var(--muted); font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); }
 .sliders { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; margin: 8px 0; }
 .sliders label { font-size: 11px; } .sliders input[type=range] { width: 100%; accent-color: var(--d); }
-.gtable { border-collapse: collapse; font-size: 12px; margin-top: 6px; } .gtable th { text-align: left; color: var(--fg); padding: 3px 8px 3px 0; white-space: nowrap; } .gtable td { color: var(--muted); padding: 3px 14px 3px 0; }
+.gtable { border-collapse: collapse; font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); margin-top: 6px; } .gtable th { text-align: left; color: var(--fg); padding: 3px 8px 3px 0; white-space: nowrap; } .gtable td { color: var(--muted); padding: 3px 14px 3px 0; }
 .chaos .bar .sub { color: var(--d); }
 
 .stress-meter { position: fixed; left: 24px; bottom: 14px; z-index: 3; display: flex; align-items: center; gap: 10px; font: 400 11px var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: var(--d); cursor: help; }
@@ -317,8 +329,9 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 /* arc gauges: small arc, value and label stacked underneath */
 .gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px; margin: 4px 0; }
 .gauge { display: flex; flex-direction: column; align-items: center; gap: 0; cursor: ns-resize; user-select: none; touch-action: none; padding: 2px 0 3px; border-radius: 8px; outline: none; }
-.gauge:hover, .gauge:focus { background: rgba(184,180,199,.06); }
-.gauge:focus-visible { outline: 2px solid var(--l); outline-offset: 2px; }   /* same ring as the buttons */
+.gauge:focus-visible { outline: 2px solid var(--l); outline-offset: 2px; }   /* same ring as the buttons; no hover tint: no fills on controls */
+/* the step a lock knob shows: solid = locked on this step, dotted = it follows the lane (the step page's grammar, RD-6) */
+.gauge.follows .g-fill { stroke-dasharray: .01 9; }
 .gauge svg { width: 34px; height: 34px; display: block; }
 /* a knob is a 270° arc: the track as bright as an edge, the value in the lane's ink. The non-lane knobs (tempo, filter,
    evolve, MIDI…) are handed old accent tokens by app.js: here those tokens are the light grey, so the lane hues stay the
@@ -326,13 +339,13 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .gauge { --signal-cyan: var(--l); --ember-magenta: var(--l); --nebula-purple: var(--l); --star-white: var(--l); --gk: color-mix(in srgb, var(--gc, var(--l)) 80%, var(--v)); }
 .gauge .g-track { fill: none; stroke: var(--track); stroke-width: 6; stroke-linecap: round; }
 .gauge .g-fill { fill: none; stroke: var(--gk); stroke-width: 6; stroke-linecap: round; } .gauge .g-dot { fill: var(--gk); }
-.gauge .g-val { font-size: 12px; font-weight: 500; line-height: 1.1; margin-top: -2px; } .gauge .g-label { font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
+.gauge .g-val { font-size: var(--t-m); font-weight: 500; line-height: 13.2px; margin-top: -2px; } .gauge .g-label { font-size: 11px; color: var(--muted); letter-spacing: .02em; text-align: center; line-height: 1.1; margin-top: 1px; }
 .gauges.two { grid-template-columns: repeat(2, 1fr); }
 /* A4: an automated knob wears a small "A"; the selected lane's automation strip sits under its steps */
-.gauge { position: relative; } .gauge .g-mark { position: absolute; top: 0; right: 2px; font: 500 9px/1 var(--font-body); font-style: normal; color: var(--l); border: 1px solid var(--l); border-radius: 3px; padding: 0 1px; }
+.gauge { position: relative; } .gauge .g-mark { position: absolute; top: 0; right: 2px; font: 500 var(--t-s)/1 var(--font-body); font-style: normal; color: var(--l); border: 1px solid var(--l); border-radius: 3px; padding: 0 1px; }
 .auto-strip { margin: 2px 0 8px; } .auto-cv { display: block; width: 100%; height: 44px; border-radius: 6px; background: rgba(236,233,247,.06); }
 .ctl-lbl.wrap { display: block; white-space: normal; margin-top: 6px; }   /* a label as long as a sentence: its own line, wrapping on a phone (no sideways scroll) */
-.auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; } .auto-row .hint { margin: 0; } .auto-pick { font-size: 12px; color: var(--muted); }
+.auto-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 4px; } .auto-row .hint { margin: 0; } .auto-pick { font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); color: var(--muted); }
 
 /* launcher credit */
 .credit { margin: -14px 0 26px; font: 400 12px var(--font-display); letter-spacing: .22em; text-transform: lowercase; color: rgba(236,233,247,.8); }
@@ -360,7 +373,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .pl-grow { flex: 1 1 220px; } .pl-grow select { width: 100%; }
 .pl-kick { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; padding-bottom: 6px; }
 .seg { display: inline-flex; border: 1px solid var(--hairline); box-shadow: inset 0 0 0 1px var(--b); border-radius: 8px; overflow: hidden; background: var(--plate); }
-.seg button { border: none; border-radius: 0; padding: 6px 11px; font-size: 12px; background: transparent; color: var(--d); box-shadow: none; }
+.seg button { border: none; border-radius: 0; padding: 6px 11px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); background: transparent; color: var(--d); box-shadow: none; }
 .seg button + button { border-left: 1px solid var(--b); }
 .seg button:hover { color: var(--l); box-shadow: inset 0 0 0 1px var(--b); }
 .seg button.on { color: var(--l); box-shadow: inset 0 0 0 2px var(--l); }
@@ -469,13 +482,14 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 
 /* Orbits: slots, record, evolve, MIDI, step locks */
 .slots { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 6px 0 2px; }
-.slots .slot { padding: 4px 0; min-height: 32px; font-size: 12px; border-radius: 6px; background: transparent; color: var(--d); border: 1px dashed var(--b); }
+.slots .slot { padding: 4px 0; min-height: 32px; font-size: var(--t-m); border-radius: 6px; background: transparent; color: var(--d); border: 1px dashed var(--b); }
 .slots .slot.filled { color: var(--l); border-style: solid; }
 .slots .slot.chain { border-style: double; border-width: 3px; padding: 2px 0; }   /* in the chain: a double line, the box the same size */
 .slots .slot.cur { color: var(--l); border-color: var(--l); border-style: solid; box-shadow: inset 0 0 0 1px var(--l); }
-.slots .slot.queued { color: var(--l); border-color: var(--l); border-style: dashed; box-shadow: inset 0 0 0 1px var(--l); animation: slot-wait .5s ease-in-out infinite alternate; }
+.slots .slot.queued { color: var(--l); border-color: var(--l); border-style: dashed; box-shadow: inset 0 0 0 1px var(--l); transition: none; animation: slot-wait .5s ease-in-out infinite alternate; }   /* no transition: under the blink it never reached --l */
 @keyframes slot-wait { to { opacity: .45; } }
-.row-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; font-size: 12px; }
+@media (prefers-reduced-motion: reduce) { .slots .slot.queued { animation: none; } html { scroll-behavior: auto; } }   /* the dashed light outline says "queued" alone */
+.row-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0; font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); }
 .row-ctl label { display: flex; flex-direction: row; align-items: center; gap: 6px; margin: 0; }
 .row-ctl select { width: auto; }
 .row-ctl input[type=number] { width: 64px; }
@@ -483,9 +497,9 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .hint.tight { margin: 4px 0; }
 button.small { padding: 3px 10px; font-size: 11px; }
 .rec-btn.armed { color: var(--rec); border-color: var(--rec); box-shadow: inset 0 0 0 1px var(--rec); }   /* red: recording, and only that */
-#btn-evolve.armed { color: var(--l); border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* evolve is not a recording: the plain on outline */
-.evo-lanes { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; margin: 4px 0; }
-.evo-sub > summary { font-size: 12px; color: var(--muted); cursor: pointer; margin: 2px 0; }
+#btn-evolve.armed, #btn-dice.armed { color: var(--l); border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* evolve and locked dice share the record button's shape, not its red: they record nothing (the plain on outline) */
+.evo-lanes { display: flex; gap: 12px; flex-wrap: wrap; font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); margin: 4px 0; }
+.evo-sub > summary { font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); color: var(--muted); cursor: pointer; margin: 2px 0; }
 /* V2 coupling matrix: row = the lane that hits, column = the lane it lifts */
 .couple-matrix { display: grid; grid-template-columns: auto repeat(calc(var(--n, 5) - 1), minmax(32px, 1fr)); gap: 3px; margin: 4px 0; font-size: 11px; align-items: center; }
 .couple-matrix[hidden] { display: none; }
@@ -531,8 +545,8 @@ button.small { padding: 3px 10px; font-size: 11px; }
 /* lane buttons: the touch way to pick a ring */
 .lane-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 /* a lane button: its name in the lane's ink on the lane's ink line; selected = the 2 px outline */
-.lane-tab { --lane: var(--l); color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); padding: 6px 10px; font-size: 12px; min-height: 36px; }
-.lane-tab.sel { box-shadow: inset 0 0 0 2px var(--ink); }
+.lane-tab { --lane: var(--l); color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); padding: 6px 10px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); min-height: 36px; }
+.lane-tab.sel { border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }   /* its own ink, not the shared on rule's grey */
 /* phone */
 @media (max-width: 760px) {
   body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
@@ -566,14 +580,14 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .ctl { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .ctl-col { display: flex; flex-direction: column; gap: 5px; margin: 8px 0; }
 .ctl-lbl { font: 400 var(--t-s) var(--font-body); letter-spacing: .06em; text-transform: lowercase; color: var(--muted); white-space: nowrap; }
-.seg-ui button { padding: 5px 10px; font-size: 11.5px; }
+.seg-ui button { padding: 5px 10px; font-size: var(--t-s); line-height: 14.6px; letter-spacing: var(--tr-115); }
 .seg-ui button.on { color: var(--l); box-shadow: inset 0 0 0 2px var(--l); }   /* inside a joined bar: both pixels inset */
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 /* chips: --b line; a lane chip (--chip set by app.js) draws its line in the lane's ink; on = 2 px */
-.chips button, .tchip { --chip: var(--l); padding: 4px 11px; font-size: 11.5px; border-radius: 8px; background: var(--plate); color: var(--l); border: 1px solid var(--b); }
+.chips button, .tchip { --chip: var(--l); padding: 4px 11px; font-size: var(--t-s); line-height: 14.6px; letter-spacing: var(--tr-115); border-radius: 8px; background: var(--plate); color: var(--l); border: 1px solid var(--b); }
 .tchip { --o: color-mix(in srgb, var(--chip) 80%, var(--v)); border-color: var(--o); box-shadow: inset 0 0 0 1px var(--o); }
 .chips button:hover { border-color: var(--l); }
-.chips button.on { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .tchip.on { box-shadow: inset 0 0 0 2px var(--o); }   /* a lane chip on: three pixels of its ink */
+.chips button.on { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .tchip.on { border-color: var(--o); box-shadow: inset 0 0 0 2px var(--o); }   /* a lane chip on: three pixels of its ink */
 .chips button:disabled { opacity: .25; cursor: default; }
 .tchip::before { content: '○ '; } .tchip.on::before { content: '● '; }
 /* condition picker: "1 in N" + loop dots */
@@ -600,14 +614,13 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .evo-lanes { gap: 6px; }
 .midi-gauges { grid-template-columns: repeat(4, 1fr); }
 /* jam: the recorder is the loudest thing on the page while it runs */
-.jam-btn::first-letter { color: var(--rec); }   /* the jam dot: red, because jam records */
 .jam-btn.on { color: var(--rec); border-color: var(--rec); box-shadow: inset 0 0 0 1px var(--rec); animation: jam-pulse 1s ease-in-out infinite; }
 @keyframes jam-pulse { 50% { box-shadow: inset 0 0 0 1px transparent; } }
 @media (prefers-reduced-motion: reduce) { .jam-btn.on { animation: none; } }
 .jam-panel { width: 100%; max-width: 440px; border: 1px solid var(--rec); border-radius: 10px; padding: 8px 10px; background: var(--v); }
 .jam-bar { height: 8px; border-radius: 4px; background: rgba(236,233,247,.12); overflow: hidden; }
 .jam-bar i { display: block; height: 100%; width: 0; background: var(--rec); transition: width .25s linear; }
-.jam-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--l); flex-wrap: wrap; }
+.jam-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); color: var(--l); flex-wrap: wrap; }
 /* library of saved setups */
 .lib-form { display: flex; gap: 6px; margin: 6px 0; }
 .lib-form input, .lib-rename { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: transparent; color: var(--l); font: inherit; font-size: var(--t-m); }
@@ -631,8 +644,8 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .slots .slot.menu { outline: 2px solid var(--l); outline-offset: 1px; }
 .slot-menu { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 6px 0 2px; padding: 6px 8px; border: 1px solid var(--b); border-radius: 10px; background: var(--v); }
 .slot-menu[hidden] { display: none; }
-.slot-menu-title { font-size: 12px; color: var(--l); margin-right: 2px; }
-.slot-menu button { padding: 4px 12px; font-size: 12px; } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
+.slot-menu-title { font-size: var(--t-s); letter-spacing: var(--tr-12); color: var(--l); margin-right: 2px; }
+.slot-menu button { padding: 4px 12px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); } .slot-menu [data-act=close] { margin-left: auto; min-width: 32px; padding: 0; }
 @media (max-width: 760px) { .slot-menu-title { flex-basis: 100%; } }   /* title on its own line: the four buttons fit one row */
 /* playhead: the step of the selected lane sounding now */
 .stepsui .st { position: relative; }
@@ -673,7 +686,9 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .ring-legend li.sel { color: var(--ink); }
 .ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
 #legend { position: fixed; }   /* placed by layoutHud over the stage */
-@media (max-width: 1100px) { body:has(#hud-left) #legend { position: static; order: 1; margin: 8px 16px 12px; } }
+@media (max-width: 1100px) { body:has(#hud-left) #legend { position: static; order: 1; margin: 8px 16px 12px; letter-spacing: .36em; } }
+/* RD-2 holds the in-flow legend's measure: in Major Mono it was this wide, so it wraps where it did (a phone: two lines)
+   and nothing under it moves, until RD-10 turns it into a row of colour dots */
 /* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps
    its floating play (no Space bar there to stop the music) */
 body.focus-mode #topbar { visibility: hidden; }
@@ -698,14 +713,14 @@ body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; he
 /* safe center + scroll: on a short screen (a phone on its side) the top of the card stays reachable, never above the fold */
 .gift[open] { display: flex; flex-direction: column; align-items: center; justify-content: center; justify-content: safe center; gap: 10px; text-align: center; overflow-y: auto; }
 .gift::backdrop { background: rgba(6, 2, 18, .8); }
-.gift .gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: 20px; line-height: 1; }
-.gift-kicker { margin: 0; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.gift .gift-x { position: absolute; top: 14px; right: 14px; min-width: 40px; min-height: 40px; font-size: var(--t-l); line-height: 1; }
+.gift-kicker { margin: 0; font-size: var(--t-s); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .gift-rings { width: min(240px, 60vw, 34dvh); aspect-ratio: 1; flex: none; }
 @media (max-height: 500px) { .gift { padding: 12px 24px; } .gift[open] { gap: 6px; } .gift-hear { margin-top: 4px; } }
-.gift h2 { margin: 4px 0 0; font-size: 22px; overflow-wrap: anywhere; }
+.gift h2 { margin: 4px 0 0; font-size: var(--t-l); overflow-wrap: anywhere; }   /* a title is the large size (RD-2: three sizes) */
 .gift-meta, .gift-from { margin: 0; color: var(--muted); font-size: 13px; }
 .gift-from { font-style: italic; }
-.gift-hear { margin-top: 10px; padding: 14px 28px; font-size: 17px; border-radius: 999px; min-height: 52px; }
+.gift-hear { margin-top: 10px; padding: 14px 28px; font-size: var(--t-l); border-radius: 999px; min-height: 52px; }
 .gift-acts { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; min-height: 44px; align-items: center; }
 @media (pointer: coarse) { .gift-acts button { min-height: 44px; } }
 /* I5 "today's seed": the one chip that changes every day, in the warm colour */
@@ -715,11 +730,11 @@ body.simple .adv { display: none !important; }
 .view-row { display: flex; justify-content: flex-start; }
 .view-row .seg button { min-width: 84px; }
 /* I6 the quest card: what to try now; its drawer gets a light and a "quest n" tag */
-.quest { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; padding: 8px 10px 8px 12px; border: 1px solid var(--b); border-radius: 10px; background: var(--v); font-size: 12.5px; max-width: 520px; margin-left: auto; }
+.quest { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; padding: 8px 10px 8px 12px; border: 1px solid var(--b); border-radius: 10px; background: var(--v); font-size: var(--t-m); max-width: 520px; margin-left: auto; }
 .quest[hidden] { display: none; }
 .quest-k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
 .quest-title { color: var(--l); font-size: var(--t-l); font-weight: 400; }
-.quest-hint { flex: 1 1 100%; color: var(--muted); line-height: 1.4; }
+.quest-hint { flex: 1 1 100%; color: var(--muted); line-height: 17.5px; letter-spacing: -.02em; }   /* its 12.5 px box: 1.4 × 12.5, the old measure */
 .quest-acts { display: flex; gap: 6px; margin-left: auto; }
 .quest-acts button { padding: 2px 10px; }
 .quest.cheer { animation: quest-cheer 1.2s ease-out; }
