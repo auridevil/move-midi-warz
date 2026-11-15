@@ -167,6 +167,11 @@ before the page's first script and seeded again, with the frames held (and hande
   - a bar fixed along the bottom edge (the window's width, under half its height: the phone's docked sheet tabs) hides
     what scrolls under it: `seen()` ends a box at its top, so text behind the dock is not judged against the dock.
   - RD-3's gates: `--tests A1,A6,A7,IDS,TYPE,HIT,HUE --assert`.
+  - (round 1) **A6 also fails what a column cuts off**: on wide windows each column is a cell that hides its overflow,
+    so a panel too wide or too low is cut, not scrolled to. In every A6 state `clipped()` lists each child of `.hud` /
+    `#col-left` past its column (px sideways / below); sideways fails, and the sheet fails once it sinks past its body's
+    bottom padding (a row out of reach). It caught the jam take 24 px past the right column's left edge (`abb43ad`);
+    at 1280×720 with every pill shown the sheet sits 11 px into its 16 px padding (reported, not cut).
 - **RD-2 holds** (the layout kept by hand until a later phase rebuilds the part; remove them with it): `.tstrip {
   margin-right: 2px }` (≥ 1101 px; RD-5's console); px line-heights where a text came onto 11 / 13 / 15 (15.2 px on
   `.pill`, `.seg button`, `.lane-tab`, `.slot-menu button`; 14.6 on `.seg-ui button`, `.chips button, .tchip`; 17.8 on

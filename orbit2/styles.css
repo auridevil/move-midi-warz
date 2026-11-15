@@ -250,12 +250,16 @@ body.chaos::before { display: none; }
    stage cell, and the rings take their box from that cell alone (app.js layoutStage → scene.js ringBox): a drawer, a
    wrapped legend, focus mode or the sheet never moves them (A7). The canvas stays the whole window behind the grid (the
    void and the stars run under the columns); #stage is an empty, click-through box the rings are measured from.
-   1512×860: 300 · stage · 428 over 144 px; up to 1400 px wide, DECISION's 1280×720 rule: 256 · stage · 380 over 128 */
+   1512×860: 300 · stage · 428 over 144 px; up to 1400 px wide, DECISION's 1280×720 rule: 256 · stage · 380 over 128.
+   Wide is always `not all and (max-width: 1100px)`: the exact complement of the narrow test (here and app.js NARROW),
+   so a zoomed window 1100.5 css px wide gets one layout or the other, never neither. A stray in-flow child of the body
+   would take an implicit row: it gets 0 px (grid-auto-rows), so it can't shrink the stage row and move the rings */
 :root { --col-l: 300px; --col-r: 428px; --console-h: 144px; }
 @media (max-width: 1400px) { :root { --col-l: 256px; --col-r: 380px; --console-h: 128px; } }
+@media (max-width: 1240px) { :root { --console-h: 144px; } }   /* narrower, the top strip wraps to 135 px: the 144 px row until RD-5's console */
 #stage { display: none; }
-@media (min-width: 1101px) {
-  body.chaos:has(#stage) { display: grid; height: 100vh; height: 100dvh; overflow: hidden; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr) var(--console-h); }
+@media not all and (max-width: 1100px) {
+  body.chaos:has(#stage) { display: grid; height: 100vh; height: 100dvh; overflow: hidden; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr) var(--console-h); grid-auto-rows: 0; }
   #stage { display: block; grid-column: 2; grid-row: 1; pointer-events: none; }
   /* a column is one cell that clips: what opens inside it scrolls there, it never grows a track */
   .col-left { grid-column: 1; grid-row: 1; min-height: 0; z-index: 3; display: flex; flex-direction: column; overflow: hidden; }
@@ -278,7 +282,7 @@ body.chaos::before { display: none; }
 .tstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 /* RD-2 holds the layout: weight 400 made the strip's words 2 px narrower, and the strip sits flush right, so every control
    in it slid 2 px right. This margin puts them back on the RD-1 positions until the console (RD-5) replaces the strip */
-@media (min-width: 1101px) { .tstrip { margin-right: 2px; } }
+@media not all and (max-width: 1100px) { .tstrip { margin-right: 2px; } }
 .tstrip .big-btn { padding: 8px 18px; font-size: var(--t-l); line-height: 17.8px; min-width: 96px; }   /* play: the large size in its 14 px box */
 .tstrip-tempo .gauge, .tstrip-fx .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
 .tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-label { display: none; }
@@ -290,7 +294,7 @@ body.chaos::before { display: none; }
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
 .hud { z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
-@media (min-width: 1101px) { .hud { grid-column: 3; grid-row: 1; min-height: 0; padding: 16px 0 0; } }   /* RD-3: the right column's grid cell (the sheet runs to its edges) */
+@media not all and (max-width: 1100px) { .hud { grid-column: 3; grid-row: 1; min-height: 0; padding: 16px 0 0; } }   /* RD-3: the right column's grid cell (the sheet runs to its edges) */
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
@@ -343,7 +347,7 @@ body.chaos::before { display: none; }
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(12, 9, 25, 0.88); }   /* the void, nearly opaque */
 .sliders label[title] { cursor: help; }
 /* RD-3: the left column (.col-left) holds the legend (RD-5's lane list and the peek go here) */
-@media (min-width: 1101px) { #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; } }   /* one lane a line */
+@media not all and (max-width: 1100px) { #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; } }   /* one lane a line */
 @media (max-width: 1100px) { .col-left { display: contents; } }
 /* RD-3 the sheet: six tabs over one scrolling body; the drawers inside are re-hosted as they were. Wide: the whole right
    column under what is on (welcome, quest, jam take), down to the console, pinned open in this phase; closed it keeps only
@@ -351,7 +355,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .sheet { display: flex; flex-direction: column; min-height: 0; }
 .sheet-head { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px 8px; }
 .sheet-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
-@media (min-width: 1101px) and (max-width: 1400px) { .sheet-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }   /* the 380 px sheet: two rows of three, not five and a lonely sixth */
+@media not all and (max-width: 1100px) { @media (max-width: 1400px) { .sheet-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } } }   /* the 380 px sheet: two rows of three, not five and a lonely sixth */
 .sheet-tabs [role=tab] { padding: 6px; flex: 1 1 auto; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); }
 .sheet-tabs [role=tab][aria-selected=true] { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* state needs a shape: the 2 px outline */
 .sheet-tabs [role=tab].quest-lit::after { content: ' ·'; }   /* the tab whose drawer the quest is played in */
@@ -362,9 +366,9 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .pane .drawer { width: 100%; }
 .pane .hud-row, .pane .lane-tabs, .pane .grooves-row .chips { justify-content: flex-start; }
 .pane .keys-pop[open] { width: auto; max-height: none; overflow: visible; box-shadow: none; z-index: auto; }   /* a drawer here, not a popup over a column */
-@media (min-width: 1101px) {
+@media not all and (max-width: 1100px) {
   .hud { overflow: hidden; }
-  .hud > :not(.sheet) { margin-right: 24px; }
+  .hud > :not(.sheet) { margin-right: 24px; max-width: calc(100% - 24px); }   /* a full-width one (the jam take) fits beside its margin, not 24 px past the column's edge */
   .hud > .sheet { align-self: stretch; flex: 1 1 0; min-height: min(340px, 100%); border: 1px solid var(--b); border-width: 1px 0 0 1px; border-radius: 12px 0 0 0; background: rgba(12, 9, 25, 0.88); }
   .hud > .sheet:not(.open) { flex: none; min-height: 0; }
 }
@@ -378,7 +382,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
   .sheet-head { padding: 6px 8px; }
   .sheet-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .sheet-tabs [role=tab] { padding: 6px 2px; min-width: 0; }
-  .sheet-body { padding: 4px 12px 104px; }
+  .sheet-body { padding: 4px 12px calc(var(--dock) + 96px); }   /* the phone's floating play reaches --dock + 86 px up: the last row scrolls clear of it */
 }
 
 /* arc gauges: small arc, value and label stacked underneath */
@@ -751,7 +755,7 @@ body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; heigh
 .focus-exit:hover, .focus-exit:focus-visible { opacity: 1; }
 .focus-exit[hidden] { display: none; }
 /* a finger: the strip's small buttons 44 px wide too, and the exit pill plain to see (there's no hover) */
-@media (pointer: coarse) { body:has(#sheet) #transport button, body:has(#sheet) .focus-exit { min-width: 44px; } .focus-exit { opacity: .9; } }
+@media (pointer: coarse) { body:has(#sheet) #transport button, body:has(#sheet) .focus-exit, body:has(#sheet) .sheet-x { min-width: 44px; } .focus-exit { opacity: .9; } }
 /* I2 / I3 share in the transport: the link in one tap, … opens the other ways under it */
 .share-wrap { position: relative; display: inline-flex; }
 .share-wrap #btn-share { border-top-right-radius: 0; border-bottom-right-radius: 0; }

@@ -171,7 +171,22 @@ const PAGE = String.raw`(() => {
       if (!shown(e) || e.scrollHeight <= e.clientHeight + 1) continue; const s = getComputedStyle(e);
       if (s.overflowY === 'auto' || s.overflowY === 'scroll') inner.push({ el: tag(e), sheet: !!e.closest(${JSON.stringify(SHEET_SEL)}), scrollHeight: e.scrollHeight, clientHeight: e.clientHeight });
     }
-    return { scrollHeight: d.scrollHeight, innerHeight, pageScrolls: d.scrollHeight > innerHeight, inner };
+    return { scrollHeight: d.scrollHeight, innerHeight, pageScrolls: d.scrollHeight > innerHeight, inner, clip: clipped() };
+  }
+  // RD-3: what a clipping column cuts off (wide windows: each column is one cell that hides its overflow, so a panel too
+  // wide or too low is cut, not scrolled to): px out sideways and below; the sheet may sink into its body's bottom padding
+  function clipped() {
+    const out = [];
+    for (const col of document.querySelectorAll('.hud, #col-left')) {
+      if (!shown(col) || getComputedStyle(col).overflow === 'visible') continue; const c = col.getBoundingClientRect();
+      for (const e of col.children) {
+        if (!shown(e) || /^(fixed|absolute)$/.test(getComputedStyle(e).position)) continue; const r = e.getBoundingClientRect();
+        const x = Math.max(0, c.left - r.left, r.right - c.right), y = Math.max(0, r.bottom - c.bottom), body = e.querySelector('#sheet-body');
+        const pad = body && shown(body) ? parseFloat(getComputedStyle(body).paddingBottom) : 0;
+        if (x > 1 || y > 1) out.push({ el: tag(e), x: Math.round(x), y: Math.round(y), pad, cut: x > 1 || y > pad + 1 });
+      }
+    }
+    return out;
   }
   function rings() { const g = __poly.scene.geo(), c = document.getElementById('cv').getBoundingClientRect(); return { cx: Math.round((c.left + g.cx) * 10) / 10, cy: Math.round((c.top + g.cy) * 10) / 10, R: Math.round(g.R * 10) / 10, outer: Math.round(g.outer * 10) / 10, diameter: Math.round(g.outer * 20) / 10, lanes: g.lanes }; }
   // the text runs: an element's own text nodes, tight boxes
@@ -426,7 +441,8 @@ export function verdicts(report, t = THRESHOLDS) {
   for (const k of t.a6Sizes) { const s = by[k]; if (!s) continue;
     for (const [st, v] of [...Object.entries(s.states), ['6 lanes', s.controls6]]) { if (!v) continue; const sc = v.scroll;
       if (sc.pageScrolls) fails.push({ test: 'A6', size: k, what: `${st}: the page scrolls (${sc.scrollHeight} > ${sc.innerHeight})` });
-      const inner = sc.inner.filter(i => !i.sheet); if (inner.length) fails.push({ test: 'A6', size: k, what: `${st}: scrolls inside outside the sheet: ${inner.map(i => i.el).join(', ')}` }); }
+      const inner = sc.inner.filter(i => !i.sheet); if (inner.length) fails.push({ test: 'A6', size: k, what: `${st}: scrolls inside outside the sheet: ${inner.map(i => i.el).join(', ')}` });
+      const cut = (sc.clip || []).filter(c => c.cut); if (cut.length) fails.push({ test: 'A6', size: k, what: `${st}: cut off by its column: ${cut.map(c => `${c.el} ${c.x} px sideways, ${c.y} px below`).join(', ')}` }); }
   }
   for (const k of t.a7Sizes) { const s = by[k]; if (!s) continue; const base = s.states.default?.rings;
     for (const [st, v] of Object.entries(s.states)) { const g = v.rings; if (base && (Math.round(g.cx) !== Math.round(base.cx) || Math.round(g.cy) !== Math.round(base.cy) || Math.round(g.outer) !== Math.round(base.outer))) fails.push({ test: 'A7', size: k, what: `${st}: rings at (${g.cx}, ${g.cy}) r ${g.outer}, default (${base.cx}, ${base.cy}) r ${base.outer}` }); }
@@ -450,7 +466,7 @@ export function summary(report) {
     if (s.reach) { const by = {}; for (const r of s.reach) by[r.tab || 'face'] = (by[r.tab || 'face'] || 0) + 1; L.push(`RD-1 control ids: ${s.reach.filter(r => r.exists && r.drawn).length} of ${s.reach.length} drawn with their tab open (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ')})`); }
     if (s.type) L.push(`type: ${s.type.n} runs · ${Object.entries(s.type.sizes).map(([k, n]) => `${k} ×${n}`).join(', ')} · weights ${Object.entries(s.type.weights).map(([k, n]) => `${k} ×${n}`).join(', ')}${s.type.fails.length ? ` · ${s.type.fails.length} off the rules` : ''}`);
     for (const st of ['stopped', 'playing']) { const l = s.light[st]; if (l) L.push(`light ${st}: brightest control ${l.controlMax} (${l.controlMaxAt}) · brightest canvas ${l.canvasMax}${l.over ? ` · ${l.over.length} controls over ${THRESHOLDS.controlLum}` : ''}`); }
-    for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
+    for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''}${v.scroll.clip?.length ? ` (past its column: ${v.scroll.clip.map(c => `${c.el} ${c.x}/${c.y} px${c.cut ? ' CUT' : ''}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
     L.push(`frames while playing: per frame p95 ${r2(s.frames.frame)} ms, frame interval p95 ${r2(s.frames.interval)} ms (${s.frames.frames} frames) · callback p95 ${r2(s.frames.cost)} ms, gap p95 ${r2(s.frames.gap)} ms (${s.frames.n} callbacks)`, '');
   }
   if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) { const dr = a.clock.drawing; L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame time p95 ${a.clock.frameMs.frame95} ms, frame interval p95 ${a.clock.frameMs.interval95} ms (${a.clock.frameMs.frames} frames) · callback p95 ${a.clock.frameMs.cost95} ms (${a.clock.frameMs.n} callbacks) · canvas ${dr.pictures > 1 ? `drawing (${dr.pictures} different pictures in ${dr.of})` : 'NOT DRAWING: this clock is not A9\'s'}`); } L.push(''); }

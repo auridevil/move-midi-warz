@@ -591,7 +591,7 @@ test('RD-3 A7: the rings come from the stage cell alone (DECISION sizes), inside
   const { ringGeo, ringBox } = await import('../src/poly/scene.js');
   // the grid's stage cell (styles.css): between the columns, above the console row; centre and outer diameter as DECISION
   // "The screen at 1512×860" and "How it degrades" set them (1512×982: taller and wider rings, in the cell's middle)
-  const cells = [[1512, 860, 300, 428, 144, 756, 630], [1280, 720, 256, 380, 128, 578, 568], [1512, 982, 300, 428, 144, 692, 708], [1101, 640, 256, 380, 128, 488.5, 389]];
+  const cells = [[1512, 860, 300, 428, 144, 756, 630], [1280, 720, 256, 380, 128, 578, 568], [1512, 982, 300, 428, 144, 692, 708], [1101, 640, 256, 380, 144, 488.5, 389]];
   for (const [W, H, l, r, con, cx, d] of cells) {
     const cell = { x: l, y: 0, w: W - l - r, h: H - con };
     for (const lanes of [4, 6]) {
@@ -601,8 +601,7 @@ test('RD-3 A7: the rings come from the stage cell alone (DECISION sizes), inside
       const e = 1e-6; assert.ok(g.cx - g.outer >= cell.x + 12 - e && g.cx + g.outer <= cell.x + cell.w - 12 + e && g.cy - g.outer >= 12 - e && g.cy + g.outer <= cell.h - 12 + e,`${W}×${H}: 12 px clear of the columns, the top and the console`);
     }
   }
-  // the same cell and window = the same rings, whatever else is on the page (the box takes nothing else)
-  assert.deepEqual(ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512), ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512));
+  // (the box takes the cell and the window width and nothing else: that it stays put in the page is the face audit's A7)
   assert.ok(ringBox({ x: 0, y: 0, w: 50, h: 50 }, 100).w >= 120 * 0.95 / 0.85 - 1e-9, 'never smaller than 120 px across');
   const free = ringGeo(390, 390); assert.equal(free.cx, 195); assert.equal(free.cy, 195);   // no stage: the phone's square canvas
 });

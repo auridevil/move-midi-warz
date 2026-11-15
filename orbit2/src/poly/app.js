@@ -21,6 +21,7 @@ import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
+import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
@@ -2376,10 +2377,14 @@ function announceChanges() {
 // ---- RD-3 layout: a CSS grid (left column, stage, right column, console row; styles.css) places everything, and the
 // rings take their box from the stage cell alone (ringBox), so no drawer, sheet tab, wrap or focus mode moves them
 // (A7). Only the window size does: the cell observer and resize. Narrow windows stack under a square canvas instead ----
-const NARROW = matchMedia('(max-width: 1100px)');   // the CSS's own test, so both agree at a zoomed 1100.5 px
+// The CSS's own test: its wide rules say `not all and (max-width: 1100px)`, so a zoomed window 1100.5 px wide is one or
+// the other, never neither (test/sheet.test.js holds both to it)
+const NARROW = matchMedia('(max-width: 1100px)');
 function layoutStage() {
-  if (NARROW.matches) { scene.setStage(null); poke(); return; }
-  const c = $('stage').getBoundingClientRect(); scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth)); poke();
+  const c = $('stage').getBoundingClientRect();
+  // a cell with no size (no grid laid out) never places the rings: they keep the canvas's own box rather than a corner
+  if (NARROW.matches || !c.width || !c.height) { scene.setStage(null); poke(); return; }
+  scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth)); poke();
 }
 new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', layoutStage);
 // ---- RD-3 the sheet: every drawer and the old right column in one place, six tabs (Greta's feature table). Pinned open
@@ -2387,16 +2392,17 @@ new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', 
 // docked closed, full height once a tab is tapped (a phone never opens it by itself on load). The tab and the wide
 // open / closed are remembered. reveal(el): the tab that holds el, open, and every drawer round it, so whatever shows a
 // control (a lock editor, the library, a test) finds it drawn ----
-const SHEET_KEY = 'midi-warz.orbit2.sheet', SHEET_TABS = ['lane', 'pattern', 'groove', 'perform', 'export', 'setup'];
-const sheetSaved = (() => { try { return JSON.parse(localStorage.getItem(SHEET_KEY) || 'null') || {}; } catch { return {}; } })();
-const sheet = { tab: SHEET_TABS.includes(sheetSaved.tab) ? sheetSaved.tab : 'lane', open: false };
+const sheetSaved = (() => { try { return sheetFrom(localStorage.getItem(SHEET_KEY)); } catch { return {}; } })();   // storage itself can throw (blocked)
+const sheet = { tab: sheetSaved.tab || 'lane', open: false };
 const sheetDefault = () => !NARROW.matches && sheetSaved.open !== false;
 function setSheet(tab, open, user = false) {
-  const was = sheet.tab; sheet.tab = SHEET_TABS.includes(tab) ? tab : sheet.tab; sheet.open = !!open;
+  const was = sheet.tab, a = document.activeElement; sheet.tab = SHEET_TABS.includes(tab) ? tab : sheet.tab; sheet.open = !!open;
   $('sheet').classList.toggle('open', sheet.open); document.body.classList.toggle('sheet-open', sheet.open);
   for (const t of SHEET_TABS) { const b = $('tab-' + t), on = t === sheet.tab; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('pane-' + t).hidden = !on; }
-  const body = $('sheet-body'); if (!sheet.open && body.contains(document.activeElement)) $('tab-' + sheet.tab).focus({ preventScroll: true });   // focus never stays in a hidden body
-  body.hidden = !sheet.open; $('sheet-x').hidden = !sheet.open;
+  $('sheet-body').hidden = !sheet.open; $('sheet-x').hidden = !sheet.open;
+  // focus never stays on what just hid (the pane left behind, the closed body, the × itself): the selected tab takes it.
+  // No box = hidden (getClientRects: checkVisibility is missing on older iOS Safari)
+  if (a && a !== document.body && $('sheet').contains(a) && !a.getClientRects().length) $('tab-' + sheet.tab).focus({ preventScroll: true });
   if (sheet.open && sheet.tab === 'lane' && was !== 'lane') renderAuto();   // the automation strip measures its canvas: drawn again once it has a size
   // a tab that is one drawer (perform, export) shows it open: the tab was the click, a closed header would ask for another
   const one = $('pane-' + sheet.tab).querySelectorAll(':scope > details'); if (user && sheet.open && one.length === 1 && $('pane-' + sheet.tab).children.length === 1) one[0].open = true;
@@ -2412,10 +2418,9 @@ function reveal(el) {
 for (const t of SHEET_TABS) $('tab-' + t).onclick = () => setSheet(t, !(NARROW.matches && sheet.open && sheet.tab === t), true);
 $('sheet-x').onclick = () => setSheet(sheet.tab, false, true);
 $('sheet').querySelector('[role=tablist]').addEventListener('keydown', (e) => {
-  const f = SHEET_TABS.indexOf(document.activeElement?.id?.slice(4)), k = f >= 0 ? f : SHEET_TABS.indexOf(sheet.tab), d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-  if (!d && e.key !== 'Home' && e.key !== 'End') return; e.preventDefault(); e.stopPropagation();
-  const t = SHEET_TABS[e.key === 'Home' ? 0 : e.key === 'End' ? SHEET_TABS.length - 1 : (k + d + SHEET_TABS.length) % SHEET_TABS.length];
-  setSheet(t, sheet.open || !NARROW.matches, true); $('tab-' + t).focus();
+  const f = SHEET_TABS.indexOf(document.activeElement?.id?.slice(4)), k = tabMove(e.key, f >= 0 ? f : SHEET_TABS.indexOf(sheet.tab));
+  if (k < 0) return; e.preventDefault(); e.stopPropagation();
+  const t = SHEET_TABS[k]; setSheet(t, sheet.open || !NARROW.matches, true); $('tab-' + t).focus();
 });
 NARROW.addEventListener('change', () => setSheet(sheet.tab, sheetDefault()));
 setSheet(sheet.tab, sheetDefault());
@@ -2447,6 +2452,6 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 // ---- C3 help: the keys and the mouse tricks, in one overlay (button "?" or the ? key) ----
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
-addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
+// (RD-3: the Move table is a drawer in Sheet → setup now, not a popup, so a click elsewhere no longer folds it shut)
 window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, get questLog() { return questLog; }, get setlog() { return slog; } };
 readout(); layoutStage(); scene.start();

@@ -33,6 +33,14 @@ test('RD-1 face audit: each threshold fails on its own (A1 text, edge, light; A5
   assert.deepEqual(one({ '1512x860': { states: { default: state(), focus: state({ rings: { cx: 756.3, cy: 358.2, R: 330, outer: 315.1 } }) } } }), [], 'to the pixel');
 });
 
+test('RD-3 face audit A6: a panel its column cuts off fails (sideways at all; the sheet only past its body\'s bottom padding)', () => {
+  const one = (clip) => verdicts(report({ '1280x720': { states: { default: state(), pills: state({ scroll: { ...state().scroll, clip } }) } } })).map(f => `${f.test} ${f.size} ${f.what}`);
+  // what the audit's clipped() hands over: the round-1 jam take 24 px past the column's left edge; the sheet 11 px into its 16 px padding
+  assert.match(one([{ el: 'div#jam-panel', x: 24, y: 0, pad: 0, cut: true }])[0], /^A6 1280x720 pills: cut off by its column: div#jam-panel 24 px sideways/);
+  assert.deepEqual(one([{ el: 'section#sheet', x: 0, y: 11, pad: 16, cut: false }]), []);
+  assert.equal(one([{ el: 'section#sheet', x: 0, y: 30, pad: 16, cut: true }]).length, 1, 'past the padding: a row of the sheet is out of reach');
+});
+
 test('RD-1 A9: the WAV reader, the render diff, and a fingerprint that a 1-LSB wobble keeps and a 1 dB change moves', () => {
   const n = 44100, ch = [new Float32Array(n), new Float32Array(n)];
   for (let i = 0; i < n; i++) { const env = Math.exp(-(i % 11025) / 2000); ch[0][i] = Math.sin(i * 0.05) * 0.5 * env; ch[1][i] = Math.sin(i * 0.031) * 0.4 * env; }
@@ -127,10 +135,14 @@ test('RD-3 the RD-1 baseline\'s control ids: 62, each once, and every one still 
   const ids = baselineIds(JSON.parse(readFileSync(new URL('../docs/redesign/baseline/rd01-controls.json', import.meta.url), 'utf8')));
   assert.equal(ids.length, 62); assert.equal(new Set(ids).size, ids.length);
   for (const id of ['btn-play', 'btn-help', 'btn-connect', 'lib-name', 'btn-rec', 'exp-wav', 'exp-all', 'btn-midi-enable', 'voice-select', 'btn-mute', 'btn-random', 'btn-focus']) assert.ok(ids.includes(id), id);
-  // exists: an id="…" in the page, or one the app sets (a gauge or chip mounted where the page has its placeholder)
-  const src = [readFileSync(new URL('../index.html', import.meta.url), 'utf8'), ...readdirSync(new URL('../src/poly/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => readFileSync(new URL(`../src/poly/${f}`, import.meta.url), 'utf8'))].join('\n');
-  // (a groove chip: `groove-${g.key}` for each groove in grooves.js)
-  for (const id of ids) assert.ok(src.includes(`id="${id}"`) || src.includes(`'${id}'`) || (id.startsWith('groove-') && src.includes(`key: '${id.slice(7)}'`)), `${id} is still in the page`);
+  // exists: an id="…" in the page, or one of the few the app mounts itself: today's seed chip and the groove chips
+  // (`groove-${g.key}` for each groove in grooves.js). Only those may be missing from the page: a static id that was
+  // deleted can't pass by being named somewhere in the code
+  const page = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const code = readdirSync(new URL('../src/poly/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => readFileSync(new URL(`../src/poly/${f}`, import.meta.url), 'utf8')).join('\n');
+  const mounted = (id) => id === 'seed-today' ? code.includes(`.id = 'seed-today'`) : id.startsWith('groove-') && code.includes('.id = `groove-${g.key}`') && code.includes(`key: '${id.slice(7)}'`);
+  for (const id of ids) assert.ok(page.includes(`id="${id}"`) || mounted(id), `${id} is still in the page`);
+  assert.deepEqual(ids.filter(id => !page.includes(`id="${id}"`)).sort(), ['seed-today', ...ids.filter(id => id.startsWith('groove-'))].sort(), 'only the mounted ids are missing from the markup');
 });
 
 test('RD-3 face audit IDS: an id gone, or not drawn with its tab open, fails; drawn on the face or in a tab passes', async () => {

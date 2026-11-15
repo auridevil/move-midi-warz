@@ -27,7 +27,12 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   px line-height and tracking). No fills on controls ("on" = 2 px `--l`), lane hues the only hues, red only for record,
   Major Mono only in the wordmark, the action words a 40 px hit area. `test/dark-room.test.js` holds the token maths;
   the face audit's TYPE gate measures the type on the page.
-- Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll, A7 rings, A9
+- The layout (RD-3): a grid on wide windows (left column, stage, right column over the console row; wide is always
+  `not all and (max-width: 1100px)`, the exact complement of the narrow test), the rings from the stage cell alone
+  (`scene.js ringBox`), and every drawer in the one sheet (six tabs; `app.js setSheet / reveal`, the pure half in
+  `src/poly/sheet.js`; a test opens a control's tab with `__poly.reveal(el)`).
+- Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
+  a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;
   `--assert` fails on a threshold, `--tests A1,TYPE,HIT,HUE` limits it to a phase's own gates, `--diff
   orbit2/docs/redesign/baseline/rd01-controls.json` checks no drawn control moved > 2 px at first load, and none came

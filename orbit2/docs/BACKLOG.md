@@ -900,3 +900,26 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   everything shown with a lock panel and help open, not the gift card, the slot or ring menus (checked by hand); the
   lock-knob test pins source text; the 11 px labels' legibility at 70 cm in a dark room (yuki: "grooves", "swing
   template", "plays every loop") and the value / label contrast by eye (greta) are for RD-8 / RD-10's night checks.
+- **Where the rings centre when they grow** (RD-03 round 1: verifier, architect; for Noor): `ringBox` centres the
+  rings on the window while they fit 12 px clear of both columns, else in the stage cell. At 1512 wide that holds up to
+  862 px tall (x 756, ⌀ 630); from 863 they jump 64 px left into the cell (1512×982: x 691.5, ⌀ 708). DECISION says
+  "centred" for full screen; the alternative is a window-centred ring capped near 632 px (it barely grows). The 1400 →
+  1401 px breakpoint also widens the stage by 91 px (columns 256 / 380 → 300 / 428).
+- **The sheet's floor with today's panels** (RD-03 round 1: architect, verifier; RD-7): at 1280×720 with welcome +
+  quest + jam take shown the right column holds 603 px in 592: the sheet sits at its 340 px floor and its last 11 px
+  sink into the body's 16 px bottom padding (nothing out of reach). The face audit's A6 now fails a panel its column
+  cuts off (sideways, or the sheet past its padding), so RD-7's pills can't push a row out of reach unseen. At 1280×720
+  the export tab opens with WAV / stems below the sheet's fold (sound; for Noor / greta: they could come first).
+- **Keys in and around the sheet** (RD-03 round 1: greta, verifier, architect; RD-4's Esc order): Tab from a tab stops
+  on the × before the pane; Esc does not close the phone's full-height sheet; Esc still closes the Move table drawer
+  (its popup days); there is no ⌘O (the library opens from load / save).
+- **The phone sheet** (RD-03 round 1, rio; RD-7 / RD-10): a quest whose drawer sits in a closed tab lights only that tab
+  in the docked row (a newcomer has to guess); a reload remembers the tab but opens the dock closed, by design, with no
+  cue.
+- **Sheet clean-up** (RD-03 round 1, architect; RD-10): two page markers (`body.chaos:has(#stage)` for the grid,
+  `body:has(#sheet)` for the rest); the Move table's popup-only rules (`.keys-pop[open]` width / max-height / shadow /
+  z-index, `.pop-x`) are overridden in a pane and can go; `setSheet` / `reveal` (the DOM half) have no unit test without
+  a DOM (`src/poly/sheet.js` holds the pure half: the saved value, the tab keys).
+- **Tools for the sheet** (RD-03 round 1, sound): headless Chrome drops a real click on a sheet tab about 1 s after a
+  reload (like Play's 1.5 s: wait, or use `__poly.setSheet` / `reveal`); an A9 clock state that plays while switching
+  tabs and scrolling the sheet (sound's round-1 numbers as its baseline: main thread 47–74 ms/s, layout ≤ 1.9 ms/s).
