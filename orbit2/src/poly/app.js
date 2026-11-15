@@ -2405,7 +2405,8 @@ function setSheet(tab, open, user = false) {
   if (a && a !== document.body && $('sheet').contains(a) && !a.getClientRects().length) $('tab-' + sheet.tab).focus({ preventScroll: true });
   if (sheet.open && sheet.tab === 'lane' && was !== 'lane') renderAuto();   // the automation strip measures its canvas: drawn again once it has a size
   // a tab that is one drawer (perform, export) shows it open: the tab was the click, a closed header would ask for another
-  const one = $('pane-' + sheet.tab).querySelectorAll(':scope > details'); if (user && sheet.open && one.length === 1 && $('pane-' + sheet.tab).children.length === 1) one[0].open = true;
+  // (and a reload that brings the tab back brings it open too)
+  const one = $('pane-' + sheet.tab).querySelectorAll(':scope > details'); if (sheet.open && one.length === 1 && $('pane-' + sheet.tab).children.length === 1) one[0].open = true;
   if (user) { if (!NARROW.matches) sheetSaved.open = sheet.open; sheetSaved.tab = sheet.tab; try { localStorage.setItem(SHEET_KEY, JSON.stringify(sheetSaved)); } catch {} }
 }
 function reveal(el) {

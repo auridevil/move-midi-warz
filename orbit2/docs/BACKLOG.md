@@ -910,6 +910,15 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   sink into the body's 16 px bottom padding (nothing out of reach). The face audit's A6 now fails a panel its column
   cuts off (sideways, or the sheet past its padding), so RD-7's pills can't push a row out of reach unseen. At 1280×720
   the export tab opens with WAV / stems below the sheet's fold (sound; for Noor / greta: they could come first).
+  (RD-03 round 2, architect) The audit's pills state shows quest 1's card (133 px); quest 2 "backbeat" is 151 px, and
+  with it + welcome + jam take at 1280×720 the sheet sinks 28 px, 12 past its padding (the last drawer's edge cut, the
+  last controls still clear by ≥ 3 px: 592 − 16 − 340 leaves 236 px for the panels, they take 265): RD-7's pills state
+  should show the tallest card. At 1101–1240 × 720 (the 144 px console row there, round 1) the column is 576 px and the
+  same state sinks the sheet 27 px (quest 1) / 44 px (backbeat: `exp-roll` loses 13 of its 32 px, still clickable).
+- **The breakpoint test reads CSS text** (RD-03 round 2, architect): `sheet.test.js` pins the media query strings and
+  `NARROW`; a zoomed window at 1100.5 css px is only checked in a browser by hand (an iframe at `zoom: 1.1` in a 1211 px
+  window). A zoomed-iframe state in the face audit or the smoke would test the behaviour (a `(min-width: 1100.5px)`
+  would slip past the regex).
 - **Keys in and around the sheet** (RD-03 round 1: greta, verifier, architect; RD-4's Esc order): Tab from a tab stops
   on the × before the pane; Esc does not close the phone's full-height sheet; Esc still closes the Move table drawer
   (its popup days); there is no ⌘O (the library opens from load / save).
