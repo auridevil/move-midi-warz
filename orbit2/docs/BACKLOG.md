@@ -886,4 +886,14 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   lanes, jam on) when RD-8 brings the labels. Jam recalculates style every frame while it records (0.1 ms; RD-5 / RD-8).
 - **A drawer's inside with everything open** (RD-02 round 1, measured after the fixes): with the "everything" view and
   every drawer open, 229 controls, none moved > 2 px at 1512×860 and 1280×720; on a phone "new roll" sits 3 px left
-  (the export row's buttons are 1–2 px narrower at weight 400 than at 500). The no-layout gate measures the first load.
+  (the export row's buttons are 1–2 px narrower at weight 400 than at 500). The no-layout gate measures the first load;
+  since round 2 the diff lists these moves and fails only on a control gone or new. The keys table's hold is close, not
+  exact, on a desktop (11 px + .05 em: two rows wrap a line more, +36 px inside the keys drawer).
+- **Faint knob arcs on the purple lane** (RD-02 round 2, architect; for Noor / RD-6): over the track (an edge, 0.139),
+  lane 4's ink (0.215) is 1.40:1 (lane 1 2.08, yellow 2.72), so its arcs and the lock knobs' dotted vs solid read
+  weakly. It follows from two token choices (a track as bright as an edge, inks under the cap).
+- **The gates' blind spots** (RD-02 round 2: architect, yuki, greta): HIT does not check that a 40 px area leaves its
+  neighbours alone (checked by hand at five sizes in round 2: none covered); TYPE / HUE scan the first load and
+  everything shown with a lock panel and help open, not the gift card, the slot or ring menus (checked by hand); the
+  lock-knob test pins source text; the 11 px labels' legibility at 70 cm in a dark room (yuki: "grooves", "swing
+  template", "plays every loop") and the value / label contrast by eye (greta) are for RD-8 / RD-10's night checks.

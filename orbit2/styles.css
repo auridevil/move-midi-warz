@@ -57,7 +57,7 @@ h1 .sub { color: var(--d); font: 400 var(--t-s) var(--font-body); margin-left: 1
 .home { color: var(--l); text-decoration: none; }
 h2 { font: 400 var(--t-s) var(--font-body); margin: 0 0 10px; color: var(--d); text-transform: lowercase; letter-spacing: .22em; }
 h2 small { text-transform: none; letter-spacing: 0; margin-left: 8px; font-family: var(--font-body); color: var(--d); }
-b, strong, th { font-weight: 500; }   /* the browser's bold is 700: values and key names are 500, the rest 400 */
+b, strong, th { font-weight: 400; color: var(--l); }   /* the browser's bold is 700; 500 is for values only (DECISION "Numeral weight"): a key name or a word that stands out does it in the light grey */
 .status { display: flex; gap: 8px; align-items: center; } .status[hidden] { display: none; }
 .pill { padding: 5px 12px; border-radius: 8px; font: 400 var(--t-s)/15.2px var(--font-body); letter-spacing: var(--tr-12); border: 1px solid var(--b); box-shadow: inset 0 0 0 1px var(--b); background: transparent; }
 .pill-off { color: var(--d); } .pill-on { color: var(--l); border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .pill-warn { color: var(--l); border-color: var(--l); border-style: dashed; }
@@ -79,8 +79,8 @@ button.on, button.armed, button.flash, button[aria-pressed=true] { border-color:
 /* the action words (DECISION "Outlined boxes vs hairlines": fill, fill next, throw, undo, randomize, jam, share; redo
    with undo) take a 40 px hit area round their 32 px box: a transparent ::after, so nothing moves and nothing is drawn.
    The face audit's HIT gate probes it */
-:is(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share) { position: relative; }
-:is(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share)::after { content: ''; position: absolute; top: min(0px, (100% - 40px) / 2); bottom: min(0px, (100% - 40px) / 2); left: min(0px, (100% - 40px) / 2); right: min(0px, (100% - 40px) / 2); }
+:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share) { position: relative; }   /* :where: no id weight, so a later phase's placing rule wins */
+:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share)::after { content: ''; position: absolute; top: min(0px, (100% - 40px) / 2); bottom: min(0px, (100% - 40px) / 2); left: min(0px, (100% - 40px) / 2); right: min(0px, (100% - 40px) / 2); }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .panel-wide { grid-column: 1 / -1; }
@@ -562,7 +562,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
   body:has(#hud-left) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
   body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
-  body:has(#hud-left) .gtable.keys { font-size: 11px; }
+  body:has(#hud-left) .gtable.keys { font-size: 11px; line-height: 16.5px; letter-spacing: normal; }   /* it was 11 px here already: no hold to make */
   body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
   body:has(#hud-left) .welcome > span { flex-basis: 100%; }
   body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 44px; }

@@ -28,10 +28,11 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   Major Mono only in the wordmark, the action words a 40 px hit area. `test/dark-room.test.js` holds the token maths;
   the face audit's TYPE gate measures the type on the page.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll, A7 rings, A9
-  audio; TYPE the three sizes, HIT the action words' 40 px; `--assert` fails on a threshold, `--tests A1,TYPE,HIT`
-  limits it to a phase's own gates, `--diff orbit2/docs/redesign/baseline/rd01-controls.json` checks no drawn control
-  moved > 2 px, came or went; `--root` audits another checkout; baselines in `docs/redesign/baselines.md`), `?setlog`
-  on the page (the
+  audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;
+  `--assert` fails on a threshold, `--tests A1,TYPE,HIT,HUE` limits it to a phase's own gates, `--diff
+  orbit2/docs/redesign/baseline/rd01-controls.json` checks no drawn control moved > 2 px at first load, and none came
+  or went there or with everything shown; `--root` audits another checkout; baselines in `docs/redesign/baselines.md`),
+  `?setlog` on the page (the
   action log, key L saves it). Player-agent runs (A2 / A3 / A10 by agents): `orbit2/tools/session.mjs` (a seeded
   performer plays a set as Move MIDI or mouse-only, with slips, and tags the setlog's accidents), `glance.mjs` (300 ms
   darkened screenshots + answer key + `score`), `moveview.mjs` (the Move's LEDs drawn as the device). The RD-1

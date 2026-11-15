@@ -65,7 +65,7 @@ test('RD-2 no layout change: the position diff matches controls by element, name
   const now = { sizes: [{ size: '1512x860', controls: { list: [c('button#a', 'play', 12, 10, 44), c('button', 'x', 100, 13), c('button', 'x', 201, 10), c('button#new', 'peek', 0, 830)] } }, { size: '1280x720', controls: { list: [] } }] };
   const [d, missing] = positionDiff(base, now);
   assert.equal(d.n, 4); assert.equal(d.max, 4);
-  assert.deepEqual(d.moved.map(m => m.k), ['button#a|play|0', 'button|x|0']);   // play: 2 px right and 4 px wider = centre 4 px off; the first x 3 px down; the second x 1 px off: kept
-  assert.deepEqual(d.gone, ['button#gone|old|0']); assert.deepEqual(d.added, ['button#new|peek|0']);
+  assert.deepEqual(d.moved.map(m => m.k), ['button#a|0', 'button|x|0']);   // play: 2 px right and 4 px wider = centre 4 px off; the first x 3 px down; the second x 1 px off: kept (an id is the control's key)
+  assert.deepEqual(d.gone, ['button#gone|0']); assert.deepEqual(d.added, ['button#new|0']);
   assert.ok(missing.missing);
 });

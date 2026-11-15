@@ -843,7 +843,7 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
 function setRec(on) { if (on !== rec.armed) slog?.act('record', rec.armed, on); if (!on) gestEnd(true); rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
 function buildRecUI() {
   $('btn-rec').onclick = () => setRec(!rec.armed);
-  sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, say: (v) => `velocity ${v}`, title: INFO['accent above'], color: '#fb7185', onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);
+  sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, say: (v) => `velocity ${v}`, title: INFO['accent above'], onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);   // no colour: grey like every non-lane knob (RD-2: a rose arc read as recording)
   ui.quant = mount('rec-quant', segmented({ options: [['nearest', 'nearest step', 'early hits land on the coming step'], ['previous', 'step just played']], value: rec.quant, onChange: (v) => { rec.quant = v; saveSettings(); } }));
   ui.pitchPads = mount('rec-pitch', toggleChip({ label: 'pitch pads', on: rec.pitchPads, title: INFO['pitch pads'], onChange: (v) => { rec.pitchPads = v; saveSettings(); } }));
   ui.recKnobs = mount('rec-knobs', segmented({ options: KNOB_MODES.map(k => [k, k, INFO['record knobs']]), value: rec.knobs, onChange: setKnobs }));

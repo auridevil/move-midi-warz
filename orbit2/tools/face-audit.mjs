@@ -8,7 +8,7 @@
 //   node orbit2/tools/face-audit.mjs --assert               # exit 1 when an A1 / A5 / A6 / A7 threshold fails
 //   --sizes 1512x860,390x844m   (m = phone: touch + mobile)   --port 5400 --debug-port 9400   --path orbit2/index.html
 //   --play 6  (seconds of playing for the frame-time p95)
-//   --tests A1,TYPE,HIT   only these gates count for --assert (a phase's own: RD-2; A5–A7 wait for RD-3 / RD-5)
+//   --tests A1,TYPE,HIT,HUE   only these gates count for --assert (a phase's own: RD-2; A5–A7 wait for RD-3 / RD-5)
 //   --diff orbit2/docs/redesign/baseline/rd01-controls.json   every drawn control's centre (page px) vs the RD-1 baseline
 //                      (> 2 px = moved; moved, gone or new fails --assert)
 //   --root /tmp/x      audit another checkout (a `git archive` of a commit) with this tool
@@ -29,6 +29,8 @@
 //   type      (RD-2) every drawn text's family / size / weight at first load and with everything shown: Major Mono only
 //             in the wordmark, three sizes (11 / 13 / 15) under 40 px, weights 400 / 500 (300 only at 40 px and up)
 //   hits      (RD-2) the action words in view: a 40 px hit area (probed with elementFromPoint 19.5 px off the centre)
+//   hues      (RD-2) every drawn colour (text, borders, background, shadow, SVG marks) is a grey, a lane's colour over the
+//             void, or record red on a recorder that records (first load and everything shown)
 import { launch } from './cdp.mjs';
 import { createHash } from 'node:crypto';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -40,6 +42,14 @@ export const THRESHOLDS = {
   a1Sizes: ['1512x860', '1280x720', '390x844m'], a5Size: '1512x860', a6Sizes: ['1512x860', '1512x982', '1280x720'], a7Sizes: ['1512x860', '1512x982', '1280x720'],
   typeSizes: [11, 13, 15], typeLarge: 40,                       // TYPE (RD-2): three sizes; 300 only at 40 px and up
 };
+/** RD-2 colour = sound: a colour ([r, g, b] 0–255) is 'grey' (chroma ≤ 40: the void's greys, a muted dot), 'lane' (a mix
+ *  of one lane colour over the void, any amount, every channel within 8), 'rec' (the same for record red) or 'stray'.
+ *  Runs in the page too (serialized): no outside names. */
+export function hueKind(c, lanes, rec, v) {
+  if (Math.max(...c) - Math.min(...c) <= 40) return 'grey';
+  const mix = (base) => { for (let p = 0.05; p <= 1.0001; p += 0.01) if (Math.max(...[0, 1, 2].map(i => Math.abs(c[i] - (p * base[i] + (1 - p) * v[i])))) <= 8) return true; return false; };
+  return lanes.some(mix) ? 'lane' : mix(rec) ? 'rec' : 'stray';
+}
 /** RD-2 type rules over the text runs of a page (`__fa.types()`): Major Mono only in the wordmark; under 40 px only the
  *  three sizes and weights 400 / 500; 300 only at 40 px and up; nothing heavier than 500. → { n, sizes, weights, fails } */
 export function typeCheck(runs, t = THRESHOLDS) {
@@ -85,7 +95,8 @@ const PAGE = String.raw`(() => {
     const inWin = (e) => { const r = e.getBoundingClientRect(); return r.bottom > 0 && r.right > 0 && r.top < innerHeight && r.left < innerWidth && r.width > 0 && r.height > 0; };
     // drawn: every drawn control's whole box in page px, in view or not (RD-2's no-layout diff: the phone's controls
     // below the fold count too)
-    const page = (e) => { const r = e.getBoundingClientRect(); return { el: tag(e), name: name(e), x: Math.round(r.x + scrollX), y: Math.round(r.y + scrollY), w: Math.round(r.width), h: Math.round(r.height) }; };
+    // (a scrolling column's own scroll is added back: the place in its content, whatever the column shows)
+    const page = (e) => { const r = e.getBoundingClientRect(); let x = r.x + scrollX, y = r.y + scrollY; for (let a = e.parentElement; a; a = a.parentElement) { x += a.scrollLeft; y += a.scrollTop; } return { el: tag(e), name: name(e), x: Math.round(x), y: Math.round(y), w: Math.round(r.width), h: Math.round(r.height) }; };
     return { dom: all.length, total: laid.length, visible: vis.length, brief: { boxes: box.length, inWindow: box.filter(inWin).length }, list: vis.map(([e, r]) => ({ el: tag(e), name: name(e), x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.w), h: Math.round(r.h) })), drawn: laid.map(page) };
   }
   // RD-2 the action words' 40 px hit area (DECISION "Outlined boxes vs hairlines"): a click 19.5 px above and below the
@@ -98,6 +109,33 @@ const PAGE = String.raw`(() => {
       for (const y of [cy - 19.5, cy + 19.5]) for (const x of xs) { const h = document.elementFromPoint(x, y); if (!h || !e.contains(h)) miss.push([Math.round(x - r.x), Math.round(y - r.y), h ? tag(h) : null]); }
       return { el: tag(e), w: Math.round(r.width), h: Math.round(r.height), ok: !miss.length, miss };
     });
+  }
+  // RD-2 colour = sound (DECISION §1.6: lane colours are the only hues, red means recording): every drawn element's own
+  // colours (its text, borders, background, box-shadow, an SVG mark's stroke / fill, a ::before / ::after) sorted by
+  // hueKind; a stray hue anywhere, or record red off a recorder that records, is reported. The canvas is light, not a
+  // control: left out (RD-8)
+  const hueKind = ${hueKind};
+  const RECORDING = '#btn-rec.armed, #btn-mic.armed, .jam-btn.on, .jam-panel';
+  function hues() {
+    const root = getComputedStyle(document.documentElement), hex = (h) => [1, 3, 5].map(i => parseInt(h.trim().slice(i, i + 2), 16));
+    const lanes = [...document.querySelectorAll('#legend li')].map(li => hex(li.style.getPropertyValue('--lane'))), rec = hex(root.getPropertyValue('--rec')), v = hex(root.getPropertyValue('--v'));
+    const out = new Map(), check = (e, prop, css) => {
+      for (const m of css.match(/rgba?\([^)]*\)|color\([^)]*\)/g) || []) {
+        const c = rgbOf(m); if ((c[3] ?? 1) < 0.05) continue;
+        const kind = hueKind(c.slice(0, 3), lanes, rec, v); if (kind === 'grey' || kind === 'lane' || (kind === 'rec' && e.closest(RECORDING))) continue;
+        const rgb = c.slice(0, 3).map(Math.round); out.set(tag(e) + ' ' + prop + ' ' + rgb, { el: tag(e), prop, rgb, kind });
+      }
+    };
+    for (const e of document.querySelectorAll('body *')) {
+      if (['SCRIPT', 'STYLE', 'OPTION', 'CANVAS'].includes(e.tagName) || !shown(e)) continue;
+      const s = getComputedStyle(e);
+      if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) || [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) check(e, 'color', s.color);
+      for (const k of ['Top', 'Right', 'Bottom', 'Left']) if (parseFloat(s['border' + k + 'Width']) > 0 && !/none|hidden/.test(s['border' + k + 'Style'])) check(e, 'border', s['border' + k + 'Color']);
+      check(e, 'background', s.backgroundColor); if (s.boxShadow !== 'none') check(e, 'shadow', s.boxShadow);
+      if (e instanceof SVGElement) { if (s.stroke !== 'none') check(e, 'stroke', s.stroke); if (s.fill !== 'none') check(e, 'fill', s.fill); }
+      for (const pe of ['::before', '::after']) { const p = getComputedStyle(e, pe); if (p.content === 'none' || p.content === 'normal' || p.display === 'none') continue; if (/^["']\S|^attr\(/.test(p.content)) check(e, pe + ' color', p.color); check(e, pe + ' background', p.backgroundColor); }
+    }
+    return [...out.values()];
   }
   // RD-2 type: every drawn text's computed family, size and weight (an element's own text, a field's value, a
   // ::before / ::after with text), and whether it is the wordmark (h1)
@@ -151,7 +189,7 @@ const PAGE = String.raw`(() => {
   }
   const grow = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
   window.__fa = {
-    controls, scroll, rings, types, hits,
+    controls, scroll, rings, types, hits, hues,
     hideText(on) { let s = document.getElementById('fa-hide'); if (!s) { s = document.createElement('style'); s.id = 'fa-hide'; document.head.append(s); } s.textContent = '*, *::before, *::after { transition: none !important; }' + (on ? ' *, *::before, *::after, *::placeholder, *::marker { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' : ''); },
     async measure(bg64, full64) {
       const bg = await image(bg64), full = await image(full64), runs = texts(), text = [];
@@ -209,7 +247,7 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
   try {
     const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)'); await settle(p, 400);
     const out = { size, errors: p.errors };
-    out.controls = await p.eval('__fa.controls()'); const type0 = await p.eval('__fa.types()'); out.hits = await p.eval('__fa.hits()');
+    out.controls = await p.eval('__fa.controls()'); const type0 = await p.eval('__fa.types()'), hue0 = await p.eval('__fa.hues()'); out.hits = await p.eval('__fa.hits()');
     // text: the background with every text transparent, then the page as it is
     await p.eval('__fa.hideText(true)'); await settle(p); const bg = await shot64(p);
     await p.eval('__fa.hideText(false)'); await settle(p); const full = await shot64(p);
@@ -234,11 +272,18 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     const ms2 = await p.eval(`__fa.measure(${JSON.stringify(full2)}, ${JSON.stringify(full2)})`);
     out.light.playing = { controlMax: ms2.ctlMax, controlMaxAt: ms2.ctlMaxAt, canvasMax: Math.max(canvasMax, ms2.canvasMax) };
     await play(p); await settle(p);
+    // everything shown (the "everything" view, every drawer open): its drawn controls, so the diff also sees a control
+    // that left (or came into) a drawer; then back as it was
+    await p.eval(`(() => { window.__faSimple = document.body.classList.contains('simple'); __poly.setView('all'); window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`); await settle(p, 250);
+    out.controls.all = (await p.eval('__fa.controls()')).drawn;
+    await p.eval(`(() => { document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); if (window.__faSimple) __poly.setView('simple'); })()`); await settle(p);
     // A5 worst case today: 6 lanes
     await p.eval('__poly.setLaneCount(6)'); await settle(p, 250); out.controls6 = { visible: (await p.eval('__fa.controls()')).visible, scroll: await p.eval('__fa.scroll()') };
-    // RD-2 type: the first load and everything there is (the "everything" view, every drawer open)
-    await p.eval(`(() => { __poly.setView('all'); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`); await settle(p, 250);
+    // RD-2 type and hue: the first load and everything there is (the "everything" view, every drawer open, a step's lock
+    // panel, the help dialog)
+    await p.eval(`(() => { __poly.setView('all'); document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __poly.openHelp(); })()`); await settle(p, 250);
     out.type = typeCheck([...type0, ...await p.eval('__fa.types()')]);
+    const hues = new Map(); for (const h of [...hue0, ...await p.eval('__fa.hues()')]) hues.set(`${h.el} ${h.prop} ${h.rgb}`, h); out.hues = [...hues.values()];
     out.errors = p.errors; return out;
   } finally { await b.close(); }
 }
@@ -342,6 +387,7 @@ export function verdicts(report, t = THRESHOLDS) {
   }
   for (const s of report.sizes) if (s.type?.fails.length) fails.push({ test: 'TYPE', size: s.size, what: `${s.type.fails.length} text kinds off the type rules: ${s.type.fails.slice(0, 4).map(f => f.what).join('; ')}` });
   for (const s of report.sizes) { const bad = (s.hits || []).filter(h => !h.ok); if (bad.length) fails.push({ test: 'HIT', size: s.size, what: `${bad.length} action words without a 40 px hit area: ${bad.map(h => `${h.el} ${h.w}×${h.h}`).join(', ')}` }); }
+  for (const s of report.sizes) if (s.hues?.length) fails.push({ test: 'HUE', size: s.size, what: `${s.hues.length} colours that are no lane's, or red off a recording: ${s.hues.slice(0, 5).map(h => `${h.el} ${h.prop} rgb(${h.rgb}) ${h.kind}`).join('; ')}` });
   return fails;
 }
 
@@ -352,6 +398,7 @@ export function summary(report) {
     L.push(`controls: ${s.controls.visible} visible / ${s.controls.total} drawn / ${s.controls.dom} in the DOM · 6 lanes: ${s.controls6?.visible} visible · the brief's count (boxes, closed drawers included): ${s.controls.brief.inWindow} in the window / ${s.controls.brief.boxes}`);
     L.push(`text: ${s.text.n} runs, min ${s.text.min}:1, ${s.text.fails.length} under ${THRESHOLDS.text}:1${s.text.fails.length ? ` (worst: ${s.text.fails.slice(0, 5).map(f => `${f.contrast} "${f.text}"`).join(', ')})` : ''}`);
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
+    if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);
     if (s.hits) L.push(`hit areas: ${s.hits.filter(h => h.ok).length} of ${s.hits.length} action words in view take 40 px${s.hits.some(h => !h.ok) ? ` (not: ${s.hits.filter(h => !h.ok).map(h => h.el).join(', ')})` : ''}`);
     if (s.type) L.push(`type: ${s.type.n} runs · ${Object.entries(s.type.sizes).map(([k, n]) => `${k} ×${n}`).join(', ')} · weights ${Object.entries(s.type.weights).map(([k, n]) => `${k} ×${n}`).join(', ')}${s.type.fails.length ? ` · ${s.type.fails.length} off the rules` : ''}`);
     for (const st of ['stopped', 'playing']) { const l = s.light[st]; if (l) L.push(`light ${st}: brightest control ${l.controlMax} (${l.controlMaxAt}) · brightest canvas ${l.canvasMax}${l.over ? ` · ${l.over.length} controls over ${THRESHOLDS.controlLum}` : ''}`); }
@@ -369,25 +416,32 @@ export function summary(report) {
  *  (docs/redesign/baseline/rd01-controls.json). A control in only one of the two is listed (gone / new), not guessed at;
  *  the CLI fails --assert on it like on a move. */
 export function positionDiff(base, report, tol = 2) {
-  const key = (c, seen) => { const k = c.el + '|' + c.name; const n = seen.get(k) || 0; seen.set(k, n + 1); return k + '|' + n; };
+  // a control with an id is itself (its name may be a value: a random seed); the others go by element, name and order
+  const key = (c, seen) => { const k = c.el.includes('#') ? c.el : c.el + '|' + c.name; const n = seen.get(k) || 0; seen.set(k, n + 1); return k + '|' + n; };
   const index = (list) => { const seen = new Map(), m = new Map(); for (const c of list) m.set(key(c, seen), c); return m; };
-  return report.sizes.map(s => {
-    const b = base.sizes.find(x => x.size === s.size); if (!b) return { size: s.size, missing: true };
-    const basis = b.controls.drawn && s.controls.drawn ? 'drawn' : 'visible', pick = (c) => basis === 'drawn' ? c.drawn : c.list;
-    const was = index(pick(b.controls)), now = index(pick(s.controls)), moved = [], gone = [], added = [];
+  const cmp = (wasList, nowList) => {
+    const was = index(wasList), now = index(nowList), moved = [], gone = [], added = [];
     for (const [k, c] of now) {
       const o = was.get(k); if (!o) { added.push(k); continue; }
       const dx = (c.x + c.w / 2) - (o.x + o.w / 2), dy = (c.y + c.h / 2) - (o.y + o.h / 2), dw = c.w - o.w, dh = c.h - o.h;
       if (Math.max(Math.abs(dx), Math.abs(dy)) > tol) moved.push({ k, dx, dy, dw, dh });
     }
     for (const k of was.keys()) if (!now.has(k)) gone.push(k);
-    return { size: s.size, basis, n: now.size, moved, gone, added, max: moved.reduce((a, m) => Math.max(a, Math.abs(m.dx), Math.abs(m.dy)), 0) };
+    return { n: now.size, moved, gone, added, max: moved.reduce((a, m) => Math.max(a, Math.abs(m.dx), Math.abs(m.dy)), 0) };
+  };
+  return report.sizes.map(s => {
+    const b = base.sizes.find(x => x.size === s.size); if (!b) return { size: s.size, missing: true };
+    const basis = b.controls.drawn && s.controls.drawn ? 'drawn' : 'visible', pick = (c) => basis === 'drawn' ? c.drawn : c.list;
+    // everything shown: every control still there (gone / new fail); its moves are listed, the gate is the first load
+    const all = b.controls.all && s.controls.all ? cmp(b.controls.all, s.controls.all) : null;
+    return { size: s.size, basis, ...cmp(pick(b.controls), pick(s.controls)), all };
   });
 }
-export const diffSummary = (d) => d.map(s => s.missing ? `${s.size}: not in the baseline` : `${s.size}: ${s.n} controls (${s.basis}), ${s.moved.length} moved > 2 px${s.moved.length ? ` (max ${Math.round(s.max * 10) / 10} px: ${s.moved.slice(0, 6).map(m => `${m.k.split('|').slice(0, 2).join(' ')} ${Math.round(m.dx * 10) / 10},${Math.round(m.dy * 10) / 10}`).join('; ')})` : ''}${s.gone.length ? ` · gone: ${s.gone.join(', ')}` : ''}${s.added.length ? ` · new: ${s.added.join(', ')}` : ''}`).join('\n');
-/** The diff fails --assert on a control that moved, and on one that is gone or new (a control that left the page, or
- *  came into it, changed the layout too). */
-export const layoutChanged = (d) => d.some(s => s.moved?.length || s.gone?.length || s.added?.length);
+const moves = (s) => `${s.moved.length} moved > 2 px${s.moved.length ? ` (max ${Math.round(s.max * 10) / 10} px: ${s.moved.slice(0, 6).map(m => `${m.k.split('|').slice(0, 2).join(' ')} ${Math.round(m.dx * 10) / 10},${Math.round(m.dy * 10) / 10}`).join('; ')})` : ''}${s.gone.length ? ` · gone: ${s.gone.join(', ')}` : ''}${s.added.length ? ` · new: ${s.added.join(', ')}` : ''}`;
+export const diffSummary = (d) => d.map(s => s.missing ? `${s.size}: not in the baseline` : `${s.size}: ${s.n} controls (${s.basis}), ${moves(s)}${s.all ? `\n  everything shown: ${s.all.n} controls, ${moves(s.all)}` : ''}`).join('\n');
+/** The diff fails --assert on a control that moved at first load, and on one that is gone or new there or with
+ *  everything shown (a control that left the page, or came into it, changed the layout too). */
+export const layoutChanged = (d) => d.some(s => s.missing || s.moved?.length || s.gone?.length || s.added?.length || s.all?.gone.length || s.all?.added.length);   // a size the baseline lacks cannot pass
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);

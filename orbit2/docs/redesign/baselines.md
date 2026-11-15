@@ -146,11 +146,28 @@ before the page's first script and seeded again, with the frames held (and hande
     load and with everything shown: Major Mono only in the wordmark, 11 / 13 / 15 px under 40 px, weights 400 / 500,
     300 only from 40 px); **HIT** (the action words in view: `elementFromPoint` 19.5 px above and below the centre, at
     both ends and the middle, lands on the button: a 40 px hit area); `--root <dir>` audits another checkout with this
-    tool. RD-2's gates: `--tests A1,TYPE,HIT --assert --diff orbit2/docs/redesign/baseline/rd01-controls.json`.
-- **No-layout baseline:** `baseline/rd01-controls.json` = every control at first load at the four sizes, from 07c2ba4
-  (RD-1 closed): `list` the part in view (viewport px), `drawn` every drawn control's whole box (page px). Measured
-  again in RD-2 round 1 by this tool on a `git archive 07c2ba4` (`--root`); `list` came out identical to the first
-  take. The phase start's own TYPE: 54–55 kinds off the rules (7 sizes, 700 on play, jam, help and bold).
+    tool. RD-2's gates: `--tests A1,TYPE,HIT,HUE --assert --diff orbit2/docs/redesign/baseline/rd01-controls.json`.
+  - (RD-2 review round 2) **HUE**: every drawn colour (text, borders, background, box-shadow, an SVG mark's stroke /
+    fill, a `::before` / `::after`) at first load and with everything shown is a grey (chroma ≤ 40), a mix of one lane
+    colour over the void (any amount, each channel within 8 / 255), or record red on a recorder that records (armed
+    record or mic, jam on, the jam panel); the canvas is left out. TYPE and HUE's "everything shown" also opens step
+    1's lock panel and the help dialog. The diff also takes **every drawn control with everything shown** (`all`: the
+    "everything" view, every drawer open, page px with a scrolling column's own scroll added back): a control gone or
+    new there fails `--assert` (round 2: a knob whose line lost its `appendChild` vanished from the Record drawer and
+    every first-load gate passed), its moves are listed only (the gate is the first load); a control with an id is
+    keyed by it (a seed field's name is its random value).
+- **RD-2 holds** (the layout kept by hand until a later phase rebuilds the part; remove them with it): `.tstrip {
+  margin-right: 2px }` (≥ 1101 px; RD-5's console); px line-heights where a text came onto 11 / 13 / 15 (15.2 px on
+  `.pill`, `.seg button`, `.lane-tab`, `.slot-menu button`; 14.6 on `.seg-ui button`, `.chips button, .tchip`; 17.8 on
+  play; 13.2 on `.gauge .g-val`; 17.5 on `.quest-hint`; 18.75 on `.welcome`; 18 on `.hint`, `.drawer summary`,
+  `.gtable`, `.row-ctl`, `.evo-lanes`, `.evo-sub > summary`, `.auto-pick`, `.jam-row`); tracking that keeps the old
+  measure (`--tr-12` + .05 em, `--tr-115` + .025 em, − .02 em on `.welcome` / `.quest-hint`, − .04 em on the strip's
+  tempo value, .36 em on the in-flow legend ≤ 1100 px: RD-10's phone row of dots); `.tstrip-fx .g-val { min-width:
+  40.8px }`.
+- **No-layout baseline:** `baseline/rd01-controls.json` = every control at the four sizes, from 07c2ba4 (RD-1 closed):
+  `list` the part in view at first load (viewport px), `drawn` every drawn control's whole box at first load (page px),
+  `all` every drawn control with everything shown (229 per size). Measured again in RD-2 rounds 1 and 2 by this tool on
+  a `git archive 07c2ba4` (`--root`); `list` and `drawn` came out identical each time. The phase start's own TYPE: 54–55 kinds off the rules (7 sizes, 700 on play, jam, help and bold).
 
 Screenshots: `baseline/01…04` (the brief, 1512×860), `baseline/rd01-first-load-1280x720.png`,
 `baseline/rd01-first-load-390x844.png`.

@@ -2,7 +2,7 @@
 // the A9 render diff and fingerprint (a 1-LSB wobble keeps the fingerprint, a level change does not), the WAV reader.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint, holdFrames, typeCheck, positionDiff, layoutChanged } from '../tools/face-audit.mjs';
+import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint, holdFrames, typeCheck, positionDiff, layoutChanged, hueKind } from '../tools/face-audit.mjs';
 import { encodeWav } from '../src/unasm/wav.js';
 
 const state = (o = {}) => ({ scroll: { scrollHeight: 860, innerHeight: 860, pageScrolls: false, inner: [] }, rings: { cx: 756, cy: 358, R: 330, outer: 315, diameter: 630, lanes: 4 }, ...o });
@@ -78,15 +78,44 @@ test('RD-2 TYPE: three sizes under 40 px, 400 / 500, 300 only from 40 px, Major 
   assert.deepEqual(one({ '1280x720': { hits: [{ el: 'button#btn-undo', w: 58, h: 32, ok: false, miss: [[2, -4, 'div']] }] } }), ['HIT 1280x720']);
 });
 
+test('RD-2 HUE: greys, a lane colour over the void at any amount, record red apart, anything else stray', () => {
+  const V = [12, 9, 25], LANES = [[240, 171, 252], [103, 232, 249], [253, 224, 71], [167, 139, 250], [134, 239, 172], [253, 186, 116]], REC = [255, 107, 120];
+  const mix = (c, p) => c.map((x, i) => Math.round(x * p + V[i] * (1 - p)));
+  for (const g of [[184, 180, 199], [141, 136, 158], [110, 105, 130], [12, 9, 25], [139, 132, 168]]) assert.equal(hueKind(g, LANES, REC, V), 'grey', `${g}`);
+  for (const l of LANES) for (const p of [1, 0.8, 0.62, 0.45, 0.22]) { const c = mix(l, p); assert.ok(['lane', 'grey'].includes(hueKind(c, LANES, REC, V)), `${l} at ${p}: ${c}`); }
+  assert.equal(hueKind(mix(LANES[3], 0.8), LANES, REC, V), 'lane'); assert.equal(hueKind(mix(LANES[1], 0.22), LANES, REC, V), 'lane', 'a ghost cyan cell');
+  assert.equal(hueKind(REC, LANES, REC, V), 'rec'); assert.equal(hueKind(mix(REC, 0.8), LANES, REC, V), 'rec');
+  assert.equal(hueKind([203, 92, 111], LANES, REC, V), 'stray', 'the accent knob\'s rose (#fb7185 at 80 %), round 2');
+  assert.equal(hueKind([94, 234, 212], LANES, REC, V), 'stray', 'the old --ok teal is no lane');
+  assert.equal(hueKind([59, 130, 246], LANES, REC, V), 'stray', 'a blue that is no lane');
+  assert.equal(hueKind([38, 26, 74], LANES, REC, V), 'lane', 'a dim purple is the purple lane, 19 % over the void');
+  const one = (o) => verdicts(report(o)).map(f => `${f.test} ${f.size}`);
+  assert.deepEqual(one({ '390x844m': { hues: [{ el: 'path', prop: 'stroke', rgb: [203, 92, 111], kind: 'stray' }] } }), ['HUE 390x844m']);
+  assert.deepEqual(one({ '1512x860': { hues: [] } }), []);
+});
+
 test('RD-2 no layout change: every drawn control in page px when both sides have it; gone and new fail like a move', () => {
   const c = (el, name, x, y, w = 40, h = 32) => ({ el, name, x, y, w, h });
   const base = { sizes: [{ size: '390x844m', controls: { list: [c('a', 'home', 18, 10)], drawn: [c('a', 'home', 18, 10), c('summary', 'library', 16, 900, 358, 32), c('button#quest-skip', 'skip', 200, 1100)] } }] };
   const fell = { sizes: [{ size: '390x844m', controls: { list: [c('a', 'home', 18, 10), c('button#quest-skip', 'skip', 200, 830)], drawn: [c('a', 'home', 18, 10), c('summary', 'library', 16, 880, 358, 32), c('button#quest-skip', 'skip', 200, 1080)] } }] };
   const d = positionDiff(base, fell);
-  assert.equal(d[0].basis, 'drawn'); assert.deepEqual(d[0].moved.map(m => [m.k, m.dy]), [['summary|library|0', -20], ['button#quest-skip|skip|0', -20]], 'below the fold counts');
+  assert.equal(d[0].basis, 'drawn'); assert.deepEqual(d[0].moved.map(m => [m.k, m.dy]), [['summary|library|0', -20], ['button#quest-skip|0', -20]], 'below the fold counts');
   assert.ok(layoutChanged(d));
   const inView = positionDiff({ sizes: [{ size: '390x844m', controls: { list: base.sizes[0].controls.list } }] }, fell);
-  assert.equal(inView[0].basis, 'visible'); assert.deepEqual(inView[0].moved, []); assert.deepEqual(inView[0].added, ['button#quest-skip|skip|0']);
+  assert.equal(inView[0].basis, 'visible'); assert.deepEqual(inView[0].moved, []); assert.deepEqual(inView[0].added, ['button#quest-skip|0']);
   assert.ok(layoutChanged(inView), 'a control that came into view is a change too');
   assert.ok(!layoutChanged(positionDiff(base, base)));
+  assert.ok(layoutChanged(positionDiff({ sizes: [] }, fell)), 'a size the baseline lacks cannot pass');
+});
+
+test('RD-2 no layout change, everything shown: a control gone from a drawer fails, a move there is listed, an id is itself', () => {
+  const c = (el, name, x, y, w = 40, h = 32) => ({ el, name, x, y, w, h });
+  const first = [c('a', 'home', 18, 10)], all = [c('a', 'home', 18, 10), c('div', 'accent above', 30, 400), c('summary', 'Evolve', 30, 470, 300, 32), c('input#dice-seed', '2451', 30, 900)];
+  const base = { sizes: [{ size: '1512x860', controls: { list: first, drawn: first, all } }] };
+  const now = (list) => ({ sizes: [{ size: '1512x860', controls: { list: first, drawn: first, all: list } }] });
+  const lost = positionDiff(base, now([all[0], c('summary', 'Evolve', 30, 406, 300, 32), c('input#dice-seed', '1403', 30, 836)]));   // round 2: a knob's line lost its append
+  assert.deepEqual(lost[0].all.gone, ['div|accent above|0']); assert.equal(lost[0].all.moved.length, 2); assert.deepEqual(lost[0].all.added, [], 'a seed field with another value is the same field');
+  assert.ok(layoutChanged(lost));
+  const reflow = positionDiff(base, now([all[0], all[1], c('summary', 'Evolve', 30, 473, 300, 32), c('input#dice-seed', '9', 30, 900)]));
+  assert.equal(reflow[0].all.moved.length, 1); assert.ok(!layoutChanged(reflow), 'inside a drawer a move is listed, not a gate (the gate is the first load)');
 });
