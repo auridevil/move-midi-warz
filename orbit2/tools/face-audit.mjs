@@ -84,7 +84,10 @@ const PAGE = String.raw`(() => {
       const nodes = [...e.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim());
       if (!nodes.length && !field) continue;
       let box = null;
-      if (field) box = e.getBoundingClientRect();
+      if (field) {   // a field's text sits in its content box: its border (now a 3:1 edge) is not the text's background (RD-2)
+        const q = e.getBoundingClientRect(), c = getComputedStyle(e), side = (k) => parseFloat(c['border' + k + 'Width']) + parseFloat(c['padding' + k]);
+        box = { left: q.left + side('Left'), top: q.top + side('Top'), right: q.right - side('Right'), bottom: q.bottom - side('Bottom') };
+      }
       else for (const n of nodes) { const rg = document.createRange(); rg.selectNodeContents(n); for (const q of rg.getClientRects()) box = box ? { left: Math.min(box.left, q.left), top: Math.min(box.top, q.top), right: Math.max(box.right, q.right), bottom: Math.max(box.bottom, q.bottom) } : { left: q.left, top: q.top, right: q.right, bottom: q.bottom }; }
       if (!box) continue; const r = seen(e, box); if (!r) continue;
       const s = getComputedStyle(e), m = rgbOf(s.color); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;

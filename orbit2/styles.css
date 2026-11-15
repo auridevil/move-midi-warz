@@ -19,6 +19,9 @@
   /* three sizes: small (labels, hints), body (controls, text), large (titles, play); weight 300 only ≥ 40 px (none on
      the face yet: the peek and the sun numeral bring it), 500 for values, 400 everywhere else */
   --t-s: 11px; --t-m: 13px; --t-l: 15px;
+  /* under a control: the void, nearly opaque. Not a fill (it is the page's own dark): a planet passing behind a button
+     over the canvas must not light the button above the cap */
+  --plate: rgba(12, 9, 25, 0.9);
 }
 /* --ink: a lane's own colour where it marks a control (an outline, a knob arc, type): 80 % over the void stays under the
    cap for every lane hue (yellow 0.464) and over 4.5:1 for every one (purple 4.8:1). Declared where --lane is set, so it
@@ -55,7 +58,7 @@ b, strong, th { font-weight: 500; }   /* the browser's bold is 700: values and k
 .pill { padding: 5px 12px; border-radius: 8px; font: 400 12px var(--font-body); border: 1px solid var(--b); box-shadow: inset 0 0 0 1px var(--b); background: transparent; }
 .pill-off { color: var(--d); } .pill-on { color: var(--l); border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .pill-warn { color: var(--l); border-color: var(--l); border-style: dashed; }
 /* no fills on controls: type on a 1 px --b line; "on" is a 2 px --l outline (the second pixel inset, so nothing moves) */
-button, select, input { background: transparent; color: var(--l); border: 1px solid var(--b); border-radius: 8px; padding: 6px 12px; font: 400 var(--t-m) var(--font-body); }
+button, select, input { background: var(--plate); color: var(--l); border: 1px solid var(--b); border-radius: 8px; padding: 6px 12px; font: 400 var(--t-m) var(--font-body); }
 select, input[type=number] { border-radius: 8px; }
 select { background: var(--v); }   /* the open list draws on this: transparent would be the OS's white */
 /* the edge is two pixels: the border and one inset (A1 measures a 3 px band, and a 1 px line on a fractional pixel is
@@ -356,7 +359,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .pl-f select, .pl-f input { font-size: 13px; padding: 6px 10px; } .pl-f input { width: 64px; }
 .pl-grow { flex: 1 1 220px; } .pl-grow select { width: 100%; }
 .pl-kick { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; padding-bottom: 6px; }
-.seg { display: inline-flex; border: 1px solid var(--hairline); box-shadow: inset 0 0 0 1px var(--b); border-radius: 8px; overflow: hidden; }
+.seg { display: inline-flex; border: 1px solid var(--hairline); box-shadow: inset 0 0 0 1px var(--b); border-radius: 8px; overflow: hidden; background: var(--plate); }
 .seg button { border: none; border-radius: 0; padding: 6px 11px; font-size: 12px; background: transparent; color: var(--d); box-shadow: none; }
 .seg button + button { border-left: 1px solid var(--b); }
 .seg button:hover { color: var(--l); box-shadow: inset 0 0 0 1px var(--b); }
@@ -567,7 +570,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .seg-ui button.on { color: var(--l); box-shadow: inset 0 0 0 2px var(--l); }   /* inside a joined bar: both pixels inset */
 .chips { display: flex; flex-wrap: wrap; gap: 5px; }
 /* chips: --b line; a lane chip (--chip set by app.js) draws its line in the lane's ink; on = 2 px */
-.chips button, .tchip { --chip: var(--l); padding: 4px 11px; font-size: 11.5px; border-radius: 8px; background: transparent; color: var(--l); border: 1px solid var(--b); }
+.chips button, .tchip { --chip: var(--l); padding: 4px 11px; font-size: 11.5px; border-radius: 8px; background: var(--plate); color: var(--l); border: 1px solid var(--b); }
 .tchip { --o: color-mix(in srgb, var(--chip) 80%, var(--v)); border-color: var(--o); box-shadow: inset 0 0 0 1px var(--o); }
 .chips button:hover { border-color: var(--l); }
 .chips button.on { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .tchip.on { box-shadow: inset 0 0 0 2px var(--o); }   /* a lane chip on: three pixels of its ink */
