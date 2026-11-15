@@ -119,3 +119,26 @@ test('RD-2 no layout change, everything shown: a control gone from a drawer fail
   const reflow = positionDiff(base, now([all[0], all[1], c('summary', 'Evolve', 30, 473, 300, 32), c('input#dice-seed', '9', 30, 900)]));
   assert.equal(reflow[0].all.moved.length, 1); assert.ok(!layoutChanged(reflow), 'inside a drawer a move is listed, not a gate (the gate is the first load)');
 });
+
+// ---- RD-3 every control id of the RD-1 baseline ----
+test('RD-3 the RD-1 baseline\'s control ids: 62, each once, and every one still named in the page or the code that builds it', async () => {
+  const { readFileSync, readdirSync } = await import('node:fs');
+  const { baselineIds } = await import('../tools/face-audit.mjs');
+  const ids = baselineIds(JSON.parse(readFileSync(new URL('../docs/redesign/baseline/rd01-controls.json', import.meta.url), 'utf8')));
+  assert.equal(ids.length, 62); assert.equal(new Set(ids).size, ids.length);
+  for (const id of ['btn-play', 'btn-help', 'btn-connect', 'lib-name', 'btn-rec', 'exp-wav', 'exp-all', 'btn-midi-enable', 'voice-select', 'btn-mute', 'btn-random', 'btn-focus']) assert.ok(ids.includes(id), id);
+  // exists: an id="…" in the page, or one the app sets (a gauge or chip mounted where the page has its placeholder)
+  const src = [readFileSync(new URL('../index.html', import.meta.url), 'utf8'), ...readdirSync(new URL('../src/poly/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => readFileSync(new URL(`../src/poly/${f}`, import.meta.url), 'utf8'))].join('\n');
+  // (a groove chip: `groove-${g.key}` for each groove in grooves.js)
+  for (const id of ids) assert.ok(src.includes(`id="${id}"`) || src.includes(`'${id}'`) || (id.startsWith('groove-') && src.includes(`key: '${id.slice(7)}'`)), `${id} is still in the page`);
+});
+
+test('RD-3 face audit IDS: an id gone, or not drawn with its tab open, fails; drawn on the face or in a tab passes', async () => {
+  const { baselineIds } = await import('../tools/face-audit.mjs');
+  assert.deepEqual(baselineIds({ sizes: [{ controls: { list: [{ el: 'button#a' }, { el: 'summary' }], drawn: [{ el: 'button#a' }, { el: 'input#b' }], all: [{ el: 'select#c' }] } }, { controls: { list: [{ el: 'button#d' }] } }] }), ['c', 'a', 'b', 'd']);
+  const ok = [{ id: 'btn-play', exists: true, tab: null, drawn: true }, { id: 'exp-wav', exists: true, tab: 'export', drawn: true }];
+  const ids = (reach) => verdicts(report({ '1512x860': { reach } })).filter(f => f.test === 'IDS').map(f => f.what);
+  assert.deepEqual(ids(ok), []);
+  assert.match(ids([...ok, { id: 'btn-x', exists: false, drawn: false }])[0], /^1 RD-1 control ids gone or not drawn.*btn-x \(gone\)/);
+  assert.match(ids([...ok, { id: 'lib-name', exists: true, tab: 'pattern', drawn: false }])[0], /lib-name \(tab pattern\)/);
+});

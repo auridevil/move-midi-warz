@@ -70,7 +70,10 @@ select { background: var(--v); }   /* the open list draws on this: transparent w
 button, select, input { box-shadow: inset 0 0 0 1px var(--b); }
 button { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
 button:hover { border-color: var(--l); }
-button:disabled, button[aria-disabled=true] { opacity: .4; cursor: default; } button:disabled:hover, button[aria-disabled=true]:hover { border-color: var(--b); }
+/* RD-3: a control that can't act now says so by its shape (a dashed hairline, like a cell outside the loop), and its word
+   stays readable in the label grey (5.6:1): faded to 40 % it read 1.6:1 (a lane's own choke chip, once the taller sheet
+   drew it in view) */
+button:disabled, button[aria-disabled=true] { color: var(--d); border-style: dashed; box-shadow: none; cursor: default; } button:disabled:hover, button[aria-disabled=true]:hover { border-color: var(--b); }
 button.mini { padding: 2px 10px; font-size: var(--t-s); }
 button.primary { border-color: var(--l); padding: 8px 16px; font-size: var(--t-l); }
 button.primary:disabled, button.primary[aria-disabled=true] { border-color: var(--b); color: var(--d); }
@@ -258,7 +261,8 @@ body.chaos::before { display: none; }
   .col-left { grid-column: 1; grid-row: 1; min-height: 0; z-index: 3; display: flex; flex-direction: column; overflow: hidden; }
   #topbar { grid-column: 1 / -1; grid-row: 2; z-index: 3; align-content: center; min-height: 0; }
   .share-menu { top: auto; bottom: calc(100% + 6px); }   /* the strip sits on the bottom edge now: the menu opens upward */
-  body:has(#stage) .toast { bottom: calc(var(--console-h) + 12px); }   /* over the stage, never over the console */
+  /* over the stage, never over the console or a column: centred on the stage cell, no wider than it */
+  body:has(#stage) .toast { bottom: calc(var(--console-h) + 12px); left: calc(var(--col-l) + (100vw - var(--col-l) - var(--col-r)) / 2); max-width: min(560px, calc(100vw - var(--col-l) - var(--col-r) - 24px)); }
 }
 /* I1 the rings are played by hand: a touch on a ring never scrolls or zooms the page (app.js cancels it there); off the
    rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
@@ -347,6 +351,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .sheet { display: flex; flex-direction: column; min-height: 0; }
 .sheet-head { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px 8px; }
 .sheet-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+@media (min-width: 1101px) and (max-width: 1400px) { .sheet-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } }   /* the 380 px sheet: two rows of three, not five and a lonely sixth */
 .sheet-tabs [role=tab] { padding: 6px; flex: 1 1 auto; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); }
 .sheet-tabs [role=tab][aria-selected=true] { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* state needs a shape: the 2 px outline */
 .sheet-tabs [role=tab].quest-lit::after { content: ' ·'; }   /* the tab whose drawer the quest is played in */
@@ -635,7 +640,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .tchip { --o: color-mix(in srgb, var(--chip) 80%, var(--v)); border-color: var(--o); box-shadow: inset 0 0 0 1px var(--o); }
 .chips button:hover { border-color: var(--l); }
 .chips button.on { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); } .tchip.on { border-color: var(--o); box-shadow: inset 0 0 0 2px var(--o); }   /* a lane chip on: three pixels of its ink */
-.chips button:disabled { opacity: .25; cursor: default; }
+.chips button:disabled { color: var(--d); border-style: dashed; cursor: default; }   /* RD-3: as every disabled button (was faded to 25 %: 1.6:1) */
 .tchip::before { content: '○ '; } .tchip.on::before { content: '● '; }
 /* condition picker: "1 in N" + loop dots */
 .cond-pick { flex-basis: 100%; display: flex; flex-direction: column; gap: 6px; }

@@ -12,6 +12,7 @@
 //   --diff orbit2/docs/redesign/baseline/rd01-controls.json   every drawn control's centre (page px) vs the RD-1 baseline
 //                      (> 2 px = moved; moved, gone or new fails --assert)
 //   --root /tmp/x      audit another checkout (a `git archive` of a commit) with this tool
+//   --ids <report.json | none>   the control ids the IDS gate looks for (default: the RD-1 baseline's 62)
 //
 // What it measures, per size (methods in orbit2/docs/redesign/baselines.md):
 //   controls  every interactive element: in the DOM, drawn (`total`: checkVisibility, so not inside a closed drawer), and
@@ -22,8 +23,10 @@
 //   edges     every visible control: its 3 px inner band against the median of the 3 px band outside it (a knob: its
 //             arc box, 85th percentile), on a full screenshot
 //   light     the brightest control pixel (relative luminance) vs the brightest canvas pixel, stopped and playing
-//   scroll    document scrollHeight vs innerHeight, and every element that scrolls inside, in four states
-//   rings     scene.geo(): centre and outer radius (page px) in each state (default, every drawer open, focus mode, playing)
+//   scroll    document scrollHeight vs innerHeight, and every element that scrolls inside, in each state
+//   rings     scene.geo(): centre and outer radius (page px) in each state (default, every drawer open, each sheet tab
+//             open with its drawers, the sheet closed, every pill shown, focus mode, playing)
+//   reach     (RD-3) every control id of the RD-1 baseline: in the page, and drawn once __poly.reveal opened its tab
 //   frames    while playing: the page's own work per frame (its rAF callbacks summed by frame) p95 and frame interval p95;
 //             and per callback (a frame runs several, most near 0 ms)
 //   type      (RD-2) every drawn text's family / size / weight at first load and with everything shown: Major Mono only
@@ -77,9 +80,15 @@ const PAGE = String.raw`(() => {
   // drawn: Chrome keeps layout boxes for a closed <details>' content (content-visibility: hidden), so a box is not enough
   const shown = (e) => e.checkVisibility({ visibilityProperty: true, opacityProperty: true, contentVisibilityAuto: true }) && !e.closest('[inert]');
   const boxed = (e) => e.getClientRects().length > 0 && getComputedStyle(e).visibility !== 'hidden';   // the brief's count (it includes closed drawers)
-  // the part of a box the eye can see: clipped by the window and by every scrolling / clipping ancestor
+  // RD-3 a bar fixed along the bottom edge, the window's width, under half its height (the phone's docked sheet tabs):
+  // what scrolls under it is hidden there, so a box outside the bar ends at its top
+  let dockMemo = null, dockAt = -1e9;   // looked up once per pass, not once per box (a pass asks hundreds of times)
+  const docks = () => (performance.now() - dockAt < 200 ? dockMemo : (dockAt = performance.now(), dockMemo = findDocks()));
+  const findDocks = () => [...document.querySelectorAll('body *')].filter(d => { if (getComputedStyle(d).position !== 'fixed' || !shown(d)) return false; const q = d.getBoundingClientRect(); return q.left <= 0.5 && q.right >= innerWidth - 0.5 && q.bottom >= innerHeight - 0.5 && q.height < innerHeight / 2; });
+  // the part of a box the eye can see: clipped by the window, by every scrolling / clipping ancestor, and by a dock
   function seen(e, r = e.getBoundingClientRect()) {
     let x0 = Math.max(0, r.left), y0 = Math.max(0, r.top), x1 = Math.min(innerWidth, r.right), y1 = Math.min(innerHeight, r.bottom);
+    for (const d of docks()) if (!d.contains(e)) y1 = Math.min(y1, d.getBoundingClientRect().top);
     for (let a = e.parentElement; a && a !== document.documentElement; a = a.parentElement) {
       const s = getComputedStyle(a); if (s.overflowX === 'visible' && s.overflowY === 'visible') continue;
       const q = a.getBoundingClientRect(); x0 = Math.max(x0, q.left); y0 = Math.max(y0, q.top); x1 = Math.min(x1, q.right); y1 = Math.min(y1, q.bottom);
@@ -194,8 +203,24 @@ const PAGE = String.raw`(() => {
     }
   }
   const grow = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
+  // RD-3 the sheet: its tabs for the A6 / A7 states, and every pane at once (not a real state) where a pass must see every
+  // control there is (everything shown, type, hue). A page from before the sheet has none: nothing to do
+  const TABS = [...document.querySelectorAll('[role=tabpanel][data-sheet]')].map(p => p.dataset.sheet);
+  function allPanes(on) { if (!window.__poly?.setSheet) return; if (on) { document.getElementById('sheet-body').hidden = false; document.querySelectorAll('[role=tabpanel][data-sheet]').forEach(p => { p.hidden = false; }); } else { const s = __poly.sheet; __poly.setSheet(s.tab, s.open); } }
+  // RD-3 every control id of the RD-1 baseline: still in the page, and drawn once its sheet tab and drawers are open
+  // (__poly.reveal: what the app itself does to show a control). The view, the sheet and the drawers come back after
+  function reach(ids) {
+    const s = window.__poly.sheet, view = __poly.quests.view, open = [...document.querySelectorAll('details')].map(d => d.open), out = [];
+    __poly.setView('all');
+    for (const id of ids) {
+      const e = document.getElementById(id); if (!e) { out.push({ id, exists: false, drawn: false }); continue; }
+      __poly.reveal?.(e); out.push({ id, exists: true, tab: e.closest('[role=tabpanel]')?.dataset.sheet || null, drawn: shown(e) });
+    }
+    if (s) __poly.setSheet(s.tab, s.open); __poly.setView(view); document.querySelectorAll('details').forEach((d, i) => { d.open = open[i]; });
+    return out;
+  }
   window.__fa = {
-    controls, scroll, rings, types, hits, hues,
+    controls, scroll, rings, types, hits, hues, reach, allPanes, tabs: TABS,
     hideText(on) { let s = document.getElementById('fa-hide'); if (!s) { s = document.createElement('style'); s.id = 'fa-hide'; document.head.append(s); } s.textContent = '*, *::before, *::after { transition: none !important; }' + (on ? ' *, *::before, *::after, *::placeholder, *::marker { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' : ''); },
     async measure(bg64, full64) {
       const bg = await image(bg64), full = await image(full64), runs = texts(), text = [];
@@ -248,7 +273,7 @@ async function shot64(p) { const { result } = await p.send('Page.captureScreensh
 const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
 
 /** One size: a fresh browser (a first visit), first load measured, then the states. */
-export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'orbit2/index.html', shots = null, playSec = 6, root } = {}) {
+export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'orbit2/index.html', shots = null, playSec = 6, root, ids = null } = {}) {
   const [, w, h, m] = /^(\d+)x(\d+)(m?)$/.exec(size), mobile = !!m, b = await launch({ port, debugPort, ...(root ? { root } : {}) });
   try {
     const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)'); await settle(p, 400);
@@ -268,6 +293,17 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     await p.eval(`(() => { window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`); await state('drawers');
     if (shots) await p.shot(join(shots, `${size}-drawers.png`));
     await p.eval(`document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; })`);
+    // RD-3: each sheet tab open with every drawer in it open, the sheet closed, and what is on above the sheet (welcome,
+    // quest, jam take: RD-7's pills) all shown at once; then back as it was
+    const tabs = await p.eval('__fa.tabs');
+    if (tabs.length) {
+      await p.eval(`window.__faSheet = __poly.sheet; window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open)`);
+      for (const t of tabs) { await p.eval(`(() => { __poly.setSheet(${JSON.stringify(t)}, true); document.querySelectorAll('#pane-${t} details').forEach(d => { d.open = true; }); })()`); await state(`tab ${t}`); if (shots && t !== 'lane') await p.shot(join(shots, `${size}-tab-${t}.png`)); }
+      await p.eval('__poly.setSheet(__faSheet.tab, false)'); await state('closed'); if (shots) await p.shot(join(shots, `${size}-sheet-closed.png`));
+      await p.eval(`(() => { __poly.setSheet(__faSheet.tab, __faSheet.open); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); window.__faPills = ['welcome', 'quest', 'jam-panel'].map(id => document.getElementById(id).hidden); ['welcome', 'quest', 'jam-panel'].forEach(id => { document.getElementById(id).hidden = false; }); })()`);
+      await state('pills'); if (shots) await p.shot(join(shots, `${size}-pills.png`));
+      await p.eval(`['welcome', 'quest', 'jam-panel'].forEach((id, i) => { document.getElementById(id).hidden = window.__faPills[i]; })`);
+    }
     await p.eval('__poly.setFocusMode(true)'); await state('focus'); await p.eval('__poly.setFocusMode(false)');
     // playing: rings, frame time, light while the planets flash
     await play(p); await p.sleep(800); await state('playing');
@@ -280,16 +316,20 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     await play(p); await settle(p);
     // everything shown (the "everything" view, every drawer open): its drawn controls, so the diff also sees a control
     // that left (or came into) a drawer; then back as it was
-    await p.eval(`(() => { window.__faSimple = document.body.classList.contains('simple'); __poly.setView('all'); window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`); await settle(p, 250);
+    // (RD-3: every sheet pane shown at once, so a control in another tab counts too)
+    await p.eval(`(() => { window.__faSimple = document.body.classList.contains('simple'); __poly.setView('all'); window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); __fa.allPanes(true); })()`); await settle(p, 250);
     out.controls.all = (await p.eval('__fa.controls()')).drawn;
-    await p.eval(`(() => { document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); if (window.__faSimple) __poly.setView('simple'); })()`); await settle(p);
+    await p.eval(`(() => { __fa.allPanes(false); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); if (window.__faSimple) __poly.setView('simple'); })()`); await settle(p);
     // A5 worst case today: 6 lanes
     await p.eval('__poly.setLaneCount(6)'); await settle(p, 250); out.controls6 = { visible: (await p.eval('__fa.controls()')).visible, scroll: await p.eval('__fa.scroll()') };
     // RD-2 type and hue: the first load and everything there is (the "everything" view, every drawer open, a step's lock
     // panel, the help dialog)
-    await p.eval(`(() => { __poly.setView('all'); document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __poly.openHelp(); })()`); await settle(p, 250);
+    await p.eval(`(() => { __poly.setView('all'); document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __fa.allPanes(true); __poly.openHelp(); })()`); await settle(p, 250);
     out.type = typeCheck([...type0, ...await p.eval('__fa.types()')]);
     const hues = new Map(); for (const h of [...hue0, ...await p.eval('__fa.hues()')]) hues.set(`${h.el} ${h.prop} ${h.rgb}`, h); out.hues = [...hues.values()];
+    // RD-3: every control id of the RD-1 baseline still there and drawn once its tab is open
+    await p.eval(`(() => { document.getElementById('help').close(); __fa.allPanes(false); })()`); await settle(p);
+    if (ids?.length) out.reach = await p.eval(`__fa.reach(${JSON.stringify(ids)})`);
     out.errors = p.errors; return out;
   } finally { await b.close(); }
 }
@@ -393,6 +433,7 @@ export function verdicts(report, t = THRESHOLDS) {
   }
   for (const s of report.sizes) if (s.type?.fails.length) fails.push({ test: 'TYPE', size: s.size, what: `${s.type.fails.length} text kinds off the type rules: ${s.type.fails.slice(0, 4).map(f => f.what).join('; ')}` });
   for (const s of report.sizes) { const bad = (s.hits || []).filter(h => !h.ok); if (bad.length) fails.push({ test: 'HIT', size: s.size, what: `${bad.length} action words without a 40 px hit area: ${bad.map(h => `${h.el} ${h.w}×${h.h}`).join(', ')}` }); }
+  for (const s of report.sizes) { const bad = (s.reach || []).filter(r => !r.exists || !r.drawn); if (bad.length) fails.push({ test: 'IDS', size: s.size, what: `${bad.length} RD-1 control ids ${bad.some(r => !r.exists) ? 'gone or ' : ''}not drawn with their tab open: ${bad.map(r => `${r.id}${r.exists ? ` (tab ${r.tab})` : ' (gone)'}`).join(', ')}` }); }
   for (const s of report.sizes) if (s.hues?.length) fails.push({ test: 'HUE', size: s.size, what: `${s.hues.length} colours that are no lane's, or red off a recording: ${s.hues.slice(0, 5).map(h => `${h.el} ${h.prop} rgb(${h.rgb}) ${h.kind}`).join('; ')}` });
   return fails;
 }
@@ -406,6 +447,7 @@ export function summary(report) {
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);
     if (s.hits) L.push(`hit areas: ${s.hits.filter(h => h.ok).length} of ${s.hits.length} action words in view take 40 px${s.hits.some(h => !h.ok) ? ` (not: ${s.hits.filter(h => !h.ok).map(h => h.el).join(', ')})` : ''}`);
+    if (s.reach) { const by = {}; for (const r of s.reach) by[r.tab || 'face'] = (by[r.tab || 'face'] || 0) + 1; L.push(`RD-1 control ids: ${s.reach.filter(r => r.exists && r.drawn).length} of ${s.reach.length} drawn with their tab open (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ')})`); }
     if (s.type) L.push(`type: ${s.type.n} runs · ${Object.entries(s.type.sizes).map(([k, n]) => `${k} ×${n}`).join(', ')} · weights ${Object.entries(s.type.weights).map(([k, n]) => `${k} ×${n}`).join(', ')}${s.type.fails.length ? ` · ${s.type.fails.length} off the rules` : ''}`);
     for (const st of ['stopped', 'playing']) { const l = s.light[st]; if (l) L.push(`light ${st}: brightest control ${l.controlMax} (${l.controlMaxAt}) · brightest canvas ${l.canvasMax}${l.over ? ` · ${l.over.length} controls over ${THRESHOLDS.controlLum}` : ''}`); }
     for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
@@ -445,6 +487,13 @@ export function positionDiff(base, report, tol = 2) {
 }
 const moves = (s) => `${s.moved.length} moved > 2 px${s.moved.length ? ` (max ${Math.round(s.max * 10) / 10} px: ${s.moved.slice(0, 6).map(m => `${m.k.split('|').slice(0, 2).join(' ')} ${Math.round(m.dx * 10) / 10},${Math.round(m.dy * 10) / 10}`).join('; ')})` : ''}${s.gone.length ? ` · gone: ${s.gone.join(', ')}` : ''}${s.added.length ? ` · new: ${s.added.join(', ')}` : ''}`;
 export const diffSummary = (d) => d.map(s => s.missing ? `${s.size}: not in the baseline` : `${s.size}: ${s.n} controls (${s.basis}), ${moves(s)}${s.all ? `\n  everything shown: ${s.all.n} controls, ${moves(s.all)}` : ''}`).join('\n');
+/** RD-3: every control id in a baseline report (docs/redesign/baseline/rd01-controls.json: each size's first load, its
+ *  drawn controls and everything shown), once each, in page order of the first size that has it. */
+export function baselineIds(base) {
+  const ids = new Set();
+  for (const s of base.sizes) for (const k of ['all', 'drawn', 'list']) for (const c of s.controls[k] || []) { const i = c.el.indexOf('#'); if (i >= 0) ids.add(c.el.slice(i + 1)); }
+  return [...ids];
+}
 /** The diff fails --assert on a control that moved at first load, and on one that is gone or new there or with
  *  everything shown (a control that left the page, or came into it, changed the layout too). */
 export const layoutChanged = (d) => d.some(s => s.missing || s.moved?.length || s.gone?.length || s.added?.length || s.all?.gone.length || s.all?.added.length);   // a size the baseline lacks cannot pass
@@ -453,6 +502,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
   // --root: audit another checkout with this tool (e.g. a `git archive` of the phase start, for a baseline)
   const opt = { port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), path: arg('--path', 'orbit2/index.html'), shots: arg('--shots', null), playSec: +arg('--play', 6), root: arg('--root', undefined) };
+  // RD-3: the control ids to find (IDS): the RD-1 baseline's by default, another report with --ids, none with --ids none
+  { const f = arg('--ids', new URL('../docs/redesign/baseline/rd01-controls.json', import.meta.url).pathname); if (f !== 'none') { const { readFileSync } = await import('node:fs'); opt.ids = baselineIds(JSON.parse(readFileSync(f, 'utf8'))); } }
   const sizes = arg('--sizes', '1512x860,1512x982,1280x720,390x844m').split(',').filter(s => s && s !== 'none');   // none: --audio only
   const report = { date: new Date().toISOString(), path: opt.path, sizes: [] };
   for (const s of sizes) report.sizes.push(await auditSize(s, opt));

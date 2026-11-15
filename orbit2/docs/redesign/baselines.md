@@ -157,6 +157,16 @@ before the page's first script and seeded again, with the frames held (and hande
     new there fails `--assert` (round 2: a knob whose line lost its `appendChild` vanished from the Record drawer and
     every first-load gate passed), its moves are listed only (the gate is the first load); a control with an id is
     keyed by it (a seed field's name is its random value).
+- **RD-3 changes to the measuring:**
+  - **A6 / A7 states**: besides first load, every drawer open, focus mode and playing: each sheet tab open with every
+    drawer in it open, the sheet closed, and every pill shown at once (welcome, quest, jam panel). 12 states a size.
+  - "Everything shown", TYPE and HUE show **every sheet pane at once** (not a real state: so a control in another tab is
+    counted and coloured too); the layout diff against the RD-1 baseline no longer applies (the phase moves everything).
+  - **IDS**: every control id in `baseline/rd01-controls.json` (62) is in the page and drawn after `__poly.reveal(el)`
+    opened its tab and drawers (`--ids <report | none>`); one gone or undrawn fails `--assert`.
+  - a bar fixed along the bottom edge (the window's width, under half its height: the phone's docked sheet tabs) hides
+    what scrolls under it: `seen()` ends a box at its top, so text behind the dock is not judged against the dock.
+  - RD-3's gates: `--tests A1,A6,A7,IDS,TYPE,HIT,HUE --assert`.
 - **RD-2 holds** (the layout kept by hand until a later phase rebuilds the part; remove them with it): `.tstrip {
   margin-right: 2px }` (≥ 1101 px; RD-5's console); px line-heights where a text came onto 11 / 13 / 15 (15.2 px on
   `.pill`, `.seg button`, `.lane-tab`, `.slot-menu button`; 14.6 on `.seg-ui button`, `.chips button, .tchip`; 17.8 on
