@@ -31,6 +31,11 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `not all and (max-width: 1100px)`, the exact complement of the narrow test), the rings from the stage cell alone
   (`scene.js ringBox`), and every drawer in the one sheet (six tabs; `app.js setSheet / reveal`, the pure half in
   `src/poly/sheet.js`; a test opens a control's tab with `__poly.reveal(el)`).
+- Find and one Escape (RD-4): the sheet is closed on load; ⌘K or `/` opens it with one search field over every labelled
+  control (the index is read off the page each time: accessible name, tab · drawer · group, the synonyms table and the
+  actions in `src/poly/find.js`; Enter runs an action or shows and focuses the control; recents in
+  `midi-warz.orbit2.find`). One Esc order, `escStep` in `find.js`: popup → step locks → sheet → focus mode → give the
+  keys back; a click on empty canvas is one Esc and never edits (`__poly.escapeOnce / escState / findIndex / openFind`).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

@@ -350,9 +350,20 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 @media not all and (max-width: 1100px) { #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; } }   /* one lane a line */
 @media (max-width: 1100px) { .col-left { display: contents; } }
 /* RD-3 the sheet: six tabs over one scrolling body; the drawers inside are re-hosted as they were. Wide: the whole right
-   column under what is on (welcome, quest, jam take), down to the console, pinned open in this phase; closed it keeps only
+   column under what is on (welcome, quest, jam take), down to the console, closed on load (RD-4); closed it keeps only
    its tab row. Its body is the one place that scrolls inside (A6) */
 .sheet { display: flex; flex-direction: column; min-height: 0; }
+/* RD-4 find: one field over the tabs while the sheet is open; the list lies over the body (nothing under it moves), the
+   picked row has the 2 px --l outline state needs */
+.find { position: relative; flex: none; padding: 10px 12px 0; } .find[hidden] { display: none; }
+.find input { display: block; width: 100%; box-sizing: border-box; min-height: 40px; padding: 8px 10px; border: 1px solid var(--b); border-radius: 8px; background: transparent; color: var(--l); font: inherit; font-size: var(--t-m); line-height: 19.5px; }
+.find input::placeholder { color: var(--d); opacity: 1; }
+.find-list { position: absolute; left: 12px; right: 12px; top: 100%; z-index: 6; margin: 4px 0 0; padding: 4px; list-style: none; max-height: 320px; overflow-y: auto; border: 1px solid var(--b); border-radius: 8px; background: var(--v); }
+.find-list[hidden] { display: none; }
+.find-list li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 7px 8px; border-radius: 6px; color: var(--l); font-size: var(--t-m); line-height: 19.5px; cursor: pointer; }
+.find-list li[aria-selected=true] { box-shadow: inset 0 0 0 2px var(--l); }
+.find-list .find-where { flex: none; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--d); font-size: var(--t-s); line-height: 16.5px; }
+.find-list .find-none { color: var(--d); cursor: default; }
 .sheet-head { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px 8px; }
 .sheet-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
 @media not all and (max-width: 1100px) { @media (max-width: 1400px) { .sheet-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); } } }   /* the 380 px sheet: two rows of three, not five and a lonely sixth */
@@ -379,7 +390,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
   body:has(#sheet) .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; background: rgb(12, 9, 25); border-top: 1px solid var(--b); padding-bottom: env(safe-area-inset-bottom); }
   body:has(#sheet) .sheet.open { top: 0; }
   body:has(#sheet) { padding-bottom: calc(var(--dock) + 16px); }
-  .sheet-head { padding: 6px 8px; }
+  .sheet-head { padding: 6px 8px; } .find { padding: 8px 8px 0; } .find-list { left: 8px; right: 8px; }
   .sheet-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .sheet-tabs [role=tab] { padding: 6px 2px; min-width: 0; }
   .sheet-body { padding: 4px 12px calc(var(--dock) + 96px); }   /* the phone's floating play reaches --dock + 86 px up: the last row scrolls clear of it */

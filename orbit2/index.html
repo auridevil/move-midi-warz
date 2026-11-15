@@ -82,7 +82,8 @@
       <tr><th>hold 0</th><td>fill</td></tr>
       <tr><th>Alt+1–6</th><td>select a lane</td></tr>
       <tr><th>Cmd/Ctrl+Z</th><td>undo · with Shift: redo</td></tr>
-      <tr><th>Esc</th><td>close a popup, give the keys back to the page</td></tr>
+      <tr><th>⌘K or /</th><td>find any control by name or a synonym ("euclid", "stems", "7/8"); Enter runs or shows it · ↑↓ pick · empty = recent</td></tr>
+      <tr><th>Esc</th><td>one thing at a time: a popup, then the step locks, then the sheet, then focus mode, then gives the keys back to the page · a click on empty canvas does the same</td></tr>
       <tr><th>knobs</th><td>drag up / down (Shift = fine), scroll, or arrow keys · double-click = back to the start value</td></tr>
       <tr><th>rings</th><td>touch a ring to select its lane · tap a step tick = add a hit (stopped, you hear it at once; playing, on its turn) · tap a planet = on → accent → off · drag along a ring = rotate it · drag across it (or pinch) = its length · long-press or right-click a planet = its locks · each is one undo step · drop an audio file on a ring to load it as a sample</td></tr>
       <tr><th>steps</th><td>tap = off → on → accent → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only</td></tr>
@@ -108,9 +109,14 @@
       <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
     </div>
     <!-- RD-3 the sheet: every drawer and the old right column, re-hosted as they were (ids kept), in six tabs (Greta's
-         feature table). Pinned open on wide windows in this phase; on narrow ones a bottom sheet, full height when open.
-         Tall tabs scroll inside it; the page never does (app.js setSheet / reveal) -->
+         feature table). Closed on load (RD-4); on narrow windows a bottom sheet, full height when open. Tall tabs scroll
+         inside it; the page never does (app.js setSheet / reveal) -->
     <section id="sheet" class="sheet" aria-label="sheet">
+      <!-- RD-4 find: every control by its name, a synonym or what it does (⌘K or /; app.js openFind, src/poly/find.js) -->
+      <div id="find-box" class="find" role="search" hidden>
+        <input id="find" type="search" role="combobox" aria-expanded="false" aria-controls="find-list" aria-autocomplete="list" aria-label="find any control" placeholder="find any control · ⌘K or /" autocomplete="off" spellcheck="false" />
+        <ul id="find-list" class="find-list" role="listbox" aria-label="found" hidden></ul>
+      </div>
       <div class="sheet-head">
         <div class="sheet-tabs" role="tablist" aria-label="sheet">
           <button type="button" role="tab" id="tab-lane" aria-controls="pane-lane" aria-selected="true">lane</button>
