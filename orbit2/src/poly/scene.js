@@ -82,13 +82,18 @@ export function ringGeo(W, H, stage = null, lanes = 4) {
 }
 
 /**
- * The rings' stage on a wide window, in client px: the free box between the left panels (right edge `left`) and the
- * right column (left edge `right`), from `top` (under the header) to `bottom`, `gap` clear of everything. `legend` px
- * at its top belong to the legend; the rings get the rest. Never smaller than `min` px a side.
+ * RD-3 the rings' box from the stage cell alone (client px { x, y, w, h }, the grid's middle cell above the console) and
+ * the window width: nothing that opens, closes or wraps around the cell can move them (DECISION A7). The outer ring is
+ * D across: 12 % of a tall stage stays free (Greta: 630 px in the 716 px stage at 1512×860), never less than 630 when
+ * the cell has room, always 38 px clear of the columns and 12 px of the console and the top (568 px at 1280×720).
+ * Centred on the window when that ring fits there 12 px clear of both columns (x 756 at 1512×860), else in the cell
+ * (x 578 at 1280×720). Returns the square box ringGeo() sizes the rings by (outer ring = 0.85 R, R = side / 2 / 0.95).
  */
-export function stageBox({ left, right, top, bottom, legend = 0, gap = 16, min = 120 }) {
-  const x = left + gap, y = top + legend;
-  return { x, y, w: Math.max(min, right - gap - x), h: Math.max(min, bottom - gap - y) };
+export function ringBox(cell, winW, min = 120) {
+  const D = Math.round(Math.max(min, Math.min(cell.w - 76, cell.h - 24, Math.max(630, 0.88 * cell.h))));
+  const mid = winW / 2, cx = mid - D / 2 - 12 >= cell.x && mid + D / 2 + 12 <= cell.x + cell.w ? mid : cell.x + cell.w / 2;
+  const side = D * 0.95 / 0.85;
+  return { x: cx - side / 2, y: cell.y + cell.h / 2 - side / 2, w: side, h: side };
 }
 
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */

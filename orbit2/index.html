@@ -19,6 +19,8 @@
 </head>
 <body class="chaos">
   <canvas id="cv"></canvas>
+  <!-- RD-3: the stage cell of the grid (styles.css); the rings are measured from it alone (app.js layoutStage) -->
+  <div id="stage" aria-hidden="true"></div>
   <header class="bar chaos-bar" id="topbar">
     <h1><a href="../index.html" class="home">MIDI Warz</a> <span class="sub" title="a testing copy of orbits">orbits 2 · lab</span></h1>
     <!-- C1 transport strip: what you reach for while playing, in one place (on a phone play floats in the thumb zone) -->
@@ -68,8 +70,6 @@
       <button id="gift-back" class="small" type="button" title="Undo the link: your own beat comes back" hidden>back to my beat</button>
     </div>
   </dialog>
-  <!-- C5: which ring is which (filled by app.js); heads the stage on wide windows, sits under the canvas on narrow ones -->
-  <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
   <button id="focus-exit" class="small focus-exit" type="button" hidden title="Show the panels again (F or Esc)">exit focus</button>
   <!-- C3: every key and mouse trick in one place (button "?" or the ? key); the Move's buttons are in the Move panel -->
   <dialog id="help" class="help" aria-labelledby="help-title">
@@ -93,6 +93,10 @@
     <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm; 5/4 · 7/4 = fives and sevens over four beats, 4/3 = hemiola, ×6 = sixteenth triplets. Euclid spreads k hits evenly; rotation shifts them.</p>
     <p class="hint">On the orbits: each planet is a hit you set, as solid as its chance of playing (a faint one seldom plays). A ring that flashes round a planet: it came round and stayed silent (solid ring: its chance said no · dotted: the locked dice said no · dashed: its condition). Arcs round a planet: a 1:3-style condition, one arc per loop from the top; the solid arc is the loop it plays on, the white one the loop you are in now. The thin arc outside the rings: how far you are through the whole cycle, until everything lines up again.</p>
   </dialog>
+  <!-- RD-3: the left column of the grid (on narrow windows its children join the page's own stack) -->
+  <div class="col-left" id="col-left">
+  <!-- C5: which ring is which (filled by app.js); heads the left column on wide windows, sits under the canvas on narrow ones -->
+  <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
   <div class="hud-left" id="hud-left">
     <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
     <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
@@ -267,6 +271,7 @@
       </table>
     </details>
     <div class="stress-meter" id="stress-meter" hidden title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
+  </div>
   </div>
   <div class="hud">
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>

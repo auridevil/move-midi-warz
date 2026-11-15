@@ -20,7 +20,7 @@ import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
-import { createScene, stageBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
+import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
@@ -2370,26 +2370,15 @@ function announceChanges() {
   if (!changed.length || changed.length > 3) return;   // a whole new pattern (undo, slot) is not one value: stay quiet
   clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = changed.join(', '); }, 300);
 }
-// ---- layout: both columns start under the header (whose height changes: the strip and the status line wrap); the
-// left one ends above the bottom-left panel. The rings get the free stage between the columns, so no panel ever
-// covers them (wide windows only: narrower ones stack everything under a square canvas, see styles.css) ----
-const STAGE_GAP = 16, NARROW = matchMedia('(max-width: 1100px)');   // the CSS's own test, so both agree at a zoomed 1100.5 px
-function layoutHud() {
-  const top = Math.round($('topbar').getBoundingClientRect().bottom + 10), hl = $('hud-left'), lg = $('legend');
-  document.documentElement.style.setProperty('--hud-top', `${top}px`);   // where both columns start (CSS)
-  if (NARROW.matches || focusMode) { hl.style.bottom = lg.style.left = lg.style.top = lg.style.width = ''; scene.setStage(null); poke(); return; }
-  const keysOpen = $('keys-pop').open, stress = $('hud-bl').querySelector('.stress-meter');
-  // while the Move-controls popup is open it floats over the column; size the column against the closed panel
-  const blTop = keysOpen ? innerHeight - 18 - (stress?.offsetHeight || 0) - 8 - $('keys-pop').querySelector('summary').offsetHeight - 2 : $('hud-bl').getBoundingClientRect().top;
-  hl.style.bottom = `${Math.round(Math.max(16, innerHeight - blTop + 12))}px`;
-  const cols = { left: Math.max(hl.getBoundingClientRect().right, $('hud-bl').getBoundingClientRect().right), right: document.querySelector('.hud').getBoundingClientRect().left, top, bottom: innerHeight, gap: STAGE_GAP };
-  // the legend heads the stage; the rings get what is left under it
-  const head = stageBox(cols); lg.style.left = `${head.x}px`; lg.style.top = `${head.y}px`; lg.style.width = `${head.w}px`;
-  scene.setStage(stageBox({ ...cols, legend: lg.offsetHeight + 8 })); poke();
+// ---- RD-3 layout: a CSS grid (left column, stage, right column, console row; styles.css) places everything, and the
+// rings take their box from the stage cell alone (ringBox), so no drawer, sheet tab, wrap or focus mode moves them
+// (A7). Only the window size does: the cell observer and resize. Narrow windows stack under a square canvas instead ----
+const NARROW = matchMedia('(max-width: 1100px)');   // the CSS's own test, so both agree at a zoomed 1100.5 px
+function layoutStage() {
+  if (NARROW.matches) { scene.setStage(null); poke(); return; }
+  const c = $('stage').getBoundingClientRect(); scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth)); poke();
 }
-// the legend too: a longer voice name or a muted lane can wrap it onto more lines, and the rings must move down
-for (const id of ['topbar', 'hud-bl', 'legend']) new ResizeObserver(layoutHud).observe($(id)); addEventListener('resize', layoutHud);
-$('keys-pop').addEventListener('toggle', layoutHud);
+new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', layoutStage);
 addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !$('help').open) setFocusMode(false, true); });
 // ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
 // Coming back puts the focus and the page where they were. F gives the keys back to whoever owned them: a control the
@@ -2406,7 +2395,7 @@ function setFocusMode(on, esc = false) {
     if (a?.closest('header, .hud, #hud-left, #hud-bl')) a.blur();   // focus must not stay in a hidden panel
   }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
-  layoutHud(); poke();
+  poke();   // the rings stay where the stage cell puts them (A7: F on or off); a phone's canvas resize redraws itself
   if (!on && beforeFocus) {
     const { el, owned, y, cols } = beforeFocus; beforeFocus = null; scrollTo({ top: y, behavior: 'instant' });
     columns().forEach((c, i) => c.scrollTo({ top: cols[i], behavior: 'instant' }));
@@ -2420,4 +2409,4 @@ function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
 window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, get questLog() { return questLog; }, get setlog() { return slog; } };
-readout(); layoutHud(); scene.start();
+readout(); layoutStage(); scene.start();

@@ -242,6 +242,24 @@ body.launcher { display: grid; place-items: center; min-height: 100vh; }
 body.chaos { overflow: hidden; }
 body.chaos::before { display: none; }
 #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 0; }
+/* RD-3 the console grid (wide windows): left column, stage, right column, and the console row along the bottom (the top
+   strip lives there until RD-5's console replaces it). Every track is fixed, so nothing inside a column can resize the
+   stage cell, and the rings take their box from that cell alone (app.js layoutStage → scene.js ringBox): a drawer, a
+   wrapped legend, focus mode or the sheet never moves them (A7). The canvas stays the whole window behind the grid (the
+   void and the stars run under the columns); #stage is an empty, click-through box the rings are measured from.
+   1512×860: 300 · stage · 428 over 144 px; up to 1400 px wide, DECISION's 1280×720 rule: 256 · stage · 380 over 128 */
+:root { --col-l: 300px; --col-r: 428px; --console-h: 144px; }
+@media (max-width: 1400px) { :root { --col-l: 256px; --col-r: 380px; --console-h: 128px; } }
+#stage { display: none; }
+@media (min-width: 1101px) {
+  body.chaos:has(#stage) { display: grid; height: 100vh; height: 100dvh; overflow: hidden; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr) var(--console-h); }
+  #stage { display: block; grid-column: 2; grid-row: 1; pointer-events: none; }
+  /* a column is one cell that clips: what opens inside it scrolls there, it never grows a track */
+  .col-left { grid-column: 1; grid-row: 1; min-height: 0; z-index: 3; display: flex; flex-direction: column; overflow: hidden; }
+  #topbar { grid-column: 1 / -1; grid-row: 2; z-index: 3; align-content: center; min-height: 0; }
+  .share-menu { top: auto; bottom: calc(100% + 6px); }   /* the strip sits on the bottom edge now: the menu opens upward */
+  body:has(#stage) .toast { bottom: calc(var(--console-h) + 12px); }   /* over the stage, never over the console */
+}
 /* I1 the rings are played by hand: a touch on a ring never scrolls or zooms the page (app.js cancels it there); off the
    rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
 #cv { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
@@ -267,7 +285,8 @@ body.chaos::before { display: none; }
 .tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: var(--t-m); white-space: nowrap; min-width: 40.8px; } .tstrip-fx .g-label { display: none; }   /* 40.8: its old 3.4 em at 12 px */
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
-.hud { position: fixed; right: 24px; top: var(--hud-top, 74px); bottom: 18px; z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; width: 400px; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+.hud { z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
+@media (min-width: 1101px) { .hud { grid-column: 3; grid-row: 1; min-height: 0; padding: 16px 24px 12px 2px; } }   /* RD-3: the right column's grid cell */
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
@@ -319,10 +338,15 @@ body.chaos::before { display: none; }
 /* pages with a live full-screen canvas: blur would be recomputed every frame, so go opaque instead */
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(12, 9, 25, 0.88); }   /* the void, nearly opaque */
 .sliders label[title] { cursor: help; }
-.hud-left { position: fixed; left: 24px; top: var(--hud-top, 130px); z-index: 3; display: flex; flex-direction: column; gap: 10px; width: 340px; max-height: calc(100vh - 240px); overflow: auto; }
+/* RD-3: the left column (.col-left): the legend, the drawers (they scroll inside), the Move panel at the bottom */
+.hud-left { display: flex; flex-direction: column; gap: 10px; }
 .hud-left .drawer { width: 100%; }
-@media (max-width: 1100px) { .hud-left { position: static; width: auto; margin: 0 16px; } }
-.hud-bl { position: fixed; left: 24px; bottom: 18px; z-index: 3; width: 340px; }
+@media (min-width: 1101px) {
+  .hud-left { flex: 1 1 0; min-height: 0; padding-left: 24px; overflow: auto; }
+  .hud-bl { flex: none; max-height: 100%; overflow: auto; padding: 10px 0 12px 24px; }
+  #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; }   /* heads the left column, one lane a line (RD-5's lane list goes here) */
+}
+@media (max-width: 1100px) { .col-left { display: contents; } .hud-left { position: static; width: auto; margin: 0 16px; } }
 .hud-bl .drawer { width: 100%; }
 @media (max-width: 1100px) { .hud-bl { position: static; width: auto; margin: 0 16px 16px; } }
 
@@ -519,7 +543,6 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .lockpanel { border: 1px solid var(--b); border-radius: 10px; padding: 6px 8px; margin: 4px 0 8px; background: transparent; }
 .lock-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--l); gap: 8px; }
 .hud-bl .stress-meter { position: static; margin: 8px 0 0; }
-/* Orbits layout: the left column is placed by JS between the readout and the bottom-left panel (layoutHud) */
 #hud-left { max-height: none; }
 /* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
 .keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgb(18, 12, 40); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
@@ -685,7 +708,6 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .ring-legend li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 8px var(--lane); }
 .ring-legend li.sel { color: var(--ink); }
 .ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
-#legend { position: fixed; }   /* placed by layoutHud over the stage */
 @media (max-width: 1100px) { body:has(#hud-left) #legend { position: static; order: 1; margin: 8px 16px 12px; letter-spacing: .36em; } }
 /* RD-2 holds the in-flow legend's measure: in Major Mono it was this wide, so it wraps where it did (a phone: two lines)
    and nothing under it moves, until RD-10 turns it into a row of colour dots */

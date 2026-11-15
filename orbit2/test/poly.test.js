@@ -587,22 +587,23 @@ test('a restart forgets the step on screen, so the playhead lights nothing until
   assert.equal('shown' in m.lanes[0].toJSON(), false, 'not saved');
 });
 
-test('C1/C2: the rings and their glow stay inside the free box between the panels, under the legend', async () => {
-  const { ringGeo, stageBox } = await import('../src/poly/scene.js');
-  const fits = (g, s) => { const glow = g.ring(3) + 0.1 * g.R; return g.cx - glow >= s.x - 1e-9 && g.cx + glow <= s.x + s.w + 1e-9 && g.cy - glow >= s.y - 1e-9 && g.cy + glow <= s.y + s.h + 1e-9; };
-  // wide windows as layoutHud measures them: the header ends at 87 px (+10), the left column is 24 + 340 px, the right
-  // one 400 + 24 px; the legend wraps onto 1–4 lines of 18 px (+8) when voices are long or lanes muted
-  for (const [W, H] of [[1280, 720], [1440, 900], [1101, 640]]) {
-    const cols = { left: 24 + 340, right: W - 24 - 400, top: 97, bottom: H, gap: 16 };
-    for (const lines of [1, 2, 3, 4]) {
-      const legend = lines * 18 + 8, s = stageBox({ ...cols, legend }), g = ringGeo(W, H, s);
-      assert.deepEqual([s.x, s.y, s.x + s.w, s.y + s.h], [cols.left + 16, cols.top + legend, cols.right - 16, H - 16], 'clear of both columns, under the legend, 16 px off the bottom');
-      assert.ok(Math.abs(g.cx - (s.x + s.w / 2)) < 1e-9 && Math.abs(g.cy - (s.y + s.h / 2)) < 1e-9, 'centred in the stage');
-      assert.ok(fits(g, s), `fits ${W}×${H} with ${lines} legend line(s)`);
+test('RD-3 A7: the rings come from the stage cell alone (DECISION sizes), inside it, clear of the columns and the console', async () => {
+  const { ringGeo, ringBox } = await import('../src/poly/scene.js');
+  // the grid's stage cell (styles.css): between the columns, above the console row; centre and outer diameter as DECISION
+  // "The screen at 1512×860" and "How it degrades" set them (1512×982: taller and wider rings, in the cell's middle)
+  const cells = [[1512, 860, 300, 428, 144, 756, 630], [1280, 720, 256, 380, 128, 578, 568], [1512, 982, 300, 428, 144, 692, 708], [1101, 640, 256, 380, 128, 488.5, 389]];
+  for (const [W, H, l, r, con, cx, d] of cells) {
+    const cell = { x: l, y: 0, w: W - l - r, h: H - con };
+    for (const lanes of [4, 6]) {
+      const g = ringGeo(W, H, ringBox(cell, W), lanes);
+      assert.ok(Math.abs(g.cx - cx) < 0.5 && Math.abs(g.cy - cell.h / 2) < 0.5, `${W}×${H}: centre (${g.cx}, ${g.cy})`);
+      assert.ok(Math.abs(2 * g.outer - d) < 1, `${W}×${H}: outer ring ${2 * g.outer} across`);
+      const e = 1e-6; assert.ok(g.cx - g.outer >= cell.x + 12 - e && g.cx + g.outer <= cell.x + cell.w - 12 + e && g.cy - g.outer >= 12 - e && g.cy + g.outer <= cell.h - 12 + e,`${W}×${H}: 12 px clear of the columns, the top and the console`);
     }
   }
-  assert.ok(fits(ringGeo(1280, 720, { x: 10, y: 50, w: 900, h: 200 }), { x: 10, y: 50, w: 900, h: 200 }), 'a flat stage: sized by its height');
-  assert.deepEqual(stageBox({ left: 0, right: 100, top: 0, bottom: 50 }), { x: 16, y: 0, w: 120, h: 120 }, 'never smaller than 120 px a side');
+  // the same cell and window = the same rings, whatever else is on the page (the box takes nothing else)
+  assert.deepEqual(ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512), ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512));
+  assert.ok(ringBox({ x: 0, y: 0, w: 50, h: 50 }, 100).w >= 120 * 0.95 / 0.85 - 1e-9, 'never smaller than 120 px across');
   const free = ringGeo(390, 390); assert.equal(free.cx, 195); assert.equal(free.cy, 195);   // no stage: the phone's square canvas
 });
 
