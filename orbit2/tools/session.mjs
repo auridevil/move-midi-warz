@@ -32,8 +32,9 @@ export async function openSet(b, { path = 'orbit2/index.html', groove = 'techno'
   return p;
 }
 
-// a control in a closed drawer: the player opens the drawer first (as a hand would; that click is not what is measured)
-const center = (p, sel) => p.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; for (let d = e.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true; if (!e.checkVisibility()) return null; e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+// a control in a closed drawer or another sheet tab: the player opens the tab and the drawer first (as a hand would; that
+// click is not what is measured). RD-3: __poly.reveal does both (a page from before the sheet: the drawers only)
+const center = (p, sel) => p.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); if (!e) return null; if (__poly.reveal) __poly.reveal(e); else for (let d = e.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true; if (!e.checkVisibility()) return null; e.scrollIntoView({ block: 'nearest' }); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 const mouse = (p, type, x, y) => p.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
 
 /** Play one action on the page. Returns null, or why it was not played ('not on screen', 'already so'). */

@@ -286,7 +286,7 @@ body.chaos::before { display: none; }
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
 .hud { z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
-@media (min-width: 1101px) { .hud { grid-column: 3; grid-row: 1; min-height: 0; padding: 16px 24px 12px 2px; } }   /* RD-3: the right column's grid cell */
+@media (min-width: 1101px) { .hud { grid-column: 3; grid-row: 1; min-height: 0; padding: 16px 0 0; } }   /* RD-3: the right column's grid cell (the sheet runs to its edges) */
 .hud > * { flex: none; }
 .hud-row { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
@@ -338,17 +338,43 @@ body.chaos::before { display: none; }
 /* pages with a live full-screen canvas: blur would be recomputed every frame, so go opaque instead */
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(12, 9, 25, 0.88); }   /* the void, nearly opaque */
 .sliders label[title] { cursor: help; }
-/* RD-3: the left column (.col-left): the legend, the drawers (they scroll inside), the Move panel at the bottom */
-.hud-left { display: flex; flex-direction: column; gap: 10px; }
-.hud-left .drawer { width: 100%; }
+/* RD-3: the left column (.col-left) holds the legend (RD-5's lane list and the peek go here) */
+@media (min-width: 1101px) { #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; } }   /* one lane a line */
+@media (max-width: 1100px) { .col-left { display: contents; } }
+/* RD-3 the sheet: six tabs over one scrolling body; the drawers inside are re-hosted as they were. Wide: the whole right
+   column under what is on (welcome, quest, jam take), down to the console, pinned open in this phase; closed it keeps only
+   its tab row. Its body is the one place that scrolls inside (A6) */
+.sheet { display: flex; flex-direction: column; min-height: 0; }
+.sheet-head { display: flex; align-items: flex-start; gap: 6px; padding: 10px 12px 8px; }
+.sheet-tabs { flex: 1; display: flex; flex-wrap: wrap; gap: 4px; }
+.sheet-tabs [role=tab] { padding: 6px; flex: 1 1 auto; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); }
+.sheet-tabs [role=tab][aria-selected=true] { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* state needs a shape: the 2 px outline */
+.sheet-tabs [role=tab].quest-lit::after { content: ' ·'; }   /* the tab whose drawer the quest is played in */
+.sheet-x { flex: none; min-width: 32px; padding: 6px 0; } .sheet-x[hidden] { display: none; }
+.sheet-body { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 4px 24px 16px 12px; }
+.sheet-body[hidden], .pane[hidden] { display: none; }
+.pane { display: flex; flex-direction: column; gap: 10px; }
+.pane .drawer { width: 100%; }
+.pane .hud-row, .pane .lane-tabs, .pane .grooves-row .chips { justify-content: flex-start; }
+.pane .keys-pop[open] { width: auto; max-height: none; overflow: visible; box-shadow: none; z-index: auto; }   /* a drawer here, not a popup over a column */
 @media (min-width: 1101px) {
-  .hud-left { flex: 1 1 0; min-height: 0; padding-left: 24px; overflow: auto; }
-  .hud-bl { flex: none; max-height: 100%; overflow: auto; padding: 10px 0 12px 24px; }
-  #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; }   /* heads the left column, one lane a line (RD-5's lane list goes here) */
+  .hud { overflow: hidden; }
+  .hud > :not(.sheet) { margin-right: 24px; }
+  .hud > .sheet { align-self: stretch; flex: 1 1 0; min-height: min(340px, 100%); border: 1px solid var(--b); border-width: 1px 0 0 1px; border-radius: 12px 0 0 0; background: rgba(12, 9, 25, 0.88); }
+  .hud > .sheet:not(.open) { flex: none; min-height: 0; }
 }
-@media (max-width: 1100px) { .col-left { display: contents; } .hud-left { position: static; width: auto; margin: 0 16px; } }
-.hud-bl .drawer { width: 100%; }
-@media (max-width: 1100px) { .hud-bl { position: static; width: auto; margin: 0 16px 16px; } }
+/* narrow windows: a bottom sheet. Closed, its tab row docks along the bottom edge; open, it takes the full height and
+   scrolls inside (the floating play stays over it on a phone, so the body keeps room under its last row) */
+:root { --dock: 46px; } @media (pointer: coarse) { :root { --dock: 58px; } }
+@media (max-width: 1100px) {
+  body:has(#sheet) .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; background: rgb(12, 9, 25); border-top: 1px solid var(--b); padding-bottom: env(safe-area-inset-bottom); }
+  body:has(#sheet) .sheet.open { top: 0; }
+  body:has(#sheet) { padding-bottom: calc(var(--dock) + 16px); }
+  .sheet-head { padding: 6px 8px; }
+  .sheet-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .sheet-tabs [role=tab] { padding: 6px 2px; min-width: 0; }
+  .sheet-body { padding: 4px 12px 104px; }
+}
 
 /* arc gauges: small arc, value and label stacked underneath */
 .gauges { display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px 6px; margin: 4px 0; }
@@ -542,28 +568,26 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .stepsui .st.sel { outline: 2px solid var(--l); outline-offset: 1px; }
 .lockpanel { border: 1px solid var(--b); border-radius: 10px; padding: 6px 8px; margin: 4px 0 8px; background: transparent; }
 .lock-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--l); gap: 8px; }
-.hud-bl .stress-meter { position: static; margin: 8px 0 0; }
-#hud-left { max-height: none; }
+.pane .stress-meter { position: static; margin: 8px 0 0; }
 /* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
 .keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgb(18, 12, 40); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
 .keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgb(18, 12, 40); padding: 8px 0; }
 .keys-pop .pop-x { display: none; float: right; font-size: 11px; color: var(--muted); letter-spacing: .1em; }
 .keys-pop[open] .pop-x { display: inline; }
 .gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
-@media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } #hud-left { top: auto !important; bottom: auto !important; } }
-/* Orbits on narrow windows: stack everything in one scrolling column over the fixed canvas */
+@media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } }
+/* Orbits on narrow windows: header, the square canvas, the legend and what is on stack in one scrolling page; the sheet
+   is the bottom sheet (above). .hud makes no layer here, so the sheet's own z-index sits over the page */
 @media (max-width: 1100px) {
-  body:has(#hud-left) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
-  body:has(#hud-left) .chaos-bar { order: 0; } body:has(#hud-left) .hud { order: 2; }
-  body:has(#hud-left) #hud-left { order: 3; } body:has(#hud-left) #hud-bl { order: 4; }
-  body:has(#hud-left) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; }
-  body:has(#hud-left) .hud-row { justify-content: flex-start; }
-  body:has(#hud-left) #hud-left { position: static; width: auto; margin: 0 16px 12px; overflow: visible; }
-  body:has(#hud-left) #hud-bl { position: static; width: auto; margin: 0 16px 16px; }
+  body:has(#sheet) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
+  body:has(#sheet) .chaos-bar { order: 0; } body:has(#sheet) .hud { order: 2; }
+  body:has(#sheet) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; z-index: auto; }
+  body:has(#sheet) .hud-row { justify-content: flex-start; }
+  body.sheet-open:has(#sheet) .chaos-bar { z-index: auto; }   /* open full height: the sheet covers the header, the phone's play (z 8) still floats over it */
   /* the orbits get their own square stage right under the header, so the rings are visible and tappable instead of
      sitting behind the panels; the scene measures the canvas box, not the viewport */
-  body:has(#hud-left) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
-  body:has(#hud-left) .lane-tabs, body:has(#hud-left) .grooves-row .chips { justify-content: flex-start; }
+  body:has(#sheet) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
+  body:has(#sheet) .lane-tabs, body:has(#sheet) .grooves-row .chips { justify-content: flex-start; }
 }
 /* lane buttons: the touch way to pick a ring */
 .lane-tabs { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
@@ -572,24 +596,24 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .lane-tab.sel { border-color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); }   /* its own ink, not the shared on rule's grey */
 /* phone */
 @media (max-width: 760px) {
-  body:has(#hud-left) .hud, body:has(#hud-left) #hud-left, body:has(#hud-left) #hud-bl { margin-left: 12px; margin-right: 12px; }
+  body:has(#sheet) .hud { margin-left: 12px; margin-right: 12px; }
   /* C1 on a phone: play floats in the thumb zone, over the bottom of the screen; the page scrolls clear of it */
   /* the 64 px ring, centred where the 76 px disc was (right / bottom + 6 px), on the void so what it floats over stays behind it */
-  body:has(#hud-left) #btn-play { position: fixed; right: 22px; bottom: max(22px, calc(env(safe-area-inset-bottom) + 6px)); z-index: 8; width: 64px; height: 64px; min-width: 0; padding: 0; border-radius: 50%; font-size: var(--t-m); line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: var(--v); box-shadow: inset 0 0 0 2px var(--l), 0 0 0 4px rgba(12,9,25,.85); }
-  body:has(#hud-left) { padding-bottom: 104px; }
+  body:has(#sheet) #btn-play { position: fixed; right: 22px; bottom: calc(var(--dock) + max(22px, calc(env(safe-area-inset-bottom) + 6px))); z-index: 8; width: 64px; height: 64px; min-width: 0; padding: 0; border-radius: 50%; font-size: var(--t-m); line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: var(--v); box-shadow: inset 0 0 0 2px var(--l), 0 0 0 4px rgba(12,9,25,.85); }
+  body:has(#sheet) { padding-bottom: calc(104px + var(--dock)); }   /* RD-3: play floats over the docked tab row */
   /* the button lives in the header: the header's layer must sit over the panels (flex items with a z-index, like
      .hud, stack even when static), or a panel scrolled under the button takes its taps */
-  body:has(#hud-left) .chaos-bar { z-index: 8; }
-  body:has(#hud-left) .toast { bottom: 108px; }
-  body:has(#hud-left) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
-  body:has(#hud-left) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
-  body:has(#hud-left) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
-  body:has(#hud-left) .gauge svg { width: 40px; height: 40px; } body:has(#hud-left) .gauge { padding: 4px 0 5px; }
-  body:has(#hud-left) .gtable.keys { font-size: 11px; line-height: 16.5px; letter-spacing: normal; }   /* it was 11 px here already: no hold to make */
-  body:has(#hud-left) .welcome { flex-wrap: wrap; justify-content: flex-start; }
-  body:has(#hud-left) .welcome > span { flex-basis: 100%; }
-  body:has(#hud-left) .welcome > button, body:has(#hud-left) .grooves-row .chips > button, body:has(#hud-left) .row-ctl:has(#exp-roll) > button, body:has(#hud-left) #btn-solo { min-height: 44px; }
-  body:has(#hud-left) .welcome .wb-x { min-width: 40px; margin-left: auto; }
+  body:has(#sheet) .chaos-bar { z-index: 8; }
+  body:has(#sheet) .toast { bottom: calc(108px + var(--dock)); }
+  body:has(#sheet) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
+  body:has(#sheet) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
+  body:has(#sheet) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
+  body:has(#sheet) .gauge svg { width: 40px; height: 40px; } body:has(#sheet) .gauge { padding: 4px 0 5px; }
+  body:has(#sheet) .gtable.keys { font-size: 11px; line-height: 16.5px; letter-spacing: normal; }   /* it was 11 px here already: no hold to make */
+  body:has(#sheet) .welcome { flex-wrap: wrap; justify-content: flex-start; }
+  body:has(#sheet) .welcome > span { flex-basis: 100%; }
+  body:has(#sheet) .welcome > button, body:has(#sheet) .grooves-row .chips > button, body:has(#sheet) .row-ctl:has(#exp-roll) > button, body:has(#sheet) #btn-solo { min-height: 44px; }
+  body:has(#sheet) .welcome .wb-x { min-width: 40px; margin-left: auto; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
 .stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto -2px -15px -2px; font-size: 11px; line-height: 1.2; color: var(--d); text-align: center; white-space: nowrap; overflow: hidden; }
@@ -677,18 +701,18 @@ button.small { padding: 3px 10px; font-size: 11px; }
 /* T2 / T7 target sizes on the Orbits page: drawer headers, buttons and steps 32 px (steps 32 wide too), 44 px for a
    finger, all in this one block. A phone too narrow for 8 steps of 44 px (8 × 44 + gaps = 373 px of strip) lays them
    out 4 in a row. */
-body:has(#hud-left) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
-body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 32px; }
+body:has(#sheet) .drawer > summary { min-height: 32px; padding: 7px 0; line-height: 18px; }
+body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) input:not([type=file]) { min-height: 32px; }
 @media (pointer: coarse) {
-  body:has(#hud-left) .drawer > summary { min-height: 44px; padding: 13px 0; }
-  body:has(#hud-left) button:not(.st), body:has(#hud-left) select, body:has(#hud-left) input:not([type=file]) { min-height: 44px; }
-  body:has(#hud-left) .stepsui .st { height: 44px; }
-  body:has(#hud-left) .ldot { width: 44px; height: 44px; }
+  body:has(#sheet) .drawer > summary { min-height: 44px; padding: 13px 0; }
+  body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) input:not([type=file]) { min-height: 44px; }
+  body:has(#sheet) .stepsui .st { height: 44px; }
+  body:has(#sheet) .ldot { width: 44px; height: 44px; }
   .slot-menu [data-act=close] { min-width: 44px; }
 }
-@media (pointer: coarse) and (max-width: 440px) { body:has(#hud-left) .stepsui { grid-template-columns: repeat(4, 1fr); } }
+@media (pointer: coarse) and (max-width: 440px) { body:has(#sheet) .stepsui { grid-template-columns: repeat(4, 1fr); } }
 /* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */
-@media (pointer: coarse) { body:has(#hud-left) .stepsui:not(.short) { grid-template-columns: repeat(8, 1fr); } }
+@media (pointer: coarse) { body:has(#sheet) .stepsui:not(.short) { grid-template-columns: repeat(8, 1fr); } }
 /* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
    (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
 body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }
@@ -708,21 +732,21 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .ring-legend li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 8px var(--lane); }
 .ring-legend li.sel { color: var(--ink); }
 .ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
-@media (max-width: 1100px) { body:has(#hud-left) #legend { position: static; order: 1; margin: 8px 16px 12px; letter-spacing: .36em; } }
+@media (max-width: 1100px) { body:has(#sheet) #legend { position: static; order: 1; margin: 8px 16px 12px; letter-spacing: .36em; } }
 /* RD-2 holds the in-flow legend's measure: in Major Mono it was this wide, so it wraps where it did (a phone: two lines)
    and nothing under it moves, until RD-10 turns it into a row of colour dots */
 /* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps
    its floating play (no Space bar there to stop the music) */
 body.focus-mode #topbar { visibility: hidden; }
-body.focus-mode .hud, body.focus-mode #hud-left, body.focus-mode #hud-bl, body.focus-mode #legend { display: none !important; }
-@media (max-width: 760px) { body.focus-mode:has(#hud-left) #btn-play { visibility: visible; } }
-body.focus-mode:has(#hud-left) { overflow: hidden; padding-bottom: 0; }
-body.focus-mode:has(#hud-left) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }
+body.focus-mode .hud, body.focus-mode #col-left, body.focus-mode #legend { display: none !important; }
+@media (max-width: 760px) { body.focus-mode:has(#sheet) #btn-play { visibility: visible; } }
+body.focus-mode:has(#sheet) { overflow: hidden; padding-bottom: 0; }
+body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 .focus-exit { position: fixed; top: 12px; right: 12px; z-index: 9; opacity: .55; }
 .focus-exit:hover, .focus-exit:focus-visible { opacity: 1; }
 .focus-exit[hidden] { display: none; }
 /* a finger: the strip's small buttons 44 px wide too, and the exit pill plain to see (there's no hover) */
-@media (pointer: coarse) { body:has(#hud-left) #transport button, body:has(#hud-left) .focus-exit { min-width: 44px; } .focus-exit { opacity: .9; } }
+@media (pointer: coarse) { body:has(#sheet) #transport button, body:has(#sheet) .focus-exit { min-width: 44px; } .focus-exit { opacity: .9; } }
 /* I2 / I3 share in the transport: the link in one tap, … opens the other ways under it */
 .share-wrap { position: relative; display: inline-flex; }
 .share-wrap #btn-share { border-top-right-radius: 0; border-bottom-right-radius: 0; }

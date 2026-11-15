@@ -43,7 +43,7 @@ test('RD-2 type: the font link has no unused weight, and the canvas captions are
 test('RD-2 red means recording: of the buttons in the record shape (.rec-btn), only the recorders turn red when armed', () => {
   const RECORDERS = ['btn-rec', 'btn-mic'];   // arm record, the mic take; evolve and locked dice record nothing
   const shaped = [...html.matchAll(/<button id="([\w-]+)" class="[^"]*\brec-btn\b/g)].map(m => m[1]);
-  assert.deepEqual(shaped.filter(id => RECORDERS.includes(id)), RECORDERS);
+  assert.deepEqual(shaped.filter(id => RECORDERS.includes(id)).sort(), [...RECORDERS].sort());   // document order: the sheet's tabs (RD-3)
   const plain = css.match(/^([^{\n]*)\{ color: var\(--l\); border-color: var\(--l\); box-shadow: inset 0 0 0 1px var\(--l\); \}/m);
   assert.ok(plain, 'the plain "on" for a record-shaped button');
   for (const id of shaped.filter(id => !RECORDERS.includes(id))) assert.ok(plain[1].includes(`#${id}.armed`), `${id} armed is the plain on, not red`);

@@ -640,8 +640,9 @@ const LOCK_UI = {
   nudge: { label: 'nudge', min: -50, max: 50, fmt: v => (v > 0 ? '+' : '') + v + '%', say: v => v ? `${Math.abs(v)}% of a step ${v > 0 ? 'late' : 'early'}` : 'on the grid', base: () => 0 },
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
-// opening it brings the panel into view: in the scrolling lane panel the slice picker can open below its edge
-function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) $('lockpanel').scrollIntoView({ block: 'nearest' }); }
+// opening it brings the panel into view: in the scrolling sheet the slice picker can open below its edge, and a planet's
+// long-press opens it from the rings while another tab shows (RD-3: reveal opens the lane tab)
+function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). */
 function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); readout(); }
@@ -1861,6 +1862,8 @@ function renderQuest() {
   const d = q && !quests.hidden ? hintDrawer(quests.done) : null;
   for (const el of document.querySelectorAll('.quest-lit')) if (el.id !== d) { el.classList.remove('quest-lit'); el.querySelector('summary')?.removeAttribute('data-quest'); }
   if (d) { const el = $(d); el.classList.add('quest-lit'); el.querySelector('summary')?.setAttribute('data-quest', `quest ${QUESTS.indexOf(q) + 1}`); }
+  // RD-3: and the sheet tab that holds it, so a quest in a closed tab still points the way
+  const pane = d && $(d).closest('[role=tabpanel]'); if (pane) $(pane.getAttribute('aria-labelledby')).classList.add('quest-lit');
 }
 /** I7: simple = plain words on the lane knobs and the advanced drawers tucked away (.adv); all = everything. */
 function setView(v) {
@@ -1913,7 +1916,7 @@ function saveSetup(name) {
   const e = lib.save(name, setupData()); if (!e) { $('lib-name').setCustomValidity('browser storage is full: delete a setup or a sample'); $('lib-name').reportValidity(); return; }
   libCurrent = e.id; $('lib-name').value = e.name; renderLib(); flash('btn-save', 'saved ✓'); readout();
 }
-function openLib(focus) { $('lib-drawer').open = true; $('lib-drawer').scrollIntoView({ block: 'nearest' }); if (focus) { const n = $('lib-name'); n.value = lib.get(libCurrent)?.name || lib.nextName(); n.focus(); n.select(); } }
+function openLib(focus) { reveal('lib-drawer').scrollIntoView({ block: 'nearest' }); if (focus) { const n = $('lib-name'); n.value = lib.get(libCurrent)?.name || lib.nextName(); n.focus(); n.select(); } }
 const ago = (t) => { const s = (Date.now() - t) / 1000; return s < 60 ? 'just now' : s < 3600 ? `${Math.round(s / 60)} min ago` : s < 86400 ? `${Math.round(s / 3600)} h ago` : new Date(t).toLocaleDateString(); };
 function renderLib() {
   const el = $('lib-list'); el.innerHTML = ''; const items = lib.list();
@@ -2379,6 +2382,43 @@ function layoutStage() {
   const c = $('stage').getBoundingClientRect(); scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth)); poke();
 }
 new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', layoutStage);
+// ---- RD-3 the sheet: every drawer and the old right column in one place, six tabs (Greta's feature table). Pinned open
+// on wide windows in this phase (RD-4 closes it by default and adds the Esc order); on narrow ones it is a bottom sheet,
+// docked closed, full height once a tab is tapped (a phone never opens it by itself on load). The tab and the wide
+// open / closed are remembered. reveal(el): the tab that holds el, open, and every drawer round it, so whatever shows a
+// control (a lock editor, the library, a test) finds it drawn ----
+const SHEET_KEY = 'midi-warz.orbit2.sheet', SHEET_TABS = ['lane', 'pattern', 'groove', 'perform', 'export', 'setup'];
+const sheetSaved = (() => { try { return JSON.parse(localStorage.getItem(SHEET_KEY) || 'null') || {}; } catch { return {}; } })();
+const sheet = { tab: SHEET_TABS.includes(sheetSaved.tab) ? sheetSaved.tab : 'lane', open: false };
+const sheetDefault = () => !NARROW.matches && sheetSaved.open !== false;
+function setSheet(tab, open, user = false) {
+  const was = sheet.tab; sheet.tab = SHEET_TABS.includes(tab) ? tab : sheet.tab; sheet.open = !!open;
+  $('sheet').classList.toggle('open', sheet.open); document.body.classList.toggle('sheet-open', sheet.open);
+  for (const t of SHEET_TABS) { const b = $('tab-' + t), on = t === sheet.tab; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('pane-' + t).hidden = !on; }
+  const body = $('sheet-body'); if (!sheet.open && body.contains(document.activeElement)) $('tab-' + sheet.tab).focus({ preventScroll: true });   // focus never stays in a hidden body
+  body.hidden = !sheet.open; $('sheet-x').hidden = !sheet.open;
+  if (sheet.open && sheet.tab === 'lane' && was !== 'lane') renderAuto();   // the automation strip measures its canvas: drawn again once it has a size
+  // a tab that is one drawer (perform, export) shows it open: the tab was the click, a closed header would ask for another
+  const one = $('pane-' + sheet.tab).querySelectorAll(':scope > details'); if (user && sheet.open && one.length === 1 && $('pane-' + sheet.tab).children.length === 1) one[0].open = true;
+  if (user) { if (!NARROW.matches) sheetSaved.open = sheet.open; sheetSaved.tab = sheet.tab; try { localStorage.setItem(SHEET_KEY, JSON.stringify(sheetSaved)); } catch {} }
+}
+function reveal(el) {
+  el = typeof el === 'string' ? $(el) : el; if (!el) return null;
+  const pane = el.closest('[role=tabpanel]'); if (pane && (!sheet.open || sheet.tab !== pane.dataset.sheet)) setSheet(pane.dataset.sheet, true);
+  for (let d = el.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true;
+  return el;
+}
+// a tab opens its pane (a phone: the tapped tab of an open sheet closes it again); ← → Home End move along the tabs
+for (const t of SHEET_TABS) $('tab-' + t).onclick = () => setSheet(t, !(NARROW.matches && sheet.open && sheet.tab === t), true);
+$('sheet-x').onclick = () => setSheet(sheet.tab, false, true);
+$('sheet').querySelector('[role=tablist]').addEventListener('keydown', (e) => {
+  const f = SHEET_TABS.indexOf(document.activeElement?.id?.slice(4)), k = f >= 0 ? f : SHEET_TABS.indexOf(sheet.tab), d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+  if (!d && e.key !== 'Home' && e.key !== 'End') return; e.preventDefault(); e.stopPropagation();
+  const t = SHEET_TABS[e.key === 'Home' ? 0 : e.key === 'End' ? SHEET_TABS.length - 1 : (k + d + SHEET_TABS.length) % SHEET_TABS.length];
+  setSheet(t, sheet.open || !NARROW.matches, true); $('tab-' + t).focus();
+});
+NARROW.addEventListener('change', () => setSheet(sheet.tab, sheetDefault()));
+setSheet(sheet.tab, sheetDefault());
 addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop').open = false; if (focusMode && !$('help').open) setFocusMode(false, true); });
 // ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
 // Coming back puts the focus and the page where they were. F gives the keys back to whoever owned them: a control the
@@ -2386,13 +2426,13 @@ addEventListener('keydown', (e) => { if (e.key !== 'Escape') return; $('keys-pop
 // plays. Esc gives them to the page, as it does everywhere. The scroll comes back too: the page's (on a phone it shrinks
 // to the window while the panels are hidden) and each column's (a hidden column forgets it).
 let focusMode = false, beforeFocus = null;
-const columns = () => [$('hud-left'), document.querySelector('.hud')];
+const columns = () => [$('sheet-body')];
 function setFocusMode(on, esc = false) {
   if (on === focusMode) return;
   if (on) {   // before the panels go: hidden, the page is one window tall and scrollY already 0
     const a = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY, cols: columns().map(c => c.scrollTop) };
-    if (a?.closest('header, .hud, #hud-left, #hud-bl')) a.blur();   // focus must not stay in a hidden panel
+    if (a?.closest('header, .hud, #col-left')) a.blur();   // focus must not stay in a hidden panel
   }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
   poke();   // the rings stay where the stage cell puts them (A7: F on or off); a phone's canvas resize redraws itself
@@ -2408,5 +2448,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 addEventListener('pointerdown', (e) => { const p = $('keys-pop'); if (p.open && !p.contains(e.target)) p.open = false; });
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, get questLog() { return questLog; }, get setlog() { return slog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, get questLog() { return questLog; }, get setlog() { return slog; } };
 readout(); layoutStage(); scene.start();

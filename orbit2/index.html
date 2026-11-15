@@ -51,7 +51,7 @@
       <button id="btn-connect" class="primary" type="button">Connect Move</button>
       <span id="live-mode"></span>
     </div>
-    <!-- C2 one status line; the per-lane and sound rows live in "nerd stats" (left column) -->
+    <!-- C2 one status line; the per-lane and sound rows live in "nerd stats" (Sheet → setup) -->
     <p id="readout" class="readout"></p>
   </header>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
@@ -71,7 +71,7 @@
     </div>
   </dialog>
   <button id="focus-exit" class="small focus-exit" type="button" hidden title="Show the panels again (F or Esc)">exit focus</button>
-  <!-- C3: every key and mouse trick in one place (button "?" or the ? key); the Move's buttons are in the Move panel -->
+  <!-- C3: every key and mouse trick in one place (button "?" or the ? key); the Move's buttons are in Sheet → setup → Move -->
   <dialog id="help" class="help" aria-labelledby="help-title">
     <form method="dialog" class="help-head"><h2 id="help-title">keys &amp; mouse</h2><button class="small" aria-label="close help">close</button></form>
     <table class="gtable keys">
@@ -97,182 +97,8 @@
   <div class="col-left" id="col-left">
   <!-- C5: which ring is which (filled by app.js); heads the left column on wide windows, sits under the canvas on narrow ones -->
   <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
-  <div class="hud-left" id="hud-left">
-    <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
-    <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
-    <details class="drawer">
-      <summary>Humanize</summary>
-      <div id="global-sliders" class="gauges two"></div>
-    </details>
-    <details class="drawer" id="lib-drawer">
-      <summary>Library</summary>
-      <form id="lib-form" class="lib-form" autocomplete="off" title="A setup is everything: patterns, voices, kit, sounds, locks, conditions, samples, humanize, tempo, volume and dice. Same name = overwrite.">
-        <input id="lib-name" type="text" maxlength="40" placeholder="name this setup" aria-label="setup name" />
-        <button class="primary small" type="submit">save</button>
-      </form>
-      <div id="lib-list" class="lib-list"></div>
-    </details>
-    <details class="drawer" id="patterns-drawer">
-      <summary>Patterns</summary>
-      <div class="ctl meter-ctl" title="Time signature of this pattern"><span class="ctl-lbl">meter</span><div id="meter"></div></div>
-      <div class="ctl meter-ctl" title="How many lanes this pattern has"><span class="ctl-lbl">lanes</span><div id="lane-count"></div></div>
-      <div id="slots" class="slots" role="group" aria-label="pattern slots"></div>
-      <div id="slot-menu" class="slot-menu" role="group" aria-labelledby="slot-menu-title" hidden>
-        <span id="slot-menu-title" class="slot-menu-title"></span>
-        <button type="button" data-act="save">save here</button>
-        <button type="button" data-act="chain">add to chain</button>
-        <button type="button" data-act="erase">erase</button>
-        <button type="button" data-act="close" aria-label="close the slot menu">×</button>
-      </div>
-      <p id="chain-info" class="hint tight"></p>
-      <div class="row-ctl">
-        <div class="ctl" title="When a recalled slot takes over"><span class="ctl-lbl">switch</span><div id="slot-switch"></div></div>
-        <span id="slot-restart"></span>
-        <div id="slot-gauges" class="gauges one"></div>
-        <button id="chain-stop" class="small">stop chain</button>
-      </div>
-      <p class="hint tight">Tap = load · long-press = save, chain, erase.</p>
-    </details>
-    <details class="drawer">
-      <summary>Record</summary>
-      <div class="row-ctl">
-        <button id="btn-rec" class="rec-btn">● arm record</button>
-        <div class="ctl" title="Record knob moves into the selected lane while armed and playing"><span class="ctl-lbl">knobs</span><div id="rec-knobs"></div></div>
-        <div id="rec-gauges" class="gauges one"></div>
-      </div>
-      <div class="row-ctl">
-        <div class="ctl" title="Where a hit is filed"><span class="ctl-lbl">quantize</span><div id="rec-quant"></div></div>
-        <div id="rec-pitch"></div>
-      </div>
-      <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents. Knobs on touch or latch: a knob you hold (a gauge, or a Move knob you touch) records its moves into the selected lane.</p>
-    </details>
-    <details class="drawer" id="evolve-drawer">
-      <summary>Evolve</summary>
-      <div class="row-ctl">
-        <button id="btn-evolve" class="rec-btn">◌ evolve</button>
-        <button id="evo-home-now" class="small" title="Use the current pattern as home">home = now</button>
-        </div>
-      <div class="row-ctl"><div class="ctl" title="What evolve may change"><span class="ctl-lbl">touches</span><div id="evo-scope"></div></div>
-      </div>
-      <div id="evo-gauges" class="gauges three"></div>
-      <div id="evo-more" class="gauges two"></div>
-      <details class="evo-sub adv"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
-      <div id="evo-lanes" class="evo-lanes"></div>
-      <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady. Gravity pulls them back home.</p>
-      <div class="row-ctl"><div class="ctl" title="A hit on one lane makes another lane more likely to play its next step"><span class="ctl-lbl">coupling</span><div id="couple-mode"></div></div></div>
-      <div id="couple-gauges" class="gauges two"></div>
-      <div id="couple-matrix" class="couple-matrix" hidden></div>
-    </details>
-    <details class="drawer adv" id="dice-drawer">
-      <summary>Dice</summary>
-      <div class="row-ctl">
-        <button id="btn-dice" class="rec-btn">○ dice free</button>
-        <label title="Same seed = same groove">seed <input type="number" id="dice-seed" min="1" max="99999" /></label>
-        <button id="dice-roll" class="small" title="New seed">re-roll</button>
-        <button id="dice-make" class="small" title="Make the groove randomize rolls from this seed (Shift+click: the wild roll)">pattern from seed</button>
-      </div>
-      <div id="dice-gauges" class="gauges three"></div>
-      <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
-    </details>
-    <details class="drawer" id="export-drawer">
-      <summary>Export</summary>
-      <div class="row-ctl">
-        <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
-      </div>
-      <div class="row-ctl">
-        <div class="ctl"><span class="ctl-lbl">length</span><div id="exp-len"></div></div>
-        <div id="exp-loop"></div>
-      </div>
-      <div class="row-ctl">
-        <div class="ctl" title="export format of every WAV rendered here: bit depth and sample rate (jam takes record at the page's own rate, 16-bit)"><span class="ctl-lbl">format</span><div id="exp-bits"></div><div id="exp-rate"></div></div>
-        <div id="exp-ring"></div>
-      </div>
-      <div class="row-ctl">
-        <div id="exp-dry"></div>
-        <div id="exp-print-fx"></div>
-      </div>
-      <div class="row-ctl">
-        <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
-        <div class="ctl"><span class="ctl-lbl">MIDI tracks</span><div id="exp-midi-one"></div></div>
-      </div>
-      <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + their raw sum (no master compressor), all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button><button id="exp-kit" title="each lane's sound as one-shot WAVs (an accent and a normal hit, up to 2 s, no delay) in a zip: load them into Simpler or a Drum Rack">⤓ kit (.zip)</button><button id="exp-all" class="primary" title="the mix WAV, the stems and the MIDI of this pattern in one zip, all from one roll of the dice, every file named after one base">⤓ export all (.zip)</button><button id="exp-roll" class="small" title="Free dice: WAV, stems and MIDI share one roll of the probability and humanize dice, so they hold the same hits. New roll = a different take.">new roll</button></div>
-      <p id="exp-status" class="hint tight"></p>
-    </details>
-    <details class="drawer adv" id="midi-drawer">
-      <summary>MIDI</summary>
-      <button id="btn-midi-enable">enable MIDI ports</button>
-      <div id="midi-body" hidden>
-        <div class="ctl-col"><span class="ctl-lbl">send notes &amp; clock to</span><div id="midi-out"></div></div>
-        <div class="row-ctl"><div id="midi-clock-out"></div></div>
-        <span class="ctl-lbl">note · channel per lane, gate, out offset</span>
-        <div id="midi-lanes" class="gauges midi-gauges"></div>
-        <div class="row-ctl"><span id="midi-lat-auto"></span></div>
-        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
-        <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
-        <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
-      </div>
-      <span class="ctl-lbl wrap" title="MIDI export: automation as CC on each lane's track">automation in the MIDI export: CC per parameter (0 = left out)</span>
-      <div id="midi-cc" class="gauges midi-gauges"></div>
-      <p id="midi-status" class="hint tight"></p>
-    </details>
-    <details class="drawer" id="settings-drawer">
-      <summary>Settings</summary>
-      <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
-      <p id="engine-note" class="hint tight"></p>
-      <div class="row-ctl">
-        <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
-        <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
-      </div>
-    </details>
-    <details class="drawer nerd" id="nerd">
-      <summary>Nerd stats</summary>
-      <pre id="nerd-stats" class="nerd-stats"></pre>
-    </details>
   </div>
-  <div class="hud-bl" id="hud-bl">
-    <details class="drawer keys-pop" id="keys-pop">
-      <summary>Move <span class="pop-x" aria-hidden="true">esc ×</span></summary>
-      <table class="gtable keys">
-        <tr><th>Live mode</th><td>on by default (the chip by Connect Move): pads play, Capture and Delete need Shift or a hold. Off = editing: pads toggle steps, every button acts at once</td></tr>
-        <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
-        <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
-        <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
-        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
-        <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
-        <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
-        <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
-        <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
-        <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
-        <tr><th>Hold Layout</th><td>fill</td></tr>
-        <tr><th>Shift + Layout</th><td>fill for the next whole bar, hands free (Layout lights cyan while it waits) · again before it starts = cancel</td></tr>
-        <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
-        <tr><th>Delete</th><td>clear the lane · live mode: Shift + Delete, or hold it 0.6 s (it blinks red first; a shorter tap does nothing)</td></tr>
-        <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
-        <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
-        <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
-        <tr><th>Play</th><td>start / stop</td></tr>
-        <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
-        <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
-        <tr><th>Knob 8</th><td>master tempo</td></tr>
-        <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
-        <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
-        <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (blue until then; a slot coming in on that line gets it too) · mutes are never undo steps</td></tr>
-        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
-        <tr><th>−</th><td>evolve on/off</td></tr>
-        <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
-        <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
-        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · in touch mode a touch writes even while the knob holds still (rest a finger on it only to record its value) · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
-        <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
-        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
-        <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
-        <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
-        <tr><th>Hold +</th><td>delay throw: the whole mix into a dotted-eighth delay, feedback up, while held; let go and the echoes ring out</td></tr>
-        <tr><th>Volume</th><td>volume</td></tr>
-      </table>
-    </details>
-    <div class="stress-meter" id="stress-meter" hidden title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
-  </div>
-  </div>
+  <!-- RD-3: the right column: what is on (welcome, quest, jam take: RD-7's pills go here), then the one sheet -->
   <div class="hud">
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
     <!-- I6: the quest you are on (filled by app.js renderQuest) -->
@@ -281,15 +107,23 @@
       <div class="jam-bar"><i id="jam-fill"></i></div>
       <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
     </div>
-    <div class="hud-row">
-      <button id="btn-init" title="Empty pattern: the same number of lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
-      <button id="btn-save" title="Save this setup under a name (library)">save</button>
-      <button id="btn-load" title="Open the library of saved setups">load</button>
-      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
-      <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
-      <button id="btn-clear">clear lane</button>
-    </div>
-    <div class="hud-row grooves-row"><span class="hint">grooves</span><div id="grooves" class="chips" role="group" aria-label="starter grooves"></div></div>
+    <!-- RD-3 the sheet: every drawer and the old right column, re-hosted as they were (ids kept), in six tabs (Greta's
+         feature table). Pinned open on wide windows in this phase; on narrow ones a bottom sheet, full height when open.
+         Tall tabs scroll inside it; the page never does (app.js setSheet / reveal) -->
+    <section id="sheet" class="sheet" aria-label="sheet">
+      <div class="sheet-head">
+        <div class="sheet-tabs" role="tablist" aria-label="sheet">
+          <button type="button" role="tab" id="tab-lane" aria-controls="pane-lane" aria-selected="true">lane</button>
+          <button type="button" role="tab" id="tab-pattern" aria-controls="pane-pattern" aria-selected="false" tabindex="-1">pattern</button>
+          <button type="button" role="tab" id="tab-groove" aria-controls="pane-groove" aria-selected="false" tabindex="-1">groove</button>
+          <button type="button" role="tab" id="tab-perform" aria-controls="pane-perform" aria-selected="false" tabindex="-1">perform</button>
+          <button type="button" role="tab" id="tab-export" aria-controls="pane-export" aria-selected="false" tabindex="-1">export</button>
+          <button type="button" role="tab" id="tab-setup" aria-controls="pane-setup" aria-selected="false" tabindex="-1">setup</button>
+        </div>
+        <button type="button" id="sheet-x" class="small sheet-x" aria-label="close the sheet" title="Close the sheet (a tab opens it again)">×</button>
+      </div>
+      <div id="sheet-body" class="sheet-body">
+        <div role="tabpanel" id="pane-lane" class="pane" data-sheet="lane" aria-labelledby="tab-lane">
     <div id="lane-tabs" class="lane-tabs" role="group" aria-label="lane"></div>
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
@@ -358,6 +192,199 @@
       <p id="gen-scale-note" class="hint tight"></p>
       </div>
     </details>
+        </div>
+        <div role="tabpanel" id="pane-pattern" class="pane" data-sheet="pattern" aria-labelledby="tab-pattern" hidden>
+    <div class="hud-row">
+      <button id="btn-init" title="Empty pattern: the same number of lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
+      <button id="btn-save" title="Save this setup under a name (library)">save</button>
+      <button id="btn-load" title="Open the library of saved setups">load</button>
+      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
+      <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
+      <button id="btn-clear">clear lane</button>
+    </div>
+    <div class="hud-row grooves-row"><span class="hint">grooves</span><div id="grooves" class="chips" role="group" aria-label="starter grooves"></div></div>
+    <details class="drawer" id="patterns-drawer">
+      <summary>Patterns</summary>
+      <div class="ctl meter-ctl" title="Time signature of this pattern"><span class="ctl-lbl">meter</span><div id="meter"></div></div>
+      <div class="ctl meter-ctl" title="How many lanes this pattern has"><span class="ctl-lbl">lanes</span><div id="lane-count"></div></div>
+      <div id="slots" class="slots" role="group" aria-label="pattern slots"></div>
+      <div id="slot-menu" class="slot-menu" role="group" aria-labelledby="slot-menu-title" hidden>
+        <span id="slot-menu-title" class="slot-menu-title"></span>
+        <button type="button" data-act="save">save here</button>
+        <button type="button" data-act="chain">add to chain</button>
+        <button type="button" data-act="erase">erase</button>
+        <button type="button" data-act="close" aria-label="close the slot menu">×</button>
+      </div>
+      <p id="chain-info" class="hint tight"></p>
+      <div class="row-ctl">
+        <div class="ctl" title="When a recalled slot takes over"><span class="ctl-lbl">switch</span><div id="slot-switch"></div></div>
+        <span id="slot-restart"></span>
+        <div id="slot-gauges" class="gauges one"></div>
+        <button id="chain-stop" class="small">stop chain</button>
+      </div>
+      <p class="hint tight">Tap = load · long-press = save, chain, erase.</p>
+    </details>
+    <details class="drawer" id="lib-drawer">
+      <summary>Library</summary>
+      <form id="lib-form" class="lib-form" autocomplete="off" title="A setup is everything: patterns, voices, kit, sounds, locks, conditions, samples, humanize, tempo, volume and dice. Same name = overwrite.">
+        <input id="lib-name" type="text" maxlength="40" placeholder="name this setup" aria-label="setup name" />
+        <button class="primary small" type="submit">save</button>
+      </form>
+      <div id="lib-list" class="lib-list"></div>
+    </details>
+        </div>
+        <div role="tabpanel" id="pane-groove" class="pane" data-sheet="groove" aria-labelledby="tab-groove" hidden>
+    <details class="drawer">
+      <summary>Humanize</summary>
+      <div id="global-sliders" class="gauges two"></div>
+    </details>
+    <details class="drawer" id="evolve-drawer">
+      <summary>Evolve</summary>
+      <div class="row-ctl">
+        <button id="btn-evolve" class="rec-btn">◌ evolve</button>
+        <button id="evo-home-now" class="small" title="Use the current pattern as home">home = now</button>
+        </div>
+      <div class="row-ctl"><div class="ctl" title="What evolve may change"><span class="ctl-lbl">touches</span><div id="evo-scope"></div></div>
+      </div>
+      <div id="evo-gauges" class="gauges three"></div>
+      <div id="evo-more" class="gauges two"></div>
+      <details class="evo-sub adv"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
+      <div id="evo-lanes" class="evo-lanes"></div>
+      <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady. Gravity pulls them back home.</p>
+      <div class="row-ctl"><div class="ctl" title="A hit on one lane makes another lane more likely to play its next step"><span class="ctl-lbl">coupling</span><div id="couple-mode"></div></div></div>
+      <div id="couple-gauges" class="gauges two"></div>
+      <div id="couple-matrix" class="couple-matrix" hidden></div>
+    </details>
+    <details class="drawer adv" id="dice-drawer">
+      <summary>Dice</summary>
+      <div class="row-ctl">
+        <button id="btn-dice" class="rec-btn">○ dice free</button>
+        <label title="Same seed = same groove">seed <input type="number" id="dice-seed" min="1" max="99999" /></label>
+        <button id="dice-roll" class="small" title="New seed">re-roll</button>
+        <button id="dice-make" class="small" title="Make the groove randomize rolls from this seed (Shift+click: the wild roll)">pattern from seed</button>
+      </div>
+      <div id="dice-gauges" class="gauges three"></div>
+      <p class="hint tight">Locked: probability, humanize, evolve and randomize follow the seed, so the groove repeats exactly.</p>
+    </details>
+        </div>
+        <div role="tabpanel" id="pane-perform" class="pane" data-sheet="perform" aria-labelledby="tab-perform" hidden>
+    <details class="drawer">
+      <summary>Record</summary>
+      <div class="row-ctl">
+        <button id="btn-rec" class="rec-btn">● arm record</button>
+        <div class="ctl" title="Record knob moves into the selected lane while armed and playing"><span class="ctl-lbl">knobs</span><div id="rec-knobs"></div></div>
+        <div id="rec-gauges" class="gauges one"></div>
+      </div>
+      <div class="row-ctl">
+        <div class="ctl" title="Where a hit is filed"><span class="ctl-lbl">quantize</span><div id="rec-quant"></div></div>
+        <div id="rec-pitch"></div>
+      </div>
+      <p class="hint tight">Armed + playing: the pads play their row's lane and write the nearest step. Hard hits = accents. Knobs on touch or latch: a knob you hold (a gauge, or a Move knob you touch) records its moves into the selected lane.</p>
+    </details>
+        </div>
+        <div role="tabpanel" id="pane-export" class="pane" data-sheet="export" aria-labelledby="tab-export" hidden>
+    <details class="drawer" id="export-drawer">
+      <summary>Export</summary>
+      <div class="row-ctl">
+        <button id="exp-link" title="Copy a link with this pattern in it">copy share link</button>
+      </div>
+      <div class="row-ctl">
+        <div class="ctl"><span class="ctl-lbl">length</span><div id="exp-len"></div></div>
+        <div id="exp-loop"></div>
+      </div>
+      <div class="row-ctl">
+        <div class="ctl" title="export format of every WAV rendered here: bit depth and sample rate (jam takes record at the page's own rate, 16-bit)"><span class="ctl-lbl">format</span><div id="exp-bits"></div><div id="exp-rate"></div></div>
+        <div id="exp-ring"></div>
+      </div>
+      <div class="row-ctl">
+        <div id="exp-dry"></div>
+        <div id="exp-print-fx"></div>
+      </div>
+      <div class="row-ctl">
+        <div class="ctl" title="MIDI only: the running chain, each slot its bars"><span class="ctl-lbl">MIDI of</span><div id="exp-what"></div></div>
+        <div class="ctl"><span class="ctl-lbl">MIDI tracks</span><div id="exp-midi-one"></div></div>
+      </div>
+      <div class="row-ctl"><button id="exp-wav" title="the mix">⤓ WAV</button><button id="exp-stems" title="one WAV per lane + their raw sum (no master compressor), all the same length, in a zip: drop them into a DAW">⤓ stems (.zip)</button><button id="exp-mid">⤓ MIDI</button><button id="exp-kit" title="each lane's sound as one-shot WAVs (an accent and a normal hit, up to 2 s, no delay) in a zip: load them into Simpler or a Drum Rack">⤓ kit (.zip)</button><button id="exp-all" class="primary" title="the mix WAV, the stems and the MIDI of this pattern in one zip, all from one roll of the dice, every file named after one base">⤓ export all (.zip)</button><button id="exp-roll" class="small" title="Free dice: WAV, stems and MIDI share one roll of the probability and humanize dice, so they hold the same hits. New roll = a different take.">new roll</button></div>
+      <p id="exp-status" class="hint tight"></p>
+    </details>
+        </div>
+        <div role="tabpanel" id="pane-setup" class="pane" data-sheet="setup" aria-labelledby="tab-setup" hidden>
+    <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
+    <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
+    <details class="drawer" id="settings-drawer">
+      <summary>Settings</summary>
+      <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
+      <p id="engine-note" class="hint tight"></p>
+      <div class="row-ctl">
+        <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
+        <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
+      </div>
+    </details>
+    <details class="drawer adv" id="midi-drawer">
+      <summary>MIDI</summary>
+      <button id="btn-midi-enable">enable MIDI ports</button>
+      <div id="midi-body" hidden>
+        <div class="ctl-col"><span class="ctl-lbl">send notes &amp; clock to</span><div id="midi-out"></div></div>
+        <div class="row-ctl"><div id="midi-clock-out"></div></div>
+        <span class="ctl-lbl">note · channel per lane, gate, out offset</span>
+        <div id="midi-lanes" class="gauges midi-gauges"></div>
+        <div class="row-ctl"><span id="midi-lat-auto"></span></div>
+        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
+        <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
+        <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
+      </div>
+      <span class="ctl-lbl wrap" title="MIDI export: automation as CC on each lane's track">automation in the MIDI export: CC per parameter (0 = left out)</span>
+      <div id="midi-cc" class="gauges midi-gauges"></div>
+      <p id="midi-status" class="hint tight"></p>
+    </details>
+    <details class="drawer keys-pop" id="keys-pop">
+      <summary>Move <span class="pop-x" aria-hidden="true">esc ×</span></summary>
+      <table class="gtable keys">
+        <tr><th>Live mode</th><td>on by default (the chip by Connect Move): pads play, Capture and Delete need Shift or a hold. Off = editing: pads toggle steps, every button acts at once</td></tr>
+        <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
+        <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
+        <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
+        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
+        <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
+        <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
+        <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
+        <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
+        <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
+        <tr><th>Hold Layout</th><td>fill</td></tr>
+        <tr><th>Shift + Layout</th><td>fill for the next whole bar, hands free (Layout lights cyan while it waits) · again before it starts = cancel</td></tr>
+        <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
+        <tr><th>Delete</th><td>clear the lane · live mode: Shift + Delete, or hold it 0.6 s (it blinks red first; a shorter tap does nothing)</td></tr>
+        <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
+        <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
+        <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
+        <tr><th>Play</th><td>start / stop</td></tr>
+        <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
+        <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
+        <tr><th>Knob 8</th><td>master tempo</td></tr>
+        <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
+        <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
+        <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (blue until then; a slot coming in on that line gets it too) · mutes are never undo steps</td></tr>
+        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
+        <tr><th>−</th><td>evolve on/off</td></tr>
+        <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
+        <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
+        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · in touch mode a touch writes even while the knob holds still (rest a finger on it only to record its value) · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
+        <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
+        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
+        <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
+        <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
+        <tr><th>Hold +</th><td>delay throw: the whole mix into a dotted-eighth delay, feedback up, while held; let go and the echoes ring out</td></tr>
+        <tr><th>Volume</th><td>volume</td></tr>
+      </table>
+    </details>
+    <details class="drawer nerd" id="nerd">
+      <summary>Nerd stats</summary>
+      <pre id="nerd-stats" class="nerd-stats"></pre>
+    </details>
+    <div class="stress-meter" id="stress-meter" hidden title="stress: frame time (visuals) and audio headroom (how far ahead of the speakers notes are scheduled); the visuals shed sparks and stars when it climbs"><span class="stress-lbl">stress</span><div class="stressbar"><i id="stress"></i></div><span id="stress-val" class="stress-val">0% · calm</span></div>
+        </div>
+      </div>
+    </section>
   </div>
   <script src="../vendor/tone/Tone.js"></script>
   <script type="module" src="./src/poly/app.js"></script>
