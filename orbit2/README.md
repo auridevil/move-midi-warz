@@ -21,8 +21,14 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `node tools/smoke.mjs` loads `orbit2/index.html` with the other pages.
 - After editing `orbit2/src/poly/dsp-core.js`, regenerate the worklet: `node orbit2/tools/build-worklet.mjs`.
 - Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
+- The look (RD-2, dark room): tokens at the top of `styles.css` (`--v` void, `--l` light = the 0.475 luminance cap,
+  `--d` labels, `--b` edges, `--track` knob tracks, `--rec` record red, `--ink` a lane's colour on a control; sizes
+  `--t-s / --t-m / --t-l`). No fills on controls ("on" = 2 px `--l`), lane hues the only hues, red only for record,
+  Major Mono only in the wordmark. `test/dark-room.test.js` holds the token maths.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll, A7 rings, A9
-  audio; `--assert` fails on a threshold; baselines in `docs/redesign/baselines.md`), `?setlog` on the page (the
+  audio; `--assert` fails on a threshold, `--tests A1` limits it to a phase's own gates, `--diff
+  docs/redesign/baseline/rd01-controls.json` checks no control moved > 2 px; baselines in
+  `docs/redesign/baselines.md`), `?setlog` on the page (the
   action log, key L saves it). Player-agent runs (A2 / A3 / A10 by agents): `orbit2/tools/session.mjs` (a seeded
   performer plays a set as Move MIDI or mouse-only, with slips, and tags the setlog's accidents), `glance.mjs` (300 ms
   darkened screenshots + answer key + `score`), `moveview.mjs` (the Move's LEDs drawn as the device). The RD-1

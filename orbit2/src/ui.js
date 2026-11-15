@@ -22,7 +22,7 @@ export function segmented({ options, value, onChange, chips = false, color = '',
 /** On/off pill. */
 export function toggleChip({ label, on = false, onChange, title = '', color = '' }) {
   const b = document.createElement('button'); b.type = 'button'; b.className = 'tchip'; b.textContent = label; b.title = title; b.setAttribute('aria-pressed', on);
-  let v = on; const paint = () => { b.classList.toggle('on', v); b.setAttribute('aria-pressed', v); b.style.setProperty('--chip', color || 'var(--signal-cyan)'); };
+  let v = on; const paint = () => { b.classList.toggle('on', v); b.setAttribute('aria-pressed', v); b.style.setProperty('--chip', color || 'var(--l)'); };
   b.onclick = () => { v = !v; paint(); onChange?.(v); }; paint();
   return { el: b, set: (x) => { v = !!x; paint(); }, get value() { return v; } };
 }

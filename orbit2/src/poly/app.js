@@ -572,7 +572,7 @@ function sync() {
   muteQ.trim(m.lanes.length);   // a lane the pattern no longer has (6 → 4, a slot) has no mute waiting
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
   ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${muteWord(i)} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
-  $('lane-drawer').open = true; $('lane-drawer').style.borderColor = LANE_HEX[m.selected]; for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
+  $('lane-drawer').open = true; $('lane-drawer').style.setProperty('--lane', LANE_HEX[m.selected]);   /* RD-2: its border, steps and playhead take the lane's ink (CSS) */ for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
   renderSteps(); renderLocks(); renderAuto(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes(); renderQuest();
 }

@@ -130,6 +130,18 @@ before the page's first script and seeded again, with the frames held (and hande
 - **Thresholds (`--assert`):** A1 at 1512×860, 1280×720, 390×844 (text ≥ 4.5, edges ≥ 3, control luminance ≤ 0.475,
   canvas brighter than every control); A5 at 1512×860 (≤ 50, ≤ 62 with 6 lanes); A6 at 1512×860, 1512×982, 1280×720;
   A7 at the three desktop sizes. Page errors exit 2.
+- **RD-2 changes to the measuring** (the RD-1 numbers above were taken before them):
+  - a text colour that computes to `color(srgb r g b)` (what `color-mix()` gives) is read in 0–1, not as 0–255
+    (before: lane-ink text read as black, contrast ~1:1);
+  - a segment button's edge is its joined bar's edge (like a drawer header's), as this section already said it should be;
+  - no edge is judged for a disabled control or a text link without a border (WCAG 1.4.11 exempts both; the link's
+    text is judged by the text test);
+  - a side cut off by the window or a scrolling column is left out of the edge bands (a control peeking in at the
+    bottom, a drawer half scrolled away: the cut is not the control's edge);
+  - `--tests A1` (only these gates count for `--assert`), `--diff baseline/rd01-controls.json` (RD-2's "no layout
+    change": every visible control's centre vs the RD-1 first load, more than 2 px = moved, fails `--assert`).
+- **No-layout baseline:** `baseline/rd01-controls.json` = every visible control at first load (page px) at the four
+  sizes, from 07c2ba4 (RD-1 closed).
 
 Screenshots: `baseline/01…04` (the brief, 1512×860), `baseline/rd01-first-load-1280x720.png`,
 `baseline/rd01-first-load-390x844.png`.

@@ -14,7 +14,7 @@ const short = (t) => String(t).split(' · ')[0];   // 'master tempo · knob 8' �
 const START = Math.PI * 0.75, SWEEP = Math.PI * 1.5;
 
 export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, exact = false, fmt = (v) => v, say = fmt, color = 'var(--signal-cyan)', title = '', onChange, onStart, onEnd, prime }) {
-  const el = document.createElement('div'); el.className = 'gauge'; el.title = title; el.tabIndex = 0;
+  const el = document.createElement('div'); el.className = 'gauge'; el.title = title; el.tabIndex = 0; el.style.setProperty('--gc', color);   // the stylesheet may tone the colour (orbit2 RD-2: 80 % over the void)
   let name = short(label), marked = false; const aria = () => el.setAttribute('aria-label', marked ? `${name}, automated` : name);
   el.setAttribute('role', 'slider'); aria(); el.setAttribute('aria-valuemin', min); el.setAttribute('aria-valuemax', max);
   const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 48 48'); svg.setAttribute('aria-hidden', 'true');
@@ -44,6 +44,6 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   });
   el.addEventListener('dblclick', () => set(value, true));
   render();
-  return { el, set, get value() { return v; }, get held() { return !!drag; }, setLabel: (t) => { lab.textContent = t; name = short(t); aria(); }, setColor: (c) => { fill.setAttribute('stroke', c); dot.setAttribute('fill', c); },
+  return { el, set, get value() { return v; }, get held() { return !!drag; }, setLabel: (t) => { lab.textContent = t; name = short(t); aria(); }, setColor: (c) => { fill.setAttribute('stroke', c); dot.setAttribute('fill', c); el.style.setProperty('--gc', c); },
     setMark: (on) => { if (marked === !!on) return; marked = !!on; mark.hidden = !marked; aria(); } };
 }

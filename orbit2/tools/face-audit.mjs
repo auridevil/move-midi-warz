@@ -8,6 +8,8 @@
 //   node orbit2/tools/face-audit.mjs --assert               # exit 1 when an A1 / A5 / A6 / A7 threshold fails
 //   --sizes 1512x860,390x844m   (m = phone: touch + mobile)   --port 5400 --debug-port 9400   --path orbit2/index.html
 //   --play 6  (seconds of playing for the frame-time p95)
+//   --tests A1         only these gates count for --assert (a phase's own; A5–A7 wait for RD-3 / RD-5)
+//   --diff docs/redesign/baseline/rd01-controls.json   every visible control's centre vs the RD-1 baseline (> 2 px = moved; fails --assert)
 //
 // What it measures, per size (methods in orbit2/docs/redesign/baselines.md):
 //   controls  every interactive element: in the DOM, drawn (`total`: checkVisibility, so not inside a closed drawer), and
@@ -55,6 +57,8 @@ const PAGE = String.raw`(() => {
     }
     return x1 - x0 >= 1 && y1 - y0 >= 1 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
   }
+  // a computed colour: rgb(a) in 0–255, or color(srgb r g b / a) in 0–1 (what color-mix() computes to): [r, g, b, a?] in 0–255
+  const rgbOf = (c) => { const n = c.match(/[\d.]+/g).map(Number); return c.startsWith('color(') ? [n[0] * 255, n[1] * 255, n[2] * 255, n[3]] : n; };
   const name = (e) => (e.getAttribute('aria-label') || e.textContent || e.title || e.placeholder || e.value || '').replace(/\s+/g, ' ').trim().slice(0, 40);
   const tag = (e) => e.tagName.toLowerCase() + (e.id ? '#' + e.id : '');
   function controls() {
@@ -83,7 +87,7 @@ const PAGE = String.raw`(() => {
       if (field) box = e.getBoundingClientRect();
       else for (const n of nodes) { const rg = document.createRange(); rg.selectNodeContents(n); for (const q of rg.getClientRects()) box = box ? { left: Math.min(box.left, q.left), top: Math.min(box.top, q.top), right: Math.max(box.right, q.right), bottom: Math.max(box.bottom, q.bottom) } : { left: q.left, top: q.top, right: q.right, bottom: q.bottom }; }
       if (!box) continue; const r = seen(e, box); if (!r) continue;
-      const s = getComputedStyle(e), m = s.color.match(/[\d.]+/g).map(Number); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;
+      const s = getComputedStyle(e), m = rgbOf(s.color); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;
       if (op * (m[3] ?? 1) < 0.02) continue;   // text that is not drawn
       out.push({ el: tag(e), text: (field ? e.value || e.placeholder || '' : nodes.map(n => n.textContent).join(' ')).replace(/\s+/g, ' ').trim().slice(0, 40), rgb: m.slice(0, 3), a: (m[3] ?? 1) * op, size: parseFloat(s.fontSize), weight: +s.fontWeight || 400, r });
     }
@@ -91,9 +95,9 @@ const PAGE = String.raw`(() => {
   }
   async function image(b64) { const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob()); const c = new OffscreenCanvas(bmp.width, bmp.height), g = c.getContext('2d'); g.drawImage(bmp, 0, 0); return g.getImageData(0, 0, bmp.width, bmp.height); }
   const px = (img, x, y) => { const i = (Math.round(y) * img.width + Math.round(x)) * 4, d = img.data; return [d[i], d[i + 1], d[i + 2]]; };
-  function each(img, r, fn, inside = null) {   // every pixel of rect r (and, with inside, not in that rect)
+  function each(img, r, fn, inside = null, skip = null) {   // every pixel of rect r (and, with inside, not in that rect; skip(x, y): not those)
     for (let y = Math.max(0, Math.floor(r.y)); y < Math.min(img.height, Math.ceil(r.y + r.h)); y++) for (let x = Math.max(0, Math.floor(r.x)); x < Math.min(img.width, Math.ceil(r.x + r.w)); x++) {
-      if (inside && x >= inside.x && x < inside.x + inside.w && y >= inside.y && y < inside.y + inside.h) continue; fn(px(img, x, y));
+      if (inside && x >= inside.x && x < inside.x + inside.w && y >= inside.y && y < inside.y + inside.h) continue; if (skip?.(x, y)) continue; fn(px(img, x, y));
     }
   }
   const grow = (r, d) => ({ x: r.x - d, y: r.y - d, w: r.w + 2 * d, h: r.h + 2 * d });
@@ -108,11 +112,21 @@ const PAGE = String.raw`(() => {
       }
       const edges = [], light = []; let ctlMax = 0, ctlMaxAt = null;
       for (const e of [...document.querySelectorAll(SEL)].filter(shown)) {
-        const box = e.tagName === 'SUMMARY' && e.parentElement?.tagName === 'DETAILS' ? e.parentElement : e, knob = e.classList.contains('gauge') ? e.querySelector('svg') : null;
-        const r = seen(box, (knob || box).getBoundingClientRect()); if (!r || r.w < 4 || r.h < 4) continue;
-        const out = []; each(full, grow(r, 3), ([a, b, c]) => out.push(lum(a, b, c)), r); const Lo = pct(out, 50) ?? 0;
-        const inner = []; if (knob) each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo))); else each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo)), grow(r, -3));
-        edges.push({ el: tag(e), name: name(e), edge: Math.round((pct(inner, knob ? 85 : 75) ?? 1) * 100) / 100 });
+        // the component whose edge counts: a drawer for its summary, the joined bar for a segment (its buttons share the
+        // bar's line); a knob's arc box. No edge to judge (WCAG 1.4.11): a disabled control, and a text link without a
+        // border (its edge is its text, judged by the text test)
+        const box = e.tagName === 'SUMMARY' && e.parentElement?.tagName === 'DETAILS' ? e.parentElement : e.parentElement?.classList.contains('seg') ? e.parentElement : e, knob = e.classList.contains('gauge') ? e.querySelector('svg') : null;
+        const cs = getComputedStyle(e), textLink = e.tagName === 'A' && !parseFloat(cs.borderTopWidth) && cs.boxShadow === 'none';
+        const r = seen(box, (knob || box).getBoundingClientRect());
+        if (r && r.w >= 4 && r.h >= 4 && !e.disabled && e.getAttribute('aria-disabled') !== 'true' && !textLink) {
+          // a side cut off by the window or a scrolling column is not the control's edge: its band is left out (RD-2;
+          // before, a drawer half scrolled away or a button peeking in at the bottom was judged by the cut)
+          const fr = (knob || box).getBoundingClientRect(), cut = { l: r.x > fr.left + 0.5, t: r.y > fr.top + 0.5, r: r.x + r.w < fr.right - 0.5, b: r.y + r.h < fr.bottom - 0.5 };
+          const skip = knob ? null : (x, y) => (cut.l && x < r.x + 3) || (cut.t && y < r.y + 3) || (cut.r && x >= r.x + r.w - 3) || (cut.b && y >= r.y + r.h - 3);
+          const out = []; each(full, grow(r, 3), ([a, b, c]) => out.push(lum(a, b, c)), r, skip); const Lo = pct(out, 50) ?? 0;
+          const inner = []; if (knob) each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo))); else each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo)), grow(r, -3), skip);
+          if (inner.length && out.length) edges.push({ el: tag(e), name: name(e), edge: Math.round((pct(inner, knob ? 85 : 75) ?? 1) * 100) / 100, ...(Object.values(cut).some(Boolean) ? { cut: Object.keys(cut).filter(k => cut[k]).join('') } : {}) });
+        }
         const cr = seen(e); if (!cr) continue; let mx = 0; each(full, cr, ([a, b, c]) => { const L = lum(a, b, c); if (L > mx) mx = L; });
         light.push({ el: tag(e), name: name(e), lum: Math.round(mx * 1000) / 1000 }); if (mx > ctlMax) { ctlMax = mx; ctlMaxAt = tag(e) + ' ' + name(e); }
       }
@@ -293,6 +307,26 @@ export function summary(report) {
   return L.join('\n');
 }
 
+/** RD-2's "no layout change": every visible control at first load matched to the baseline's (same element and name,
+ *  the nth of its kind), its centre and size compared. `base` is a report or `{ sizes: [{ size, controls: { list } }] }`
+ *  (docs/redesign/baseline/rd01-controls.json). A control in only one of the two is listed, not guessed at. */
+export function positionDiff(base, report, tol = 2) {
+  const key = (c, seen) => { const k = c.el + '|' + c.name; const n = seen.get(k) || 0; seen.set(k, n + 1); return k + '|' + n; };
+  const index = (list) => { const seen = new Map(), m = new Map(); for (const c of list) m.set(key(c, seen), c); return m; };
+  return report.sizes.map(s => {
+    const b = base.sizes.find(x => x.size === s.size); if (!b) return { size: s.size, missing: true };
+    const was = index(b.controls.list), now = index(s.controls.list), moved = [], gone = [], added = [];
+    for (const [k, c] of now) {
+      const o = was.get(k); if (!o) { added.push(k); continue; }
+      const dx = (c.x + c.w / 2) - (o.x + o.w / 2), dy = (c.y + c.h / 2) - (o.y + o.h / 2), dw = c.w - o.w, dh = c.h - o.h;
+      if (Math.max(Math.abs(dx), Math.abs(dy)) > tol) moved.push({ k, dx, dy, dw, dh });
+    }
+    for (const k of was.keys()) if (!now.has(k)) gone.push(k);
+    return { size: s.size, n: now.size, moved, gone, added, max: moved.reduce((a, m) => Math.max(a, Math.abs(m.dx), Math.abs(m.dy)), 0) };
+  });
+}
+export const diffSummary = (d) => d.map(s => s.missing ? `${s.size}: not in the baseline` : `${s.size}: ${s.n} controls, ${s.moved.length} moved > 2 px${s.moved.length ? ` (max ${s.max} px: ${s.moved.slice(0, 6).map(m => `${m.k.split('|').slice(0, 2).join(' ')} ${m.dx},${m.dy}`).join('; ')})` : ''}${s.gone.length ? ` · gone: ${s.gone.join(', ')}` : ''}${s.added.length ? ` · new: ${s.added.join(', ')}` : ''}`).join('\n');
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
   const opt = { port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), path: arg('--path', 'orbit2/index.html'), shots: arg('--shots', null), playSec: +arg('--play', 6) };
@@ -301,10 +335,13 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   for (const s of sizes) report.sizes.push(await auditSize(s, opt));
   if (has('--audio')) report.audio = await auditAudio(opt);
   report.verdicts = verdicts(report);
+  if (arg('--tests', null)) { const only = arg('--tests').split(','); report.verdicts = report.verdicts.filter(v => only.includes(v.test)); }   // a phase asserts its own gates (RD-2: A1)
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(report, null, 1));
   console.log(summary(report));
+  let layoutMoved = false;
+  if (arg('--diff', null)) { const { readFileSync } = await import('node:fs'); const d = positionDiff(JSON.parse(readFileSync(arg('--diff'), 'utf8')), report); console.log(`\n## positions vs ${arg('--diff')}\n${diffSummary(d)}`); layoutMoved = d.some(s => s.moved?.length); }
   const errs = report.sizes.flatMap(s => s.errors).concat(report.audio?.errors || []), frozen = report.audio?.clock?.drawing.pictures < 2;
   if (errs.length) { console.error(`page errors: ${errs.join(' | ')}`); process.exitCode = 2; }
   else if (frozen) { console.error('the A9 clock ran on a canvas that did not draw: not a measurement'); process.exitCode = 2; }
-  else if (has('--assert') && report.verdicts.length) process.exitCode = 1;   // page errors stay 2: they say more
+  else if (has('--assert') && (report.verdicts.length || layoutMoved)) process.exitCode = 1;   // page errors stay 2: they say more
 }

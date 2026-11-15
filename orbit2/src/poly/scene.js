@@ -7,6 +7,7 @@ import { MAX_LANES, MAX_STEPS, condParts, condPasses } from './lanes.js';
 
 const TAU = Math.PI * 2;
 const MUTED = '#8b84a8';
+const CAPTION_FONT = '13px "Space Grotesk", system-ui, sans-serif';   // RD-2: Major Mono is the wordmark's alone; 13 px = the body size
 const rgb = (hex) => { const n = parseInt(hex.slice(1), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
 const rgba = (hex, a) => { const [r, g, b] = rgb(hex); return `rgba(${r},${g},${b},${a})`; };
 
@@ -320,7 +321,7 @@ export function createScene(cv, o) {
     }
     if (at) {
       const lastBeat = al.cycle - (al.tick % al.cycle) <= al.beat;
-      ctx.globalCompositeOperation = 'source-over'; ctx.font = '11px "Major Mono Display", monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.globalCompositeOperation = 'source-over'; ctx.font = CAPTION_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const room = g.ring(0) * 2 - 10, lines = ctx.measureText(at).width + 14 <= room ? [at] : [at.replace(/ \d.*/, ''), at.replace(/^.* in /, '')];
       const w = Math.max(...lines.map(s => ctx.measureText(s).width)) + 14, h = lines.length * 14 + 4;
       ctx.fillStyle = 'rgba(12,8,28,.85)'; ctx.beginPath(); ctx.roundRect(g.cx - w / 2, g.cy - h / 2, w, h, 8); ctx.fill();
@@ -336,7 +337,7 @@ export function createScene(cv, o) {
       ctx.strokeStyle = 'rgba(239,68,68,.18)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
       ctx.strokeStyle = `rgba(239,68,68,${0.7 + pulse * 0.3})`; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, a1); ctx.stroke(); ctx.lineCap = 'butt';
       ctx.drawImage(sprite('#ef4444'), g.cx + Math.cos(a1) * r - 16, g.cy + Math.sin(a1) * r - 16, 32, 32);
-      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fca5a5'; ctx.font = '12px "Major Mono Display", monospace'; ctx.textAlign = 'center';
+      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fca5a5'; ctx.font = CAPTION_FONT; ctx.textAlign = 'center';
       ctx.fillText(`jam ${Math.floor(jp * 256)}/256`, g.cx, g.cy - r - 12); ctx.textAlign = 'left'; ctx.globalCompositeOperation = 'lighter';
     }
     // beams between simultaneous hits
