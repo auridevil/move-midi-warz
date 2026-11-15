@@ -2,7 +2,8 @@
 // reports what the redesign is judged by. Every size gets a fresh browser profile, so each one is a first visit.
 //
 //   node orbit2/tools/face-audit.mjs                        # 1512×860, 1512×982, 1280×720, 390×844 → summary
-//   node orbit2/tools/face-audit.mjs --audio                # + the A9 audio baseline (fixed-seed WAV hash, lateness, stress)
+//   node orbit2/tools/face-audit.mjs --audio                # + the A9 audio baseline (fixed-seed WAV hash, lateness, stress;
+//                                                           #   exit 2 when the canvas did not draw during the clock)
 //   node orbit2/tools/face-audit.mjs --json /tmp/x.json --shots /tmp/x/   # the full report + screenshots
 //   node orbit2/tools/face-audit.mjs --assert               # exit 1 when an A1 / A5 / A6 / A7 threshold fails
 //   --sizes 1512x860,390x844m   (m = phone: touch + mobile)   --port 5400 --debug-port 9400   --path orbit2/index.html
@@ -117,6 +118,8 @@ const PAGE = String.raw`(() => {
       return { text, edges, light, ctlMax: Math.round(ctlMax * 1000) / 1000, ctlMaxAt, canvasMax: this.canvasMax() };
     },
     canvasMax() { const cv = document.getElementById('cv'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let mx = 0; for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 8) continue; const L = lum(d[i], d[i + 1], d[i + 2]) * d[i + 3] / 255; if (L > mx) mx = L; } return Math.round(mx * 1000) / 1000; },
+    // the canvas in one number (every 7th pixel hashed): pictures that differ while playing = the scene is drawing
+    canvasSig() { const cv = document.getElementById('cv'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let h = 2166136261; for (let i = 0; i < d.length; i += 28) h = Math.imul(h ^ (d[i] | d[i + 1] << 8 | d[i + 2] << 16), 16777619); return h >>> 0; },
     // frame cost: every rAF callback timed (the scene asks for its next frame through the global each time)
     frames() { const raf = window.__faRaf ||= window.requestAnimationFrame.bind(window), cost = [], gap = []; let last = 0; window.requestAnimationFrame = (cb) => raf((t) => { if (last) gap.push(t - last); last = t; const s = performance.now(); cb(t); cost.push(performance.now() - s); }); return () => { window.requestAnimationFrame = raf; return { cost: pct(cost, 95), gap: pct(gap, 95), n: cost.length }; }; },
     // A9 clock: a second Tone.Loop on the app loop's grid measures how late the scheduler calls back (audio time)
@@ -193,13 +196,24 @@ export function fingerprint(s, sr = 44100, ms = 20) {
 // buffers from the random stream, so a second render in the same page plays the cache, not the page
 export const A9_RANDOM = 12345;
 const SEEDED = `(() => { let a = ${A9_RANDOM}; window.__faSeed = (s) => { a = s >>> 0; }; Math.random = () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; })()`;
+/**
+ * fn with win's animation frames held: the callbacks asked for wait, and go to the real requestAnimationFrame after fn,
+ * never dropped (the scene's loop asks for its next frame from inside each frame, so a frame never called back stops the
+ * canvas for good, and the clock run after the render would measure a page that does not draw). Runs in the page
+ * (serialized with toString): no outside names.
+ */
+export async function holdFrames(win, fn) {
+  const raf = win.requestAnimationFrame, held = []; win.requestAnimationFrame = (cb) => { held.push(cb); return 0; };
+  try { return await fn(); } finally { win.requestAnimationFrame = raf; for (const cb of held) raf.call(win, cb); }
+}
+const HOLD_FRAMES = `(${holdFrames})(window, async () => { __faSeed(${A9_RANDOM}); await __poly.exportWav(); })`;
 async function seededRender(b, { path, engine, groove, seed }) {
-  const p = await b.open(`${path}?debug`, { width: 1512, height: 860 }); await ready(p);
+  const p = await b.open(`${path}${path.includes('?') ? '&' : '?'}debug`, { width: 1512, height: 860 }); await ready(p);
   await p.send('Page.addScriptToEvaluateOnNewDocument', { source: SEEDED }); await p.eval('window.__faOld = 1'); await p.send('Page.reload', {}); await p.sleep(500); await ready(p);
   await p.eval(PAGE);
   await p.eval(`(async () => { await __poly.wake(); __poly.setEngine(${JSON.stringify(engine)}); if (${JSON.stringify(engine)} === 'dsp') await __poly.ensureDsp(); const d = __poly.dice; d.locked = true; d.seed = ${seed}; d.repeat = 1; __poly.loadGroove(${JSON.stringify(groove)}); })()`);
   await settle(p, 300); await p.captureDownloads();
-  await p.eval(`(async () => { const raf = window.requestAnimationFrame; window.requestAnimationFrame = () => 0; __faSeed(${A9_RANDOM}); try { await __poly.exportWav(); } finally { window.requestAnimationFrame = raf; } })()`);
+  await p.eval(HOLD_FRAMES);
   return { p, file: (await p.downloads())[0] };
 }
 /** A9: a fixed seed and pattern rendered by exportWav on two fresh seeded pages per engine → SHA-256 (exact), how much
@@ -217,9 +231,13 @@ export async function auditAudio({ port = 5400, debugPort = 9400, path = 'orbit2
       if (engine === 'synth') {   // the clock: the page's default engine, playing the same groove
         await p.eval('window.__faLate = __fa.lateness(); window.__faStop = __fa.frames(); window.__faStress = []; window.__faHead = []; window.__faStressT = setInterval(() => { __faStress.push(__poly.stress.level); __faHead.push(__poly.stress.headMs); }, 300)');
         await play(p); await p.sleep(playSec * 1000);
-        const head = await p.eval('__faHead.slice(5)'); await play(p);   // the headroom once it settled, while playing
+        const head = await p.eval('__faHead.slice(5)');   // the headroom once it settled, while playing
         const late = await p.eval('window.__faLate()'), frames = await p.eval('window.__faStop()'), stress = await p.eval('(clearInterval(__faStressT), __faStress)');
-        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, headroomMs: { p5: r2(pct(head, 5)), min: r2(Math.min(...head)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n } };
+        // still playing, after the measured window (a pixel read there would load it): a canvas that stopped drawing during
+        // the render stays stopped, and its clock is not A9's (a dropped frame callback ended the scene's loop once)
+        const sigs = []; for (let k = 0; k < 3; k++) { if (k) await p.sleep(400); sigs.push(await p.eval('__fa.canvasSig()')); }
+        await play(p);   // stop
+        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, headroomMs: { p5: r2(pct(head, 5)), min: r2(Math.min(...head)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n }, drawing: { pictures: new Set(sigs).size, of: sigs.length } };
       }
       out.errors = [...(out.errors || []), ...one.p.errors, ...p.errors]; p.send('Page.close'); p.close();
     }
@@ -263,7 +281,7 @@ export function summary(report) {
     for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
     L.push(`frames while playing: callback p95 ${r2(s.frames.cost)} ms, interval p95 ${r2(s.frames.gap)} ms (${s.frames.n} frames)`, '');
   }
-  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame callback p95 ${a.clock.frameMs.cost95} ms, interval p95 ${a.clock.frameMs.gap95} ms`); L.push(''); }
+  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) { const dr = a.clock.drawing; L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame callback p95 ${a.clock.frameMs.cost95} ms, interval p95 ${a.clock.frameMs.gap95} ms (${a.clock.frameMs.n} frames) · canvas ${dr.pictures > 1 ? `drawing (${dr.pictures} different pictures in ${dr.of})` : 'NOT DRAWING: this clock is not A9\'s'}`); } L.push(''); }
   const v = report.verdicts; L.push(v.length ? `## thresholds: ${v.length} failing\n${v.map(f => `- ${f.test} ${f.size}: ${f.what}`).join('\n')}` : '## thresholds: all pass');
   return L.join('\n');
 }
@@ -278,7 +296,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   report.verdicts = verdicts(report);
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(report, null, 1));
   console.log(summary(report));
-  const errs = report.sizes.flatMap(s => s.errors).concat(report.audio?.errors || []);
+  const errs = report.sizes.flatMap(s => s.errors).concat(report.audio?.errors || []), frozen = report.audio?.clock?.drawing.pictures < 2;
   if (errs.length) { console.error(`page errors: ${errs.join(' | ')}`); process.exitCode = 2; }
+  else if (frozen) { console.error('the A9 clock ran on a canvas that did not draw: not a measurement'); process.exitCode = 2; }
   else if (has('--assert') && report.verdicts.length) process.exitCode = 1;   // page errors stay 2: they say more
 }

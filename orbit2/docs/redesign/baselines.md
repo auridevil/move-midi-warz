@@ -65,14 +65,14 @@ brief) and judges A5 by what is drawn and in view: **79**.
 
 Groove `house` (124 bpm) with dice locked at seed 4127, `exportWav` with a fresh profile's export settings (16-bit,
 44.1 kHz, 4 bars, loop). Each render is **render #1 of a fresh page** whose `Math.random` is seeded (mulberry32, 12345)
-before the page's first script and seeded again, with the frames held, just before `exportWav`; two fresh pages per
-engine, two launches (`node orbit2/tools/face-audit.mjs --sizes none --audio`). Raw numbers and the per-window levels:
-`baseline/rd01-a9.json`.
+before the page's first script and seeded again, with the frames held (and handed back after), just before
+`exportWav`; two fresh pages per engine, four launches (`node orbit2/tools/face-audit.mjs --sizes none --audio`: two on
+2026-11-14, two on 2026-11-15 after review round 2). Raw numbers and the per-window levels: `baseline/rd01-a9.json`.
 
 | engine | fingerprint (per 20 ms: RMS of L, R and mid, 0.1 dB) | the same on | null test: two fresh pages | SHA-256 |
 |---|---|---|---|---|
-| synth (Tone, the default) | **`fee43cee9cc5fe56`** | 4 of 4 renders (2 launches) | differ in 22–36 samples by **1 LSB** | moves with the 1-LSB wobble (4 different) |
-| **dsp** (worklet) | **`96c2672430aa9851`** | 4 of 4 renders | identical in both launches | moves between launches (1-LSB wobble) |
+| synth (Tone, the default) | **`fee43cee9cc5fe56`** | 8 of 8 renders (4 launches) | differ in 16–36 samples by **1 LSB** | moves with the 1-LSB wobble (8 different) |
+| **dsp** (worklet) | **`96c2672430aa9851`** | 8 of 8 renders | identical, or 61 samples by **1 LSB** | moves between launches (1-LSB wobble) |
 
 - **What a later phase checks (A9):** the same command gives the **same two fingerprints** and the null test holds
   (≤ 1 LSB between two fresh pages); a level, timing, pan or sound change moves the fingerprint (unit-tested: +1 dB,
@@ -84,12 +84,20 @@ engine, two launches (`node orbit2/tools/face-audit.mjs --sizes none --audio`). 
   one. The task-3 baseline rendered twice in one page and concluded the synth could not repeat: wrong, and replaced.
   Its numbers (stereo-sum fingerprint dsp `acf20b4e977cb76c`, unseeded synth `38f18855…`) stay in `rd01-a9.json`
   under `previous`.
-- **Clock while playing** (synth, `?debug`, 1512×860): **Tone.Loop lateness p95 between −43 and −49 ms** over every
-  run on 2026-11-14 (HEAD and the phase start; −46.2 ms in the 10 s baseline run, −44.7 and −44.0 ms in the two
-  launches above): callbacks run 43–49 ms before their audio time and are never late (max < 0). Judge a later phase
-  by "never late, p95 inside the band", not by one number. **Stress p95 0**; the audio **headroom** (`stress.headMs`)
-  p5 66–69 ms, the stress meter only moves under 30 ms. Frame callback p95 0.1–0.6 ms, frame interval p95 16.7 ms.
-  The probe needs the synth engine (it counts Tone.Loop callbacks; on dsp it sees almost none).
+- **Clock while playing** (synth, `?debug`, 1512×860, 10 s, after the render, **the canvas drawing**: three
+  pictures of it, 400 ms apart, all differ; the audit exits 2 when they do not): **Tone.Loop lateness p95 between −43
+  and −49 ms** over every run (2026-11-14 and -15, HEAD and the phase start; −47.8 and −44.5 ms in the two launches
+  of round 2): callbacks run 43–49 ms before their audio time and are never late (max < 0). Judge a later phase by
+  "never late, p95 inside the band", not by one number. **Stress p95 0**; the audio **headroom** (`stress.headMs`) p5
+  **about 65 ms or more** (67.9 and 71.4 ms; a floor: more headroom is not a deviation), the stress meter only moves
+  under 30 ms. **Frame callback p95 0.6–0.8 ms** (about 1,600 frame callbacks in 10 s), frame interval p95 16.7 ms:
+  this is A9's "frame time p95" (≤ +1 ms in a later phase). The probe needs the synth engine (it counts Tone.Loop
+  callbacks; on dsp it sees almost none).
+- **Replaced (round 2, Sofia):** round 1's clock ran after a render whose `requestAnimationFrame` stub dropped the
+  scene's next frame, and the scene's loop asks for each frame from inside the last one, so the canvas never drew
+  again: its frame callback p95 of 0.1 ms (about 590 callbacks in 6 s) described a page that does not draw. The render
+  now holds the frames and hands them back after (`holdFrames`, unit-tested). The old runs stay in `rd01-a9.json`
+  under `previous.frozenClock`; their lateness and stress agree with the drawing page.
 
 ## How the audit measures (so later numbers compare)
 

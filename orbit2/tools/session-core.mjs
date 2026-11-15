@@ -4,7 +4,7 @@
 // script meant to change. No browser here: unit-tested in orbit2/test/session.test.js.
 import { mulberry32 } from '../src/poly/dice.js';
 import { SOUND_KEYS } from '../src/poly/lanes.js';
-import { PAD_FIRST, STEP_FIRST, ENCODER_FIRST_CC, WHEEL_CC, BUTTON } from '../../node_modules/movewire/src/protocol.js';
+import { PAD_FIRST, STEP_FIRST, ENCODER_FIRST_CC, WHEEL_CC, BUTTON } from 'movewire';
 
 // ---- the Move on the wire (movewire's protocol: pads 68+, steps 16+, encoders CC 71–78 relative, buttons by CC) ----
 export const MOVE = { PAD: PAD_FIRST, STEP: STEP_FIRST, ENC: ENCODER_FIRST_CC, WHEEL: WHEEL_CC, BTN: BUTTON };
@@ -26,6 +26,7 @@ export const MOUSE_GAUGE = { length: 1, euclidK: 2, rotation: 3, ratio: 4, prob:
 // ---- what counts as what (DECISION A3) ----
 const DESTRUCTIVE = new Set(['init', 'randomize', 'clear', 'load', 'slot', 'chain']);   // a slot recall or a chain loads a slot: a load
 const SILENT = new Set(['select', 'export', 'slot.save', 'record']);
+const WORDS = new Set(['undo', 'redo']);   // they log the pattern in words ("4 lanes · 6 hits"): the same words are not the same pattern
 /**
  * A lane left with no hits (the hits knob at 0; one click down on a hand-drawn lane re-fills it from E(0)). Not one of
  * A3's classes, so it never changes one: the tags and the summary report it beside them, for Noor to weigh.
@@ -35,9 +36,11 @@ const same = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 /** A3's words: destructive (stop, load, init, randomize, clear, a kick muted) | silent (nothing heard changes) | harmless (all else that sounds). */
 export function classOf(e) {
   if (e.target === 'transport') return e.after === 'stopped' ? 'destructive' : 'harmless';
+  if (e.target === 'chain' && !(Array.isArray(e.after) && e.after.length)) return 'silent';   // a chain cleared loads nothing
   if (DESTRUCTIVE.has(e.target)) return 'destructive';
   if (/^lane\d+\.mute$/.test(e.target) && e.after === true && /kick/.test(e.voice || '')) return 'destructive';
-  if (SILENT.has(e.target) || ('before' in e && same(e.before, e.after))) return 'silent';   // a turn that came back to where it began
+  // a value turned and brought back to where it began (a lane's, the tempo, the filter); loads return above
+  if (SILENT.has(e.target) || (!WORDS.has(e.target) && 'before' in e && same(e.before, e.after))) return 'silent';
   return 'harmless';
 }
 // an expectation: a target ('select'), a family ('lane2.hits.*') or a target and the value it should end on

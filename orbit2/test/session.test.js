@@ -127,6 +127,11 @@ test('RD-1 baseline-set fixes: the mouse finds the knob it means, a drop says wh
   assert.equal(emptied({ target: 'lane3.euclidK', before: 2, after: 0 }), true); assert.equal(emptied({ target: 'lane3.euclidK', before: 0, after: 0 }), false);
   assert.equal(classOf({ target: 'lane3.euclidK', before: 3, after: 0 }), 'harmless'); assert.equal(classOf({ target: 'chain', before: [1], after: [1, 2] }), 'destructive', 'a chain loads a slot');
   assert.equal(classOf({ target: 'lane1.locks.3', before: null, after: null }), 'silent', 'a turn that came back changed nothing');
+  assert.equal(classOf({ target: 'undo', before: '4 lanes · 6 hits', after: '4 lanes · 6 hits' }), 'harmless', 'an undo logs a summary: the same words are not the same pattern');
+  assert.equal(classOf({ target: 'redo', before: '4 lanes · 6 hits', after: '4 lanes · 6 hits' }), 'harmless');
+  assert.equal(classOf({ target: 'tempo', before: 120, after: 120 }), 'silent', 'a tempo turn that came back');
+  assert.equal(classOf({ target: 'tempo', before: 120, after: 124 }), 'harmless');
+  assert.equal(classOf({ target: 'chain', before: [1, 2], after: [] }), 'silent', 'a chain cleared loads nothing');
   // the hits knob expects its re-fill too (Move and mouse); the Move protocol comes from movewire
   for (const x of performer({ seed: 5, minutes: 30, persona: 'kai' }).filter(x => x.kind === 'move.knob' && !x.shift && x.knob === 1)) assert.match(x.expect[1], /^lane\d\.hits\*$/);
   assert.equal(MOVE.PAD, 68); assert.equal(MOVE.BTN.track1, 43); assert.equal(KNOB_TARGETS[0], 'length');

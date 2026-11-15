@@ -101,6 +101,7 @@ const tagOf = (e) => ({ id: e.id, action: e.action, intent: e.intent, intended: 
 /** A saved set tagged again by today's tagger. Its plan is made again from its own seed, intents and slips; when that
  *  gives the very same actions, today's expectations apply, else the saved script is kept. The page's log is untouched. */
 export function retag(set) {
+  if (!set?.session?.script || !Array.isArray(set.entries)) throw new Error('not a set from session.mjs (no session script or setlog entries)');
   const s = set.session, act = (a) => JSON.stringify({ ...a, expect: undefined });
   const plan = s.intents !== undefined && injectSlips(performer({ seed: s.seed, minutes: s.minutes, persona: s.persona, mouse: s.mouse, intents: s.intents }), { rate: s.slips, seed: s.seed });
   const fresh = plan && plan.length === s.script.length && plan.every((a, i) => act(a) === act(s.script[i]));

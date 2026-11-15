@@ -833,7 +833,10 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   1984 s); an `emptied` mark on the diff (or the lane's hit count) would let it count as destructive.
 - **The simulated Move looks unplugged** (RD-01 baseline sets): the session tools set `move.transport` and
   `inControl`, not the page's connect state, so the pill reads "Move: not connected" in every set and glance shot.
-  Nothing reads it today; RD-5's Move pill and "MOVE ⇢" chip will, so the tools need the connected state then.
+  Nothing reads it today; RD-5's Move pill and "MOVE ⇢" chip will, so the tools need the connected state then. Also
+  (RD-01 round 2, architect): a Move step byte through `__poly.move.receive` on a page with no simulated connection
+  toggles nothing (the phase start `19646c0` the same); a later tool or reviewer that drives the Move by bytes needs
+  the session tools' `move.transport` + `inControl` first.
 - **What the setlog misses or splits** (RD-01 round 1: verifier, kai, rio, architect): a knob turn that rests over
   0.7 s logs twice (the gesture's own start and end could close it); a step is logged by its stored index, not the
   step pressed on a rotated lane; throw, fill, fill next bar, volume, engine and jam are not logged, so a slip onto
@@ -841,6 +844,11 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   next pointer, key or wheel; loads log word summaries only (a short hash would make their reversal exact); a hand
   edit that a clock save swallows is not counted; a phone has no way to save the log (key L only); the 8 load-style
   hooks could share one helper.
+- **A link opened before the first input** (RD-01 round 2, verifier): the setlog takes in what the page does before
+  any hand (`src` null), so a `#p=` link pasted into the address bar of an open page before the first pointer, key or
+  Move byte (`hashchange`, `app.js` `loadShared`) changes the pattern and logs nothing; after an input the same load is
+  logged under the last source (`move load … (link)`). No A3 risk (a set always starts with an input, a pasted link is
+  never a slip); a fix: absorb only the page's own start, and give a `hashchange` load its own source (`link`).
 - **Session tools: open-loop edges** (RD-01 round 1: verifier, kai, noor): the performer presses steps past the
   lane's length (nothing happens, the action still counts); a slipped evolve is harmless in A3's words although it
   reshapes the pattern over time; the RD-9 sets must replay the baseline commands (seeds, intents, slips) to compare.

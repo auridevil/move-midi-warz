@@ -9,7 +9,7 @@
 import { launch } from './cdp.mjs';
 import { ledsOf, drawMove, bytes } from './session-core.mjs';
 import { openSet } from './session.mjs';
-import { paletteHex } from '../../node_modules/movewire/src/protocol.js';
+import { paletteHex } from 'movewire';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 

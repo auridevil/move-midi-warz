@@ -2,7 +2,7 @@
 // the A9 render diff and fingerprint (a 1-LSB wobble keeps the fingerprint, a level change does not), the WAV reader.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint } from '../tools/face-audit.mjs';
+import { verdicts, THRESHOLDS, pcm16, pcmDiff, fingerprint, holdFrames } from '../tools/face-audit.mjs';
 import { encodeWav } from '../src/unasm/wav.js';
 
 const state = (o = {}) => ({ scroll: { scrollHeight: 860, innerHeight: 860, pageScrolls: false, inner: [] }, rings: { cx: 756, cy: 358, R: 330, outer: 315, diameter: 630, lanes: 4 }, ...o });
@@ -46,4 +46,16 @@ test('RD-1 A9: the WAV reader, the render diff, and a fingerprint that a 1-LSB w
   // the channels count: left and right swapped, or one channel's polarity flipped, is another sound
   const swap = a.slice(), flip = a.slice(); for (let i = 0; i < a.length; i += 2) { swap[i] = a[i + 1]; swap[i + 1] = a[i]; flip[i + 1] = -a[i + 1]; }
   assert.notEqual(fingerprint(swap).hash, fingerprint(a).hash, 'L/R swap'); assert.notEqual(fingerprint(flip).hash, fingerprint(a).hash, 'polarity of one channel');
+});
+
+test('RD-1 A9: frames held during a render wait and are handed back, so a loop that re-asks every frame keeps drawing', async () => {
+  const real = [], win = { requestAnimationFrame(cb) { real.push(cb); return real.length; } }, own = win.requestAnimationFrame;
+  let drawn = 0; const loop = () => { drawn++; win.requestAnimationFrame(loop); };
+  win.requestAnimationFrame(loop);
+  const frame = () => real.splice(0).forEach(cb => cb());   // the browser draws one frame
+  const out = await holdFrames(win, async () => { frame(); frame(); return 'rendered'; });   // the render: frames come, none is called
+  assert.equal(out, 'rendered'); assert.equal(win.requestAnimationFrame, own, 'the real one is back');
+  assert.equal(drawn, 1, 'held during the render'); assert.equal(real.length, 1, 'the loop\'s next frame was handed back');
+  frame(); frame(); assert.equal(drawn, 3, 'and it keeps drawing');
+  await assert.rejects(holdFrames(win, async () => { throw new Error('render failed'); })); assert.equal(win.requestAnimationFrame, own);
 });
