@@ -20,7 +20,8 @@
 //   light     the brightest control pixel (relative luminance) vs the brightest canvas pixel, stopped and playing
 //   scroll    document scrollHeight vs innerHeight, and every element that scrolls inside, in four states
 //   rings     scene.geo(): centre and outer radius (page px) in each state (default, every drawer open, focus mode, playing)
-//   frames    while playing: rAF callback time p95 (the page's own work per frame) and frame interval p95
+//   frames    while playing: the page's own work per frame (its rAF callbacks summed by frame) p95 and frame interval p95;
+//             and per callback (a frame runs several, most near 0 ms)
 import { launch } from './cdp.mjs';
 import { createHash } from 'node:crypto';
 import { writeFileSync, mkdirSync } from 'node:fs';
@@ -120,16 +121,22 @@ const PAGE = String.raw`(() => {
     canvasMax() { const cv = document.getElementById('cv'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let mx = 0; for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 8) continue; const L = lum(d[i], d[i + 1], d[i + 2]) * d[i + 3] / 255; if (L > mx) mx = L; } return Math.round(mx * 1000) / 1000; },
     // the canvas in one number (every 7th pixel hashed): pictures that differ while playing = the scene is drawing
     canvasSig() { const cv = document.getElementById('cv'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let h = 2166136261; for (let i = 0; i < d.length; i += 28) h = Math.imul(h ^ (d[i] | d[i + 1] << 8 | d[i + 2] << 16), 16777619); return h >>> 0; },
-    // frame cost: every rAF callback timed (the scene asks for its next frame through the global each time)
-    frames() { const raf = window.__faRaf ||= window.requestAnimationFrame.bind(window), cost = [], gap = []; let last = 0; window.requestAnimationFrame = (cb) => raf((t) => { if (last) gap.push(t - last); last = t; const s = performance.now(); cb(t); cost.push(performance.now() - s); }); return () => { window.requestAnimationFrame = raf; return { cost: pct(cost, 95), gap: pct(gap, 95), n: cost.length }; }; },
+    // frame cost: every rAF callback timed (the scene asks for its next frame through the global each time); a frame runs
+    // several (the scene, automation, Tone.Draw), most near 0 ms, so the callbacks are also summed per frame (by their
+    // timestamp): frame is A9's frame time, interval the time between frames (callbacks of one frame have no gap)
+    frames() { const raf = window.__faRaf ||= window.requestAnimationFrame.bind(window), cost = [], gap = [], per = new Map(); let last = 0; window.requestAnimationFrame = (cb) => raf((t) => { if (last) gap.push(t - last); last = t; const s = performance.now(); cb(t); const c = performance.now() - s; cost.push(c); per.set(t, (per.get(t) || 0) + c); }); return () => { window.requestAnimationFrame = raf; const ts = [...per.keys()].sort((a, b) => a - b); return { cost: pct(cost, 95), gap: pct(gap, 95), n: cost.length, frame: pct([...per.values()], 95), interval: pct(ts.slice(1).map((t, i) => t - ts[i]), 95), frames: ts.length }; }; },
     // A9 clock: a second Tone.Loop on the app loop's grid measures how late the scheduler calls back (audio time)
     lateness() { const T = window.Tone, raw = T.getContext().rawContext, late = []; const l = new T.Loop((time) => late.push((raw.currentTime - time) * 1000), (T.getTransport().PPQ / 24) + 'i').start(0); return () => { l.dispose(); return { p95: pct(late, 95), max: late.length ? Math.max(...late) : null, n: late.length }; }; },
   };
 })()`;
 
 async function settle(p, ms = 120) { await p.eval('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))'); await p.sleep(ms); }
-// a busy machine can take longer than open()'s 3.5 s to run the page's modules
-async function ready(p) { for (let i = 0; i < 80 && !(await p.eval('!!window.__poly && !window.__faOld')); i++) await p.sleep(250); }
+// a busy machine can take longer than open()'s 3.5 s to run the page's modules (and once took over 20 s): wait up to a
+// minute, then say so, rather than measure a page that never started
+async function ready(p) {
+  for (let i = 0; i < 240; i++) { if (await p.eval('!!window.__poly && !window.__faOld')) return; await p.sleep(250); }
+  throw new Error(`orbit2 did not start within a minute (page errors: ${p.errors.join(' | ') || 'none'})`);
+}
 async function shot64(p) { const { result } = await p.send('Page.captureScreenshot', { format: 'png' }); return result.data; }
 const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
 
@@ -237,7 +244,7 @@ export async function auditAudio({ port = 5400, debugPort = 9400, path = 'orbit2
         // the render stays stopped, and its clock is not A9's (a dropped frame callback ended the scene's loop once)
         const sigs = []; for (let k = 0; k < 3; k++) { if (k) await p.sleep(400); sigs.push(await p.eval('__fa.canvasSig()')); }
         await play(p);   // stop
-        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, headroomMs: { p5: r2(pct(head, 5)), min: r2(Math.min(...head)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n }, drawing: { pictures: new Set(sigs).size, of: sigs.length } };
+        out.clock = { seconds: playSec, latenessMs: { p95: r2(late.p95), max: r2(late.max), n: late.n }, stress: { p95: r2(pct(stress, 95)), max: r2(Math.max(...stress)) }, headroomMs: { p5: r2(pct(head, 5)), min: r2(Math.min(...head)) }, frameMs: { cost95: r2(frames.cost), gap95: r2(frames.gap), n: frames.n, frame95: r2(frames.frame), interval95: r2(frames.interval), frames: frames.frames }, drawing: { pictures: new Set(sigs).size, of: sigs.length } };
       }
       out.errors = [...(out.errors || []), ...one.p.errors, ...p.errors]; p.send('Page.close'); p.close();
     }
@@ -279,9 +286,9 @@ export function summary(report) {
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     for (const st of ['stopped', 'playing']) { const l = s.light[st]; if (l) L.push(`light ${st}: brightest control ${l.controlMax} (${l.controlMaxAt}) · brightest canvas ${l.canvasMax}${l.over ? ` · ${l.over.length} controls over ${THRESHOLDS.controlLum}` : ''}`); }
     for (const [st, v] of Object.entries(s.states)) L.push(`${st.padEnd(8)} scroll ${v.scroll.scrollHeight}/${v.scroll.innerHeight}${v.scroll.inner.length ? ` (inside: ${v.scroll.inner.map(i => `${i.el} ${i.scrollHeight}/${i.clientHeight}`).join(', ')})` : ''} · rings (${v.rings.cx}, ${v.rings.cy}) outer r ${v.rings.outer} (⌀ ${v.rings.diameter})`);
-    L.push(`frames while playing: callback p95 ${r2(s.frames.cost)} ms, interval p95 ${r2(s.frames.gap)} ms (${s.frames.n} frames)`, '');
+    L.push(`frames while playing: per frame p95 ${r2(s.frames.frame)} ms, frame interval p95 ${r2(s.frames.interval)} ms (${s.frames.frames} frames) · callback p95 ${r2(s.frames.cost)} ms, gap p95 ${r2(s.frames.gap)} ms (${s.frames.n} callbacks)`, '');
   }
-  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) { const dr = a.clock.drawing; L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame callback p95 ${a.clock.frameMs.cost95} ms, interval p95 ${a.clock.frameMs.gap95} ms (${a.clock.frameMs.n} frames) · canvas ${dr.pictures > 1 ? `drawing (${dr.pictures} different pictures in ${dr.of})` : 'NOT DRAWING: this clock is not A9\'s'}`); } L.push(''); }
+  if (report.audio) { const a = report.audio; L.push(`## audio (A9) · groove ${a.groove}, dice ${a.seed}, Math.random seeded ${a.random}, render #1 of two fresh pages per engine`); for (const [e, r] of Object.entries(a.renders)) L.push(`exportWav ${e}: sha256 ${r.sha256} (${r.bytes} bytes; ${r.identical ? 'the second page renders it identically' : `the second page differs in ${r.renderDiff.samples} samples, up to ${r.renderDiff.maxLsb} LSB, from ${r.renderDiff.firstSec} s`}: null test ${r.nullTest ? 'pass' : 'FAIL'}) · fingerprint ${r.fingerprint.hash}${r.fingerprintAgain.hash === r.fingerprint.hash ? ' (same on the second page)' : ` (second page: ${r.fingerprintAgain.hash})`}`); if (a.clock) { const dr = a.clock.drawing; L.push(`clock (${a.clock.seconds} s, synth): Tone.Loop lateness p95 ${a.clock.latenessMs.p95} ms (max ${a.clock.latenessMs.max}) · stress p95 ${a.clock.stress.p95} · headroom p5 ${a.clock.headroomMs?.p5} ms (min ${a.clock.headroomMs?.min}) · frame time p95 ${a.clock.frameMs.frame95} ms, frame interval p95 ${a.clock.frameMs.interval95} ms (${a.clock.frameMs.frames} frames) · callback p95 ${a.clock.frameMs.cost95} ms (${a.clock.frameMs.n} callbacks) · canvas ${dr.pictures > 1 ? `drawing (${dr.pictures} different pictures in ${dr.of})` : 'NOT DRAWING: this clock is not A9\'s'}`); } L.push(''); }
   const v = report.verdicts; L.push(v.length ? `## thresholds: ${v.length} failing\n${v.map(f => `- ${f.test} ${f.size}: ${f.what}`).join('\n')}` : '## thresholds: all pass');
   return L.join('\n');
 }

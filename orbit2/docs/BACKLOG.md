@@ -855,7 +855,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **What the face audit counts** (RD-01 round 1: verifier, rio, sound): A5 counts a control with a 5 px strip in view
   (a minimum visible area?); on the phone it reports 16 in view at scroll 0 and 102 drawn, so RD-10 must say which
   one its ceiling means; the frame metric is the rAF callback only, blind to style, layout and paint (add
-  `Performance.getMetrics` before RD-5's DOM console); with `?setlog`, one Tone.Loop callback in about a thousand ran
+  `Performance.getMetrics` before RD-5's DOM console; since round 3 the callbacks are also summed per frame, A9's
+  `frameMs.frame95`); with `?setlog`, one Tone.Loop callback in about a thousand ran
   one block later (still 26 ms early): watch it in the RD-5+ gate runs.
 - **A9's and A5's wording** (RD-01 round 1: sound, noor; for Noor): "bit-identical" cannot hold for an unchanged page
   (both engines wobble by 1 LSB): "the same fingerprint and a null test within 1 LSB" (`baselines.md`, A9); A5's

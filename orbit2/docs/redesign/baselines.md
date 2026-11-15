@@ -42,7 +42,7 @@ The agent-run baseline sets (A3) and glance trials (A2) are at the end: [A3 base
 | **A7** rings centre, outer radius (⌀) | (726, 507.5), r 301.1 (⌀ 602) | (726, 568.5), r 309.6 (⌀ 619) | (610, 437.5), r 205.8 (⌀ 412) | (195, 512.2), r 145.9 |
 | A7 rings in focus mode | (756, 481.6), r 307 | (756, 549.9), r 350.6 | (640, 403.2), r 257 | (195, 422), r 145.9 |
 | A7 rings, every drawer open / playing | unchanged | unchanged | unchanged | unchanged |
-| frame callback p95 / interval p95 (playing 10 s) | 0.5 / 16.7 ms | 0.5 / 16.7 ms | 0.5 / 16.7 ms | 0.5 / 16.7 ms |
+| frame callback p95 / gap p95 (playing 10 s; per callback, A9's per-frame time is in §A9) | 0.5 / 16.7 ms | 0.5 / 16.7 ms | 0.5 / 16.7 ms | 0.5 / 16.7 ms |
 
 **Where today fails the decision** (`--assert`, 28 failures, all expected before RD-2…RD-10):
 - **A1:** the text passes everywhere (min 5.5:1), but the controls are glass: 72 of 79 edges at 1512×860 are under
@@ -66,13 +66,14 @@ brief) and judges A5 by what is drawn and in view: **79**.
 Groove `house` (124 bpm) with dice locked at seed 4127, `exportWav` with a fresh profile's export settings (16-bit,
 44.1 kHz, 4 bars, loop). Each render is **render #1 of a fresh page** whose `Math.random` is seeded (mulberry32, 12345)
 before the page's first script and seeded again, with the frames held (and handed back after), just before
-`exportWav`; two fresh pages per engine, four launches (`node orbit2/tools/face-audit.mjs --sizes none --audio`: two on
-2026-11-14, two on 2026-11-15 after review round 2). Raw numbers and the per-window levels: `baseline/rd01-a9.json`.
+`exportWav`; two fresh pages per engine, six launches (`node orbit2/tools/face-audit.mjs --sizes none --audio --play
+10`: two on 2026-11-14, four on 2026-11-15 after review rounds 2 and 3). Raw numbers and the per-window levels:
+`baseline/rd01-a9.json`.
 
 | engine | fingerprint (per 20 ms: RMS of L, R and mid, 0.1 dB) | the same on | null test: two fresh pages | SHA-256 |
 |---|---|---|---|---|
-| synth (Tone, the default) | **`fee43cee9cc5fe56`** | 8 of 8 renders (4 launches) | differ in 16–36 samples by **1 LSB** | moves with the 1-LSB wobble (8 different) |
-| **dsp** (worklet) | **`96c2672430aa9851`** | 8 of 8 renders | identical, or 61 samples by **1 LSB** | moves between launches (1-LSB wobble) |
+| synth (Tone, the default) | **`fee43cee9cc5fe56`** | 12 of 12 renders (6 launches) | differ in 16–36 samples by **1 LSB** | moves with the 1-LSB wobble (12 different) |
+| **dsp** (worklet) | **`96c2672430aa9851`** | 12 of 12 renders | identical, or up to 61 samples by **1 LSB** | moves between launches (1-LSB wobble) |
 
 - **What a later phase checks (A9):** the same command gives the **same two fingerprints** and the null test holds
   (≤ 1 LSB between two fresh pages); a level, timing, pan or sound change moves the fingerprint (unit-tested: +1 dB,
@@ -86,13 +87,17 @@ before the page's first script and seeded again, with the frames held (and hande
   under `previous`.
 - **Clock while playing** (synth, `?debug`, 1512×860, 10 s, after the render, **the canvas drawing**: three
   pictures of it, 400 ms apart, all differ; the audit exits 2 when they do not): **Tone.Loop lateness p95 between −43
-  and −49 ms** over every run (2026-11-14 and -15, HEAD and the phase start; −47.8 and −44.5 ms in the two launches
-  of round 2): callbacks run 43–49 ms before their audio time and are never late (max < 0). Judge a later phase by
-  "never late, p95 inside the band", not by one number. **Stress p95 0**; the audio **headroom** (`stress.headMs`) p5
-  **about 65 ms or more** (67.9 and 71.4 ms; a floor: more headroom is not a deviation), the stress meter only moves
-  under 30 ms. **Frame callback p95 0.6–0.8 ms** (about 1,600 frame callbacks in 10 s), frame interval p95 16.7 ms:
-  this is A9's "frame time p95" (≤ +1 ms in a later phase). The probe needs the synth engine (it counts Tone.Loop
-  callbacks; on dsp it sees almost none).
+  and −49 ms** over every run (2026-11-14 and -15, HEAD and the phase start; −47.8, −44.5, −48.0 and −48.4 ms in the
+  four launches of rounds 2 and 3, −43.7 in Sofia's round-3 run): callbacks run 43–49 ms before their audio time and
+  are never late (max < 0). Judge a later phase by **"never late (max < 0) and p95 at or below −40 ms"**: the band's
+  late edge (−43) is within a millisecond of an unchanged page's own runs, so it is not a threshold. **Stress p95 0**; the audio
+  **headroom** (`stress.headMs`) p5 **about 65 ms or more** (67.9–71.4 ms; a floor: more headroom is not a deviation),
+  the stress meter only moves under 30 ms. **Frame time p95 0.8 ms** (`frameMs.frame95`: each frame's rAF callbacks
+  summed, about 600 frames in 10 s; frame interval p95 16.7–16.8 ms): this is A9's "frame time p95" (≤ +1 ms in a
+  later phase). Per callback the p95 is 0.6–0.8 ms (`cost95`, about 1,600 callbacks in 10 s: a frame runs the scene,
+  the automation loop and Tone.Draw, most near 0 ms, so a callback p95 moves when a phase adds or drops a cheap loop and
+  sees heavy work in a few frames only in part; Sofia, round 3); the first two launches and round 1 have only the
+  callback figure. The probe needs the synth engine (it counts Tone.Loop callbacks; on dsp it sees almost none).
 - **Replaced (round 2, Sofia):** round 1's clock ran after a render whose `requestAnimationFrame` stub dropped the
   scene's next frame, and the scene's loop asks for each frame from inside the last one, so the canvas never drew
   again: its frame callback p95 of 0.1 ms (about 590 callbacks in 6 s) described a page that does not draw. The render
