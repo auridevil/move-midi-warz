@@ -132,8 +132,14 @@ const PAGE = String.raw`(() => {
       if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) || [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) check(e, 'color', s.color);
       for (const k of ['Top', 'Right', 'Bottom', 'Left']) if (parseFloat(s['border' + k + 'Width']) > 0 && !/none|hidden/.test(s['border' + k + 'Style'])) check(e, 'border', s['border' + k + 'Color']);
       check(e, 'background', s.backgroundColor); if (s.boxShadow !== 'none') check(e, 'shadow', s.boxShadow);
+      if (s.backgroundImage !== 'none') check(e, 'background-image', s.backgroundImage); if (s.textShadow !== 'none') check(e, 'text-shadow', s.textShadow);
+      if (s.outlineStyle !== 'none' && parseFloat(s.outlineWidth) > 0) check(e, 'outline', s.outlineColor);   // an "on" lamp's shape, a focus ring
       if (e instanceof SVGElement) { if (s.stroke !== 'none') check(e, 'stroke', s.stroke); if (s.fill !== 'none') check(e, 'fill', s.fill); }
-      for (const pe of ['::before', '::after']) { const p = getComputedStyle(e, pe); if (p.content === 'none' || p.content === 'normal' || p.display === 'none') continue; if (/^["']\S|^attr\(/.test(p.content)) check(e, pe + ' color', p.color); check(e, pe + ' background', p.backgroundColor); }
+      for (const pe of ['::before', '::after']) {
+        const p = getComputedStyle(e, pe); if (p.content === 'none' || p.content === 'normal' || p.display === 'none') continue;
+        if (/^["']\S|^attr\(/.test(p.content)) check(e, pe + ' color', p.color); check(e, pe + ' background', p.backgroundColor); if (p.boxShadow !== 'none') check(e, pe + ' shadow', p.boxShadow);
+        for (const k of ['Top', 'Right', 'Bottom', 'Left']) if (parseFloat(p['border' + k + 'Width']) > 0 && !/none|hidden/.test(p['border' + k + 'Style'])) check(e, pe + ' border', p['border' + k + 'Color']);
+      }
     }
     return [...out.values()];
   }

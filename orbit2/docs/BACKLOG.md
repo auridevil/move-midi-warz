@@ -880,7 +880,10 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   (purple / teal haze over `--v`); the `?debug` stress meter paints `--signal-cyan` (0.69), `#fde047` and `--bad`
   inline every 300 ms (`app.js` ~2325); `scene.js` canvas cyan / magenta / white flashes and the `#67e8f9` marker; the
   coupling matrix cells fill by amount (`.couple-matrix .cm-cell`); the lit cells are the one solid fill on the face (by
-  the spec: a line in the decision would say so); the jam panel keeps its red border after the take is recorded.
+  the spec: a line in the decision would say so); the jam panel keeps its red border and bar after the take is recorded
+  (RD-02 round 3, verifier: state done, nothing recording; the face audit's HUE exempts `.jam-panel` in every state,
+  narrow it to the recording states when RD-7 builds the jam pill). TYPE counts the nerd stats' ui-monospace without
+  judging the family: the decision keeps monospace for RD-5's console-log overlay.
 - **Canvas text the A9 clock never draws** (RD-02 round 1, sound; for RD-8): the house groove's 10 s never shows the
   cycle caption or any canvas text, so frame p95 cannot see text cost; add a clock state that draws it (polymetric
   lanes, jam on) when RD-8 brings the labels. Jam recalculates style every frame while it records (0.1 ms; RD-5 / RD-8).

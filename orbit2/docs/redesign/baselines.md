@@ -147,8 +147,9 @@ before the page's first script and seeded again, with the frames held (and hande
     300 only from 40 px); **HIT** (the action words in view: `elementFromPoint` 19.5 px above and below the centre, at
     both ends and the middle, lands on the button: a 40 px hit area); `--root <dir>` audits another checkout with this
     tool. RD-2's gates: `--tests A1,TYPE,HIT,HUE --assert --diff orbit2/docs/redesign/baseline/rd01-controls.json`.
-  - (RD-2 review round 2) **HUE**: every drawn colour (text, borders, background, box-shadow, an SVG mark's stroke /
-    fill, a `::before` / `::after`) at first load and with everything shown is a grey (chroma ≤ 40), a mix of one lane
+  - (RD-2 review round 2) **HUE**: every drawn colour (text, borders, background and background image, box-shadow,
+    text-shadow, outline, an SVG mark's stroke / fill, a `::before` / `::after`'s text, background, border and shadow;
+    the last four since round 3) at first load and with everything shown is a grey (chroma ≤ 40), a mix of one lane
     colour over the void (any amount, each channel within 8 / 255), or record red on a recorder that records (armed
     record or mic, jam on, the jam panel); the canvas is left out. TYPE and HUE's "everything shown" also opens step
     1's lock panel and the help dialog. The diff also takes **every drawn control with everything shown** (`all`: the
