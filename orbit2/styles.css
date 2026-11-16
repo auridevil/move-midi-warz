@@ -334,6 +334,17 @@ body.chaos::before { display: none; }
 .acts .share-wrap { justify-self: start; }
 /* the right column's head: the Move pill and "?" */
 .hud-top { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+/* the page drawn, in words ("sound", "step 7 · held on Move"); the light grey while the Move owns the row */
+.lh-page { color: var(--l); }
+/* a Move step held: its cell outlined at once (the step page follows at LOOK_MS or a turn) */
+.stepsui .st.held { outline: 2px solid var(--l); outline-offset: 1px; }
+/* RD-5 the peek (left column, under the lane list): 64 px weight 300 number, the knob's name, what it means */
+.peek { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px 12px; pointer-events: none; }
+.peek[hidden] { display: none; }
+.peek-n { font: 300 64px/1 var(--font-body); color: var(--l); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.peek-name { font-size: var(--t-m); line-height: 19.5px; color: var(--l); }
+.peek-mean { font-size: var(--t-m); line-height: 19.5px; color: var(--d); }
+@media (max-width: 1100px) { .peek { display: none !important; } }   /* narrow: no left column (RD-10 places it) */
 .pane .wordmark { padding: 4px 0 2px; }   /* h1's own look (Major Mono, only here) */
 /* narrow windows: the console stacks under the rings and the lane list (transport, the lane, the action words) */
 @media (max-width: 1100px) {

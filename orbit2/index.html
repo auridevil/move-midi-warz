@@ -39,6 +39,7 @@
         <span id="lh-lane" class="lh-lane"></span>
         <select id="voice-select" aria-label="voice"></select>
         <span id="lh-steps" class="lh-steps"></span>
+        <span id="lh-page" class="lh-page"></span>
         <span id="move-chip" class="move-chip" title="What the Move's knobs edit now: white when the Move owns the row, grey when it edits something not drawn"></span>
         <div id="page-tabs" class="page-tabs" role="group" aria-label="knob page">
           <button type="button" id="pg-rhythm" aria-pressed="true" title="The lane's rhythm: length, hits, shift, speed, swing, chance, tune and the tempo (the Move's knobs)">rhythm</button>
@@ -111,6 +112,9 @@
        it) and its M lamp (mute; Shift+click or a long press = solo). Heads the left column on wide windows, sits under
        the canvas on narrow ones -->
   <ul id="legend" class="ring-legend lane-list" aria-label="lanes, inner ring first"></ul>
+  <!-- RD-5 the peek: the touched knob's number, name and plain meaning (a Move encoder touch, a knob drag or keyboard
+       focus on a knob; never hover), 400 ms after the hand lets go. Read-only light, not a live region -->
+  <div id="peek" class="peek" aria-hidden="true" hidden><b id="peek-n" class="peek-n"></b><span id="peek-name" class="peek-name"></span><span id="peek-mean" class="peek-mean"></span></div>
   </div>
   <!-- RD-3: the right column: the Move pill and help, what is on (welcome, quest, jam take: RD-7's pills go here), then
        the one sheet -->

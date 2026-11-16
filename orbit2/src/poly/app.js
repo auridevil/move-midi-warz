@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, ratchetGains, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS, LOCK_RANGE, GHOST_VEL, AUTO_KEYS, AUTO_RES, AUTO_MAX, AUTO_LOOPS_MAX, laneCountOf } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane } from './pages.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS } from './pages.js';
 import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, chainSixteenths, chainMeters, hitsToMidi, encodeShareFit, decodeShare, autoRamps, autoCCs, collectChainAuto, LINK_MAX } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
@@ -607,23 +607,50 @@ function renderLanes() {
     mb.title = q ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `mute lane ${i + 1} · Shift+click or long-press = solo`;
   });
 }
-// ---- RD-5 the console's knob row: one page at a time (rhythm = the Move's knobs 1–8, sound = Shift + knobs). The
-// gauges are the sheet's own, moved into the row (gauge.js bindRow): a page's knobs leave the sheet while the row shows
-// them and go back when it doesn't. The mouse latches a page with its tab; the Move's Shift shows sound while held ----
+// ---- RD-5 the console's knob row: one page at a time, chosen by pages.js resolvePage (Nils's state table): rhythm =
+// the Move's knobs 1–8, sound = Shift + knobs, step = a step's locks (the Move's hold-step knobs 1–7; RD-6 draws the
+// rest of the step page). The gauges are the sheet's own, moved into the row (gauge.js bindRow): a page's knobs leave
+// the sheet while the row shows them and go back when it doesn't. The mouse latches a page with its tab (or a cell's
+// long-press: step); a Move hold or touch owns the row while it lasts (+ TOUCH_HOLD_MS); ⇧ held shows sound ----
 const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'];   // the Move's knobs 1–7 (8 = tempo)
-const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
-const knobPage = { latch: 'rhythm', shown: null };
-const pageShown = () => (shift || kbdShift ? 'sound' : knobPage.latch === 'step' ? 'rhythm' : knobPage.latch);   // RD-5: the step page is drawn by RD-6
+const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: LOCK_KEYS.slice(0, 7) };   // knob 8 on a step = its condition (the sheet)
+const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? ROW_KEYS.step.map(k => sliders['lock:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
+// latch: the page the screen chose; step: the step a cell's long-press latched (on lane `lane`), back: where it came from
+const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r: null, forced: null };   // forced: the lock editor before a Move look took it
+const hands = { touch: new Set(), touchUntil: 0, loop: false };   // the Move's encoders touched, the touch's tail, Loop held
+/** What the hands and the latch make of the row now (pages.js). A latched step goes with its lane, or a shorter loop. */
+function pageNow() {
+  const now = performance.now(), h = pages.held.size ? [...pages.held.values()][0] : null, look = pages.looked(now);
+  if (knobPage.lane !== m.selected || knobPage.step >= m.lane.length) knobPage.step = -1;
+  if (knobPage.latch === 'step' && knobPage.step < 0) knobPage.latch = knobPage.back;   // the step closed (Esc, another lane, a shorter loop)
+  return resolvePage({ latch: knobPage.latch, latchStep: knobPage.step, back: knobPage.back, shift, kbdShift, held: h && { step: (look || h).step, looked: !!look }, touch: hands.touch.size > 0 || now < hands.touchUntil, loop: hands.loop });
+}
+/** The mouse's step page: a cell (or a planet) opened step i (-1 = closed). The Move's holds come and go over it. */
+function latchStep(i) {
+  if (i >= 0) { if (knobPage.latch !== 'step') knobPage.back = knobPage.latch; Object.assign(knobPage, { latch: 'step', step: i, lane: m.selected }); }
+  else if (knobPage.latch === 'step') Object.assign(knobPage, { latch: knobPage.back, step: -1 });
+  renderPage();
+}
 function renderPage() {
-  const pg = pageShown(), lane = m.lane, first = cellFirst();
+  const r = knobPage.r = pageNow(), lane = m.lane;
+  // a Move hold that owns the step page shows the held step's locks (as the Move's knobs edit them); a look that edited
+  // nothing gives the lock editor back as it was once the row leaves it (an edit keeps it, as before: stepEdited)
+  if (r.row === 'step' && r.step !== lockStep && r.step < lane.length) { knobPage.forced ??= { prev: lockStep }; lockStep = r.step; renderSteps(); renderLocks(); }
+  else if (r.row !== 'step' && knobPage.forced) { lockStep = knobPage.forced.prev < lane.length ? knobPage.forced.prev : -1; knobPage.forced = null; renderSteps(); renderLocks(); }
   // a knob the pointer holds stays put: the row flips once it is let go (#knobs pointerup below)
-  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g.held))) { knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg; }
-  for (const t of ['rhythm', 'sound', 'step']) $('pg-' + t).setAttribute('aria-pressed', String(t === knobPage.latch));
+  const pg = r.row, first = cellFirst();
+  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g?.held))) { knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg; }
+  for (const t of PAGES) $('pg-' + t).setAttribute('aria-pressed', String(t === knobPage.shown));   // the tab of the page drawn
   $('pg-step').setAttribute('aria-disabled', String(lockStep < 0));
   const lh = `${m.selected + 1} · ${voiceLabel(lane)}${lane.muted ? ' · M' : ''}`; if ($('lh-lane').textContent !== lh) $('lh-lane').textContent = lh;
   $('lh-steps').textContent = `steps ${Math.min(first + 1, lane.length)}–${Math.min(first + STEP_BTNS, lane.length)} of ${lane.length}`;
+  $('lh-page').textContent = r.word;
+  const chip = $('move-chip'); chip.textContent = move.inControl ? r.chip : ''; chip.classList.toggle('own', r.own);   // only with a Move to name
+  paintPeek();
 }
 for (const t of ['rhythm', 'sound']) $('pg-' + t).onclick = () => { knobPage.latch = t; renderPage(); };
+// the step tab: the step a cell's long-press (right-click, Alt+click) or a planet opened; none yet, it says how
+$('pg-step').onclick = () => { if (lockStep < 0) return toast('long-press, right-click or Alt+click a cell for its step page', 2500); latchStep(lockStep); };
 $('knobs').addEventListener('pointerup', () => setTimeout(renderPage), true);   // a held knob let go: a flip it held back happens now
 // ⇧ held on the keyboard shows the sound page too (DECISION: "Move Shift, ⇧ held, or the sound tab"); a text field's
 // Shift is its own
@@ -631,8 +658,40 @@ let kbdShift = false;
 const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); };
 addEventListener('keydown', (e) => { if (e.key === 'Shift' && !(e.target instanceof Element && e.target.closest('input, textarea'))) setKbdShift(true); });
 addEventListener('keyup', (e) => { if (e.key === 'Shift') setKbdShift(false); }); addEventListener('blur', () => setKbdShift(false));
-// RD-5: the step page is RD-6's; until then its tab opens the step's locks in the sheet (a cell's long-press picks the step)
-$('pg-step').onclick = () => { if (lockStep < 0) return toast('long-press, right-click or Alt+click a cell for its locks', 2500); reveal('lockpanel').scrollIntoView({ block: 'nearest' }); };
+/** A Move encoder (0–7) touched or let go: the row flips to the Move's page for the touch and TOUCH_HOLD_MS after it. */
+function moveTouch(index, on) {
+  if (on) hands.touch.add(index); else { hands.touch.delete(index); hands.touchUntil = performance.now() + TOUCH_HOLD_MS; setTimeout(renderPage, TOUCH_HOLD_MS + 10); }
+  renderPage(); if (on) peekAt(index, 'touch'); else peekOff('touch');
+}
+// ---- RD-5 the peek (left column): the touched knob's number (64 px, weight 300), its name and what it means in plain
+// words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
+// hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` and the frame that paints
+// it measures `peek` (performance entries) ----
+const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, why: new Set(), timer: 0, mark: false };
+const PEEK_SAYS = {
+  length: v => `${v} step${v === 1 ? '' : 's'} a loop`, euclid: v => v ? `${v} hit${v === 1 ? '' : 's'}, spread evenly` : 'no hits spread',
+  rotation: v => v ? `the hits start ${v} step${v === 1 ? '' : 's'} later` : 'not shifted', ratio: v => `${RATIO_LABEL[v]} step${RATIO_LABEL[v] === '1' ? '' : 's'} a beat`,
+  swing: v => v ? `every other step ${v}% late` : 'straight', prob: v => `plays ${v} of 100 loops`, tune: v => tuneSay(v), tempo: v => `${v} beats a minute`,
+};
+function peekAt(slot, why) { clearTimeout(peek.timer); peek.slot = slot; peek.why.add(why); if (why === 'touch' && slog) { performance.mark('peek-touch'); peek.mark = true; } paintPeek(); }
+function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; paintPeek(); } }, PEEK_MS); }
+function paintPeek() {
+  const el = $('peek'), g = peek.slot >= 0 ? $('knobs').children[peek.slot]?.firstElementChild : null;
+  if (!g) { if (!el.hidden) el.hidden = true; return; }
+  const k = ROW_KEYS[knobPage.shown]?.[peek.slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
+  $('peek-n').textContent = g.querySelector('.g-val').textContent;
+  $('peek-name').textContent = `knob ${peek.slot + 1} · ${label} · ${voiceLabel(m.lane)}`;
+  $('peek-mean').textContent = PEEK_SAYS[k]?.(v) ?? `${label} ${g.getAttribute('aria-valuetext')}`;
+  el.hidden = false;
+  if (peek.mark) { peek.mark = false; requestAnimationFrame(() => performance.measure('peek', 'peek-touch')); }   // the frame that paints it
+}
+{
+  const kn = $('knobs'), slotOf = (el) => [...kn.children].indexOf(el.closest('#knobs > *'));
+  kn.addEventListener('pointerdown', (e) => { if (e.target instanceof Element && e.target.closest('.gauge')) peekAt(slotOf(e.target), 'drag'); });
+  for (const t of ['pointerup', 'pointercancel']) kn.addEventListener(t, () => peekOff('drag'));
+  kn.addEventListener('focusin', (e) => { if (lastInput === 'key' && e.target.closest('.gauge')) peekAt(slotOf(e.target), 'focus'); });
+  kn.addEventListener('focusout', () => peekOff('focus'));
+}
 /** The first of the 16 steps the cells show: the 16 holding the step being edited, else the Move's step buttons' (the
  *  16 holding the pad page: they follow the playhead, or the page Back pinned). */
 const cellFirst = () => (lockStep >= 0 ? STEP_BTNS * Math.floor(lockStep / STEP_BTNS) : pages.stepFirst(m.lane, playing));
@@ -678,10 +737,10 @@ function paintPlayhead() {
 function renderSteps() {
   const lane = m.lane; playheadAt = -1;
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
-  const first = cellsAt = cellFirst();   // RD-5: 16 cells, the Move's 16 step buttons (L1's steps 17–32 on their page)
+  const first = cellsAt = cellFirst(), hs = new Set([...pages.held.values()].map(h => h.step));   // RD-5: 16 cells, the Move's 16 step buttons (L1's steps 17–32 on their page); a Move step held is outlined
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));
-    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`;
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${hs.has(i) ? ' held' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
@@ -704,10 +763,11 @@ const LOCK_UI = {
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 // opening it brings the panel into view: in the scrolling sheet the slice picker can open below its edge, and a planet's
 // long-press opens it from the rings while another tab shows (RD-3: reveal opens the lane tab)
-function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); }
+// RD-5: it latches the console's step page too (latchStep; Esc closes it the same way)
+function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); latchStep(lockStep); if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
- *  prob lock can change the cycle). */
-function stepEdited() { renderSteps(); renderLocks(); save(); paintLeds(); readout(); }
+ *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
+function stepEdited() { knobPage.forced = null; renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
 /** Lock parameter k on the step the lock panel edits to v (null = unlock), then audition it and record it. */
 function lockHere(k, v) {
   if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v == null) lane.unlock(i, k); else lane.setLock(i, k, v);
@@ -2081,14 +2141,17 @@ move.addEventListener('step', (e) => {
   const { index: btn, on } = e.detail;
   // a release ends its own press, whatever happened since (the page turned, Back went down, the lane got shorter):
   // a tap toggles the step it went down on; a hold + knob locked something instead, a longer hold looked at its loops (P7)
-  if (!on) { const h = pages.release(btn, performance.now()), lane = m.lane; if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else paintLeds(); return; }
+  if (!on) { const h = pages.release(btn, performance.now()), lane = m.lane; if (h) stepBtns[h.step]?.classList.remove('held'); if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else { renderPage(); paintLeds(); } return; }
   if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
   if (pages.back) { pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
   const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
-  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else { pages.press(btn, step, first, performance.now()); setTimeout(paintLeds, LOOK_MS + 10); }   // P7: held LOOK_MS, the buttons show its loops
+  // P7: held LOOK_MS, the buttons show its loops; RD-5: its cell is outlined at once, the step page comes at LOOK_MS (or a turn)
+  if (shift) { lane.toggleAccent(lane.stepIndex(step)); sync(); } else { pages.press(btn, step, first, performance.now()); stepBtns[step]?.classList.add('held'); setTimeout(() => { renderPage(); paintLeds(); }, LOOK_MS + 10); }
 });
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
+  // RD-5: a turn with no touch (a controller without touch) flips the row and shows the peek as a touch would
+  if (index < 8 && !hands.touch.has(index)) { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; setTimeout(renderPage, TOUCH_HOLD_MS + 10); renderPage(); peekAt(index, 'turn'); peekOff('turn'); }
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
     for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
@@ -2128,6 +2191,7 @@ move.addEventListener('encoder', (e) => {
 const touched = new Map();   // encoder index → the parameter it was touched on (moveKnob)
 move.addEventListener('encoderTouch', (e) => {
   const { index, on } = e.detail; if (index > 7) return;
+  moveTouch(index, on);   // RD-5: the row flips to the Move's page, the peek shows the knob
   if (!on) { touched.delete(index); const g = knobGest; if (g?.knob === index && g.touch && !g.latched) gestEnd(); return; }
   if (held.size) return; const pk = moveKnob(index, shift); if (!pk) return; touched.set(index, pk);
   // recording, a touch writes from what plays (touch mode: also while the knob holds still); not recording a finger
@@ -2151,7 +2215,7 @@ move.addEventListener('wheelPush', (e) => {
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
   const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; renderPage(); paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
-  if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
+  if (name === 'loop') { loopHeld = hands.loop = pressed; renderPage(); if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
   if (name === 'back') { if (pressed) pages.backDown(); else pages.backUp(); paintLeds(); return; }   // L5 pages
   if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
@@ -2600,7 +2664,7 @@ function findRun(h) {
 const drawn = (el) => !!el.getClientRects().length;
 const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || (!ringMenu.hidden && drawn(ringMenu) && 'ring') || null;
 function closePopups() { closeShareMenu(); closeSlotMenu(); closeRingMenu(); }
-const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && drawn($('lockpanel')), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
+const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && (drawn($('lockpanel')) || knobPage.shown === 'step'), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
   const a = document.activeElement, step = escStep(escState());
   closePopups();   // the dialog step, and a popup open but not drawn (no layer) goes with whatever this press closes
@@ -2643,5 +2707,5 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 // (RD-3: the Move table is a drawer in Sheet → setup now, not a popup, so a click elsewhere no longer folds it shut)
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get questLog() { return questLog; }, get setlog() { return slog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 readout(); layoutStage(); scene.start();

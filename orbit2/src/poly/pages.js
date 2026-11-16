@@ -65,3 +65,41 @@ export class MovePages {
     this.held.delete(btn); this.down.delete(btn); if (!this.held.size) this.hold = -1; return h;
   }
 }
+
+// ---- RD-5 the console's knob row: which page it shows, and what the Move's knobs edit (Nils's state table,
+// docs/redesign/proposals/nils/answers.md §Q2). One rule: a Move control held (Shift, a step looked at) or touched (an
+// encoder, and TOUCH_HOLD_MS after it) owns the row while it lasts; let go, the row goes back to the page the screen
+// latched (rhythm, sound, or a step the mouse opened), never to rhythm. The Move's mapping never changes: the chip names
+// what its knobs edit, grey when that is not what the row draws. Pure: app.js feeds it the hands and draws the answer ----
+export const TOUCH_HOLD_MS = 400;
+export const PAGES = ['rhythm', 'sound', 'step'];
+/**
+ * @param {object} s
+ * @param {'rhythm'|'sound'|'step'} [s.latch]  the page the screen latched (a tab, or a cell's long-press = step)
+ * @param {number} [s.latchStep]   the step of a latched step page (-1: none, so 'step' falls back to `back`)
+ * @param {'rhythm'|'sound'} [s.back]   where a latched step page came from
+ * @param {boolean} [s.shift]      the Move's Shift held
+ * @param {boolean} [s.kbdShift]   ⇧ held on the keyboard (a screen hold: the sound page, the Move unchanged)
+ * @param {{ step: number, looked: boolean }|null} [s.held]   a Move step held: looked = held LOOK_MS or a knob turned
+ * @param {boolean} [s.touch]      a Move encoder touched now, or let go less than TOUCH_HOLD_MS ago
+ * @param {boolean} [s.loop]       Loop held: the cells show the slots, the knobs keep their meaning
+ * @returns {{ row: string, step: number, cells: string, move: string, knob8: string, own: boolean, chip: string, word: string }}
+ *   row: the page drawn · step: its step (-1) · cells: steps | loops | slots · move: what the Move's knobs 1–7 edit
+ *   (rhythm | sound | step: a held step's locks, looked at or not) · knob8: tempo | level | condition | repeats · own:
+ *   the chip white (the Move owns the row, or its knobs edit what is drawn) · chip: "MOVE ⇢ …" · word: the page's name
+ *   in the header
+ */
+export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm', shift = false, kbdShift = false, held = null, touch = false, loop = false } = {}) {
+  // a step held but not yet looked at may still be a tap: it owns nothing (no page flashes) unless a knob is touched
+  const holds = !!held && (held.looked || touch), quiet = !!held && !holds;
+  // what the Move's knobs edit (app.js 'encoder': a held step makes 1–7 its locks and 8 its condition, + Shift repeats)
+  const move = held ? 'step' : shift ? 'sound' : 'rhythm', knob8 = held ? (shift ? 'repeats' : 'condition') : shift ? 'level' : 'tempo';
+  const owns = holds || (!quiet && (shift || touch)), seen = holds ? 'step' : shift && !held ? 'sound' : 'rhythm';   // seen: the Move's page as drawn
+  const mine = latch === 'step' && latchStep < 0 ? back : latch, screen = kbdShift && mine !== 'step' ? 'sound' : mine;
+  const row = owns ? seen : screen, step = row === 'step' ? (owns ? held.step : latchStep) : -1;
+  // T1a / the quick tap: until the step is looked at, the chip says what it said before it went down
+  const label = holds ? `STEP ${held.step + 1}${shift ? ' ⇧' : ''}` : seen === 'sound' ? 'SOUND ⇧' : 'RHYTHM';
+  const own = owns || (row === seen && seen !== 'step');
+  const word = row === 'step' ? `step ${step + 1}${owns ? ` · held on Move${shift ? ' ⇧' : ''}` : ''}` : row === 'sound' && shift && owns ? 'sound ⇧' : row;
+  return { row, step, cells: loop ? 'slots' : row === 'step' ? 'loops' : 'steps', move, knob8, own, chip: `MOVE ⇢ ${label}`, word };
+}
