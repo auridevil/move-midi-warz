@@ -34,8 +34,10 @@ const pct = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y)
 const send = (p, b) => p.eval(`__poly.move.receive(new Uint8Array(${JSON.stringify(b)}))`);
 const BASE = JSON.parse(readFileSync(new URL('../docs/redesign/baseline/rd01-a9.json', import.meta.url), 'utf8')).clock.runs.map(r => r.frameMs.frame95).filter(Number.isFinite);
 export const THRESH = { glance: 18, frameMs: Math.max(...BASE) + 1 };
+// the old lock panel (Sheet → lane): RD-6 keeps it only as the step page's "more…" (never the 7 lock knobs: the row has them)
+const PANEL = `(() => { const lp = document.getElementById('lockpanel'); return { hidden: lp.hidden, knobs: [...document.querySelectorAll('#lock-gauges .gauge .g-label')].map(e => e.textContent) }; })()`;
 // the row, the cells, the step words and knob 8, as the page draws them
-const STATE = `(() => { const g = (i) => document.getElementById(i); return { row: g('knobs').dataset.page, cells: g('stepsui').dataset.cells, word: g('lh-page').textContent, tools: !g('step-tools').hidden, k8: g('knobs').children[7].querySelector('.g-label')?.textContent, rings: document.querySelectorAll('#knobs .gauge.ring').length, lit: document.querySelectorAll('#stepsui .st.lp-on:not(.out)').length, held: [...document.querySelectorAll('#stepsui .st')].flatMap((b, i) => b.classList.contains('held') ? [i + 1] : []), lane: parseInt(g('lh-lane').textContent, 10), sheet: __poly.sheet.open }; })()`;
+const STATE =`(() => { const g = (i) => document.getElementById(i); return { row: g('knobs').dataset.page, cells: g('stepsui').dataset.cells, word: g('lh-page').textContent, tools: !g('step-tools').hidden, k8: g('knobs').children[7].querySelector('.g-label')?.textContent, rings: document.querySelectorAll('#knobs .gauge.ring').length, lit: document.querySelectorAll('#stepsui .st.lp-on:not(.out)').length, held: [...document.querySelectorAll('#stepsui .st')].flatMap((b, i) => b.classList.contains('held') ? [i + 1] : []), lane: parseInt(g('lh-lane').textContent, 10), sheet: __poly.sheet.open }; })()`;
 /** A lane of the set whose voice has strokes (push the jog = the next one), selected, and its first hit (0-based). */
 const pickLane = (p) => p.eval(`(async () => { const { ARTICS } = await import('./src/poly/voices.js'); const ls = __poly.m.lanes; let li = ls.findIndex(l => ARTICS[l.voice] && l.hits.some(Boolean)); if (li < 0) li = 1; __poly.m.select(li); __poly.sync(); const l = __poly.m.lane; let i = 0; while (i < l.length && !l.hitAt(i)) i++; return { li, i, artics: !!ARTICS[l.voice] }; })()`);
 const saved = (p, i) => p.eval(`(() => { const s = JSON.parse(localStorage.getItem('midi-warz.orbit2.v2')), l = s.lanes[s.selected], si = __poly.m.lane.stepIndex(${i}); return { lock: l.locks[si], trig: l.trigs[si] }; })()`);
@@ -46,17 +48,19 @@ async function moveHold(p) {
   // the press and the outline in one task: within the frame
   out.outlined = await p.eval(`(() => { __poly.move.receive(new Uint8Array(${JSON.stringify(bytes.step(i, true))})); return document.querySelectorAll('#stepsui .st')[${i}].classList.contains('held'); })()`);
   out.T1a = await p.eval(STATE);
-  await send(p, bytes.touch(0, true)); await sleep(30); out.touched = await p.eval(STATE);
-  await send(p, bytes.enc(0, 5)); await sleep(30); await send(p, bytes.touch(0, false));
+  await send(p, bytes.touch(0, true)); await sleep(30); out.touched = await p.eval(STATE);   // a touch is no turn: still T1a
+  await send(p, bytes.enc(0, 5)); await sleep(30); out.turned = await p.eval(STATE); await send(p, bytes.touch(0, false));
   await send(p, bytes.touch(7, true)); await send(p, bytes.enc(7, 1)); await sleep(40); out.cond = await p.eval(STATE);
   await send(p, bytes.btn('shift', true)); await sleep(30); out.T2 = await p.eval(STATE); await send(p, bytes.enc(7, 1)); await sleep(30); await send(p, bytes.btn('shift', false)); await send(p, bytes.touch(7, false));
   await send(p, bytes.wheel(2)); await sleep(30);
   if (artics) { await send(p, [0xB0, WHEEL_PUSH_CC, 127]); await send(p, [0xB0, WHEEL_PUSH_CC, 0]); await sleep(30); }   // push the jog (CC 3)
   out.locks = await saved(p, i);
-  await send(p, bytes.step(i, false)); await sleep(60); out.after = await p.eval(STATE); out.hitAfter = await p.eval(`__poly.m.lane.hitAt(${i})`);
+  await send(p, bytes.step(i, false)); await sleep(60); out.after = await p.eval(STATE); out.hitAfter = await p.eval(`__poly.m.lane.hitAt(${i})`); out.panel = await p.eval(PANEL);
   if (!out.outlined) fails.push('the held cell was not outlined in the task of the press');
   if (out.T1a.row === 'step') fails.push('T1a: the page flipped before a look or a knob');
-  if (out.touched.row !== 'step' || out.touched.rings !== 8 || out.touched.cells !== 'loops' || out.touched.k8 !== 'condition') fails.push(`a knob touched on the held step: ${JSON.stringify(out.touched)}`);
+  if (out.touched.row === 'step') fails.push('a knob touched (not turned) on a held step showed the page: a touch is no turn');
+  if (out.turned.row !== 'step' || out.turned.rings !== 8 || out.turned.cells !== 'loops' || out.turned.k8 !== 'condition') fails.push(`a knob turned on the held step: ${JSON.stringify(out.turned)}`);
+  if (!out.panel.hidden) fails.push(`the old lock panel is shown once the row left the step page (a second lock editor): ${JSON.stringify(out.panel)}`);
   if (out.cond.lit !== 8) fails.push(`knob 8 → 1:2 should light 8 of 16 loop dots, lit ${out.cond.lit}`);
   if (out.T2.k8 !== 'repeats' || out.T2.row !== 'step') fails.push(`T2 (+ Shift): ${JSON.stringify(out.T2)}`);
   const L = out.locks; if (!(L.lock?.tune > 0)) fails.push(`knob 1 did not lock tune: ${JSON.stringify(L)}`);
@@ -78,13 +82,26 @@ async function tapRule(p) {
     const flashes = await p.eval('__flash.slice()'), h1 = await p.eval(`__poly.m.lane.hitAt(${i})`); taps.push({ ms, toggled: h0 !== h1, flashes: flashes.length });
     if (h0 === h1) fails.push(`a ${ms} ms tap did not toggle its step`); if (flashes.length) fails.push(`a ${ms} ms tap flashed: ${flashes.join(', ')}`);
   }
+  // a finger resting on a knob (touched, never turned) while the other hand taps: still taps, never the page (RD-6 round
+  // 1); the touch before the step, or during it
+  const rest = [];
+  for (const first of ['touch', 'step']) for (let k = 0; k < 3; k++) {
+    const ms = 80 + Math.floor(rng() * 300), h0 = await p.eval(`__poly.m.lane.hitAt(${i})`);
+    if (first === 'touch') { await send(p, bytes.touch(2, true)); await sleep(60); }
+    await p.eval('__flash.length = 0'); await send(p, bytes.step(i, true));
+    if (first === 'step') { await sleep(40); await send(p, bytes.touch(2, true)); }
+    await sleep(ms); const mid = await p.eval('__poly.page.row'); await send(p, bytes.step(i, false)); await sleep(80);
+    const flashes = await p.eval('__flash.slice()'), h1 = await p.eval(`__poly.m.lane.hitAt(${i})`); await send(p, bytes.touch(2, false)); await sleep(520);
+    rest.push({ first, ms, toggled: h0 !== h1, flashes: flashes.length, mid });
+    if (h0 === h1) fails.push(`a ${ms} ms tap with a knob touched (${first} first) did not toggle its step`); if (flashes.length || mid === 'step') fails.push(`a ${ms} ms tap with a knob touched (${first} first) flashed: ${mid} ${flashes.join(', ')}`);
+  }
   await p.eval('__flash.length = 0');
   const h0 = await p.eval(`__poly.m.lane.hitAt(${i})`); await send(p, bytes.step(i, true)); await sleep(520); const look = await p.eval(STATE); await send(p, bytes.step(i, false)); await sleep(60);
   const lookToggled = (await p.eval(`__poly.m.lane.hitAt(${i})`)) !== h0, seen = (await p.eval('__flash.slice()')).length;
   if (look.row !== 'step') fails.push(`a ${520} ms hold did not show the page: ${look.row}`); if (lookToggled) fails.push('a look (no knob) toggled the step');
   if (!seen) fails.push('the observer saw no change on a look: it cannot see a flash either');   // the guard's own check
   await p.eval('__mo.disconnect()');
-  return { taps, look: look.row, lookToggled, lookSeen: seen, fails };
+  return { taps, rest, look: look.row, lookToggled, lookSeen: seen, fails };
 }
 
 const center = (p, sel) => p.eval(`(() => { const e = document.querySelector(${JSON.stringify(sel)}); const r = e.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
@@ -107,7 +124,20 @@ async function mouseLatch(p) {
   if (k >= 0 && planet.word !== `step ${k + 1}`) fails.push(`a click on the planet of step ${k + 1} did not switch: ${planet.word}`);
   if (edited) fails.push('the clicks that switched the step edited the pattern');
   if (done.row === 'step') fails.push('done did not close the page'); if (esc.row === 'step') fails.push('Esc did not close the page');
-  return { opened: opened.word, switched: switched.word, planet: planet?.word ?? null, edited, done: done.row, esc: esc.row, fails };
+  // the old lock panel is "more…" of the step page only: never the 7 lock knobs (the row has them), gone with the page
+  await p.eval(`__poly.editLocks(${i})`); await sleep(60); await p.eval(`document.getElementById('st-more').click()`); await sleep(120); const more = await p.eval(PANEL);
+  await p.eval(`document.getElementById('pg-rhythm').click()`); await sleep(120); const left = await p.eval(PANEL);
+  if (more.hidden || more.knobs.includes('tune')) fails.push(`more… on the step page: ${JSON.stringify(more)}`); if (!left.hidden) fails.push(`the rhythm tab left the step page and the old lock panel stayed (a second lock editor): ${JSON.stringify(left)}`);
+  // a Move look at another step over the mouse's step page (Nils's edge case): the Move wins, then the mouse's step;
+  // Esc then closes it all (no cell left selected, the step tab off)
+  await p.eval(`__poly.setSheet(null, false)`); await p.eval(`document.getElementById('pg-step').click()`); await sleep(60);   // the step tab: step i again
+  const o = await p.eval(`(() => { const l = __poly.m.lane; for (let s = Math.min(16, l.length) - 1; s >= 0; s--) if (s !== ${i}) return s; return -1; })()`);
+  await send(p, bytes.step(o, true)); await sleep(650); const moveLook = (await p.eval(STATE)).word; await send(p, bytes.step(o, false)); await sleep(80); const back = (await p.eval(STATE)).word;
+  await p.key('Escape'); await sleep(80);
+  const closed = await p.eval(`({ row: document.getElementById('knobs').dataset.page, sel: [...document.querySelectorAll('#stepsui .st')].flatMap((b, k) => b.classList.contains('sel') ? [k + 1] : []), stepTab: document.getElementById('pg-step').getAttribute('aria-disabled') })`);
+  if (!moveLook.startsWith(`step ${o + 1} `) || back !== `step ${i + 1}`) fails.push(`a Move look at step ${o + 1} over the mouse's step ${i + 1}: ${moveLook} → ${back}`);
+  if (closed.row === 'step' || closed.sel.length || closed.stepTab !== 'true') fails.push(`Esc after a Move look over a mouse step page left the step selected: ${JSON.stringify(closed)}`);
+  return { opened: opened.word, switched: switched.word, planet: planet?.word ?? null, edited, done: done.row, esc: esc.row, more: more.knobs, left: left.hidden, moveLook, back, closed, fails };
 }
 
 async function loopHold(p) {
@@ -191,9 +221,9 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (errors?.length) fails.push(`page errors: ${errors.join(' | ')}`);
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(out, null, 1));
   const L = [`step check at ${width}×${height}`];
-  if (out.MOVE) L.push(`MOVE  step ${out.MOVE.step}: outlined in the press's task ${out.MOVE.outlined} · T1a ${out.MOVE.T1a.row} → touched ${out.MOVE.touched.row} (${out.MOVE.touched.rings} rings, cells ${out.MOVE.touched.cells}) · 1:2 lights ${out.MOVE.cond.lit}/16 · T2 knob 8 ${out.MOVE.T2.k8} · saved ${JSON.stringify(out.MOVE.locks)}`);
-  if (out.TAP) L.push(`TAP   ${out.TAP.taps.length} taps ${out.TAP.taps.map(t => t.ms).join('/')} ms: toggled ${out.TAP.taps.filter(t => t.toggled).length}, flashes ${out.TAP.taps.reduce((a, t) => a + t.flashes, 0)} · a 520 ms look: ${out.TAP.look}, toggled ${out.TAP.lookToggled}`);
-  if (out.MOUSE) L.push(`MOUSE long-press → ${out.MOUSE.opened} · a loop dot → ${out.MOUSE.switched} · a planet → ${out.MOUSE.planet} · edited ${out.MOUSE.edited} · done → ${out.MOUSE.done} · Esc → ${out.MOUSE.esc}`);
+  if (out.MOVE) L.push(`MOVE  step ${out.MOVE.step}: outlined in the press's task ${out.MOVE.outlined} · T1a ${out.MOVE.T1a.row} → touched ${out.MOVE.touched.row} → turned ${out.MOVE.turned.row} (${out.MOVE.turned.rings} rings, cells ${out.MOVE.turned.cells}) · 1:2 lights ${out.MOVE.cond.lit}/16 · T2 knob 8 ${out.MOVE.T2.k8} · saved ${JSON.stringify(out.MOVE.locks)} · lock panel after: ${out.MOVE.panel.hidden ? 'hidden' : 'SHOWN'}`);
+  if (out.TAP) L.push(`TAP   ${out.TAP.taps.length} taps ${out.TAP.taps.map(t => t.ms).join('/')} ms: toggled ${out.TAP.taps.filter(t => t.toggled).length}, flashes ${out.TAP.taps.reduce((a, t) => a + t.flashes, 0)} · ${out.TAP.rest.length} with a knob touched: toggled ${out.TAP.rest.filter(t => t.toggled).length}, flashes ${out.TAP.rest.reduce((a, t) => a + t.flashes + (t.mid === 'step'), 0)} · a 520 ms look: ${out.TAP.look}, toggled ${out.TAP.lookToggled}`);
+  if (out.MOUSE) L.push(`MOUSE long-press → ${out.MOUSE.opened} · a loop dot → ${out.MOUSE.switched} · a planet → ${out.MOUSE.planet} · edited ${out.MOUSE.edited} · done → ${out.MOUSE.done} · Esc → ${out.MOUSE.esc} · more… ${JSON.stringify(out.MOUSE.more)}, left → panel ${out.MOUSE.left ? 'hidden' : 'SHOWN'} · Move look ${out.MOUSE.moveLook} → ${out.MOUSE.back}, Esc → ${JSON.stringify(out.MOUSE.closed)}`);
   if (out.LOOP) L.push(`LOOP  held: ${out.LOOP.on} (${out.LOOP.slots}) · let go: ${out.LOOP.off}`);
   if (out.HAND) L.push(`HAND  touch shift ${JSON.stringify(out.HAND.on)} · +150 ms ${JSON.stringify(out.HAND.tail)} · +550 ms ${JSON.stringify(out.HAND.off)} · drag length ${JSON.stringify(out.HAND.drag)}`);
   if (out.A2) L.push(`A2    scripted glance (step page): ${out.A2.map(g => `seed ${g.seed} ${g.right}/${g.of}`).join(', ')}`);

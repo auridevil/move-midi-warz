@@ -995,3 +995,25 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   next-bar effect is charged to a later click); the face audit judges the play ring by its brightest 5 % of box pixels
   (measure along the ring); `face-audit --audio` launches time out under load (retry inside `ready()`); `cdp.mjs
   key('`')` sends no code (`key('`', 'Backquote')` works: a default code map).
+- **The held step read at a glance** (RD-06 glance trials + round 1: noor; for Noor / Yuki): the one judged A2 miss
+  held a step with no hit, so its 16 loop dots were hollow and the only marked dot was the ring of the loop playing now,
+  which reads more "selected" than the held cell's outline (said step 12 for 2). A stronger held outline (or a filled
+  centre) on the held cell; the lane list's row of the selected lane could carry its ring brighter on the step page.
+  The knob names "probability" and "condition" are cut in the 92 px slot (the peek names them).
+- **The ring's answers, smaller ones** (RD-06 round 1: rio; for Noor / Rio): push at small offsets is faint (a 40 ms push
+  is a short arc at 12 o'clock and a ~3 px tick); at 100 % chance the arcs are a full ring that says nothing new.
+- **Tests that read source text, the scene's diff in `frame()`** (RD-06 round 1: architect, nils, verifier): the static
+  blocks of `hand.test.js` / `steppage.test.js` match source text (they break on a reformat and passed with the halo
+  line commented out); what changed between frames (`was` vs `snap` → slide / spread / grow, the trail span) sits inside
+  `frame()` and wants a pure function with tests; no unit test reads the chip / header / LEDs from the real DOM
+  (step-check and console-check do); Nils's "Move LEDs" column (and T2's track buttons = lanes 5–6) is checked only
+  through `stepLoops`. `snap()` joins the hits into a string every frame while a hand is on. The Move disconnecting
+  mid-touch leaves the touch (and the scene's hand) on: clear `hands.touch` / the scene's hand on a disconnect.
+- **The audition while a knob turns** (RD-06 round 1, sound; pre-existing): stopped, every value step of a lock drag or a
+  Move turn auditions the step (~40 hits in 2.7 s for 6 knobs × 5 moves; no clicks, no clipping, as at `ec0855c`), and
+  knob 8's audition plays the step whatever its condition says: at most one audition per ~120 ms, plus one on release.
+- **The Move's step buttons on a 32-step lane** (RD-06 round 1, verifier; L5): while playing the 16 step buttons follow
+  the playhead's half, so a hold lands on whichever half shows (the header said "steps 1–16 of 32" for ~5 s, a hold on
+  button 3 locked step 3): Back + a step pins a half; worth a look with the step page.
+- **Tools after RD-06 round 1** (sound): `step-check --only FRAME` measures 8 s without hands, then 8 s with: on a loaded
+  machine the idle run can read higher than the hands' (1.30 vs 1.00 ms p95); interleave or repeat them before gating.

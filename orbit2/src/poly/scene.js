@@ -100,8 +100,9 @@ export function ringBox(cell, winW, min = 120) {
 // or dragged, and HAND_MS after, the selected ring shows what the change did. Read-only light: nothing here is clickable,
 // and the hit test (locate) keeps the steps where they are. Pure helpers, so the rules are tested without a canvas ----
 export const HAND_MS = 400, SLIDE_MS = 160, SPREAD_MS = 320, GROW_MS = 520;
-/** What a knob's key makes the ring show: slide (shift), spread (hits), swing (the off-beat ticks), chance (the planets
- *  dimmed, an arc each), push (the ring leads or lags), grow (a longer loop's new ticks pulse); null: nothing. */
+/** What a knob's key makes the ring show: slide (shift), spread (hits), swing (the off-beat ticks), chance (an arc round
+ *  each planet as long as its chance; the planet itself is already as solid as its chance, V6 planetAlpha), push (the
+ *  ring leads or lags), grow (a longer loop's new ticks pulse); null: nothing. */
 export const HAND_LOOK = { rotation: 'slide', euclid: 'spread', swing: 'swing', prob: 'chance', 'lock:prob': 'chance', offset: 'push', length: 'grow' };
 export const handLook = (k) => HAND_LOOK[k] ?? null;
 /** The shortest way round a `len`-step ring from rotation a to b, in steps (signed: + = clockwise). */

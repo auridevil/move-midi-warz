@@ -642,10 +642,12 @@ function latchStep(i) {
 }
 function renderPage() {
   const r = knobPage.r = pageNow(), lane = m.lane;
-  // a Move hold that owns the step page shows the held step's locks (as the Move's knobs edit them); a look that edited
-  // nothing gives the lock editor back as it was once the row leaves it (an edit keeps it, as before: stepEdited)
-  if (r.row === 'step' && r.step !== lockStep && r.step < lane.length) { knobPage.forced ??= { prev: lockStep }; lockStep = r.step; renderSteps(); renderLocks(); }
-  else if (r.row !== 'step' && knobPage.forced) { lockStep = knobPage.forced.prev < lane.length ? knobPage.forced.prev : -1; knobPage.forced = null; renderSteps(); renderLocks(); }
+  // a Move hold that owns the step page borrows the lock editor for the held step (as the Move's knobs edit it); once the
+  // row leaves the Move's look, edited or not, the editor goes back as it was: closed, or the mouse's own step page (r.own
+  // false), so nothing stays selected that Esc can't close
+  const look = r.row === 'step' && r.own;
+  if (r.row === 'step' && r.step !== lockStep && r.step < lane.length) { if (look) knobPage.forced ??= { prev: lockStep }; else knobPage.forced = null; lockStep = r.step; renderSteps(); renderLocks(); }
+  else if (!look && knobPage.forced) { lockStep = r.row === 'step' ? r.step : knobPage.forced.prev < lane.length ? knobPage.forced.prev : -1; knobPage.forced = null; renderSteps(); renderLocks(); }
   // a knob the pointer holds stays put: the row flips once it is let go (#knobs pointerup below)
   const pg = r.row, first = cellFirst();
   if ((pg !== knobPage.shown || r.row8 !== knobPage.r8) && !(knobPage.shown && pageGauges(knobPage.shown, knobPage.r8).some(g => g?.held))) {
@@ -653,6 +655,7 @@ function renderPage() {
     knobPage.shown = pg; knobPage.r8 = r.row8; bindRow([...$('knobs').children], pageGauges(pg, r.row8), pg === 'sound' ? 'pie' : pg === 'step' ? 'ring' : 'arc'); $('knobs').dataset.page = pg;
     if (fo && document.activeElement !== fo) { knobPage.lost = { el: fo, owned: keyFocused.has(fo) }; peekOff('focus'); }   // (a moved element gets no focusout)
   }
+  lockPanelShown();
   // … and gets it back, with its keys, where it is drawn again (the row, the open sheet), unless the focus went elsewhere,
   // a click came, or Esc gave the keys back meanwhile (a key on the page, Space say, while the Move's Shift holds it away, doesn't)
   const lost = knobPage.lost, at = document.activeElement;
@@ -699,9 +702,10 @@ function moveTouch(index, on) {
 const handOn = new Map();   // source ('move3', 'turn', 'drag') → the key its knob edits ('rotation', 'snd:decay', 'lock:tune', …)
 function sceneHand(src, k) { if (k) handOn.set(src, k); else handOn.delete(src); const ks = [...handOn.values()]; scene.setHand(ks.length ? { li: m.selected, k: ks[ks.length - 1] } : null); }
 /** What Move encoder `index` edits now (the page its knobs are on: a held step's locks, Shift's sound, else the rhythm). */
-const moveKey = (index) => { const mv = knobPage.r?.move ?? 'rhythm'; return mv === 'step' ? (index < 7 ? 'lock:' + LOCK_KEYS[index] : 'cond') : mv === 'sound' ? 'snd:' + SOUND_KEYS[index] : index < 7 ? RHYTHM_KEYS[index] : 'tempo'; };
+const moveKey = (index) => { const mv = knobPage.r?.move ?? 'rhythm', k = ROW_KEYS[mv][index]; return mv === 'step' && k !== 'cond' ? 'lock:' + k : mv === 'sound' ? 'snd:' + k : k; };
 addEventListener('pointerdown', (e) => { const g = e.target instanceof Element && e.target.closest('.gauge'); if (g) sceneHand('drag', Object.keys(sliders).find(k => sliders[k]?.el === g) || 'knob'); }, true);
 for (const t of ['pointerup', 'pointercancel']) addEventListener(t, () => { if (handOn.has('drag')) sceneHand('drag', null); }, true);
+addEventListener('blur', (e) => { if (e.target === window && handOn.has('drag')) sceneHand('drag', null); });   // a release outside the window never comes
 // ---- RD-5 the peek (left column): the touched knob's number (64 px, weight 300), its name and what it means in plain
 // words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
 // hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` (moveTouch) and the task
@@ -844,7 +848,7 @@ function openStep(i) { if (i < 0 || i >= m.lane.length || (lockStep !== i && loc
 function editLocks(i) { if (lockStep === i) { lockStep = -1; renderSteps(); renderLocks(); latchStep(-1); } else openStep(i); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
-function stepEdited() { knobPage.forced = null; renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
+function stepEdited() { renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
 /** Lock parameter k on the step the lock panel edits to v (null = unlock), then audition it and record it. */
 function lockHere(k, v) {
   if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v == null) lane.unlock(i, k); else lane.setLock(i, k, v);
@@ -921,9 +925,11 @@ function renderSliceLock(lane, lk) {
   const si = lane.stepIndex(lockStep), cur = lane.sliceAt(si, lk);
   [...el.children].forEach((b, k) => { const on = k ? lk.slice != null && cur === k - 1 : lk.slice == null; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.classList.toggle('dflt', k > 0 && lk.slice == null && cur === k - 1); });
 }
+/** RD-6 one lock editor: the old lock panel (Sheet → lane) is only "more…" of the step page on the row, so it shows only
+ *  then. Its 7 lock gauges go home into it whenever the row leaves the step page (gauge.js bindRow): hidden with it. */
+function lockPanelShown() { const lp = $('lockpanel'), hide = lockStep < 0 || knobPage.shown !== 'step'; if (lp.hidden !== hide) lp.hidden = hide; }
 function renderLocks() {   // always after renderSteps, which closes a step a shorter loop left out
-  const lane = m.lane, panel = $('lockpanel');
-  panel.hidden = lockStep < 0; if (lockStep < 0) return;
+  const lane = m.lane; lockPanelShown(); if (lockStep < 0) return;   // the values even while hidden: the row may show them next
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
   renderTrig(lane.trigAt(lockStep));
   $('lock-title').textContent = `step ${lockStep + 1} · more · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dashed = the lane value)'}`;
@@ -2429,7 +2435,10 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
 // RD-6 held: the steps that get a halo (a Move step button down on the selected lane, and the step a step-page knob edits
 // while a hand is on it)
-const scene = createScene($('cv'), { held: () => { const out = []; for (const h of pages.held.values()) out.push({ li: m.selected, i: h.step }); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+// RD-6 the halos: the Move's held steps once looked at (a tap draws nothing), and the step a step-page knob edits while a
+// hand is on it. Asked every frame: nothing allocated while nothing is held
+const NO_HELD = [];
+const scene = createScene($('cv'), { held: () => { if (!pages.held.size && !handOn.size) return NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 // ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at
 // once when stopped, on its turn while playing), tap a planet = on → accent → off, drag along a ring = rotate it (whole

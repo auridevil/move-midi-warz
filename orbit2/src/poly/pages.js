@@ -58,6 +58,9 @@ export class MovePages {
   /** P7: the held step whose loops the step buttons show at `at` ms: the first one a knob (or the wheel, or Delete)
    *  edited, or one held LOOK_MS; null while every press may still be a tap (the buttons keep showing the steps). */
   looked(at) { for (const [btn, h] of this.held) if (h.used || at - this.down.get(btn) >= LOOK_MS) return h; return null; }
+  /** RD-6: every held step looked at (LOOK_MS, or edited) at `at` ms, the steps the canvas draws a halo round: a press
+   *  that may still be a tap draws nothing there either. */
+  lookedSteps(at) { const out = []; for (const [btn, h] of this.held) if (h.used || at - this.down.get(btn) >= LOOK_MS) out.push(h.step); return out; }
   /** Step button `btn` comes up at `at` ms: what it pressed ({ step, used }), or undefined; held LOOK_MS it was a look,
    *  so it comes back used (no toggle). A release always ends its own press, whatever happened since (the page turned,
    *  Back went down, the lane got shorter). */
@@ -91,11 +94,13 @@ export const PAGES = ['rhythm', 'sound', 'step'];
  *   in the header
  */
 export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm', shift = false, kbdShift = false, held = null, touch = false, loop = false } = {}) {
-  // a step held but not yet looked at may still be a tap: it owns nothing (no page flashes) unless a knob is touched
-  const holds = !!held && (held.looked || touch), quiet = !!held && !holds;
+  // a step held but not yet looked at (LOOK_MS, or a knob turned) may still be a tap: it owns nothing and changes nothing
+  // on screen (no page flashes), whatever else the hands do; a touch alone is no turn (a finger can rest on a knob while
+  // the other hand taps steps), so it keeps showing its own page (T0′) and Shift stays ignored
+  const holds = !!held && held.looked, quiet = !!held && !holds;
   // what the Move's knobs edit (app.js 'encoder': a held step makes 1–7 its locks and 8 its condition, + Shift repeats)
   const move = held ? 'step' : shift ? 'sound' : 'rhythm', knob8 = held ? (shift ? 'repeats' : 'condition') : shift ? 'level' : 'tempo';
-  const owns = holds || (!quiet && (shift || touch)), seen = holds ? 'step' : shift && !held ? 'sound' : 'rhythm';   // seen: the Move's page as drawn
+  const owns = holds || touch || (!quiet && shift), seen = holds ? 'step' : shift && !held ? 'sound' : 'rhythm';   // seen: the Move's page as drawn
   const mine = latch === 'step' && latchStep < 0 ? back : latch, screen = kbdShift && mine !== 'step' ? 'sound' : mine;
   const row = owns ? seen : screen, step = row === 'step' ? (owns ? held.step : latchStep) : -1;
   // T1a / the quick tap: until the step is looked at, the chip says what it said before it went down
@@ -132,6 +137,7 @@ export function cellAction(cells, i, length, long = false) {
   return long || cells === 'loops' ? 'open' : 'cycle';
 }
 /** A tap on a planet (a step with a hit): with a step page latched by the mouse it switches the page to that step;
- *  otherwise it cycles the step as before (I1). A long-press or right-click always opens its step page.
+ *  otherwise it cycles the step as before (I1). (A long-press or right-click always opens its step page: app.js
+ *  planetStep, no choice to make.)
  *  @returns {'cycle'|'open'} */
-export const planetAction = (stepLatched, long = false) => (long || stepLatched ? 'open' : 'cycle');
+export const planetAction = (stepLatched) => (stepLatched ? 'open' : 'cycle');

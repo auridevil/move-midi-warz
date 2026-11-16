@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolvePage, stepLoops, cellAction, planetAction, LOOK_MS, STEP_BTNS } from '../src/poly/pages.js';
+import { resolvePage, stepLoops, cellAction, planetAction, LOOK_MS, STEP_BTNS, MovePages } from '../src/poly/pages.js';
 import { condPasses } from '../src/poly/lanes.js';
 
 const COLS = ['row', 'step', 'move', 'knob8', 'row8', 'cells', 'own', 'chip', 'word'];
@@ -24,9 +24,16 @@ test('RD-6 Nils\'s table T0–T4, every column (Noor\'s sequence: SOUND latched 
     T4: [S, row('sound', -1, 'rhythm', 'tempo', 'level', 'steps', false, 'MOVE ⇢ RHYTHM', 'sound')],
   };
   for (const [t, [hands, want]] of Object.entries(T)) assert.deepEqual(pick(resolvePage(hands)), want, t);
-  // T1a → T1b: the same hands, only time (LOOK_MS) or a knob turn makes it a look; a touch on a knob is a turn coming
+  // T1a → T1b: the same hands, only time (LOOK_MS) or a knob turn makes it a look. A touch alone is no turn (RD-6 round
+  // 1: a finger resting on a knob while the other hand taps steps): it keeps its own page (T0′), never the step page,
+  // whichever came first, and Shift on a step not looked at changes nothing on screen either
   assert.equal(LOOK_MS, 450);
-  assert.equal(resolvePage({ ...S, held: held7(false), touch: true }).row, 'step', 'a knob touched on a held step: the page at once');
+  for (const latch of ['rhythm', 'sound']) {
+    const t = resolvePage({ latch, held: held7(false), touch: true }), t0 = resolvePage({ latch, touch: true });
+    assert.deepEqual(pick(t), { ...pick(t0), move: 'step', knob8: 'condition' }, `${latch}: a resting touch + a step not looked at = T0′ (the Move's knobs on the step)`);
+    for (const touch of [false, true]) { const a = resolvePage({ latch, held: held7(false), touch }), b = resolvePage({ latch, held: held7(false), touch, shift: true }); assert.deepEqual({ ...pick(b), knob8: a.knob8 }, pick(a), `${latch}${touch ? ' + touch' : ''}: Shift`); }
+  }
+  assert.equal(resolvePage({ ...S, held: held7(true), touch: true }).row, 'step', 'looked (LOOK_MS or a turn): the page, touched or not');
   // T2: only slot 8 repaints (the row stays the step page, the same step, the same 7 locks)
   const b = resolvePage(T.T1b[0]), c = resolvePage(T.T2[0]);
   assert.deepEqual([b.row, b.step, b.move], [c.row, c.step, c.move]); assert.notEqual(b.row8, c.row8);
@@ -84,8 +91,16 @@ test('RD-6 a click on a cell or a planet: never an edit on a dot, the mouse neve
   // past the loop, or a slot while Loop is held: nothing
   assert.equal(cellAction('loops', 9, 8), 'none'); assert.equal(cellAction('steps', 9, 8, true), 'none');
   assert.equal(cellAction('slots', 3, 16), 'none'); assert.equal(cellAction('slots', 3, 16, true), 'none');
-  // a planet: tapped it cycles (I1); with a step page latched it switches the page; held / right-clicked it opens it
-  assert.equal(planetAction(false), 'cycle'); assert.equal(planetAction(true), 'open'); assert.equal(planetAction(false, true), 'open');
+  // a planet: tapped it cycles (I1); with a step page latched it switches the page (held / right-clicked it always opens)
+  assert.equal(planetAction(false), 'cycle'); assert.equal(planetAction(true), 'open');
+});
+
+test('RD-6 a tap draws nothing on the canvas either: the halos are the held steps looked at (MovePages.lookedSteps)', () => {
+  const p = new MovePages(); p.press(0, 3, 0, 1000); p.press(1, 9, 0, 1200);
+  assert.deepEqual(p.lookedSteps(1300), [], 'inside LOOK_MS both may still be taps');
+  p.held.get(1).used = true; assert.deepEqual(p.lookedSteps(1300), [9], 'a knob turned on one: that one');
+  assert.deepEqual(p.lookedSteps(1000 + LOOK_MS), [3, 9], 'held LOOK_MS: both');
+  p.release(0, 1500); assert.deepEqual(p.lookedSteps(2000), [9]); p.release(1, 2100); assert.deepEqual(p.lookedSteps(2200), []);
 });
 
 test('RD-6 static: one lock editor on the console (no radial menu), its words and knob 8, the old panel as "more…"', () => {

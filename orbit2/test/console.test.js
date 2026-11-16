@@ -36,8 +36,10 @@ test('RD-5 T1a / T1b / T2: a held step owns the row only once it is looked at (L
   assert.deepEqual(pick(c, 'row', 'step', 'knob8', 'chip', 'word'), { row: 'step', step: 6, knob8: 'repeats', chip: 'MOVE ⇢ STEP 7 ⇧', word: 'step 7 · held on Move ⇧' });
   // Shift let go first (T2 → the step still held): knob 8 goes back to condition, nothing else changes
   assert.deepEqual(pick(resolvePage({ ...S, held: step7(true) }), 'row', 'knob8', 'chip'), { row: 'step', knob8: 'condition', chip: 'MOVE ⇢ STEP 7' });
-  // a touch on a knob while the step is held is a lock edit: the step page at once
-  assert.equal(resolvePage({ ...S, held: step7(false), touch: true }).row, 'step');
+  // a touch alone is no turn (RD-6: a tap with a finger resting on a knob never flashes the step page): the touch's own
+  // page (T0′); the first turn makes it a look (app.js marks the press used), and then the step page
+  assert.equal(resolvePage({ ...S, held: step7(false), touch: true }).row, 'rhythm');
+  assert.equal(resolvePage({ ...S, held: step7(true), touch: true }).row, 'step');
 });
 
 test('RD-5 T3: the step let go with Shift held: the sound page (the same as the latch, so only the header and the chip change)', () => {

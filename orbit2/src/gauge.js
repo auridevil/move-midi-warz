@@ -43,7 +43,7 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   let v = value, pie = false, shape = 'arc';
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
   const ang = (x) => START + SWEEP * (x - min) / (max - min || 1);   // the arc fills from min, or from the detent
-  const render = () => { const a = ang(v), a0 = ang(detent ?? min), lo = Math.min(a0, a), hi = Math.max(a0, a); track.setAttribute('d', shape === 'ring' ? 'M 24 6 A 18 18 0 1 1 23.99 6 Z' : arc(24, 24, 18, START, START + SWEEP)); fill.setAttribute('d', (hi - lo) / SWEEP > 0.001 ? (pie ? `M 24 24 L ${24 + 18 * Math.cos(lo)} ${24 + 18 * Math.sin(lo)} ${arc(24, 24, 18, lo, hi).replace(/^M [^A]+/, '')} Z` : arc(24, 24, 18, lo, hi)) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
+  const render = () => { const a = ang(v), a0 = ang(detent ?? min), lo = Math.min(a0, a), hi = Math.max(a0, a); fill.setAttribute('d', (hi - lo) / SWEEP > 0.001 ? (pie ? `M 24 24 L ${24 + 18 * Math.cos(lo)} ${24 + 18 * Math.sin(lo)} ${arc(24, 24, 18, lo, hi).replace(/^M [^A]+/, '')} Z` : arc(24, 24, 18, lo, hi)) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
   const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
   const by = (x) => set(stopAt(v, x, detent), true);   // a key or wheel step (it stops on a detent on the way across)
   // drag: 150 px of travel = full range; Shift = 5× finer. onStart first: it may set where the drag starts (A3)
@@ -63,7 +63,7 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   render();
   return { el, set, get value() { return v; }, get held() { return !!drag; }, setLabel: (t) => { lab.textContent = t; name = short(t); aria(); }, setColor: (c) => { fill.setAttribute('stroke', c); dot.setAttribute('fill', c); el.style.setProperty('--gc', c); },
     setMark: (on) => { if (marked === !!on) return; marked = !!on; mark.hidden = !marked; aria(); },
-    setShape: (s) => { if (shape === s) return; shape = s; pie = s === 'pie'; el.classList.toggle('pie', pie); el.classList.toggle('ring', s === 'ring'); render(); } };
+    setShape: (s) => { if (shape === s) return; shape = s; pie = s === 'pie'; el.classList.toggle('pie', pie); el.classList.toggle('ring', s === 'ring'); track.setAttribute('d', s === 'ring' ? 'M 24 6 A 18 18 0 1 1 23.99 6 Z' : arc(24, 24, 18, START, START + SWEEP)); render(); } };   // the track only when the shape changes
 }
 /**
  * RD-5 page binding: the console's knob row shows one page's gauges at a time. bindRow(slots, gauges, shape) moves each
