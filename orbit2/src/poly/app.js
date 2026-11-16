@@ -616,6 +616,9 @@ function renderLanes() {
 // rest of the step page). The gauges are the sheet's own, moved into the row (gauge.js bindRow): a page's knobs leave
 // the sheet while the row shows them and go back when it doesn't. The mouse latches a page with its tab (or a cell's
 // long-press: step); a Move hold or touch owns the row while it lasts (+ TOUCH_HOLD_MS); ⇧ held shows sound ----
+// key ownership ("Who owns a key press?", by controlOwnsKey below), declared before the console's first render reads it
+const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']), keyFocused = new WeakSet();
+let lastInput = 'pointer';
 const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'];   // the Move's knobs 1–7 (8 = tempo)
 const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: LOCK_KEYS.slice(0, 7) };   // knob 8 on a step = its condition (the sheet)
 const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? ROW_KEYS.step.map(k => sliders['lock:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
@@ -647,9 +650,10 @@ function renderPage() {
   if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g?.held))) {
     const fo = document.activeElement?.closest?.('.gauge') ? document.activeElement : null;   // a knob that moves loses the focus
     knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg;
-    if (fo && document.activeElement !== fo) knobPage.lost = { el: fo, owned: keyFocused.has(fo) };   // (never at load: nothing has the focus)
+    if (fo && document.activeElement !== fo) { knobPage.lost = { el: fo, owned: keyFocused.has(fo) }; peekOff('focus'); }   // (a moved element gets no focusout)
   }
-  // … and gets it back, with its keys, where it is drawn again (the row, the open sheet), unless the focus went elsewhere
+  // … and gets it back, with its keys, where it is drawn again (the row, the open sheet), unless the focus went elsewhere,
+  // a click came, or Esc gave the keys back meanwhile (a key on the page, Space say, while the Move's Shift holds it away, doesn't)
   const lost = knobPage.lost, at = document.activeElement;
   if (lost && at && at !== document.body) knobPage.lost = null;
   else if (lost && lost.el.getClientRects().length) { knobPage.lost = null; focusAs(lost.el, lost.owned); }
@@ -670,9 +674,9 @@ $('knobs').addEventListener('pointerup', () => setTimeout(renderPage), true);   
 // (Shift+Tab, + an arrow, + a letter), not a held ⇧: the row goes back before that key does anything, so Shift+Tab
 // lands on the page it left
 let kbdShift = false;
-const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); }, MODS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
+const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); };
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Shift') { if (!MODS.has(e.key)) knobPage.lost = null; if (kbdShift) setKbdShift(false); return; }   // a key meanwhile: the knob's focus stays gone
+  if (e.key !== 'Shift') { if (kbdShift) setKbdShift(false); return; }
   if (!e.repeat && !(e.target instanceof Element && e.target.closest('input, textarea, .gauge'))) setKbdShift(true);
 }, true);
 addEventListener('keyup', (e) => { if (e.key === 'Shift') setKbdShift(false); }); addEventListener('blur', () => setKbdShift(false));
@@ -687,30 +691,32 @@ function moveTouch(index, on) {
 // words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
 // hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` (moveTouch) and the task
 // after the frame that paints the peek measures `peek` (performance entries) ----
-const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, why: new Set(), timer: 0, mark: false };
+const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, el: null, why: new Set(), timer: 0, mark: false };   // el: the knob a drag or the focus opened it for
 const PEEK_SAYS = {
   length: v => `${v} step${v === 1 ? '' : 's'} a loop`, euclid: v => v ? `${v} hit${v === 1 ? '' : 's'}, spread evenly` : 'no hits spread',
   rotation: v => v ? `the hits start ${v} step${v === 1 ? '' : 's'} later` : 'not shifted', ratio: v => `${RATIO_LABEL[v]} step${RATIO_LABEL[v] === '1' ? '' : 's'} a beat`,
   swing: v => v ? `every other step ${v}% late` : 'straight', prob: v => `plays ${v} of 100 loops`, tune: v => tuneSay(v), tempo: v => `${v} beats a minute`,
 };
-function peekAt(slot, why) { clearTimeout(peek.timer); peek.slot = slot; peek.why.add(why); paintPeek(); }
-function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; paintPeek(); } }, PEEK_MS); }
+/** A Move touch or turn peeks a slot: whatever that encoder edits now (Shift down mid-touch: the sound knob). A drag or
+ *  the focus peeks its own knob (el): when the row lets that knob go, the peek goes with it. */
+function peekAt(slot, why, el = null) { clearTimeout(peek.timer); peek.slot = slot; peek.el = el; peek.why.add(why); paintPeek(); }
+function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; peek.el = null; paintPeek(); } }, PEEK_MS); }
 function paintPeek() {
-  const el = $('peek'), g = peek.slot >= 0 ? $('knobs').children[peek.slot]?.firstElementChild : null;
+  const kn = $('knobs'), el = $('peek'), g = peek.el ? (peek.el.parentElement?.parentElement === kn ? peek.el : null) : peek.slot >= 0 ? kn.children[peek.slot]?.firstElementChild : null;
   if (!g) { if (!el.hidden) el.hidden = true; return; }
-  const k = ROW_KEYS[knobPage.shown]?.[peek.slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
+  const slot = [...kn.children].indexOf(g.parentElement), k = ROW_KEYS[knobPage.shown]?.[slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
   const put = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };   // it repaints with every move of its knob
   put('peek-n', g.querySelector('.g-val').textContent);
-  put('peek-name', `knob ${peek.slot + 1} · ${label} · ${voiceLabel(m.lane)}`);
+  put('peek-name', `knob ${slot + 1} · ${label} · ${voiceLabel(m.lane)}`);
   put('peek-mean', PEEK_SAYS[k]?.(v) ?? `${label} ${g.getAttribute('aria-valuetext')}`);
   el.hidden = false;
   if (peek.mark) { peek.mark = false; requestAnimationFrame(() => setTimeout(() => performance.measure('peek', 'peek-touch'))); }   // after the frame that paints it
 }
 {
   const kn = $('knobs'), slotOf = (el) => [...kn.children].indexOf(el.closest('#knobs > *'));
-  kn.addEventListener('pointerdown', (e) => { if (e.target instanceof Element && e.target.closest('.gauge')) peekAt(slotOf(e.target), 'drag'); });
+  kn.addEventListener('pointerdown', (e) => { const g = e.target instanceof Element && e.target.closest('.gauge'); if (g) peekAt(slotOf(g), 'drag', g); });
   for (const t of ['pointerup', 'pointercancel']) kn.addEventListener(t, () => peekOff('drag'));
-  kn.addEventListener('focusin', (e) => { if (lastInput === 'key' && e.target.closest('.gauge')) peekAt(slotOf(e.target), 'focus'); });
+  kn.addEventListener('focusin', (e) => { const g = e.target.closest('.gauge'); if (lastInput === 'key' && g) peekAt(slotOf(g), 'focus', g); });
   kn.addEventListener('focusout', () => peekOff('focus'));
   // the peek follows its knob whatever moves it (a turn, the hand's value drawn each frame, a curve, the keys)
   new MutationObserver(() => { if (peek.slot >= 0) paintPeek(); }).observe(kn, { subtree: true, childList: true, characterData: true });
@@ -2291,8 +2297,7 @@ window.addEventListener('keyup', (e) => { if (e.key === '0') setFill(false); });
 // (type-ahead); modifier shortcuts (Alt+1–4, Cmd/Ctrl+Z) work everywhere but in text fields. (:focus-visible can't
 // tell the two apart: Chrome turns it on at the first key press.)
 const TEXT_SEL = 'input, textarea, [contenteditable]:not([contenteditable=false])', CONTROL_SEL = 'button, summary, a[href], select, [role=slider], .gauge';
-const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']), keyFocused = new WeakSet();
-let lastInput = 'pointer';
+// (KNOB_KEYS, keyFocused and lastInput are declared above the RD-5 console, which reads them)
 const takeKeysBack = () => { if (document.activeElement) keyFocused.delete(document.activeElement); };
 addEventListener('pointerdown', () => { lastInput = 'pointer'; takeKeysBack(); }, true);
 addEventListener('wheel', (e) => { if (e.target instanceof Element && e.target.closest('.gauge')) takeKeysBack(); }, { capture: true, passive: true });
@@ -2707,6 +2712,7 @@ const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 's
 function closePopups() { closeShareMenu(); closeSlotMenu(); closeRingMenu(); }
 const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && (drawn($('lockpanel')) || knobPage.shown === 'step'), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
+  knobPage.lost = null;   // RD-5: a knob the row took the focus from doesn't get it back after an Esc
   const a = document.activeElement, step = escStep(escState());
   closePopups();   // the dialog step, and a popup open but not drawn (no layer) goes with whatever this press closes
   if (step === 'step') { editLocks(lockStep); if (a instanceof HTMLElement && !drawn(a)) a.blur(); }

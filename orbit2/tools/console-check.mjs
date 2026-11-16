@@ -153,7 +153,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (shots) mkdirSync(shots, { recursive: true });
   const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), ...(root ? { root } : {}) });
   try {
-    const fresh = async () => openSet(b, { groove: 'techno' });
+    // a busy machine can miss openSet's 20 s for the page's modules once: one more try before a red check
+    const fresh = async () => { try { return await openSet(b, { groove: 'techno' }); } catch (e) { if (!/__poly is not defined/.test(e.message)) throw e; return openSet(b, { groove: 'techno' }); } };
     if (only.has('MOVE')) out.MOVE = await moveRows(await fresh());
     if (only.has('A8')) out.A8 = await peekLatency(await fresh());
     if (only.has('A2')) { const p = await fresh(); out.A2 = [await glance(p, { seed: 1, shots }), await glance(p, { seed: 2, shots })]; }

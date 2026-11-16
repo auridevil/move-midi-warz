@@ -978,11 +978,15 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   right-click / Shift+click = wild, as at `12a25f8`; one undo step) although principle 3 keeps randomize off holds; a
   mis-clicked M lamp mutes the kick (the run's only direct hit besides play: a hold, or Shift-only?); a lit M is an
   outline and a letter (a fill would read faster in the dark).
-- **The filter's glide** (RD-05 round 1: sound, verifier): the jump to off glides in linear Hz (30 ms: LP 80 passes
-  10 kHz in ~15 ms; pre-existing P6, the wheel's push too): a glide in log frequency sounds like a sweep. A double-click
-  to off within the setlog's knob merge (0.7 s) of a drag has no entry of its own.
-- **The bar·beat counter's layout** (RD-05 round 1, sound): one page layout per beat (2.4 a second, 1.2 ms/s vs 0.01 at
-  `12a25f8`): a fixed box (`contain: strict`, room for "99.12") keeps it to a repaint.
+- **The filter's glide and its detent** (RD-05 round 1: sound, verifier; round 2: sound, kai): the jump to off glides in
+  linear Hz (30 ms: LP 80 passes 10 kHz in ~15 ms; pre-existing P6, the wheel's push too): a glide in log frequency
+  sounds like a sweep. A double-click to off within the setlog's knob merge (0.7 s) of a drag has no entry of its own.
+  The wheel's detent lasts one event, so a trackpad flick passes off in 16 ms (a ~150 ms hold, or summed deltaY); the
+  drag's detent catches only past the centre (a 2–3 px pull-in before it would feel like hardware; a wish); a fine
+  (Shift) drag keeps the 10 px hold, so it crosses off with 5× the value travel (the hold is in pixels, by design).
+- **Layout of the console's text** (RD-05 rounds 1–2, sound): the bar·beat counter costs a page layout per beat (2.4 a
+  second, 1.2 ms/s vs 0.01 at `12a25f8`), the peek's repaint ~36 layouts a second over an automated knob (+5 ms/s): fixed
+  boxes (`contain: strict`, room for "99.12"; `contain: layout size` on the peek) keep both to a repaint.
 - **Light and room on the console** (RD-05 round 1: noor, verifier, nils): the console log (~550 px, 6 lines) lies over
   the top of the outer rings (dim, read-only; a narrower block or a corner anchor would keep them clean); the quest card
   crowds the Move pill (RD-7); phone: the floating play covers the first knob row's 4th knob and the docked tabs cut
