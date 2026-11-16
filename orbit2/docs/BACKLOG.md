@@ -198,7 +198,7 @@ the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10,
 - **RD-1** Setlog and the gates: `?setlog` action log, `tools/face-audit.mjs` (A1, A5, A6, A7), the player-agent session tools (sets, glance proxy, Move LED view) and the baselines. ✅
 - **RD-2** Light and type: dark-room tokens, no fills on controls, three type sizes, no layout change. ✅
 - **RD-3** Stage and sheet: three-column grid + console row, rings fixed, drawers re-hosted (ids kept) in a 428 px sheet. ✅
-- **RD-4** Find and one Escape: ⌘K / `/` search with synonyms and recents, one Esc order, sheet closed by default.
+- **RD-4** Find and one Escape: ⌘K / `/` search with synonyms and recents, one Esc order, sheet closed by default. ✅
 - **RD-5** The console: the Move's face on screen (8 knobs, 16 cells, transport, MOVE ⇢ chip, peek, lane list), plus the switchable console-log overlay (`` ` ``).
 - **RD-6** Step page and the ring answers the hand: one lock editor, Nils's state table, read-only canvas answers.
 - **RD-7** Pills: one status region (max 4 + "+N more"), replaces welcome bar, quest card, jam panel; quest "show me".
