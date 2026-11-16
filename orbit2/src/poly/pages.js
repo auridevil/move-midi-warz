@@ -1,6 +1,7 @@
 // The Move's view of a pattern: which steps the pad rows and the step buttons show (L5 pages), which lanes the four pad
 // rows are (L2 window), what a track button selects, and which step a held step button holds. Pure (no DOM, no MIDI),
 // so the rules are unit-tested; app.js keeps one MovePages and paints the LEDs from it.
+import { condLoops, loopWindow } from './perform.js';
 export const PAD_COLS = 8, PAD_ROWS = 4, STEP_BTNS = 16;
 /** P7: a step button held this long is a look (the step buttons show its loops), not a tap, so its release doesn't
  *  toggle the step: as long as a long-press on screen (ui.js LONG_MS; a test keeps them equal). */
@@ -101,5 +102,36 @@ export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm',
   const label = holds ? `STEP ${held.step + 1}${shift ? ' ⇧' : ''}` : seen === 'sound' ? 'SOUND ⇧' : 'RHYTHM';
   const own = owns || (row === seen && seen !== 'step');
   const word = row === 'step' ? `step ${step + 1}${owns ? ` · held on Move${shift ? ' ⇧' : ''}` : ''}` : row === 'sound' && shift && owns ? 'sound ⇧' : row;
-  return { row, step, cells: loop ? 'slots' : row === 'step' ? 'loops' : 'steps', move, knob8, own, chip: `MOVE ⇢ ${label}`, word };
+  // RD-6 the row's knob 8: on a step page its condition, or its repeats while the Move holds it with Shift (T2: only slot
+  // 8 repaints); a mouse step page shows the condition (the repeats are one knob turn away in "more…")
+  const row8 = row === 'step' ? (owns && shift ? 'repeats' : 'condition') : row === 'sound' ? 'level' : 'tempo';
+  return { row, step, cells: loop ? 'slots' : row === 'step' ? 'loops' : 'steps', move, knob8, row8, own, chip: `MOVE ⇢ ${label}`, word };
 }
+
+// ---- RD-6 the step page: what the 16 cells show and what a click on them, or on a planet, does ----
+/**
+ * The 16 loop dots of a step (the step page's cells, and the Move's step LEDs while a step is looked at, P7): loop
+ * `from + i` plays (true), rests (false) or depends on the moment (null: fill, pre / not pre); `now` = the dot of the loop
+ * playing (-1 stopped). A step that never plays (off, or masked) plays on no loop.
+ * @param {{ cond?: string, on: boolean, loopN?: number|null, playing?: boolean }} s
+ */
+export function stepLoops({ cond = 'always', on, loopN = null, playing = false }) {
+  const now = playing && loopN != null ? loopN : -1, from = loopWindow(now, STEP_BTNS), at = now < 0 ? -1 : now - from;
+  const loops = on ? condLoops(cond, STEP_BTNS, from) : Array(STEP_BTNS).fill(false);
+  return { from, now: at, loops };
+}
+/**
+ * What a click (or a tap) on cell i does, by what the cells show: steps → cycle the step (off → on → accent → ghost);
+ * loops (a step page) → open that cell's step page instead (the mouse never gets stuck on one step, and a dot is never
+ * an edit); slots (Loop held on the Move) → nothing. A long-press, a right-click or Alt+click opens the step page in
+ * both step and loop cells. A cell past the lane's loop does nothing.
+ * @returns {'cycle'|'open'|'none'}
+ */
+export function cellAction(cells, i, length, long = false) {
+  if (cells === 'slots' || i >= length) return 'none';
+  return long || cells === 'loops' ? 'open' : 'cycle';
+}
+/** A tap on a planet (a step with a hit): with a step page latched by the mouse it switches the page to that step;
+ *  otherwise it cycles the step as before (I1). A long-press or right-click always opens its step page.
+ *  @returns {'cycle'|'open'} */
+export const planetAction = (stepLatched, long = false) => (long || stepLatched ? 'open' : 'cycle');

@@ -49,6 +49,11 @@
           <button type="button" id="pg-sound" aria-pressed="false" title="The lane's sound (the Move's Shift + knobs; hold Shift here too)">sound ⇧</button>
           <button type="button" id="pg-step" aria-pressed="false" title="A step's locks: long-press, right-click or Alt+click a cell first">step</button>
         </div>
+        <span id="step-tools" class="step-tools" role="group" aria-label="step page" hidden>
+          <button type="button" id="st-clear" class="aword" title="Clear this step's locks, condition and repeats">clear</button>
+          <button type="button" id="st-more" class="aword" title="The rest of this step's locks in the sheet: nudge, stroke, slice, start / end, the condition's loop, the repeats' spacing">more…</button>
+          <button type="button" id="st-done" class="aword" title="Close the step page (Esc)">done</button>
+        </span>
       </div>
       <div id="knobs" class="knobs" role="group" aria-label="knobs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
       <div id="stepsui" class="stepsui cells" role="group" aria-label="steps"></div>
@@ -178,7 +183,10 @@
         </div>
       </div>
       <div id="lockpanel" class="lockpanel adv" hidden>
-        <div class="lock-head"><span id="lock-title"></span><span><button id="lock-clear" class="small">clear</button> <button id="lock-close" class="small">×</button></span></div>
+        <!-- RD-6: the step page on the console is the lock editor (its knobs, clear and done); "more…" opens this, the
+             rest of a step's locks. Knob 8's condition / repeats gauges live in the page only (hidden holder) -->
+        <div class="lock-head"><span id="lock-title"></span></div>
+        <div id="step-knob8" hidden></div>
         <div id="lock-gauges" class="gauges"></div>
         <div id="lock-sample" class="lock-sample" hidden>
           <div id="lock-slice-row" hidden><span class="ctl-lbl">slice: the part of the break this step plays</span><div id="lock-slices" class="slice-grid" role="group" aria-label="slice this step plays"></div></div>

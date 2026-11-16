@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, ratchetGains, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS, LOCK_RANGE, GHOST_VEL, AUTO_KEYS, AUTO_RES, AUTO_MAX, AUTO_LOOPS_MAX, laneCountOf } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS } from './pages.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS, stepLoops, cellAction, planetAction } from './pages.js';
 import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, chainSixteenths, chainMeters, hitsToMidi, encodeShareFit, decodeShare, autoRamps, autoCCs, collectChainAuto, LINK_MAX } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
@@ -14,7 +14,7 @@ import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs, AUTO_CC_KEYS } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt, TUNE_SEMIS } from './voices.js';
-import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, loopWindow, fxFreqs, stepFilter } from './perform.js';
+import { HOLD_MS, MuteQueue, FillLatch, Guard, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -620,10 +620,11 @@ function renderLanes() {
 const KNOB_KEYS = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown']), keyFocused = new WeakSet();
 let lastInput = 'pointer';
 const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'];   // the Move's knobs 1–7 (8 = tempo)
-const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: LOCK_KEYS.slice(0, 7) };   // knob 8 on a step = its condition (the sheet)
-const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? ROW_KEYS.step.map(k => sliders['lock:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
+// RD-6: knob 8 on a step page = its condition, or its repeats while the Move holds the step with Shift (row8, pages.js)
+const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: [...LOCK_KEYS.slice(0, 7), 'cond'] };
+const pageGauges = (pg, r8) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? [...LOCK_KEYS.slice(0, 7).map(k => sliders['lock:' + k]), sliders[r8 === 'repeats' ? 'lock:ratchet' : 'lock:cond']] : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
 // latch: the page the screen chose; step: the step a cell's long-press latched (on lane `lane`), back: where it came from
-const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r: null, forced: null, lost: null };   // forced: the lock editor before a Move look took it; lost: a knob the row took the focus from
+const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r8: null, r: null, forced: null, lost: null };   // forced: the lock editor before a Move look took it; lost: a knob the row took the focus from
 const hands = { touch: new Set(), touchUntil: 0, loop: false, timer: 0 };   // the Move's encoders touched, the touch's tail (one timer), Loop held
 const touchTail = () => { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; clearTimeout(hands.timer); hands.timer = setTimeout(renderPage, TOUCH_HOLD_MS + 10); };
 /** What the hands and the latch make of the row now (pages.js). A latched step goes with its lane, or a shorter loop. */
@@ -647,9 +648,9 @@ function renderPage() {
   else if (r.row !== 'step' && knobPage.forced) { lockStep = knobPage.forced.prev < lane.length ? knobPage.forced.prev : -1; knobPage.forced = null; renderSteps(); renderLocks(); }
   // a knob the pointer holds stays put: the row flips once it is let go (#knobs pointerup below)
   const pg = r.row, first = cellFirst();
-  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g?.held))) {
+  if ((pg !== knobPage.shown || r.row8 !== knobPage.r8) && !(knobPage.shown && pageGauges(knobPage.shown, knobPage.r8).some(g => g?.held))) {
     const fo = document.activeElement?.closest?.('.gauge') ? document.activeElement : null;   // a knob that moves loses the focus
-    knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg;
+    knobPage.shown = pg; knobPage.r8 = r.row8; bindRow([...$('knobs').children], pageGauges(pg, r.row8), pg === 'sound' ? 'pie' : pg === 'step' ? 'ring' : 'arc'); $('knobs').dataset.page = pg;
     if (fo && document.activeElement !== fo) { knobPage.lost = { el: fo, owned: keyFocused.has(fo) }; peekOff('focus'); }   // (a moved element gets no focusout)
   }
   // … and gets it back, with its keys, where it is drawn again (the row, the open sheet), unless the focus went elsewhere,
@@ -663,6 +664,10 @@ function renderPage() {
   $('lh-steps').textContent = `steps ${Math.min(first + 1, lane.length)}–${Math.min(first + STEP_BTNS, lane.length)} of ${lane.length}`;
   $('lh-page').textContent = r.word;
   const chip = $('move-chip'); chip.textContent = move.inControl ? r.chip : ''; chip.classList.toggle('own', r.own);   // only with a Move to name
+  // RD-6: the step page's words (clear / more… / done) in the header, where "steps 1–16 of 16" was; the cells follow
+  // what the hands make of them (steps, the step's 16 loops, or the slots while Loop is held)
+  const onStep = r.row === 'step'; $('step-tools').hidden = !onStep; $('lh-steps').hidden = onStep;
+  if (r.cells !== cellsMode || (r.cells === 'loops' && r.step !== cellsStep)) renderSteps();
   paintPeek();
 }
 for (const t of ['rhythm', 'sound']) $('pg-' + t).onclick = () => { knobPage.latch = t; renderPage(); };
@@ -750,15 +755,18 @@ function buildSteps() {
   const el = $('stepsui');
   for (let i = 0; i < MAX_STEPS; i++) {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'st';
-    b.title = 'tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only';
-    b.onclick = (e) => { const lane = m.lane; if (i >= lane.length) return; if (e.altKey) return editLocks(i); const si = lane.stepIndex(i); if (e.shiftKey) lane.toggleAccent(si); else lane.cycleStep(si); sync(); };
-    longPress(b, () => { if (i < m.lane.length) editLocks(i); });
+    // RD-6: what a click does follows what the cells show (pages.js cellAction): a step cycles, a loop dot opens that
+    // cell's step page (switching the step), a slot (Loop held on the Move) does nothing
+    b.onclick = (e) => { const lane = m.lane, act = cellAction(cellsMode, i, lane.length, e.altKey); if (act === 'open') return e.altKey ? editLocks(i) : openStep(i); if (act === 'none') return; const si = lane.stepIndex(i); if (e.shiftKey) lane.toggleAccent(si); else lane.cycleStep(si); sync(); };
+    longPress(b, () => { if (cellAction(cellsMode, i, m.lane.length, true) === 'open') openStep(i); });
     el.appendChild(b); stepBtns.push(b);
   }
 }
 /** The step of the selected lane sounding now, lit on the strip while playing (only the old and new button change). */
-let playheadAt = -1, cellsAt = 0;   // cellsAt: the first step the cells show (renderSteps)
+let playheadAt = -1, cellsAt = 0, cellsMode = 'steps', cellsStep = -1, cellsLoop = -1;   // cellsAt: the first step the cells show; cellsMode: steps | loops | slots (renderSteps)
 function paintPlayhead() {
+  if (cellsMode === 'loops' && playing && m.lane.loopN !== cellsLoop) return renderSteps();   // RD-6: the "now" ring moves on every loop
+  if (cellsMode !== 'steps') return;   // dots have no playhead
   const i = playing && m.lane.shown != null && m.lane.shown < m.lane.length ? m.lane.shown : -1; if (i === playheadAt) return;
   if (cellFirst() !== cellsAt) { renderSteps(); renderPage(); return; }   // RD-5: the cells follow the Move's step page (a 32-step lane's second half)
   stepBtns[playheadAt]?.classList.remove('ph'); stepBtns[i]?.classList.add('ph'); playheadAt = i;
@@ -767,9 +775,13 @@ function renderSteps() {
   const lane = m.lane; playheadAt = -1;
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   const first = cellsAt = cellFirst(), hs = new Set([...pages.held.values()].map(h => h.step));   // RD-5: 16 cells, the Move's 16 step buttons (L1's steps 17–32 on their page); a Move step held is outlined
+  const r = knobPage.r, mode = cellsMode = r?.cells === 'slots' ? 'slots' : r?.cells === 'loops' && r.step >= 0 && r.step < lane.length ? 'loops' : 'steps';
+  cellsStep = mode === 'loops' ? r.step : -1; cellsLoop = lane.loopN; $('stepsui').dataset.cells = mode;
+  $('stepsui').setAttribute('aria-label', mode === 'loops' ? `the loops of step ${r.step + 1}` : mode === 'slots' ? 'slots' : 'steps');
+  if (mode !== 'steps') return renderDots(mode, lane, first, hs);
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));
-    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${hs.has(i) ? ' held' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`;
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${hs.has(i) ? ' held' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`; b.title = STEP_TITLE;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
@@ -777,6 +789,26 @@ function renderSteps() {
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
   });
   paintPlayhead();
+}
+const STEP_TITLE = 'tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = its step page (locks, condition, repeats) · Shift+click = accent only';
+/**
+ * RD-6 the cells as dots. On a step page: the 16 loops of its step (pages.js stepLoops, the Move's LEDs while a step is
+ * looked at): lit = it plays on that loop, dashed = it depends on fill or the step before, a ring = the loop playing now;
+ * a click opens that cell's step page (a dot is never an edit). While Loop is held on the Move: the 16 slots (lit =
+ * filled, a ring = playing, dashed = queued, outlined = picked for a chain). A Move step held stays outlined.
+ */
+function renderDots(mode, lane, first, hs) {
+  const st = mode === 'loops' ? knobPage.r.step : -1, si = st >= 0 ? lane.stepIndex(st) : 0;
+  const L = st >= 0 ? stepLoops({ cond: lane.trigs[si]?.cond, on: lane.played(si), loopN: lane.loopN, playing }) : null;
+  stepBtns.forEach((b, i) => {
+    const k = i - first; let cls = 'st dot', label = '';
+    if (k < 0 || k >= STEP_BTNS) cls += ' out';
+    else if (L) { const p = L.loops[k]; cls += p === true ? ' lp-on' : p === null ? ' lp-cue' : ''; if (k === L.now) cls += ' lp-now'; label = `loop ${L.from + k + 1} of step ${st + 1}: ${p === true ? 'plays' : p === null ? 'depends on fill or the step before' : 'rests'}${k === L.now ? ', playing now' : ''}`; }
+    else { const f = bank.filled(k), cur = bank.current === k, nx = bank.pending === k, pk = chainPick.includes(k); cls += `${f ? ' lp-on' : ''}${cur ? ' lp-now' : ''}${nx ? ' lp-cue' : ''}${pk ? ' lp-pick' : ''}`; label = `slot ${k + 1}: ${cur ? 'playing' : nx ? 'queued' : f ? 'saved' : 'empty'}${pk ? ', picked for a chain' : ''}`; }
+    if (hs.has(i)) cls += ' held';
+    b.className = cls; delete b.dataset.tg; b.disabled = false; b.removeAttribute('aria-pressed'); b.removeAttribute('aria-expanded'); b.setAttribute('aria-label', label);
+    b.title = L ? (i < lane.length ? `${label} · click: step ${i + 1}'s page` : label) : label;
+  });
 }
 
 // ---- per-step locks: hold a step on the Move and turn knobs 1–7, or Alt/right-click a step here ----
@@ -790,10 +822,12 @@ const LOCK_UI = {
   nudge: { label: 'nudge', min: -50, max: 50, fmt: v => (v > 0 ? '+' : '') + v + '%', say: v => v ? `${Math.abs(v)}% of a step ${v > 0 ? 'late' : 'early'}` : 'on the grid', base: () => 0 },
 };
 const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
-// opening it brings the panel into view: in the scrolling sheet the slice picker can open below its edge, and a planet's
-// long-press opens it from the rings while another tab shows (RD-3: reveal opens the lane tab)
-// RD-5: it latches the console's step page too (latchStep; Esc closes it the same way)
-function editLocks(i) { if (lockStep !== i && locksTucked()) return; lockStep = lockStep === i ? -1 : i; renderSteps(); renderLocks(); latchStep(lockStep); if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); }
+// RD-6 one lock editor: the console's step page (latchStep). A cell's long-press (right-click, Alt+click) or a planet's
+// opens it, another cell or planet switches it; done, Esc or the same Alt+click closes it. It no longer opens the sheet:
+// "more…" does, for the locks the 8 knobs don't hold (nudge, stroke, slice, start / end, direction, the condition's
+// loop and the repeats' shape), the old lock panel in Sheet → lane
+function openStep(i) { if (i < 0 || i >= m.lane.length || (lockStep !== i && locksTucked())) return; lockStep = i; renderSteps(); renderLocks(); latchStep(i); }
+function editLocks(i) { if (lockStep === i) { lockStep = -1; renderSteps(); renderLocks(); latchStep(-1); } else openStep(i); }
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
 function stepEdited() { knobPage.forced = null; renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
@@ -814,8 +848,17 @@ function buildLockGauges() {
       onStart: (v) => handHold('lock', k, v / 100), onEnd: () => handLetGo('lock', k) });
     sliders['lock:' + k] = g; el.appendChild(g.el);
   }
-  $('lock-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; stepEdited(); };
   const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); stepEdited(); };
+  // RD-6 the step page's knob 8: the condition (the Move's hold step + knob 8, the same order), or the repeats (+ Shift).
+  // They live in the step page only (their home is a hidden holder); "more…" has the condition's loops and the repeats' shape
+  const COND_SHORT = { always: 'all', fill: 'fill', 'not fill': 'no fill', first: '1st', 'not first': 'not 1st', pre: 'pre', 'not pre': 'not pre' };
+  const condSay = (c) => ({ always: 'every loop', fill: 'only with fill', 'not fill': 'only without fill', first: 'only the first loop', 'not first': 'after the first loop', pre: 'if the last condition passed', 'not pre': 'if the last condition failed' })[c] ?? `loop ${c.replace(':', ' of every ')}`;
+  sliders['lock:cond'] = makeGauge({ label: 'condition', min: 0, max: CONDS.length - 1, value: 0, fmt: v => COND_SHORT[CONDS[v]] ?? CONDS[v], say: v => condSay(CONDS[v]), title: INFO.condition, onChange: (v) => setTrig({ cond: CONDS[v] }) });
+  sliders['lock:ratchet'] = makeGauge({ label: 'repeats', min: 1, max: MAX_RATCHET, value: 1, fmt: v => '×' + v, say: v => v === 1 ? 'one hit' : `${v} hits inside the step`, title: 'Repeat the hit inside its step', onChange: (v) => setTrig({ ratchet: v }) });
+  $('step-knob8').replaceChildren(sliders['lock:cond'].el, sliders['lock:ratchet'].el);
+  $('st-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; stepEdited(); };
+  $('st-more').onclick = () => { if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); };
+  $('st-done').onclick = () => { if (lockStep >= 0 && knobPage.latch === 'step') editLocks(lockStep); else latchStep(-1); };
   // condition = "every N loops" + which loop (dots), or one of the fill / first specials
   ui.condEvery = mount('cond-every', segmented({ options: [[1, 'always'], [2, '1 in 2'], [3, '1 in 3'], [4, '1 in 4']], value: 1, onChange: (b) => setTrig({ cond: b === 1 ? 'always' : `1:${b}` }) }));
   ui.condSpecial = mount('cond-special', segmented({ options: [['fill', 'with fill', INFO.condition], ['not fill', 'without fill'], ['first', '1st loop'], ['not first', 'after 1st'], ['pre', 'if last passed', INFO.pre], ['not pre', 'if last failed', INFO.pre]], value: null, chips: true,
@@ -828,7 +871,6 @@ function buildLockGauges() {
   const rampSt = (v) => (v * (TUNE_SEMIS[m.lane.voice] || 12)) / 12;
   sliders.ramp = makeGauge({ label: 'pitch ramp', min: -12, max: 12, value: 0, fmt: v => (v > 0 ? '+' : '') + rampSt(v), say: v => `${rampSt(v)} semitones`, title: INFO['ratchet ramp'], color: 'var(--signal-cyan)', onChange: (v) => setTrig({ ramp: v / 12 }) });
   $('trig-ramp').replaceChildren(sliders.ramp.el);
-  $('lock-close').onclick = () => editLocks(lockStep);
   // L3 stroke: 'lane' = no artic lock (the lane's own sound); the options follow the lane's voice (renderLocks)
   ui.artic = mount('lock-artic', segmented({ options: [], value: 'lane', onChange: (v) => lockHere('artic', v === 'lane' ? null : v) }));
   // S3 on a sample lane: this step's start / end and direction ('lane' = no lock: the lane's own)
@@ -870,13 +912,16 @@ function renderLocks() {   // always after renderSteps, which closes a step a sh
   panel.hidden = lockStep < 0; if (lockStep < 0) return;
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
   renderTrig(lane.trigAt(lockStep));
-  $('lock-title').textContent = `step ${lockStep + 1} · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dotted = lane value)'}`;
+  $('lock-title').textContent = `step ${lockStep + 1} · more · ${keys.length ? 'locked: ' + keys.map(k => lockName(lane, k, lk)).join(', ') : 'no locks yet (dashed = the lane value)'}`;
   const arts = ARTICS[lane.voice]; $('artic-wrap').hidden = !arts;   // a sample lane has none
   if (arts) { if (articFor !== lane.voice) { articFor = lane.voice; ui.artic.setOptions([['lane', 'lane sound', 'no stroke lock: the lane\'s own sound'], ...arts.map((n, a) => [a, n])]); } ui.artic.set(articAt(lane.voice, lk) ?? 'lane'); }   // rebuilt only for a new voice: a click never lands on a detached button
   // RD-2: in the lane's ink, solid where this step is locked, dotted where it plays the lane's value (a dim colour sank
   // under the knob track once the track became an edge)
   const lockLook = (g, k) => { g.setColor(LANE_HEX[m.selected]); g.el.classList.toggle('follows', lk[k] == null); };
   for (const k of LOCK_KEYS) { const g = sliders['lock:' + k]; g.set(Math.round(lockValue(lane, lockStep, k) * 100)); lockLook(g, k); }
+  const tg = lane.trigAt(lockStep), cg = sliders['lock:cond'], rg = sliders['lock:ratchet'];   // knob 8: "always" and one hit follow the lane
+  cg.set(Math.max(0, CONDS.indexOf(tg?.cond || 'always'))); rg.set(tg?.ratchet || 1);
+  for (const [g, f] of [[cg, !tg || tg.cond === 'always'], [rg, !(tg?.ratchet > 1)]]) { g.setColor(LANE_HEX[m.selected]); g.el.classList.toggle('follows', f); }
   const smp = lane.voice === 'sample' && !!lane.sample; $('lock-sample').hidden = !smp;   // S1 / S3
   if (smp) {
     renderSliceLock(lane, lk); const tr = lane.trimAt(lk);
@@ -2145,7 +2190,7 @@ function paintLeds() {
   if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
   } else if ((look = pages.looked(performance.now()))) {   // P7: a step held (LOOK_MS, or edited): the step buttons are 16 of its loops (1–16, or the 16 holding the loop playing now) and light where it plays (blue = depends on fill / the step before; white = the loop playing now)
-    const si = lane.stepIndex(look.step), on = lane.played(si), now = playing && lane.loopN != null ? lane.loopN : -1, from = loopWindow(now, STEP_BTNS), loops = condLoops(lane.trigs[si]?.cond, STEP_BTNS, from), at = now - from;
+    const si = lane.stepIndex(look.step), on = lane.played(si), { loops, now: at } = stepLoops({ cond: lane.trigs[si]?.cond, on, loopN: lane.loopN, playing });   // the step page's loop dots too (pages.js)
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, !on ? (i === at ? COLOR.DARK_GREY : 0) : i === at ? (loops[i] === false ? COLOR.DARK_GREY : COLOR.WHITE) : loops[i] === null ? CUE_LED : loops[i] ? LANE_LED[m.selected] : 0);
   } else if (pages.back) {   // Back held: the step buttons are the pad pages (white = the one showing, cyan = pinned)
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, i >= np ? 0 : i === cur ? (pages.follow ? COLOR.WHITE : CYAN_LED) : LANE_DIM[m.selected]);
@@ -2176,7 +2221,7 @@ move.addEventListener('step', (e) => {
   // a release ends its own press, whatever happened since (the page turned, Back went down, the lane got shorter):
   // a tap toggles the step it went down on; a hold + knob locked something instead, a longer hold looked at its loops (P7)
   if (!on) { const h = pages.release(btn, performance.now()), lane = m.lane; if (h) stepBtns[h.step]?.classList.remove('held'); if (h && !h.used && h.step < lane.length) { lane.toggle(lane.stepIndex(h.step)); sync(); } else { renderPage(); paintLeds(); } return; }
-  if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); return; }
+  if (loopHeld || dupHeld) { if (dupHeld) saveSlot(btn); else if (bank.filled(btn) && !chainPick.includes(btn)) chainPick.push(btn); paintLeds(); renderSteps(); return; }   // RD-6: the cells show the slots too
   if (pages.back) { pages.pin(btn, m.lanes); paintLeds(); return; }   // Back + step button = that pad page
   const lane = m.lane, first = pages.stepFirst(lane, playing), step = first + btn; if (step >= lane.length) return;   // the step's own number (17–32 on page 2)
   // P7: held LOOK_MS, the buttons show its loops; RD-5: its cell is outlined at once, the step page comes at LOOK_MS (or a turn)
@@ -2407,11 +2452,11 @@ cv.addEventListener('pointerdown', (e) => {
   if (pts.size > 1) return;
   // RD-4: a press off the rings is a click on empty canvas: released where it went down, it is one Esc (the Esc order).
   // A press that closes a popup is that popup's Esc already, so its release does nothing more
-  const popup = popupOpen(); if (popup) closePopups(); emptyTap = null;
-  closeRingMenu(); const at = scene.locate(e.clientX, e.clientY); if (at.lane < 0) { gest = null; if (!popup) emptyTap = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
+  const popup = popupOpen(); if (popup) closePopups(); emptyTap = null; longFired = false;
+  const at = scene.locate(e.clientX, e.clientY); if (at.lane < 0) { gest = null; if (!popup) emptyTap = { id: e.pointerId, x: e.clientX, y: e.clientY }; return; }
   const lane = m.lanes[at.lane], onTick = at.off <= TAP_PX;
   gest = { li: at.lane, lane, step: onTick ? at.step : -1, x0: e.clientX, y0: e.clientY, dx0: at.dx, dy0: at.dy, kind: null, rot0: lane.rotation, len0: lane.length, start: structuredClone(lane.toJSON()), changed: null,
-    stepPx: Math.max(8, (at.g.gap * at.g.R) / 3), timer: onTick && lane.hitAt(at.step) ? setTimeout(() => { if (!gest || gest.kind || gone(gest)) return; gest.kind = 'long'; openRingMenu(gest.li, gest.step); }, LONG_MS) : 0 };
+    stepPx: Math.max(8, (at.g.gap * at.g.R) / 3), timer: onTick && lane.hitAt(at.step) ? setTimeout(() => { if (!gest || gest.kind || gone(gest)) return; gest.kind = 'long'; longFired = true; planetStep(gest.li, gest.step); }, LONG_MS) : 0 };
 });
 cv.addEventListener('pointermove', (e) => {
   if (!pts.has(e.pointerId)) return; pts.set(e.pointerId, { x: e.clientX, y: e.clientY }); const g = gest; if (!g || g.kind === 'long') return;
@@ -2429,7 +2474,8 @@ function gestureEnd(e, tap) {
   if (!pts.delete(e.pointerId) || pts.size) return;
   const t = emptyTap; emptyTap = null; if (t && tap && t.id === e.pointerId && Math.hypot(e.clientX - t.x, e.clientY - t.y) <= LONG_SLOP) escapeOnce();   // never an edit
   const g = gest; gest = null; if (!g) return; clearTimeout(g.timer); if (gone(g)) return;
-  if (!g.kind && tap) { if (g.step >= 0) canvasTap(g.li, g.step); else { m.select(g.li); sync(); } }   // between the ticks: select only
+  // between the ticks: select only; RD-6: a planet tapped while the mouse holds a step page open switches the page to it
+  if (!g.kind && tap) { if (g.step >= 0 && g.lane.hitAt(g.step) && planetAction(knobPage.latch === 'step' && lockStep >= 0) === 'open') planetStep(g.li, g.step); else if (g.step >= 0) canvasTap(g.li, g.step); else { m.select(g.li); sync(); } }
   else if (g.changed) { ownNext = true; sync(); questEvent({ type: 'edit', lane: g.li, k: g.changed === 'rot' ? 'rotation' : 'length' }); }   // the whole turn / pull / pinch: one undo step
 }
 // touch: a finger that lands on a ring plays it (no scroll, no zoom); off the rings (the core, the corners of a phone's
@@ -2440,57 +2486,18 @@ cv.addEventListener('touchstart', (e) => {
   const t = e.changedTouches[0]; if (!gest && !(t && scene.locate(t.clientX, t.clientY).lane >= 0)) return;
   e.preventDefault(); const a = document.activeElement; if (a instanceof HTMLElement && a !== document.body) a.blur();
 }, { passive: false });
-cv.addEventListener('touchend', (e) => { if (!ringMenu.hidden) e.preventDefault(); }, { passive: false });
+let longFired = false;   // a long press opened a step page: its touch sends no click on release
+cv.addEventListener('touchend', (e) => { if (longFired) { longFired = false; e.preventDefault(); } }, { passive: false });
 cv.addEventListener('pointerup', (e) => gestureEnd(e, true));
 cv.addEventListener('pointercancel', (e) => gestureEnd(e, false));
-cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser's own long press: the lock menu
+cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser's own long press: the planet's step page
   e.preventDefault(); if (gest?.kind === 'long') return; const at = scene.locate(e.clientX, e.clientY);
-  if (at.lane >= 0 && at.off <= TAP_PX && m.lanes[at.lane].hitAt(at.step)) { m.select(at.lane); sync(); openRingMenu(at.lane, at.step); }
+  if (at.lane >= 0 && at.off <= TAP_PX && m.lanes[at.lane].hitAt(at.step)) planetStep(at.lane, at.step);
 });
-// the radial lock menu: five buttons round the planet; each opens the steps strip's lock panel on that step with its
-// control focused, so the edit goes through the same (undoable, auditioned) path as there
-const RING_ITEMS = [['tune', 'tune'], ['prob', 'chance'], ['vel', 'velocity'], ['nudge', 'nudge'], ['cond', 'condition']];
-const ringMenu = document.createElement('div'); ringMenu.id = 'ring-menu'; ringMenu.className = 'ring-menu'; ringMenu.setAttribute('role', 'menu'); ringMenu.hidden = true; document.body.appendChild(ringMenu);
-let menuBack = null;   // what had the focus before the menu opened: Esc gives it back
-function openRingMenu(li, i) {
-  if (locksTucked()) return;   // I7 simple: the locks are tucked away (the toast says where)
-  // an ellipse (the pills are wider than tall), kept inside the window: a pill is up to ~130 px wide. Kept inside, its
-  // centre can leave the planet (near a side or the top of a phone): then the pills turn so the planet sits in a gap
-  // between two of them, the gap with the most room round the finger (measured: the pills' widths differ)
-  const lane = m.lanes[li], lk = lane.lockAt(i) || {}, tg = lane.trigAt(i), at = scene.stepXY(li, i), RX = 100, RY = 62, N = RING_ITEMS.length;
-  const cx = Math.max(RX + 70, Math.min(innerWidth - RX - 70, at.x)), cy = Math.max(RY + 24, Math.min(innerHeight - RY - 24, at.y));
-  const ex = (at.x - cx) / RX, ey = (at.y - cy) / RY, pills = () => [...ringMenu.children];
-  const pos = (turn, n) => { const a = -Math.PI / 2 + turn + (n / N) * Math.PI * 2; return [Math.cos(a) * RX, Math.sin(a) * RY]; };
-  const place = (turn) => pills().forEach((b, n) => { const [x, y] = pos(turn, n); b.style.left = `${x}px`; b.style.top = `${y}px`; });
-  // px from the finger to the nearest pill with the pills turned by `turn` (< 0: under one); the layout's sizes, not the
-  // boxes on screen (buttons glide between positions)
-  const room = (turn) => Math.min(...pills().map((b, n) => { const [x, y] = pos(turn, n); return Math.max(Math.abs(cx + x - at.x) - b.offsetWidth / 2, Math.abs(cy + y - at.y) - b.offsetHeight / 2); }));
-  if (ringMenu.hidden) menuBack = document.activeElement;
-  ringMenu.innerHTML = ''; ringMenu.setAttribute('aria-label', `locks of lane ${li + 1} step ${i + 1}`); ringMenu.style.left = `${cx}px`; ringMenu.style.top = `${cy}px`;
-  RING_ITEMS.forEach(([k, label]) => {
-    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('role', 'menuitem');
-    const set = k === 'cond' ? tg && tg.cond !== 'always' : lk[k] != null, v = k === 'cond' ? (tg?.cond ?? 'always') : LOCK_UI[k].fmt?.(Math.round(lockValue(lane, i, k) * 100)) ?? `${Math.round(lockValue(lane, i, k) * 100)}%`;
-    b.textContent = `${label} ${v}`; b.classList.toggle('lk', !!set); b.title = `${label} of step ${i + 1}${set ? ' (locked)' : ' (the lane value)'}: open it in the lock panel`;
-    // focus mode hides the lane panel the lock panel lives in: picking a lock leaves it
-    b.onclick = () => { closeRingMenu(); if (focusMode) setFocusMode(false); if (m.selected !== li) { m.select(li); sync(); } if (lockStep !== i) editLocks(i); (k === 'cond' ? $('cond-every').querySelector('button') : sliders['lock:' + k].el)?.focus(); };
-    ringMenu.appendChild(b);
-  });
-  ringMenu.hidden = false;
-  const gaps = RING_ITEMS.map((_, k) => Math.atan2(ey, ex) + Math.PI / 2 + Math.PI / N + (k * 2 * Math.PI) / N);   // the planet in gap k
-  place(Math.hypot(ex, ey) <= 0.3 ? 0 : gaps.reduce((a, t) => (room(t) > room(a) ? t : a)));   // round the planet: tune at 12 o'clock
-  ringMenu.querySelector('button').focus({ preventScroll: true });
-}
-function closeRingMenu(refocus = false) {
-  if (ringMenu.hidden) return; ringMenu.hidden = true; ringMenu.innerHTML = '';
-  const back = menuBack; menuBack = null; if (refocus && back?.isConnected && back !== document.body) back.focus({ preventScroll: true });
-}
-// Esc closes it and gives the focus back; the arrow keys (and Home / End) go round the pills, as in any menu
-ringMenu.addEventListener('keydown', (e) => {
-  const items = [...ringMenu.children], k = items.indexOf(document.activeElement), d = { ArrowDown: 1, ArrowRight: 1, ArrowUp: -1, ArrowLeft: -1 }[e.key];
-  if (e.key === 'Escape') { e.stopPropagation(); closeRingMenu(true); }
-  else if (d || e.key === 'Home' || e.key === 'End') { e.preventDefault(); e.stopPropagation(); items[e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : (k + d + items.length) % items.length]?.focus(); }
-});
-addEventListener('pointerdown', (e) => { if (!ringMenu.hidden && !ringMenu.contains(e.target) && e.target !== cv) closeRingMenu(); }, true);
+/** RD-6: a planet's long-press or right-click (or a tap while a step page is latched) opens its step page on the
+ *  console: the one lock editor (the radial menu it replaces put five lock buttons over the rings). Focus mode hides the
+ *  console the page lives on, so opening it leaves focus mode. */
+function planetStep(li, i) { if (focusMode) setFocusMode(false); if (m.selected !== li) { m.select(li); lockStep = -1; sync(); } openStep(i); }
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
 // C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
 const DEBUG = new URLSearchParams(location.search).has('debug'); $('stress-meter').hidden = !DEBUG;
@@ -2609,7 +2616,7 @@ setSheet(sheet.tab, false);
 // init…) or shows the control: its tab, its drawers, the focus on it, the keys its own. Empty = the recents. The field
 // owns its keys (B8); ↑↓ pick, Esc empties it, an empty field's Esc is the Esc order's ----
 const FIND_SEL = 'button, select, input, textarea, summary, a[href], [role=slider], [role=tab], [role=radio], [role=switch], [role=checkbox]';
-const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv';   // the field itself, the modal cards, the canvas's own popup
+const FIND_OUT = '#find-box, dialog, #stage, #cv';   // the field itself, the modal cards, the canvas
 let findRecents = (() => { try { return recentsFrom(localStorage.getItem(FIND_KEY)); } catch { return []; } })();
 let findIndex = [], findHits = [], findAt = 0;
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -2706,10 +2713,10 @@ function findRun(h) {
 // only what is open and drawn counts (the lock panel hidden in focus mode, a slot menu whose tab was left, are not
 // layers then: they close quietly with the next one). A click on empty canvas is the same (scene pointer events above).
 // A modal card (help, the shared beat) closes itself; a text field owns its Esc (B8); a popup's own handler (slot menu,
-// ring menu, share menu) answers it first when the focus is in it; a held Esc is one press ----
+// share menu) answers it first when the focus is in it; a held Esc is one press ----
 const drawn = (el) => !!el.getClientRects().length;
-const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || (!ringMenu.hidden && drawn(ringMenu) && 'ring') || null;
-function closePopups() { closeShareMenu(); closeSlotMenu(); closeRingMenu(); }
+const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || null;
+function closePopups() { closeShareMenu(); closeSlotMenu(); }
 const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && (drawn($('lockpanel')) || knobPage.shown === 'step'), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
   knobPage.lost = null;   // RD-5: a knob the row took the focus from doesn't get it back after an Esc

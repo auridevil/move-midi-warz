@@ -48,6 +48,12 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   are the Move's 16 step buttons (a 32-step lane shows the 16 of its page). The console log (\` or Sheet → setup) shows
   the old readout as text over the stage. Browser check: `node orbit2/tools/console-check.mjs` (Nils's rows through
   `__poly.move.receive`, A8 peek latency with `?setlog`, the scripted A2 run, the log's A5 / A7, Vera's mis-click run).
+- The step page (RD-6): the one lock editor. A Move step held LOOK_MS (or a knob turned) or a cell's / planet's
+  long-press, right-click or Alt+click shows it: the knobs as rings (solid = locked, dashed = the lane value; knob 8 the
+  condition, + the Move's Shift the repeats), the 16 cells as the step's loop dots (`pages.js stepLoops`, as the Move's
+  LEDs), clear · more… · done in the header ("more…" = the rest in Sheet → lane, the old lock panel). With it latched a
+  click on a planet or a cell switches the step (`cellAction` / `planetAction`); Loop held on the Move shows the slots
+  on the cells. The radial menu is gone. Nils's whole table is `test/steppage.test.js`.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

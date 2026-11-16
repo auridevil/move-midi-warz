@@ -270,10 +270,6 @@ body.chaos::before { display: none; }
 /* I1 the rings are played by hand: a touch on a ring never scrolls or zooms the page (app.js cancels it there); off the
    rings the page scrolls as before. manipulation: no double-tap zoom, so quick taps on a tick stay taps */
 #cv { touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
-.ring-menu { position: fixed; z-index: 60; width: 0; height: 0; }
-.ring-menu button { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; min-height: 32px; padding: 4px 10px; border-radius: 999px; font-size: var(--t-s); letter-spacing: var(--tr-12); color: var(--l); background: var(--v); border: 1px solid var(--b); box-shadow: 0 2px 10px rgba(0, 0, 0, .5); }
-.ring-menu button.lk { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l), 0 2px 10px rgba(0, 0, 0, .5); }
-.ring-menu button:focus-visible { outline: 2px solid var(--l); outline-offset: 2px; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
 /* ---- RD-5 the console: the Move's face (DECISION "The screen at 1512×860"). Three groups over the grid's columns:
    transport under the lane list, the selected lane under the stage (its header, the 8 knobs of the page, the 16 cells),
@@ -342,6 +338,22 @@ body.chaos::before { display: none; }
 .lh-page { color: var(--l); }
 /* a Move step held: its cell outlined at once (the step page follows at LOOK_MS or a turn) */
 .stepsui .st.held { outline: 2px solid var(--l); outline-offset: 1px; }
+/* RD-6 the step page. Its knobs are rings: the track a whole circle in the lane's ink, solid where the step is locked,
+   dashed where it follows the lane (the value arc dotted then too, as RD-2's lock knobs) */
+.gauge.ring .g-track { stroke: var(--gk); stroke-width: 2.5; } .gauge.ring.follows .g-track { stroke-dasharray: 4 4; }
+.gauge.ring .g-fill { stroke-width: 5; }
+/* its 16 cells are loop dots (lit = the step plays on that loop, dashed = it depends on fill or the step before, a ring =
+   the loop playing now); with Loop held on the Move they are the 16 slots (lit = saved, a ring = playing, dashed =
+   queued, the cell outlined = picked for a chain). The cell keeps its edge and its size: only the dot inside changes */
+.stepsui[data-cells=loops] .st, .stepsui[data-cells=slots] .st { background: transparent; }
+.stepsui .st.dot::before { content: ''; position: absolute; left: 50%; top: 50%; width: 14px; height: 14px; margin: -9px 0 0 -9px; border-radius: 50%; border: 2px solid var(--b); background: transparent; pointer-events: none; }
+.stepsui .st.dot.lp-on::before { background: color-mix(in srgb, var(--lane, var(--l)) 80%, var(--v)); border-color: color-mix(in srgb, var(--lane, var(--l)) 80%, var(--v)); }
+.stepsui .st.dot.lp-cue::before { border-style: dashed; border-color: var(--l); }
+.stepsui .st.dot.lp-now::before { box-shadow: 0 0 0 3px var(--v), 0 0 0 5px var(--l); }
+.stepsui .st.dot.lp-pick { outline: 2px solid var(--l); outline-offset: 1px; }
+/* its three words (clear · more… · done) where "steps 1–16 of 16" was, the size of the page tabs */
+.step-tools { display: flex; gap: 12px; } .step-tools[hidden] { display: none; }
+.step-tools .aword { padding: 1px 2px 2px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); min-height: 0; }
 /* RD-5 the peek (left column, under the lane list): 64 px weight 300 number, the knob's name, what it means */
 .peek { display: flex; flex-direction: column; gap: 4px; padding: 20px 24px 12px; pointer-events: none; }
 .peek[hidden] { display: none; }
