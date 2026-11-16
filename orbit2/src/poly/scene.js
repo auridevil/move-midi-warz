@@ -111,6 +111,17 @@ export const shortSteps = (a, b, len) => { const d = ((((b - a) % len) + len) % 
 export const pushSteps = (offsetMs, stepMs) => (stepMs > 0 ? offsetMs / stepMs : 0);
 /** The steps a length change from `a` to `b` adds (they pulse once); none when it got shorter. */
 export const newTicks = (a, b) => Array.from({ length: Math.max(0, b - a) }, (_, k) => a + k);
+// ---- RD-7 quest "show me" (Rio): the gesture drawn once as a ghost hand on lane li's ring. Read-only light, like the
+// answers above: drawn, never hit-tested; the app hides it on any key or press ----
+export const GHOST_MS = 2200;
+/** Where the ghost hand is at p (0..1) of its gesture on geometry g (ringGeo): a pull goes out from the ring at two
+ *  o'clock by 0.18 R (a longer loop), a turn goes along the ring a quarter-ish clockwise (a shift). It waits at the start
+ *  (to 0.15), moves (to 0.8), then rests where it ended. */
+export function ghostAt(g, kind, li, p) {
+  const t = easeOut((Math.min(1, Math.max(0, p)) - 0.15) / 0.65), a0 = -Math.PI / 2 + Math.PI / 3, r0 = g.ring(li);
+  const a = kind === 'turn' ? a0 + 0.9 * t : a0, r = kind === 'pull' ? r0 + 0.18 * g.R * t : r0;
+  return { x: g.cx + Math.cos(a) * r, y: g.cy + Math.sin(a) * r };
+}
 /** Ease out (cubic): a slide starts fast and settles. */
 const easeOut = (p) => 1 - (1 - Math.min(1, Math.max(0, p))) ** 3;
 
@@ -143,6 +154,9 @@ export function createScene(cv, o) {
   // length, hits) and the answers still fading: slides { d, t }, spreads and grows { t, ticks }, per lane
   let hand = null, answered = false; const was = [], slides = [], spreads = [], grows = [];
   const snap = (l) => ({ rot: l.rotation, len: l.length, k: l.euclidK, hits: l.hits.slice(0, l.length).join() });
+  let ghost = null;   // RD-7 "show me": { kind, li, t } while it draws (GHOST_MS), once
+  /** The app: draw the gesture { kind: 'pull' | 'turn', li } once (null: hide it now). */
+  function setGhost(gh) { ghost = gh && o.machine().lanes[gh.li] ? { kind: gh.kind, li: gh.li, t: performance.now() } : null; }
   /** The app: a knob with key k on lane li is touched or dragged (null: let go; the answer stays HAND_MS). */
   function setHand(h) {
     const now = performance.now();
@@ -226,7 +240,7 @@ export function createScene(cv, o) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
     // RD-6: a hand on a knob, a held step, an answer fading, or the frame after the last one (to clear it) keeps drawing
     const held = o.held?.() || [];
-    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean)) { prev = now; return; }
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean) && !ghost) { prev = now; return; }
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
@@ -440,6 +454,20 @@ export function createScene(cv, o) {
       const k = dt / 1000; p.vx *= Math.pow(0.08, k); p.vy *= Math.pow(0.08, k); p.x += p.vx * k; p.y += p.vy * k;
       const s = p.s * 6 * (1 - age); ctx.globalAlpha = 1 - age; ctx.drawImage(sprite(p.hex), p.x - s, p.y - s, s * 2, s * 2);
     }
+    // RD-7 the ghost hand: its path so far as a dashed line, the hand a soft ring with a dot; it fades in and out. Reduced
+    // motion: no travel, the whole path and the hand where it ends, for the same time
+    if (ghost) {
+      const p = (now - ghost.t) / GHOST_MS, lane = m.lanes[ghost.li];
+      if (p >= 1 || !lane) ghost = null;
+      else {
+        const q = reduced ? 1 : p, env = Math.min(1, p / 0.1, (1 - p) / 0.15), end = ghostAt(g, ghost.kind, ghost.li, q);
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = env; ctx.strokeStyle = 'rgba(236,233,247,.55)'; ctx.lineWidth = 2; ctx.setLineDash([4, 6]); ctx.beginPath();
+        for (let k = 0; k <= 24; k++) { const pt = ghostAt(g, ghost.kind, ghost.li, 0.15 + (q - 0.15) * k / 24); if (k) ctx.lineTo(pt.x, pt.y); else ctx.moveTo(pt.x, pt.y); }
+        ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = 'rgba(236,233,247,.16)'; ctx.strokeStyle = 'rgba(236,233,247,.8)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(end.x, end.y, 15, 0, TAU); ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(236,233,247,.9)'; ctx.beginPath(); ctx.arc(end.x, end.y, 3, 0, TAU); ctx.fill();
+      }
+    }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     for (const [k, t] of flash) if (now - t > 400) flash.delete(k);
     for (const [k, mi] of misses) if (now - mi.t > MISS_MS || !playing) misses.delete(k);
@@ -449,5 +477,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, setHand, get hand() { return hand && { ...hand }; }, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, setHand, get hand() { return hand && { ...hand }; }, ghost: setGhost, get ghosting() { return !!ghost; }, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
 }

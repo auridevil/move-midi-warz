@@ -9,7 +9,9 @@
 // the quest by itself. on: the event types that can finish it; the app checks right after one of them, so a result
 // that evolve, a slot or an undo brings later is not credited to an older move. hint(m, say): the card's words for the
 // beat on screen; say = { word(k): a lane knob's label as shown (plain in simple), lane(i): a lane as the screen names
-// it }. drawer: the panel the quest is played in (its hint lights there).
+// it }. drawer: the panel the quest is played in (its hint lights there). show(m) (RD-7 "show me"): the gesture the
+// scene draws once as a ghost hand, { kind: 'pull' | 'turn', li } on lane li's ring, or { id } of the control a quest
+// played in the sheet is done with (the app shows it instead).
 import { RATIOS } from './lanes.js';
 
 export const QUESTS_KEY = 'midi-warz.orbit2.quests';
@@ -92,6 +94,7 @@ const lastEdit = (events) => events.findLast(e => e.type === 'edit');
 export const QUESTS = [
   { id: 'three-four', title: 'make 3 against 4', drawer: 'lane-drawer', on: ['edit'],
     hint: () => 'Give one ring 3 steps and another 4, both at the same speed (the "length" knob, or pull a ring outwards). They line up every 12 steps.',
+    show: (m) => ({ kind: 'pull', li: m.selected ?? 0 }),   // a pull outwards: a longer loop
     check: (m, ev) => ['length', 'ratio'].includes(lastEdit(ev)?.k) && threeAgainstFour(m) },
   { id: 'backbeat', title: 'rotate the snare onto 2 and 4', drawer: 'lane-drawer', on: ['edit'],
     hint: (m, say) => {
@@ -101,15 +104,19 @@ export const QUESTS = [
       if (!set && onTwoAndFour(m, li)) return `Your snare (${say.lane(li)}) already plays on 2 and 4: pick it and turn "${say.word('rotation')}" away and back (or drag along its ring) to land it there yourself.`;
       return set ? `Your snare is ${say.lane(li)}. Pick it, ${set}; then ${turn}.` : `Your snare is ${say.lane(li)}: pick it and ${turn}.`;
     },
+    show: (m) => { const li = backbeatLane(m); return { kind: 'turn', li: li >= 0 ? li : m.selected ?? 0 }; },   // along the snare's ring
     check: (m, ev) => { const e = lastEdit(ev); return e?.k === 'rotation' && snareLanes(m).includes(e.lane) && onTwoAndFour(m, e.lane); } },
   { id: 'evolve', title: 'let it evolve 8 bars', drawer: 'evolve-drawer', on: ['bar'],
     hint: () => 'Open "Evolve", press ◌ evolve and play: every few bars the rings change by themselves. Listen for 8 bars.',
+    show: () => ({ id: 'btn-evolve' }),
     check: (m, ev) => ev.filter(e => e.type === 'bar' && e.evolving).length >= 8 },
   { id: 'slot', title: 'save your first slot', drawer: 'patterns-drawer', on: ['slot-save'],
     hint: () => 'Open "Patterns" and long-press a slot (or Shift+click it) to keep this beat there. Tap it later to bring it back.',
+    show: () => ({ id: 'slots' }),
     check: (m, ev) => ev.some(e => e.type === 'slot-save') },
   { id: 'export', title: 'export a loop', drawer: 'export-drawer', on: ['export'],
     hint: () => 'Open "Export" and press ⤓ WAV (or ⤓ MIDI): your beat as a file you can drop into any music app.',
+    show: () => ({ id: 'exp-wav' }),
     check: (m, ev) => ev.some(e => e.type === 'export') },
 ];
 

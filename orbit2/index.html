@@ -126,8 +126,7 @@
        focus on a knob; never hover), 400 ms after the hand lets go. Read-only light, not a live region -->
   <div id="peek" class="peek" aria-hidden="true" hidden><b id="peek-n" class="peek-n"></b><span id="peek-name" class="peek-name"></span><span id="peek-mean" class="peek-mean"></span></div>
   </div>
-  <!-- RD-3: the right column: the Move pill and help, what is on (welcome, quest, jam take: RD-7's pills go here), then
-       the one sheet -->
+  <!-- RD-3: the right column: the Move pill and help, what is on (RD-7's pills), then the one sheet under the last pill -->
   <div class="hud">
     <div class="hud-top">
       <div class="status" id="move-status" hidden>
@@ -136,12 +135,24 @@
       </div>
       <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
     </div>
-    <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
-    <!-- I6: the quest you are on (filled by app.js renderQuest) -->
-    <div id="quest" class="quest" role="region" aria-label="quest" hidden><span class="quest-k">quest <b id="quest-n"></b></span><b id="quest-title" class="quest-title"></b><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-skip" class="small" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button><button id="quest-x" class="small" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span></div>
-    <div id="jam-panel" class="jam-panel" hidden>
-      <div class="jam-bar"><i id="jam-fill"></i></div>
-      <div class="jam-row"><span id="jam-text"></span><span><button id="jam-dl" class="primary small" hidden>⤓ lane tracks + raw mix (.zip)</button> <button id="jam-discard" class="small" hidden>discard</button></span></div>
+    <!-- RD-7 the pills: what is on, in a fixed order (app.js renderPills, src/poly/pills.js). A pill appears when its mode
+         turns on and goes when it turns off: one status region, so each is announced once; its words never count with the
+         clock. The first button opens the mode's settings in the sheet (or does the pill's one job), × turns the mode
+         off. At most 4 drawn, then "+N more ▾" (the rest drop down over the sheet). The welcome bar, the quest card and
+         the jam panel are pills now (ids kept) -->
+    <div id="pills" class="pills" role="status" aria-label="what is on">
+      <span id="sp-rec" class="spill seg sp-rec" data-pill="rec" hidden><button id="sp-rec-go" type="button" title="Record: its settings in the sheet (quantize, knobs off / touch / latch)"></button><button id="sp-rec-x" class="sp-x" type="button" aria-label="record off" title="record off">×</button></span>
+      <span id="sp-chain" class="spill seg" data-pill="chain" hidden><button id="sp-chain-go" type="button" title="Slots and the chain: the pattern tab"></button><button id="sp-chain-x" class="sp-x" type="button" aria-label="stop the chain" title="stop the chain">×</button></span>
+      <span id="sp-solo" class="spill seg" data-pill="solo" hidden><button id="sp-solo-go" type="button" title="Solo: only soloed lanes play (the lane list: Shift+click or long-press an M)"></button><button id="sp-solo-x" class="sp-x" type="button" aria-label="solo off on every lane" title="solo off on every lane">×</button></span>
+      <span id="sp-evolve" class="spill seg" data-pill="evolve" hidden><button id="sp-evolve-go" type="button" title="Evolve: its settings in the sheet"></button><button id="sp-evolve-x" class="sp-x" type="button" aria-label="evolve off" title="evolve off">×</button></span>
+      <span id="sp-dice" class="spill seg" data-pill="dice" hidden><button id="sp-dice-go" type="button" title="Locked dice: the same chances every time (its seed in the sheet)"></button><button id="sp-dice-x" class="sp-x" type="button" aria-label="dice free" title="dice free">×</button></span>
+      <span id="sp-clock" class="spill seg" data-pill="clock" hidden><button id="sp-clock-go" type="button" title="Following a MIDI clock: the MIDI settings in the sheet"></button><button id="sp-clock-x" class="sp-x" type="button" aria-label="stop following the clock" title="stop following the clock">×</button></span>
+      <span id="welcome" class="spill seg" data-pill="welcome" hidden><button id="wb-keep" type="button" title="Your beat is here: play the beat you left">welcome back · play</button><button id="wb-fresh" type="button" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="sp-x" type="button" aria-label="dismiss" title="dismiss">×</button></span>
+      <!-- I6: the quest you are on; its first button opens the hint, show me and skip (a drop-down, not announced) -->
+      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span>
+      <span id="jam-panel" class="spill seg sp-rec jam-panel" data-pill="jam" hidden><button id="jam-go" type="button" title="The take ends on a bar line (stop it with jam)"><span id="jam-text"></span></button><button id="jam-dl" type="button" hidden>⤓ download</button><button id="jam-discard" type="button" hidden>discard</button></span>
+      <button id="sp-more" class="sp-more" type="button" aria-expanded="false" hidden></button>
+      <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button></span></div>
     </div>
     <!-- RD-3 the sheet: every drawer and the old right column, re-hosted as they were (ids kept), in six tabs (Greta's
          feature table). Closed on load (RD-4); on narrow windows a bottom sheet, full height when open. Tall tabs scroll

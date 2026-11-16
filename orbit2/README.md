@@ -60,6 +60,15 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   Browser check: `node orbit2/tools/step-check.mjs` (MOVE hold-step + knobs / jog / push, TAP the 450 ms rule with a
   flash observer, MOUSE the latch, LOOP the slots, HAND incl. the halo, the scripted A2 for the step page, FRAME p95
   with hands on knobs vs RD-1 + 1 ms); the face audit has a "step page" state (A1 / A6 / A7 with it open).
+- The pills (RD-7): what is on, in `#pills` (one `role="status"` region at the top of the right column, under the Move
+  pill and "?"), in a fixed order: rec armed (· touch / latch), chain or a slot / mute waiting for the bar, solo, evolve,
+  dice, clock follow, welcome back, quest, jam. Each is a joined bar: its first button shows the mode's control in the
+  sheet (or does the pill's job: welcome = play, quest = its hint with "show me" and skip, jam = stop the take /
+  download · discard), × turns the mode off. At most 4 drawn, then "+N more ▾" drops the rest down over the sheet. Pure
+  half in `src/poly/pills.js` (`pillText`, `pillLayout`); `app.js renderPills` keeps every pill's node in place and
+  writes only what changed, so the words never move with the clock (each pill announced once). Quest "show me": the
+  gesture drawn once on the rings as a ghost hand (`scene.js ghost`, `ghostAt`, read-only; any key or press hides it),
+  or the control for a quest played in the sheet. `__poly.showPills([keys])` forces a layout for tests.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

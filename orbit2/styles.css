@@ -394,12 +394,27 @@ body.chaos::before { display: none; }
 #btn-play.pulse { animation: play-pulse 1.4s ease-in-out infinite; box-shadow: inset 0 0 0 1px var(--l), 0 0 0 3px rgba(184,180,199,.45); }
 @keyframes play-pulse { 50% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 7px rgba(184,180,199,.1); } }
 @media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
-/* one line on wide screens (the words wrap, the buttons don't); stacked with finger-sized buttons on a phone */
-.welcome { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; justify-content: flex-end; padding: 6px 8px 6px 12px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--v); font-size: var(--t-m); line-height: 18.75px; letter-spacing: -.02em; }
-.welcome > span { flex: 1 1 auto; min-width: 0; }
-.welcome > button { flex: none; }
-.welcome[hidden] { display: none; }
-.welcome .wb-x { padding: 2px 8px; background: transparent; }
+/* RD-7 the pills (app.js renderPills): a row that wraps, right-aligned under the Move pill and "?", in the fixed order.
+   A pill is a joined bar (state needs a shape: its line in --l, red for record and the jam), its words in --l, the × in
+   --d. Never more than 4 drawn: the rest (.fold) are out of sight but still in the status region, and drop down over
+   the sheet from "+N more ▾"; the quest's hint drops down the same way. Neither ever pushes the sheet down */
+.pills { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
+.pills:not(:has(> .spill:not([hidden]))) { display: none; }   /* nothing on: no gap above the sheet */
+.spill { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); background: var(--v); max-width: 100%; }
+.spill[hidden] { display: none; }
+.spill.sp-rec { border-color: var(--rec); box-shadow: inset 0 0 0 1px var(--rec); }
+.spill button { color: var(--l); min-height: 32px; padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.spill button + button { border-left-color: var(--b); }
+.spill .sp-x { color: var(--d); flex: none; min-width: 32px; padding: 6px 0; }
+.spill .sp-x:hover { color: var(--l); }
+.sp-more { min-height: 32px; padding: 6px 10px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); } .sp-more[hidden] { display: none; }
+.pills .spill.fold { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); border: 0; }
+.pills.more-open .spill.fold { width: auto; height: auto; margin: 0; overflow: hidden; clip: auto; border: 1px solid var(--l); right: 0; top: calc(100% + 6px + var(--fi, 0) * 38px); }
+.pills.more-open .spill.fold.sp-rec { border-color: var(--rec); }
+.quest-more { position: absolute; right: 0; top: calc(100% + 6px); width: min(380px, 100%); display: flex; flex-wrap: wrap; gap: 8px; padding: 10px 12px; border: 1px solid var(--l); border-radius: 10px; background: var(--v); font-size: var(--t-m); }
+.quest-more[hidden] { display: none; }
+.spill.cheer { animation: quest-cheer 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .spill.cheer { animation: none; box-shadow: inset 0 0 0 1px var(--l), 0 0 0 2px var(--l); } }
 /* randomize and the grooves name what they loaded; stays in the page (a live region), shown by fading in */
 .toast { position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%); z-index: 20; width: max-content; max-width: min(92vw, 560px); padding: 8px 16px; border-radius: 14px; background: rgba(22, 14, 46, 0.95); border: 1px solid var(--hairline); color: var(--l); font-size: var(--t-m); line-height: 1.4; text-align: center; pointer-events: none; opacity: 0; transition: opacity .2s; }
 .toast.show { opacity: 1; }
@@ -717,10 +732,13 @@ button.small { padding: 3px 10px; font-size: 11px; }
   body:has(#sheet) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
   body:has(#sheet) .gauge svg { width: 40px; height: 40px; } body:has(#sheet) .gauge { padding: 4px 0 5px; }
   body:has(#sheet) .gtable.keys { font-size: 11px; line-height: 16.5px; letter-spacing: normal; }   /* it was 11 px here already: no hold to make */
-  body:has(#sheet) .welcome { flex-wrap: wrap; justify-content: flex-start; }
-  body:has(#sheet) .welcome > span { flex-basis: 100%; }
-  body:has(#sheet) .welcome > button, body:has(#sheet) .grooves-row .chips > button, body:has(#sheet) .row-ctl:has(#exp-roll) > button, body:has(#sheet) #btn-solo { min-height: 44px; }
-  body:has(#sheet) .welcome .wb-x { min-width: 40px; margin-left: auto; }
+  /* RD-7 phone: the pills are one line that scrolls sideways (DECISION "pills become one line"), finger-sized */
+  body:has(#sheet) .pills { flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; }
+  body:has(#sheet) .pills.more-open, body:has(#sheet) .pills:has(> .quest-more:not([hidden])) { overflow: visible; flex-wrap: wrap; }
+  body:has(#sheet) .spill { flex: none; }
+  body:has(#sheet) .spill button, body:has(#sheet) .sp-more, body:has(#sheet) .grooves-row .chips > button, body:has(#sheet) .row-ctl:has(#exp-roll) > button, body:has(#sheet) #btn-solo { min-height: 44px; }
+  body:has(#sheet) .spill .sp-x { min-width: 44px; }
+  body:has(#sheet) .quest-more { left: 0; right: auto; width: 100%; }
 }
 /* Orbits round 3: trig conditions, samples, dice */
 .stepsui .st.tg { position: relative; } .stepsui .st.tg::after { content: attr(data-tg); position: absolute; inset: auto -2px -15px -2px; font-size: 11px; line-height: 1.2; color: var(--d); text-align: center; white-space: nowrap; overflow: hidden; }
@@ -771,10 +789,6 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .jam-btn.on { color: var(--rec); border-color: var(--rec); box-shadow: inset 0 0 0 1px var(--rec); animation: jam-pulse 1s ease-in-out infinite; }
 @keyframes jam-pulse { 50% { box-shadow: inset 0 0 0 1px transparent; } }
 @media (prefers-reduced-motion: reduce) { .jam-btn.on { animation: none; } }
-.jam-panel { width: 100%; max-width: 440px; border: 1px solid var(--rec); border-radius: 10px; padding: 8px 10px; background: var(--v); }
-.jam-bar { height: 8px; border-radius: 4px; background: rgba(236,233,247,.12); overflow: hidden; }
-.jam-bar i { display: block; height: 100%; width: 0; background: var(--rec); transition: width .25s linear; }
-.jam-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; font-size: var(--t-s); line-height: 18px; letter-spacing: var(--tr-12); color: var(--l); flex-wrap: wrap; }
 /* library of saved setups */
 .lib-form { display: flex; gap: 6px; margin: 6px 0; }
 .lib-form input, .lib-rename { flex: 1; min-width: 0; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--hairline); background: transparent; color: var(--l); font: inherit; font-size: var(--t-m); }
@@ -888,17 +902,11 @@ body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; heigh
 body.simple .adv { display: none !important; }
 .view-row { display: flex; justify-content: flex-start; }
 .view-row .seg button { min-width: 84px; }
-/* I6 the quest card: what to try now; its drawer gets a light and a "quest n" tag */
-.quest { display: flex; align-items: center; gap: 4px 10px; flex-wrap: wrap; padding: 8px 10px 8px 12px; border: 1px solid var(--b); border-radius: 10px; background: var(--v); font-size: var(--t-m); max-width: 520px; margin-left: auto; }
-.quest[hidden] { display: none; }
-.quest-k { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
-.quest-title { color: var(--l); font-size: var(--t-l); font-weight: 400; }
+/* I6 the quest (RD-7: a pill, its hint in a drop-down under the pills); its drawer gets a light and a "quest n" tag */
 .quest-hint { flex: 1 1 100%; color: var(--muted); line-height: 17.5px; letter-spacing: -.02em; }   /* its 12.5 px box: 1.4 × 12.5, the old measure */
 .quest-acts { display: flex; gap: 6px; margin-left: auto; }
-.quest-acts button { padding: 2px 10px; }
-.quest.cheer { animation: quest-cheer 1.2s ease-out; }
-@keyframes quest-cheer { 0% { box-shadow: 0 0 0 0 rgba(184,180,199,.6); transform: scale(1.03); } 100% { box-shadow: 0 0 0 14px rgba(184,180,199,0); transform: none; } }
-@media (prefers-reduced-motion: reduce) { .quest.cheer { animation: none; box-shadow: 0 0 0 2px var(--l); } }
+.quest-acts button { padding: 2px 10px; min-height: 32px; }
+@keyframes quest-cheer { 0% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 0 rgba(184,180,199,.6); transform: scale(1.03); } 100% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 14px rgba(184,180,199,0); transform: none; } }
 /* an inner line, so the lane drawer keeps its lane-coloured border (an inline style) and still shows the light */
 .drawer.quest-lit { box-shadow: inset 0 0 0 1px var(--l); }
 .drawer.quest-lit > summary[data-quest]::after { content: attr(data-quest); margin-left: 8px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--b); color: var(--l); font-size: 11px; }

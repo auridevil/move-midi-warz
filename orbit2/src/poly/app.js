@@ -27,6 +27,7 @@ import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
 import { attachSetlog, patternWords } from './setlog.js';
+import { pillsOn, pillLayout, pillOff } from './pills.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -97,6 +98,7 @@ let barWait = null;
 const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null')); } catch { return questsFrom(null); } })();
 quests.view = startView(quests.view, firstVisit);
 let questLog = [], questTimer = 0, cheerTimer = 0;
+let welcomeOn = false;   // F3 welcome back: a returning visit's pill, until the beat plays, loads or it is dismissed (RD-7)
 const face = { log: false };   // RD-5: the console-log overlay (` or Sheet → setup), off by default, remembered
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
 try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; } } catch {}
@@ -1462,6 +1464,7 @@ async function enableMidi() {
   midi.addEventListener('ports', () => { pmidi.refresh(); renderMidi(); }); pmidi.refresh(); renderMidi();
 }
 function renderMidi() {
+  renderPills();   // RD-7: following a clock is a pill
   const has = !!midi.access; $('btn-midi-enable').hidden = has; $('midi-body').hidden = !has; if (!has) return;
   const opts = (ports) => [['', 'none'], ...ports.map(p => [p.name, p.name])];
   ui.midiOut.setOptions(opts(pmidi.outputs())); ui.midiOut.set(pmidi.outName); ui.midiIn.setOptions(opts(pmidi.inputs())); ui.midiIn.set(pmidi.inName);
@@ -1505,7 +1508,7 @@ function toggleSolo(li = m.selected) { m.lanes[li].solo = !m.lanes[li].solo; syn
 function buildMixUI() {
   $('btn-solo').onclick = () => toggleSolo(); $('btn-mute').onclick = () => toggleMute(m.selected);
   ui.muteBar = mount('mute-bar', toggleChip({ label: 'on next bar', on: perf.muteBar, title: INFO['mute next bar'], onChange: (v) => { perf.muteBar = v; saveSettings(); if (!v) flushMutes(); } }));
-  ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; padHints = 3; saveSettings(); paintLeds(); } }));
+  ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; padHints = 3; saveSettings(); paintLeds(); movePill(); } }));
   ui.consoleLog = mount('console-log-chip', toggleChip({ label: 'console log', on: face.log, title: INFO['console log'], onChange: setLog }));
   ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
@@ -1964,7 +1967,7 @@ async function ensureJamNode() {
 async function toggleJam() {
   if (jam.state === 'rec' || jam.state === 'armed') return stopJam();
   if (jam.state === 'finishing') return;   // the take is closing on its bar line: a press now would mix two takes
-  try { await wake(); await ensureJamNode(); } catch (e) { $('jam-text').textContent = `jam: ${e.message}`; return; }
+  try { await wake(); await ensureJamNode(); } catch (e) { toast(`jam: ${e.message}`, 4000); return; }
   // lanes: the most the take played (L2)
   jam.chunks = Array.from({ length: MAX_LANES }, () => [[], []]); jam.take++; jam.ring = jam.ringJob = null; jam.log = exp.ring ? [] : null; jam.ramps = exp.ring ? [] : null; jam.lanes = m.lanes.length; jam.beats = 0; jam.state = 'armed'; renderJam(); paintLeds();
   if (!playing) togglePlay();
@@ -2013,12 +2016,16 @@ async function renderRing(log, ramps, endFrame, endTime) {
   const b = await offline(() => { const k = makeKit({ raw: true, lanes }); routeStems(k); if (ramps?.length) replayRamps(k, ramps, endFrame / sr - plan.lead / sr); for (const h of plan.hits) hitSound(lanes[h.li], h.at, h.accent, h.lock, h.vel, k, h.slice, null, h.auto); return k; }, (plan.lead + plan.frames) / sr + 0.01, 2 * lanes.length, sr);
   return ringOut(Array.from({ length: jam.lanes }, (_, i) => [b.getChannelData(2 * i), b.getChannelData(2 * i + 1)]), plan.lead, plan.frames);
 }
+// RD-7: the take is a pill (renderPills): its words change with its state only, never with the beats (they count on the
+// jam word and the canvas); the take's details are the download's title
 function renderJam() {
-  const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam'), panel = $('jam-panel');
+  const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam');
   btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next bar…' : st === 'finishing' ? '◌ jam: closing…' : '● jam';
-  panel.hidden = st === 'idle'; $('jam-fill').style.width = `${Math.min(100, (jam.beats / JAM_BEATS) * 100)}%`;
-  const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
-  $('jam-text').textContent = st === 'armed' ? 'starts on the next bar' : st === 'rec' ? `recording · beat ${b} of ${JAM_BEATS} · bar ${Math.floor(jam.beats * PPQ / jam.bar) + 1}` : st === 'finishing' ? `closing the take on the bar line${playing && jam.stopTick > clockRef.tick ? ` · ${Math.ceil((jam.stopTick - clockRef.tick) / PPQ)} beat(s) to go` : '…'}` : st === 'done' ? `take ready · ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lanes + raw mix${jam.ringJob ? ' · rendering the ring-out…' : jam.ring ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}` : '';
+  if (st === 'done') {
+    const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
+    const t = `the take: ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lane tracks + raw mix (.zip)${jam.ringJob ? ' · rendering the ring-out…' : jam.ring ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}`;
+    if ($('jam-dl').title !== t) $('jam-dl').title = t;
+  }
   $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
 }
 async function downloadJam() {
@@ -2028,10 +2035,11 @@ async function downloadJam() {
   const late = await Promise.race([jam.ringJob?.then(() => false), new Promise(r => { timer = setTimeout(() => r(true), 15000); })]); clearTimeout(timer);
   if (jam.state !== 'done') return; const n = Math.round(jam.beats * PPQ / jam.bar), base = fileBase('jam', { loop: true, bars: n }, jam.tempo);
   download(stemsZip(jam.chunks.slice(0, jam.lanes), laneNames(jam.lanes), jam.sr, base, acidOf(jam.tempo, n, jam.meter), { smpl: true, ring: late ? null : jam.ring }), `${base}.zip`, 'application/zip');
-  if (late) $('jam-text').textContent += ' · downloaded without the ring-out: it was still rendering';
+  if (late) toast('downloaded without the ring-out: it was still rendering', 4000);
 }
 function buildJamUI() {
-  $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = () => downloadJam().catch(e => { $('jam-text').textContent = `jam: ${e.message}`; });
+  $('btn-jam').onclick = toggleJam; $('jam-dl').onclick = () => downloadJam().catch(e => toast(`jam: ${e.message}`, 4000));
+  $('jam-go').onclick = () => { if (jam.state === 'rec' || jam.state === 'armed') stopJam(); else if (jam.state === 'done') $('jam-dl').focus(); };   // recording: ends the take on its bar line (kept)
   $('jam-discard').onclick = () => { jam.state = 'idle'; jam.chunks = jam.ring = jam.ringJob = jam.log = jam.ramps = null; jam.take++; renderJam(); paintLeds(); };
   renderJam();
 }
@@ -2050,10 +2058,10 @@ async function exportStems() {
 // a double-click (or a double tap) can't land on whatever moved under the pointer (clear lane, jam, play).
 let clickGuard = 0, toastTimer = 0;
 for (const ev of ['pointerdown', 'mousedown', 'click', 'dblclick']) addEventListener(ev, (e) => { if (performance.now() < clickGuard) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
-/** Close the welcome bar (once the beat plays, loads or is dismissed); focus that was in it goes to play. */
+/** Close the welcome pill (once the beat plays, loads or is dismissed); focus that was in it goes to play. */
 function hideWelcome() {
-  const w = $('welcome'); if (w.hidden) return; const had = w.contains(document.activeElement);
-  w.hidden = true; clickGuard = performance.now() + 450; if (had) $('btn-play').focus({ preventScroll: true });
+  if (!welcomeOn) return; const had = $('welcome').contains(document.activeElement);
+  welcomeOn = false; renderPills(); clickGuard = performance.now() + 450; if (had) $('btn-play').focus({ preventScroll: true });
 }
 /** One short line at the bottom. A polite live region that stays in the page (only its text changes, so screen
  *  readers announce it); cleared once it has faded. */
@@ -2074,7 +2082,7 @@ function checkQuest() {
   finishQuest(q); celebrate(q);
 }
 function finishQuest(q) { quests.done.push(q.id); questLog = []; saveQuests(); renderQuest(); }
-/** A light cheer: the card glows once (a steady glow when motion is reduced, CSS) and a toast names the next quest. */
+/** A light cheer: the pill glows once (a steady glow when motion is reduced, CSS) and a toast names the next quest. */
 function celebrate(q) {
   const c = $('quest'), next = currentQuest(quests.done); c.classList.remove('cheer'); void c.offsetWidth; c.classList.add('cheer');
   clearTimeout(cheerTimer); cheerTimer = setTimeout(() => c.classList.remove('cheer'), 1500);   // the steady glow goes too
@@ -2082,14 +2090,17 @@ function celebrate(q) {
 }
 /** A lane knob's word in the view on screen (I7: plain in simple), wherever the page names it. */
 function knobWord(k, simple = quests.view === 'simple') { return paramLabel(k, PARAMS.find(p => p.k === k)?.label ?? k, simple); }
-/** The card: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or finish.
- *  sync() redraws it: the hint is written for the beat on screen (the backbeat quest names your snare and what it lacks). */
+/** The quest pill: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or
+ *  finish. sync() redraws it: the hint (in the drop-down, written while it is open) is for the beat on screen (the
+ *  backbeat quest names your snare and what it lacks); the pill's words change only when the quest does. */
 function renderQuest() {
-  const q = currentQuest(quests.done), c = $('quest'); c.hidden = !q || quests.hidden;
-  if (q && !c.hidden) {
-    $('quest-n').textContent = `${QUESTS.indexOf(q) + 1} of ${QUESTS.length}`; $('quest-title').textContent = q.title;
-    const h = $('quest-hint'), t = q.hint(m, { word: knobWord, lane: (i) => `lane ${i + 1} · ${voiceLabel(m.lanes[i])}` }); if (h.textContent !== t) h.textContent = t;
-  }
+  const q = currentQuest(quests.done), on = !!q && !quests.hidden;
+  if (on) {
+    const n = `quest ${QUESTS.indexOf(q) + 1} of ${QUESTS.length}`; if ($('quest-n').textContent !== n) $('quest-n').textContent = n;
+    if ($('quest-title').textContent !== q.title) $('quest-title').textContent = q.title;
+    if (!$('quest-more').hidden) { const h = $('quest-hint'), t = q.hint(m, { word: knobWord, lane: (i) => `lane ${i + 1} · ${voiceLabel(m.lanes[i])}` }); if (h.textContent !== t) h.textContent = t; }
+  } else if (!$('quest-more').hidden) questMore(false);
+  renderPills();
   // the drawer this quest is played in gets a light (finishing a quest lights the next one's drawer)
   const d = q && !quests.hidden ? hintDrawer(quests.done) : null;
   for (const el of document.querySelectorAll('.quest-lit')) if (el.id !== d) { el.classList.remove('quest-lit'); el.querySelector('summary')?.removeAttribute('data-quest'); }
@@ -2116,13 +2127,81 @@ ui.view = mount('view-mode', segmented({ options: [['simple', 'simple', 'plain w
 ui.view.el.setAttribute('aria-label', 'view: simple or everything');
 $('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { quests.skipped.push(q.id); finishQuest(q); toast(`skipped: ${q.title}`); } };
 $('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
+// ---- RD-7 the pills (pills.js): what is on, in one status region, in a fixed order. Each pill's node stays where the
+// HTML put it (moving one would announce it again): renderPills shows or hides it, folds the fifth and later ones by a
+// class, and writes a word or an attribute only when it changed, so the region never moves with the clock (A4: each
+// pill announced once, never per bar). Before the page is built it does nothing (pillsLive) ----
+let pillsLive = false, pillsOpen = false, pillsForce = null;
+const PILL_EL = { rec: 'sp-rec', chain: 'sp-chain', solo: 'sp-solo', evolve: 'sp-evolve', dice: 'sp-dice', clock: 'sp-clock', welcome: 'welcome', quest: 'quest', jam: 'jam-panel' };
+const PILL_WORDS = { rec: 'sp-rec-go', chain: 'sp-chain-go', solo: 'sp-solo-go', evolve: 'sp-evolve-go', dice: 'sp-dice-go', clock: 'sp-clock-go', jam: 'jam-text' };   // welcome and quest keep their own
+// a test's stand-ins for pills whose mode is off (__poly.showPills: the 6-pill layout at 1280×720)
+const PILL_STANDIN = { rec: '● rec armed', chain: 'chain 1 → 2', solo: 'solo · kick', evolve: 'evolve · every 4 bars', dice: 'dice 1234', clock: 'clock · a MIDI clock', welcome: 'welcome back · play', quest: 'quest', jam: 'take ready · 4 bars' };
+function pillState() {
+  const q = currentQuest(quests.done);
+  return { rec: { armed: rec.armed, knobs: rec.knobs }, chain: { chain: bank.chain, pending: bank.pending, switchAt: bank.switchAt, mutes: muteQ.size },
+    solo: m.lanes.filter(l => l.solo).map(voiceLabel), evolve: { on: evo.on, every: evo.every }, dice: { locked: dice.locked, seed: dice.seed, repeat: dice.repeat },
+    clock: { follow: pmidi.follow, inName: pmidi.inName }, welcome: welcomeOn, quest: q && !quests.hidden ? { n: QUESTS.indexOf(q) + 1, of: QUESTS.length, title: q.title } : null,
+    jam: { state: jam.state, bars: jam.bar ? Math.round(jam.beats * PPQ / jam.bar) : 0 } };
+}
+const setHidden = (el, h) => { if (el.hidden !== h) el.hidden = h; };
+function renderPills() {
+  if (!pillsLive) return;
+  const s = pillState(), words = Object.fromEntries(pillsOn(s).map(p => [p.k, p.text])), keys = pillsForce || Object.keys(words);
+  if (pillsForce) for (const k of keys) words[k] ??= PILL_STANDIN[k];
+  const lay = pillLayout(keys); if (!lay.more) pillsOpen = false;
+  for (const [k, id] of Object.entries(PILL_EL)) {
+    const el = $(id), on = keys.includes(k), fi = lay.folded.indexOf(k); setHidden(el, !on); if (!on) continue;
+    const w = PILL_WORDS[k] && $(PILL_WORDS[k]); if (w && w.textContent !== words[k]) w.textContent = words[k];
+    const x = $(`sp-${k}-x`); if (x) setHidden(x, !pillOff(k, s));
+    el.classList.toggle('fold', fi >= 0); if (fi >= 0 && el.style.getPropertyValue('--fi') !== String(fi)) el.style.setProperty('--fi', fi);
+    // a folded pill is out of sight until "+N more" drops it down: out of the Tab order meanwhile (still in the region)
+    for (const b of el.querySelectorAll('button')) { const t = fi >= 0 && !pillsOpen ? '-1' : null; if (b.getAttribute('tabindex') !== t) { if (t) b.setAttribute('tabindex', t); else b.removeAttribute('tabindex'); } }
+  }
+  const more = $('sp-more'), mt = `+${lay.more} more ▾`; setHidden(more, !lay.more); if (lay.more && more.textContent !== mt) more.textContent = mt;
+  if (more.getAttribute('aria-expanded') !== String(pillsOpen)) more.setAttribute('aria-expanded', String(pillsOpen));
+  $('pills').classList.toggle('more-open', pillsOpen);
+}
+function setPillsOpen(on) { pillsOpen = !!on; if (pillsOpen) questMore(false); renderPills(); }
+/** The quest's drop-down: its hint (written now, for the beat on screen), show me, skip. */
+function questMore(on) {
+  const d = $('quest-more'); setHidden(d, !on); $('quest-go').setAttribute('aria-expanded', String(!!on));
+  if (on) { pillsOpen = false; renderQuest(); }
+}
+/** A pill's first button: the mode's control shown in the sheet (its tab and drawer; simple gives way to everything for
+ *  an advanced one) with the focus on it, as find does. */
+function pillGo(el) {
+  el = typeof el === 'string' ? $(el) : el; if (!el) return; setPillsOpen(false);
+  if (!el.matches('button, select, input, summary')) el = el.querySelector('button, select, input') || el;   // a group: its first control
+  if (el.closest('.adv') && quests.view === 'simple') setView('all');
+  if (focusMode) setFocusMode(false); reveal(el); el.scrollIntoView({ block: 'nearest' }); focusAs(el, true);
+}
+/** Quest "show me" (Rio): the gesture drawn once on the rings as a ghost hand (scene.js, read-only; any key or click
+ *  hides it); a quest played in the sheet shows its control instead. */
+function showMe() {
+  const q = currentQuest(quests.done), g = q?.show?.(m); questMore(false); if (!g) return;
+  if (g.id) return pillGo(g.id);
+  if (focusMode) setFocusMode(false); scene.ghost({ kind: g.kind, li: g.li }); poke();
+}
+addEventListener('pointerdown', () => { if (scene.ghosting) scene.ghost(null); }, true);
+addEventListener('keydown', () => { if (scene.ghosting) scene.ghost(null); }, true);
+$('sp-rec-go').onclick = () => pillGo('btn-rec'); $('sp-rec-x').onclick = () => { setPillsOpen(false); setRec(false); };
+$('sp-chain-go').onclick = () => pillGo(bank.chain.length > 1 ? 'chain-stop' : $('slots').querySelector('button') || 'chain-info'); $('sp-chain-x').onclick = () => { setPillsOpen(false); $('chain-stop').click(); };
+$('sp-solo-go').onclick = () => { const li = m.lanes.findIndex(l => l.solo); if (li >= 0 && li !== m.selected) { m.select(li); sync(); } pillGo('btn-solo'); };
+$('sp-solo-x').onclick = () => { setPillsOpen(false); for (const l of m.lanes) l.solo = false; sync(); };
+$('sp-evolve-go').onclick = () => pillGo('btn-evolve'); $('sp-evolve-x').onclick = () => { setPillsOpen(false); setEvolve(false); };
+$('sp-dice-go').onclick = () => pillGo('btn-dice'); $('sp-dice-x').onclick = () => { setPillsOpen(false); dice.locked = false; saveSettings(); renderDice(); readout(); };
+$('sp-clock-go').onclick = () => pillGo($('midi-follow').querySelector('button') || 'midi-follow');
+$('sp-clock-x').onclick = () => { setPillsOpen(false); pmidi.setFollow('off'); ui.follow?.set('off'); retime(); saveSettings(); renderMidi(); };
+$('quest-go').onclick = () => questMore($('quest-more').hidden); $('quest-show').onclick = showMe;
+$('sp-more').onclick = () => setPillsOpen(!pillsOpen);
 buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildAutoUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); setView(quests.view);
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
 if (boot === 'link') loadShared({ first: firstVisit });
 else if (boot === 'first') { loadGroove(DEMO_GROOVE); hist.restart(); $('btn-play').classList.add('pulse'); }
-else $('welcome').hidden = false;
+else welcomeOn = true;
+pillsLive = true; renderPills();
 spoken = null; clearTimeout(announceTimer);   // the page just opened: nothing to announce yet (readout() at the end starts it)
 $('btn-init').onclick = initPattern;
 $('wb-keep').onclick = () => { hideWelcome(); if (!playing) togglePlay(); };
@@ -2413,7 +2492,10 @@ window.addEventListener('keydown', (e) => {
 });
 
 // ---- Move connection ----
-function setPill(t, cls) { const el = $('midi-state'); el.textContent = t; el.className = `pill ${cls}`; }
+function setPill(t, cls, title = '') { const el = $('midi-state'); el.textContent = t; el.className = `pill ${cls}`; el.title = title; }
+// RD-7 the Move pill heads the column (DECISION: "Move · live"): connected, it says the pads' mode (live or edit)
+let moveFw = '';
+const movePill = () => { if (moveOn) setPill(`Move · ${perf.live ? 'live' : 'edit'}`, 'pill-on', `Move connected${moveFw} · live mode ${perf.live ? 'on: the pads play' : 'off: the pads edit steps'} (Sheet → setup)`); };
 // One button says what it does next (Connect Move → Connecting… → Disconnect Move); the pill beside it says how it went.
 // Its words carry the state, so no aria-pressed (a toggle's label must not change). While connecting it is
 // aria-disabled, not disabled: a disabled button drops the keyboard focus to the page. Where Web MIDI is missing (iOS
@@ -2432,7 +2514,7 @@ async function connectMove() {
     if (!port) { setPill('Move: no MIDI input found', 'pill-off'); return; }
     if (!midi.sysexAllowed) { setPill('Move: SysEx denied — allow it in the Chrome prompt', 'pill-warn'); return; }
     setPill(`Handshaking with ${port.name}…`, 'pill-warn'); const { identity } = await move.connect(); moveOn = true; paintLeds();
-    setPill(`Move: ready${identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''}`, 'pill-on'); pmidi.refresh(); renderMidi();
+    moveFw = identity ? ` · fw ${identity.major}.${identity.minor}.${identity.build}` : ''; movePill(); pmidi.refresh(); renderMidi();
   } catch (e) { setPill(`Move: ${e.message}`, 'pill-off'); } finally { paintConnect(); }
 }
 function disconnectMove() { move.disconnect(); moveOn = false; touched.clear(); if (knobGest?.knob != null) gestEnd(true); setPill('Move: disconnected (back to standalone)', 'pill-off'); paintConnect(); }   // A6: no touch can end after this
@@ -2553,7 +2635,7 @@ function readout() {
     ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(pfx.filter ? [filterSay(Math.round(pfx.filter * 100))] : []), ...(pfx.throw ? ['THROW'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) $('nerd-stats').textContent = nerdLines().join('\n');   // written only while someone reads it (opening the drawer fills it)
   if (face.log) paintLog();
-  renderLanes(); announceChanges();
+  renderLanes(); renderPills(); announceChanges();
 }
 /** "Nerd stats": the engine line, a row per lane, the selected lane's sound row, what is queued or locked. */
 function nerdLines() {
@@ -2628,6 +2710,9 @@ function reveal(el) {
   el = typeof el === 'string' ? $(el) : el; if (!el) return null;
   const pane = el.closest('[role=tabpanel]'); if (pane && (!sheet.open || sheet.tab !== pane.dataset.sheet)) setSheet(pane.dataset.sheet, true);
   for (let d = el.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true;
+  // RD-7: a folded pill drops down from "+N more"; the quest's skip and show me drop down from its pill
+  if (el.closest('#pills .fold') && !pillsOpen) setPillsOpen(true);
+  if (el.closest('#quest-more') && $('quest-more').hidden && !$('quest').hidden) questMore(true);
   // RD-5: a cell of the lane off the 16 the console shows (steps 17–32): its page, as Back + a step pins it on the Move
   const i = el.matches?.('#stepsui .st.out') ? stepBtns.indexOf(el) : -1;
   if (i >= 0 && i < m.lane.length) { pages.pin(Math.floor(i / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); }
@@ -2748,8 +2833,9 @@ function findRun(h) {
 // A modal card (help, the shared beat) closes itself; a text field owns its Esc (B8); a popup's own handler (slot menu,
 // share menu) answers it first when the focus is in it; a held Esc is one press ----
 const drawn = (el) => !!el.getClientRects().length;
-const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || null;
-function closePopups() { closeShareMenu(); closeSlotMenu(); }
+// (RD-7: the pills' drop-downs, "+N more" and the quest's hint, are popups too)
+const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || (pillsOpen && drawn($('sp-more')) && 'pills') || (!$('quest-more').hidden && drawn($('quest-more')) && 'quest') || null;
+function closePopups() { closeShareMenu(); closeSlotMenu(); if (pillsOpen) setPillsOpen(false); if (!$('quest-more').hidden) questMore(false); }
 // RD-6: an open step is drawn by the step page, its "more…" panel, or its cell's selection outline (the step tab's step
 // after another tab): any of them, really seen, makes it the layer an Esc closes. Seen: focus mode hides the console
 // with visibility (so the rings never move), which keeps its boxes: a hidden page or outline is no layer then. (A box
@@ -2801,6 +2887,6 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 // (RD-3: the Move table is a drawer in Sheet → setup now, not a popup, so a click elsewhere no longer folds it shut)
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 $('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)
 readout(); layoutStage(); scene.start();
