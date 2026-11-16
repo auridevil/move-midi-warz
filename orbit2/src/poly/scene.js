@@ -96,6 +96,23 @@ export function ringBox(cell, winW, min = 120) {
   return { x: cx - side / 2, y: cell.y + cell.h / 2 - side / 2, w: side, h: side };
 }
 
+// ---- RD-6 the ring answers the hand (Rio's idea, merged with Yuki's touched knob on the ring): while a knob is touched
+// or dragged, and HAND_MS after, the selected ring shows what the change did. Read-only light: nothing here is clickable,
+// and the hit test (locate) keeps the steps where they are. Pure helpers, so the rules are tested without a canvas ----
+export const HAND_MS = 400, SLIDE_MS = 160, SPREAD_MS = 320, GROW_MS = 520;
+/** What a knob's key makes the ring show: slide (shift), spread (hits), swing (the off-beat ticks), chance (the planets
+ *  dimmed, an arc each), push (the ring leads or lags), grow (a longer loop's new ticks pulse); null: nothing. */
+export const HAND_LOOK = { rotation: 'slide', euclid: 'spread', swing: 'swing', prob: 'chance', 'lock:prob': 'chance', offset: 'push', length: 'grow' };
+export const handLook = (k) => HAND_LOOK[k] ?? null;
+/** The shortest way round a `len`-step ring from rotation a to b, in steps (signed: + = clockwise). */
+export const shortSteps = (a, b, len) => { const d = ((((b - a) % len) + len) % len); return d > len / 2 ? d - len : d; };
+/** How far (steps) a push (− ms = early, + ms = late) moves a ring whose steps last `stepMs`: + = it lags (clockwise). */
+export const pushSteps = (offsetMs, stepMs) => (stepMs > 0 ? offsetMs / stepMs : 0);
+/** The steps a length change from `a` to `b` adds (they pulse once); none when it got shorter. */
+export const newTicks = (a, b) => Array.from({ length: Math.max(0, b - a) }, (_, k) => a + k);
+/** Ease out (cubic): a slide starts fast and settles. */
+const easeOut = (p) => 1 - (1 - Math.min(1, Math.max(0, p))) ** 3;
+
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const h = size / 2;
@@ -121,6 +138,16 @@ export function createScene(cv, o) {
   const misses = new Map();   // V6: "lane:index" → { t, why } of a step that came round and stayed silent (prob / cond / dice)
   const waves = [], sparks = [], beams = [], blooms = [], recent = [];
   let shake = 0, quality = 1, avgDt = 16, prev = performance.now(), lastAlign = 0;
+  // RD-6: the hand on a knob { li, k, until } (until = Infinity while held); what its lane was when it came (rotation,
+  // length, hits) and the answers still fading: slides { d, t }, spreads and grows { t, ticks }, per lane
+  let hand = null, answered = false; const was = [], slides = [], spreads = [], grows = [];
+  const snap = (l) => ({ rot: l.rotation, len: l.length, k: l.euclidK, hits: l.hits.slice(0, l.length).join() });
+  /** The app: a knob with key k on lane li is touched or dragged (null: let go; the answer stays HAND_MS). */
+  function setHand(h) {
+    const now = performance.now();
+    if (h) { const l = o.machine().lanes[h.li]; if (!hand || hand.li !== h.li || hand.until < now) { if (l) was[h.li] = snap(l); } hand = { li: h.li, k: h.k, until: Infinity }; }
+    else if (hand && hand.until === Infinity) hand.until = now + HAND_MS;
+  }
 
   let stage = null;
   const geo = () => ringGeo(W, H, stage, o.machine().lanes.length);
@@ -191,15 +218,19 @@ export function createScene(cv, o) {
     const nd = (i) => planetNudge(lane, i), step = stepAtAngle(dx, dy, lane.length, nd), [tx, ty] = nodeXY(g, li, step + nd(step), lane.length);
     return { dx, dy, g, lane: li, step, off: Math.hypot(dx + g.cx - tx, dy + g.cy - ty) };
   }
-  /** I1: client position of lane li's visible step i, its planet where it is drawn (where the radial menu opens). */
+  /** I1: client position of lane li's visible step i, its planet where it is drawn (tests and tools aim with it). */
   function stepXY(li, i) { const b = cv.getBoundingClientRect(), g = geo(), lane = o.machine().lanes[li], [x, y] = nodeXY(g, li, i + (lane ? planetNudge(lane, i) : 0), lane?.length || 1); return { x: x + b.left, y: y + b.top }; }
 
   function frame(now) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
-    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01)) { prev = now; return; }
+    // RD-6: a hand on a knob, a held step, an answer fading, or the frame after the last one (to clear it) keeps drawing
+    const held = o.held?.() || [];
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean)) { prev = now; return; }
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
+    if (hand && now >= hand.until) hand = null;
+    answered = held.length > 0 || !!hand;
     for (let i = 0; i < energy.length; i++) energy[i] *= Math.pow(0.04, dt / 1000);   // ~0.6 s fall-off
     shake *= Math.pow(0.002, dt / 1000);
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
@@ -242,20 +273,46 @@ export function createScene(cv, o) {
       // orbit: a wide faint glow under a crisp hairline
       ctx.strokeStyle = rgba(hex, (isSel ? 0.16 : 0.06) + energy[li] * 0.12); ctx.lineWidth = isSel ? 9 : 6; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
       ctx.strokeStyle = isSel ? rgba(hex, 0.75) : 'rgba(236,233,247,.16)'; ctx.lineWidth = isSel ? 1.4 : 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
+      // RD-6 the ring answers the hand on this lane's knob: what changed since the hand came (was), and where the steps are
+      // drawn while it lasts (the push and the swing move ticks and planets; a slide eases the planets to their new place)
+      const look = hand && hand.li === li ? handLook(hand.k) : null;
+      if (hand && hand.li === li) {
+        const w = was[li], s = snap(lane);
+        if (w && look === 'slide' && s.rot !== w.rot) { const o0 = slides[li], left = o0 ? o0.d * (1 - easeOut((now - o0.t) / SLIDE_MS)) : 0; slides[li] = { d: shortSteps(w.rot, s.rot, len) + left, t: now }; }
+        if (w && look === 'spread' && (s.k !== w.k || s.hits !== w.hits)) spreads[li] = { t: now };
+        if (w && look === 'grow' && s.len > w.len) grows[li] = { t: now, ticks: newTicks(w.len, s.len) };
+        was[li] = s;
+      }
+      const sl = slides[li], slP = sl ? (now - sl.t) / (reduced ? 2 * SLIDE_MS : SLIDE_MS) : 1; if (sl && slP >= 1) slides[li] = null;
+      const slideOff = sl && slP < 1 && !reduced ? -sl.d * (1 - easeOut(slP)) : 0;   // reduced motion: no glide, the trail only
+      const sp = spreads[li], spP = sp ? (now - sp.t) / SPREAD_MS : 1; if (sp && spP >= 1) spreads[li] = null;
+      const gw = grows[li], gwP = gw ? (now - gw.t) / GROW_MS : 1; if (gw && gwP >= 1) grows[li] = null;
+      if (look || slP < 1 || spP < 1 || gwP < 1) answered = true;
+      const pushS = look === 'push' ? pushSteps(lane.offsetMs, o.stepMs(lane)) : 0, swingOf = (i) => (look === 'swing' ? lane.swingAt(i) : 0);
+      const ang = (p) => (p / len) * TAU - Math.PI / 2;
       // the rhythm's shape: hits joined into a polygon inside the ring, flaring when the lane plays
-      const pts = []; for (let i = 0; i < len; i++) if (lane.hitAt(i)) { const a = (i / len) * TAU - Math.PI / 2; pts.push([g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r]); }
+      const pts = []; for (let i = 0; i < len; i++) if (lane.hitAt(i)) { const a = ang(i + pushS + swingOf(i) + slideOff); pts.push([g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r]); }
       if (pts.length >= 3) {   // two hits would just draw a diameter: skip
         ctx.beginPath(); pts.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y))); ctx.closePath();
         ctx.fillStyle = rgba(hex, 0.025 + energy[li] * 0.05); ctx.fill();
         ctx.strokeStyle = rgba(hex, (isSel ? 0.3 : 0.14) + energy[li] * 0.35); ctx.lineWidth = 1; ctx.stroke();
       }
       // step ticks and hit planets
+      const tick = (a, w, alpha) => { const ca = Math.cos(a), sa = Math.sin(a), x = g.cx + ca * r, y = g.cy + sa * r; ctx.strokeStyle = `rgba(236,233,247,${alpha})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * w, y - sa * w); ctx.lineTo(x + ca * w, y + sa * w); ctx.stroke(); };
       for (let i = 0; i < len; i++) {
-        const a = (i / len) * TAU - Math.PI / 2, ca = Math.cos(a), sa = Math.sin(a); let x = g.cx + ca * r, y = g.cy + sa * r;
-        if (!lane.hitAt(i)) { ctx.strokeStyle = 'rgba(236,233,247,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 4, y - sa * 4); ctx.lineTo(x + ca * 4, y + sa * 4); ctx.stroke(); continue; }
-        // G1 a nudged hit sits off its tick by the nudge (a fraction of the step), the tick stays as a faint mark
-        const nd = planetNudge(lane, i);
-        if (nd) { ctx.strokeStyle = 'rgba(236,233,247,.35)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(x - ca * 5, y - sa * 5); ctx.lineTo(x + ca * 5, y + sa * 5); ctx.stroke(); const an = ((i + nd) / len) * TAU - Math.PI / 2; x = g.cx + Math.cos(an) * r; y = g.cy + Math.sin(an) * r; }
+        const moved = pushS + swingOf(i);   // RD-6: push / swing under the hand: the step drawn where it sounds, its grid tick a faint mark
+        if (moved) tick(ang(i), 3, 0.14);
+        const a = ang(i + moved), ca = Math.cos(a), sa = Math.sin(a); let x = g.cx + ca * r, y = g.cy + sa * r;
+        if (!lane.hitAt(i)) { tick(a, 4, 0.28); continue; }
+        // G1 a nudged hit sits off its tick by the nudge (a fraction of the step), the tick stays as a faint mark; RD-6 a
+        // slide under the hand eases it from where the shift took it, with a short trail behind
+        const nd = planetNudge(lane, i), off = nd + slideOff;
+        if (nd) tick(a, 5, 0.35);
+        if (off) { const an = ang(i + moved + off); x = g.cx + Math.cos(an) * r; y = g.cy + Math.sin(an) * r; }
+        if (sl && slP < 1) {   // the trail: from where it was (at most 1.5 steps back) to where it is now, fading
+          const now0 = i + moved + off, from = now0 - Math.sign(sl.d) * Math.min(1.5, Math.abs(reduced ? sl.d : sl.d * (1 - easeOut(slP)) + 0.6));
+          ctx.strokeStyle = rgba(hex, 0.6 * (1 - slP)); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, Math.min(ang(from), ang(now0)), Math.max(ang(from), ang(now0))); ctx.stroke(); ctx.lineCap = 'butt';
+        }
         // G4 a ghost (soft vel lock) is a smaller, dimmer planet
         const key = `${li}:${i}`, acc = lane.accentAt(i), ghost = lane.tierAt?.(lane.stepIndex(i)) === 'ghost', f = flash.get(key), fl = f ? Math.max(0, 1 - (now - f) / 380) : 0;
         const size = (acc ? 15 : ghost ? 7 : 10) * (1 + fl * 0.9);
@@ -293,6 +350,24 @@ export function createScene(cv, o) {
           const L = 13 + fl * 16, sp = now * 0.0006; ctx.strokeStyle = rgba(hex, 0.55 + fl * 0.45); ctx.lineWidth = 1;
           ctx.beginPath(); for (let k = 0; k < 2; k++) { const q = sp + k * Math.PI / 2; ctx.moveTo(x - Math.cos(q) * L, y - Math.sin(q) * L); ctx.lineTo(x + Math.cos(q) * L, y + Math.sin(q) * L); } ctx.stroke();
         }
+        // RD-6 hits re-spread: a ring leaves every planet once; chance: an arc round each planet as long as its chance
+        if (spP < 1) { ctx.strokeStyle = rgba(hex, 0.8 * (1 - spP)); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, size + 4 + (reduced ? 4 : spP * 12), 0, TAU); ctx.stroke(); }
+        if (look === 'chance') {
+          const c = Math.max(0, Math.min(1, lane.chanceAt(i))); ctx.lineWidth = 2;
+          ctx.strokeStyle = rgba(hex, 0.18); ctx.beginPath(); ctx.arc(x, y, size + 8, 0, TAU); ctx.stroke();
+          if (c > 0) { ctx.strokeStyle = rgba(hex, 0.85); ctx.beginPath(); ctx.arc(x, y, size + 8, -Math.PI / 2, -Math.PI / 2 + TAU * c); ctx.stroke(); }
+        }
+      }
+      // RD-6 a longer loop: its new ticks pulse once; push: an arc at 12 o'clock from the grid to where the ring is drawn
+      if (gwP < 1) for (const i of gw.ticks) if (i < len) {
+        const a = ang(i + pushS + swingOf(i)), x = g.cx + Math.cos(a) * r, y = g.cy + Math.sin(a) * r, e = 1 - gwP;
+        tick(a, 6, 0.4 + 0.55 * e); ctx.strokeStyle = rgba(hex, 0.8 * e); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 4 + (reduced ? 6 : gwP * 14), 0, TAU); ctx.stroke();
+      }
+      if (pushS) { ctx.strokeStyle = rgba(hex, 0.85); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r + 9, Math.min(ang(0), ang(pushS)), Math.max(ang(0), ang(pushS))); ctx.stroke(); ctx.lineCap = 'butt'; }
+      // RD-6 a held step (a Move step button down, or the step a knob of the step page edits): a halo round it
+      for (const h of held) if (h.li === li && h.i < len) {
+        const a = ang(h.i + pushS + swingOf(h.i) + (lane.hitAt(h.i) ? planetNudge(lane, h.i) + slideOff : 0)), x = g.cx + Math.cos(a) * r, y = g.cy + Math.sin(a) * r;
+        ctx.strokeStyle = rgba(hex, 0.95);   // a ring only: a glow would read as a planet on an empty step ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 17, 0, TAU); ctx.stroke();
       }
       // comet playhead: smooth between steps, with a fading tail along the orbit
       if (playing && ph != null) {
@@ -372,5 +447,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, setHand, get hand() { return hand && { ...hand }; }, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
 }

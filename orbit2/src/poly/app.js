@@ -691,7 +691,17 @@ function moveTouch(index, on) {
   if (on && slog) { performance.mark('peek-touch'); peek.mark = true; }   // A8 from the touch, the row's flip included
   if (on) hands.touch.add(index); else { hands.touch.delete(index); touchTail(); }
   renderPage(); if (on) peekAt(index, 'touch'); else peekOff('touch');
+  sceneHand('move' + index, on ? moveKey(index) : null);
 }
+// ---- RD-6 the ring answers the hand: the key of the knob a hand is on (a Move encoder touched or turned, a drag on any
+// knob, the console's or the sheet's) goes to the scene, which shows on the selected ring what the change did while it
+// lasts and HAND_MS after (scene.js setHand). Read-only: nothing on the canvas becomes clickable for it ----
+const handOn = new Map();   // source ('move3', 'turn', 'drag') → the key its knob edits ('rotation', 'snd:decay', 'lock:tune', …)
+function sceneHand(src, k) { if (k) handOn.set(src, k); else handOn.delete(src); const ks = [...handOn.values()]; scene.setHand(ks.length ? { li: m.selected, k: ks[ks.length - 1] } : null); }
+/** What Move encoder `index` edits now (the page its knobs are on: a held step's locks, Shift's sound, else the rhythm). */
+const moveKey = (index) => { const mv = knobPage.r?.move ?? 'rhythm'; return mv === 'step' ? (index < 7 ? 'lock:' + LOCK_KEYS[index] : 'cond') : mv === 'sound' ? 'snd:' + SOUND_KEYS[index] : index < 7 ? RHYTHM_KEYS[index] : 'tempo'; };
+addEventListener('pointerdown', (e) => { const g = e.target instanceof Element && e.target.closest('.gauge'); if (g) sceneHand('drag', Object.keys(sliders).find(k => sliders[k]?.el === g) || 'knob'); }, true);
+for (const t of ['pointerup', 'pointercancel']) addEventListener(t, () => { if (handOn.has('drag')) sceneHand('drag', null); }, true);
 // ---- RD-5 the peek (left column): the touched knob's number (64 px, weight 300), its name and what it means in plain
 // words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
 // hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` (moveTouch) and the task
@@ -708,6 +718,9 @@ function peekAt(slot, why, el = null) { clearTimeout(peek.timer); peek.slot = sl
 function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; peek.el = null; paintPeek(); } }, PEEK_MS); }
 function paintPeek() {
   const kn = $('knobs'), el = $('peek'), g = peek.el ? (peek.el.parentElement?.parentElement === kn ? peek.el : null) : peek.slot >= 0 ? kn.children[peek.slot]?.firstElementChild : null;
+  // RD-6: the touched (or dragged, or turned) knob gets a lane-colour plate while the peek shows for it (not for focus alone)
+  const plate = g && !(peek.why.size === 1 && peek.why.has('focus')) ? g.parentElement : null;
+  for (const s of kn.children) if (s.classList.contains('plate') !== (s === plate)) s.classList.toggle('plate', s === plate);
   if (!g) { if (!el.hidden) el.hidden = true; return; }
   const slot = [...kn.children].indexOf(g.parentElement), k = ROW_KEYS[knobPage.shown]?.[slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
   const put = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };   // it repaints with every move of its knob
@@ -2230,7 +2243,7 @@ move.addEventListener('step', (e) => {
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
   // RD-5: a turn with no touch (a controller without touch) flips the row and shows the peek as a touch would
-  if (index < 8 && !hands.touch.has(index)) { touchTail(); renderPage(); peekAt(index, 'turn'); peekOff('turn'); }
+  if (index < 8 && !hands.touch.has(index)) { touchTail(); renderPage(); peekAt(index, 'turn'); peekOff('turn'); sceneHand('turn', moveKey(index)); sceneHand('turn', null); }
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
     for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
@@ -2413,7 +2426,9 @@ if (midi.supported) { $('move-status').hidden = false; paintConnect(); }
 window.addEventListener('beforeunload', () => { if (move.inControl) move.disconnect(); });
 
 // ---- visuals: concentric orbits, one ring per lane, each turning at its own speed (see scene.js) ----
-const scene = createScene($('cv'), { machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+// RD-6 held: the steps that get a halo (a Move step button down on the selected lane, and the step a step-page knob edits
+// while a hand is on it)
+const scene = createScene($('cv'), { held: () => { const out = []; for (const h of pages.held.values()) out.push({ li: m.selected, i: h.step }); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 // ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at
 // once when stopped, on its turn while playing), tap a planet = on → accent → off, drag along a ring = rotate it (whole

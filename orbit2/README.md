@@ -53,7 +53,10 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   condition, + the Move's Shift the repeats), the 16 cells as the step's loop dots (`pages.js stepLoops`, as the Move's
   LEDs), clear · more… · done in the header ("more…" = the rest in Sheet → lane, the old lock panel). With it latched a
   click on a planet or a cell switches the step (`cellAction` / `planetAction`); Loop held on the Move shows the slots
-  on the cells. The radial menu is gone. Nils's whole table is `test/steppage.test.js`.
+  on the cells. The radial menu is gone. Nils's whole table is `test/steppage.test.js`. The ring answers the hand
+  (`scene.js setHand`, `HAND_LOOK`): while a knob is touched or dragged (+ `HAND_MS`) the selected ring shows what it
+  did (shift slides the planets with a trail, hits re-spread, swing moves the off-beats, chance arcs, push leads / lags,
+  new ticks pulse) and a held step gets a halo; the touched knob gets a lane-colour plate. Read-only: `locate` never moves.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

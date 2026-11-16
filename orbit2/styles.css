@@ -351,6 +351,8 @@ body.chaos::before { display: none; }
 .stepsui .st.dot.lp-cue::before { border-style: dashed; border-color: var(--l); }
 .stepsui .st.dot.lp-now::before { box-shadow: 0 0 0 3px var(--v), 0 0 0 5px var(--l); }
 .stepsui .st.dot.lp-pick { outline: 2px solid var(--l); outline-offset: 1px; }
+/* RD-6 the touched knob's plate: the lane's colour under it while a hand is on it (+ 400 ms); the number is in the peek */
+.knobs > i { border-radius: 8px; } .knobs > i.plate { background: color-mix(in srgb, var(--lane, var(--l)) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane, var(--l)) 55%, var(--v)); }
 /* its three words (clear · more… · done) where "steps 1–16 of 16" was, the size of the page tabs */
 .step-tools { display: flex; gap: 12px; } .step-tools[hidden] { display: none; }
 .step-tools .aword { padding: 1px 2px 2px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); min-height: 0; }
