@@ -82,8 +82,8 @@ button.on, button.armed, button.flash, button[aria-pressed=true] { border-color:
 /* the action words (DECISION "Outlined boxes vs hairlines": fill, fill next, throw, undo, randomize, jam, share; redo
    with undo) take a 40 px hit area round their 32 px box: a transparent ::after, so nothing moves and nothing is drawn.
    The face audit's HIT gate probes it */
-:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share) { position: relative; }   /* :where: no id weight, so a later phase's placing rule wins */
-:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share)::after { content: ''; position: absolute; top: min(0px, (100% - 40px) / 2); bottom: min(0px, (100% - 40px) / 2); left: min(0px, (100% - 40px) / 2); right: min(0px, (100% - 40px) / 2); }
+:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share, #btn-share-more, #btn-all) { position: relative; }   /* :where: no id weight, so a later phase's placing rule wins */
+:where(#btn-fill, #btn-latch, #btn-throw, #btn-undo, #btn-redo, #btn-random, #btn-jam, #btn-share, #btn-share-more, #btn-all)::after { content: ''; position: absolute; top: min(0px, (100% - 40px) / 2); bottom: min(0px, (100% - 40px) / 2); left: min(0px, (100% - 40px) / 2); right: min(0px, (100% - 40px) / 2); }
 .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; }
 .panel { background: var(--panel); border: 1px solid var(--hairline); border-radius: 12px; padding: 14px; backdrop-filter: blur(6px); box-shadow: 0 10px 30px rgba(0,0,0,.25); }
 .panel-wide { grid-column: 1 / -1; }
@@ -283,9 +283,11 @@ body.chaos::before { display: none; }
 .console { --ink: color-mix(in srgb, var(--lane, var(--l)) 80%, var(--v)); --play: 64px; --knob: 34px; --cell: 40px; --kv: 22px; }
 @media (max-width: 1400px) { .console { --play: 52px; --knob: 30px; --cell: 44px; --kv: var(--t-l); } }   /* 74 px a knob: the value at 15 px fits "100%" */
 /* 128 px hold a 32 px header (every target ≥ 32 px), the knobs and the 44 px cells with 6 px round them */
-@media not all and (max-width: 1100px) { @media (max-width: 1400px) { .lane-face { padding: 6px 12px; gap: 3px; } .tgroup, .acts { padding-top: 6px; padding-bottom: 6px; } } }
-.console.bar { display: grid; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr); align-items: stretch; align-content: stretch; gap: 0; padding: 0; background: var(--plate); border-top: 1px solid var(--ink); }
-.console.rec-live { border-top: 2px solid var(--rec); }   /* DECISION: armed and playing, a 2 px red line along the top edge */
+@media not all and (max-width: 1100px) { @media (max-width: 1400px) { .console .lane-face { padding: 6px 12px; gap: 3px; } .console .tgroup, .console .acts { padding-top: 2px; padding-bottom: 2px; } } }   /* three 41 px rows: the action words' 40 px hit areas don't overlap */
+.console.bar { display: grid; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr); align-items: stretch; align-content: stretch; gap: 0; padding: 0; background: var(--v); border-top: 1px solid var(--ink); }   /* the void itself (the body's purple haze under a 90 % plate lifted the knob tracks' surround to 2.95:1) */
+.console.rec-live { border-top: 2px solid var(--rec); }
+/* the vignette (body::after) stops at the console: in the bottom-left corner it dimmed the filter knob's track to 2.94:1 */
+@media not all and (max-width: 1100px) { body.chaos:has(#stage)::after { -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - var(--console-h)) no-repeat; mask: linear-gradient(#000 0 0) top / 100% calc(100% - var(--console-h)) no-repeat; } }   /* DECISION: armed and playing, a 2 px red line along the top edge */
 .tgroup { display: grid; grid-template-columns: var(--play) auto minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); align-items: center; gap: 0 14px; padding: 8px 12px 8px 24px; min-width: 0; }
 .tgroup #btn-play { grid-column: 1; grid-row: 1 / 3; align-self: center; }
 .tgroup .barbeat { grid-column: 2; grid-row: 1 / 3; }
@@ -299,9 +301,10 @@ body.chaos::before { display: none; }
    line; the 40 px hit area is the ::after rule above */
 .aword { background: transparent; border: 0; border-bottom: 1px solid var(--b); border-radius: 0; box-shadow: none; padding: 6px 2px 5px; font-size: var(--t-m); line-height: 19.5px; justify-self: start; white-space: nowrap; }
 .aword:hover { border-color: var(--l); }
+.aword::after { top: min(0px, (100% - 39px) / 2); bottom: min(0px, (100% - 41px) / 2); }   /* no top border: the box is measured from the padding edge (1 px short of the border box at the bottom), so these keep 40 px centred on the word */
 .aword.armed, .aword[aria-pressed=true], .aword.on { border-bottom: 2px solid var(--l); padding-bottom: 4px; box-shadow: none; }
 /* the filter knob in a row: arc + "off" / "LP 40" (its label is spoken); centre detent, double-click = off (gauge.js) */
-.tstrip-fx .gauge { flex-direction: row; gap: 6px; padding: 0; } .tstrip-fx .gauge svg { width: 30px; height: 30px; }
+.tstrip-fx .gauge { flex-direction: row; gap: 6px; padding: 0; } .tstrip-fx .gauge svg { width: var(--knob); height: var(--knob); }   /* the console's knob size (at 30 px its track read 2.95:1) */
 .tstrip-fx .g-val { margin: 0; font-size: var(--t-m); white-space: nowrap; min-width: 40.8px; } .tstrip-fx .g-label { display: none; }
 .tstrip-tempo .gauge { flex-direction: row; gap: 4px; } .tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; white-space: nowrap; }
 /* the selected lane: its header line, then the 8 knobs, then the 16 cells */
@@ -318,8 +321,8 @@ body.chaos::before { display: none; }
 .knobs > i { display: block; min-width: 0; font-style: normal; }
 .knobs .gauge { display: grid; grid-template-columns: var(--knob) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 5px; align-items: center; justify-items: start; padding: 0; }
 .knobs .gauge svg { grid-row: 1 / 3; width: var(--knob); height: var(--knob); }
-.knobs .g-val { margin: 0; font: 500 var(--kv)/1.1 var(--font-body); letter-spacing: -.02em; color: var(--l); white-space: nowrap; overflow: hidden; max-width: 100%; }
-.knobs .g-label { margin: 0; font-size: var(--t-s); line-height: 13px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.knobs .gauge .g-val { margin: 0; font: 500 var(--kv)/1.1 var(--font-body); letter-spacing: -.02em; color: var(--l); white-space: nowrap; overflow: hidden; max-width: 100%; }
+.knobs .gauge .g-label { margin: 0; font-size: var(--t-s); line-height: 13px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .knobs .gauge .g-mark { top: -2px; right: auto; left: calc(var(--knob) - 10px); }
 .gauge.pie .g-track { stroke: color-mix(in srgb, var(--gc, var(--l)) 30%, var(--v)); }   /* the band: the lane's colour, dim */
 .gauge.pie .g-fill { fill: var(--gk); stroke: none; } .gauge.pie .g-dot { display: none; }
@@ -332,6 +335,7 @@ body.chaos::before { display: none; }
 /* the action words, two to a row, under the sheet */
 .acts { display: grid; grid-template-columns: repeat(2, max-content); grid-template-rows: repeat(3, minmax(0, 1fr)); align-items: center; align-content: stretch; gap: 0 28px; padding: 8px 24px; }
 .acts .share-wrap { justify-self: start; }
+@media not all and (max-width: 1100px) { #btn-share-more { display: none; } }   /* a long press / right-click / ↓ on share opens the menu (A5) */
 /* the right column's head: the Move pill and "?" */
 .hud-top { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
 /* the page drawn, in words ("sound", "step 7 · held on Move"); the light grey while the Move owns the row */
@@ -689,9 +693,9 @@ button.small { padding: 3px 10px; font-size: 11px; }
   /* the 64 px ring, centred where the 76 px disc was (right / bottom + 6 px), on the void so what it floats over stays behind it */
   body:has(#sheet) #btn-play { position: fixed; right: 22px; bottom: calc(var(--dock) + max(22px, calc(env(safe-area-inset-bottom) + 6px))); z-index: 8; width: 64px; height: 64px; min-width: 0; padding: 0; border-radius: 50%; font-size: var(--t-m); line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: var(--v); box-shadow: inset 0 0 0 2px var(--l), 0 0 0 4px rgba(12,9,25,.85); }
   body:has(#sheet) { padding-bottom: calc(104px + var(--dock)); }   /* RD-3: play floats over the docked tab row */
-  /* the button lives in the header: the header's layer must sit over the panels (flex items with a z-index, like
-     .hud, stack even when static), or a panel scrolled under the button takes its taps */
-  body:has(#sheet) .chaos-bar { z-index: 8; }
+  /* RD-5: the button lives in the console, which scrolls under the docked tab row: the console makes no layer (z auto),
+     so the fixed button's own z 8 sits in the page's layer, over the panels and the dock, and the dock over the console */
+  body:has(#sheet) .chaos-bar { z-index: auto; position: static; }
   body:has(#sheet) .toast { bottom: calc(108px + var(--dock)); }
   body:has(#sheet) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
   body:has(#sheet) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */

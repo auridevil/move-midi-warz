@@ -40,7 +40,7 @@
     <div id="lane-face" class="lane-face" role="group" aria-label="selected lane">
       <div class="lane-head">
         <span id="lh-lane" class="lh-lane"></span>
-        <select id="voice-select" aria-label="voice"></select>
+        <select id="voice-select" class="hair" aria-label="voice"></select>
         <span id="lh-steps" class="lh-steps"></span>
         <span id="lh-page" class="lh-page"></span>
         <span id="move-chip" class="move-chip" title="What the Move's knobs edit now: white when the Move owns the row, grey when it edits something not drawn"></span>
@@ -59,7 +59,7 @@
       <button id="btn-jam" class="aword jam-btn" type="button" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
       <!-- I2 / I3: share in one tap (the link); … = 4 bars of audio and the other ways -->
       <span class="share-wrap">
-        <button id="btn-share" class="aword" type="button" title="Share this beat: copies a link anyone can open (on a phone: the share sheet)">share</button><button id="btn-share-more" class="aword share-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu" aria-label="more ways to share" title="More ways to share">…</button>
+        <button id="btn-share" class="aword" type="button" aria-haspopup="true" title="Share this beat: copies a link anyone can open (on a phone: the share sheet). Long-press, right-click or ↓: 4 bars of audio, a postcard">share</button><button id="btn-share-more" class="aword share-more" type="button" data-folded-into="btn-share" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu" aria-label="more ways to share" title="More ways to share">…</button>
         <div id="share-menu" class="share-menu" role="group" aria-label="share" hidden>
           <button id="share-link" type="button" title="A link with the whole pattern in it (not samples)">link</button>
           <button id="share-audio" type="button" title="Render 4 bars and share the WAV (or download it)">4 bars of audio</button>

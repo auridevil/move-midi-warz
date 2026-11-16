@@ -406,7 +406,7 @@ function onTick(t, time, cyc, ts) {
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
   // RD-5 the bar·beat counter: worked out here (integers), drawn on its beat by Tone.Draw (no DOM in the clock)
-  const bt = bars.len / meterParts(m.meter).num; if ((t - bars.at) % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor((t - bars.at) / bt) + 1}`; T.getDraw().schedule(() => { barBeat.textContent = bb; }, time); }
+  const bt = bars.len / meterParts(m.meter).num, inBar = (((t - bars.at) % bars.len) + bars.len) % bars.len; if (inBar % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor(inBar / bt) + 1}`; T.getDraw().schedule(() => { barBeat.textContent = bb; }, time); }
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
@@ -1804,9 +1804,12 @@ function buildExportUI() {
   // I2 / I3 share in the transport: one tap = the link; … = the other ways (4 bars of audio, …), each a toast when done
   const fail = (what) => (e) => toast(`${what}: ${e.message}`, 4000), menu = $('share-menu'), more = $('btn-share-more');
   // closing with the focus inside (Esc, Enter on an item) hands it back to "…", not to the page
-  const setMenu = (open) => { const had = menu.contains(document.activeElement); menu.hidden = !open; more.setAttribute('aria-expanded', String(open)); if (open) menu.querySelector('button')?.focus(); else if (had) more.focus(); };
+  const setMenu = (open) => { const had = menu.contains(document.activeElement); menu.hidden = !open; more.setAttribute('aria-expanded', String(open)); if (open) menu.querySelector('button')?.focus(); else if (had) (more.getClientRects().length ? more : $('btn-share')).focus(); };
   closeShareMenu = () => setMenu(false);   // RD-4: the one Esc order closes it too when the focus is elsewhere
-  $('btn-share').onclick = () => shareLink().catch(fail('share'));
+  // RD-5: on the wide console "…" is not drawn (A5: the face's 48 controls + the quest's two): a long press, a
+  // right-click or ↓ on "share" opens the other ways (find reaches each of them too)
+  const sb = $('btn-share'); sb.onclick = () => shareLink().catch(fail('share')); longPress(sb, () => setMenu(true));
+  sb.addEventListener('keydown', (e) => { if (e.key === 'ArrowDown' && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setMenu(true); } });
   more.onclick = () => setMenu(menu.hidden);
   $('share-link').onclick = () => { setMenu(false); shareLink().catch(fail('share')); };
   $('share-audio').onclick = () => { setMenu(false); shareAudio().catch(fail('4 bars')); };
@@ -2558,6 +2561,9 @@ function reveal(el) {
   el = typeof el === 'string' ? $(el) : el; if (!el) return null;
   const pane = el.closest('[role=tabpanel]'); if (pane && (!sheet.open || sheet.tab !== pane.dataset.sheet)) setSheet(pane.dataset.sheet, true);
   for (let d = el.closest('details:not([open])'); d; d = d.parentElement?.closest('details:not([open])')) d.open = true;
+  // RD-5: a cell of the lane off the 16 the console shows (steps 17–32): its page, as Back + a step pins it on the Move
+  const i = el.matches?.('#stepsui .st.out') ? stepBtns.indexOf(el) : -1;
+  if (i >= 0 && i < m.lane.length) { pages.pin(Math.floor(i / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); }
   return el;
 }
 // a tab opens its pane (a phone: the tapped tab of an open sheet closes it again); ← → Home End move along the tabs
@@ -2576,7 +2582,7 @@ setSheet(sheet.tab, false);
 // init…) or shows the control: its tab, its drawers, the focus on it, the keys its own. Empty = the recents. The field
 // owns its keys (B8); ↑↓ pick, Esc empties it, an empty field's Esc is the Esc order's ----
 const FIND_SEL = 'button, select, input, textarea, summary, a[href], [role=slider], [role=tab], [role=radio], [role=switch], [role=checkbox]';
-const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv, #btn-all';   // the field itself (and "all ⌘K", its door), the modal cards, the canvas's own popup
+const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv';   // the field itself, the modal cards, the canvas's own popup
 let findRecents = (() => { try { return recentsFrom(localStorage.getItem(FIND_KEY)); } catch { return []; } })();
 let findIndex = [], findHits = [], findAt = 0;
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -2594,7 +2600,8 @@ function accName(el) {
  *  drawer and simple view's tucked drawers (.adv) are not reasons: find opens them. Nor is the closed share menu for
  *  the actions in it (4 bars of audio, the postcard): Enter presses them without opening it. */
 const findHidden = (el) => {
-  if (!el.matches('.adv') && getComputedStyle(el).display === 'none') return true;
+  // (RD-5: a cell of the lane off the console's 16 is no reason either: reveal turns the cells' page)
+  if (!el.matches('.adv, #stepsui .st.out:not(:disabled)') && getComputedStyle(el).display === 'none') return true;
   const runs = !!ACTIONS[el.id];
   for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body') && !(runs && n.id === 'share-menu')) return true;
   return false;

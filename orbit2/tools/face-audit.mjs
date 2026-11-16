@@ -43,7 +43,7 @@ export const THRESHOLDS = {
   text: 4.5, edge: 3, controlLum: 0.475,                       // A1
   controls: 50, controlsWorst: 62,                              // A5 (at 1512×860)
   a1Sizes: ['1512x860', '1280x720', '390x844m'], a5Size: '1512x860', a6Sizes: ['1512x860', '1512x982', '1280x720'], a7Sizes: ['1512x860', '1512x982', '1280x720'],
-  typeSizes: [11, 13, 15], typeLarge: 40,                       // TYPE (RD-2): three sizes; 300 only at 40 px and up
+  typeSizes: [11, 13, 15, 18, 22], typeLarge: 40,               // TYPE (RD-2): three sizes; RD-5 adds the bar·beat 18 and the console's knob values 22 (DECISION "Numeral weight", 500); 300 only at 40 px and up
 };
 /** RD-2 colour = sound: a colour ([r, g, b] 0–255) is 'grey' (chroma ≤ 40: the void's greys, a muted dot), 'lane' (a mix
  *  of one lane colour over the void, any amount, every channel within 8), 'rec' (the same for record red) or 'stray'.
@@ -110,7 +110,7 @@ const PAGE = String.raw`(() => {
   }
   // RD-2 the action words' 40 px hit area (DECISION "Outlined boxes vs hairlines"): a click 19.5 px above and below the
   // centre, at both ends and the middle, still lands on the button (only those in view: a probe needs the window)
-  const ACTION_WORDS = ['btn-fill', 'btn-latch', 'btn-throw', 'btn-undo', 'btn-redo', 'btn-random', 'btn-jam', 'btn-share'];
+  const ACTION_WORDS = ['btn-fill', 'btn-latch', 'btn-throw', 'btn-undo', 'btn-redo', 'btn-random', 'btn-jam', 'btn-share', 'btn-share-more', 'btn-all'];   // RD-5: + … and all ⌘K
   function hits() {
     return ACTION_WORDS.map(id => document.getElementById(id)).filter(e => e && shown(e) && seen(e)).map(e => {
       const r = e.getBoundingClientRect(), cx = r.x + r.width / 2, cy = r.y + r.height / 2, miss = [];
@@ -229,7 +229,10 @@ const PAGE = String.raw`(() => {
     __poly.setView('all');
     for (const id of ids) {
       const e = document.getElementById(id); if (!e) { out.push({ id, exists: false, drawn: false }); continue; }
-      __poly.reveal?.(e); out.push({ id, exists: true, tab: e.closest('[role=tabpanel]')?.dataset.sheet || null, drawn: shown(e) });
+      // RD-5: a control folded into another on some windows (data-folded-into: "…" into share's long press on the wide
+      // console, A5) counts as drawn when the one that took its job is, and says so (via)
+      __poly.reveal?.(e); const via = !shown(e) && e.dataset.foldedInto ? document.getElementById(e.dataset.foldedInto) : null;
+      out.push({ id, exists: true, tab: e.closest('[role=tabpanel]')?.dataset.sheet || null, drawn: shown(e) || (!!via && shown(via)), ...(via ? { via: via.id } : {}) });
     }
     if (s) __poly.setSheet(s.tab, s.open); __poly.setView(view); document.querySelectorAll('details').forEach((d, i) => { d.open = open[i]; });
     return out;
@@ -255,10 +258,13 @@ const PAGE = String.raw`(() => {
           // a side cut off by the window or a scrolling column is not the control's edge: its band is left out (RD-2;
           // before, a drawer half scrolled away or a button peeking in at the bottom was judged by the cut)
           const fr = (knob || box).getBoundingClientRect(), cut = { l: r.x > fr.left + 0.5, t: r.y > fr.top + 0.5, r: r.x + r.w < fr.right - 0.5, b: r.y + r.h < fr.bottom - 0.5 };
-          const skip = knob ? null : (x, y) => (cut.l && x < r.x + 3) || (cut.t && y < r.y + 3) || (cut.r && x >= r.x + r.w - 3) || (cut.b && y >= r.y + r.h - 3);
+          // RD-5: a hairline control (an action word, the voice ▾: type on a 1 px line, DECISION "hairlines") is judged by
+          // its line, the bottom band alone; a round one (the play ring) by its brightest twentieth, as a knob's arc
+          const hair = e.matches('.aword, .hair'), round = !knob && cs.borderRadius === '50%';
+          const skip = knob ? null : (x, y) => (cut.l && x < r.x + 3) || (cut.t && y < r.y + 3) || (cut.r && x >= r.x + r.w - 3) || (cut.b && y >= r.y + r.h - 3) || (hair && y < r.y + r.h - 3);
           const out = []; each(full, grow(r, 3), ([a, b, c]) => out.push(lum(a, b, c)), r, skip); const Lo = pct(out, 50) ?? 0;
           const inner = []; if (knob) each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo))); else each(full, r, ([a, b, c]) => inner.push(ratio(lum(a, b, c), Lo)), grow(r, -3), skip);
-          if (inner.length && out.length) edges.push({ el: tag(e), name: name(e), edge: Math.round((pct(inner, knob ? 85 : 75) ?? 1) * 100) / 100, ...(Object.values(cut).some(Boolean) ? { cut: Object.keys(cut).filter(k => cut[k]).join('') } : {}) });
+          if (inner.length && out.length) edges.push({ el: tag(e), name: name(e), edge: Math.round((pct(inner, knob || hair ? 85 : round ? 95 : 75) ?? 1) * 100) / 100, ...(hair ? { hair: true } : {}), ...(Object.values(cut).some(Boolean) ? { cut: Object.keys(cut).filter(k => cut[k]).join('') } : {}) });
         }
         const cr = seen(e); if (!cr) continue; let mx = 0; each(full, cr, ([a, b, c]) => { const L = lum(a, b, c); if (L > mx) mx = L; });
         light.push({ el: tag(e), name: name(e), lum: Math.round(mx * 1000) / 1000 }); if (mx > ctlMax) { ctlMax = mx; ctlMaxAt = tag(e) + ' ' + name(e); }

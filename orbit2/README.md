@@ -40,6 +40,14 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   names is in the index, the synonyms top 1 in both views, every action findable; KEYS "stems" in 4 keys and the keys
   back to the page after an action; STALE the field reached by a click reads the page as it is; ESC / CLICK the order,
   a held Esc one press; OWN key ownership; `--root` checks another checkout; exit 1 on a failure).
+- The console (RD-5): `#topbar` is the Move's face along the bottom (transport · the selected lane's header, 8 knobs and
+  16 cells · the action words on hairlines), the lane list with M lamps and the peek in the left column. The knob row
+  shows the sheet's own gauges moved in by `gauge.js bindRow` (rhythm arcs, sound pies, a step's locks), chosen by
+  `pages.js resolvePage` (Nils's state table: a held or touched Move control owns the row, +400 ms after a touch; the
+  MOVE ⇢ chip grey when the Move edits something not drawn); `__poly.page` says what it resolves to now. The cells
+  are the Move's 16 step buttons (a 32-step lane shows the 16 of its page). The console log (\` or Sheet → setup) shows
+  the old readout as text over the stage. Browser check: `node orbit2/tools/console-check.mjs` (Nils's rows through
+  `__poly.move.receive`, A8 peek latency with `?setlog`, the scripted A2 run, the log's A5 / A7, Vera's mis-click run).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

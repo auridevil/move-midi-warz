@@ -32,7 +32,7 @@ const press = async (p, key, code, modifiers = 0, up = true, autoRepeat = false)
 const KEY = { '/': 'Slash', ' ': 'Space', Escape: 'Escape', Enter: 'Enter', ArrowDown: 'ArrowDown', ArrowUp: 'ArrowUp' }, code = (k) => KEY[k] || (/^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`);
 const keys = async (p, ks) => { for (const k of ks) await press(p, k, code(k)); };
 const STATE = `JSON.stringify({ esc: __poly.escState(), sheet: __poly.sheet, focus: __poly.focusMode, act: document.activeElement === document.body ? 'body' : document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName })`;
-const EDITS = `JSON.stringify([__poly.m.toJSON(), __poly.hist.past.length, __poly.hist.future.length, __poly.hist.cur?.full?.length, __poly.clock && document.querySelector('#tempo-gauge [role=slider]')?.getAttribute('aria-valuenow')])`;
+const EDITS = `JSON.stringify([__poly.m.toJSON(), __poly.hist.past.length, __poly.hist.future.length, __poly.hist.cur?.full?.length, __poly.clock && document.querySelector('[role=slider][aria-label=tempo]')?.getAttribute('aria-valuenow')])`;   // RD-5: the tempo knob lives in the console row or Sheet → pattern, by page
 try {
   const p = await b.open('orbit2/index.html', { width: W, height: H, mobile: W < 700 }); await p.captureDownloads();
   const st = async () => JSON.parse(await p.eval(STATE));
@@ -56,8 +56,9 @@ try {
     if (missing.length) fail('COVER', `${view}: ${missing.length} labelled controls not in the index: ${missing.slice(0, 8).join('; ')}`);
     await p.eval(`(() => { const s = __poly.sheet; __poly.setSheet(s.tab, false); document.querySelectorAll('details').forEach(d => { d.open = false; }); })()`);
   }
-  // the synonyms test, top 1, judged by the element (a lane knob in #sliders, the stems button, the meter's 7/8), in both views
-  const SYN = [['euclid', `!!e.el.closest('#sliders') && /hits/.test(e.name)`], ['rotation', `!!e.el.closest('#sliders') && /shift|rotation/.test(e.name)`], ['ratio', `!!e.el.closest('#sliders') && /speed/.test(e.name)`], ['probability', `!!e.el.closest('#sliders') && /chance|probability/.test(e.name)`], ['stems', `e.el.id === 'exp-stems'`], ['7/8', `e.name === '7/8' && !!e.el.closest('#meter')`]];
+  // the synonyms test, top 1, judged by the element (a lane knob: in the sheet's #sliders, or RD-5's console row #knobs;
+  // the stems button, the meter's 7/8), in both views
+  const SYN = [['euclid', `!!e.el.closest('#sliders, #knobs') && /hits/.test(e.name)`], ['rotation', `!!e.el.closest('#sliders, #knobs') && /shift|rotation/.test(e.name)`], ['ratio', `!!e.el.closest('#sliders, #knobs') && /speed/.test(e.name)`], ['probability', `!!e.el.closest('#sliders, #knobs') && /chance|probability/.test(e.name)`], ['stems', `e.el.id === 'exp-stems'`], ['7/8', `e.name === '7/8' && !!e.el.closest('#meter')`]];
   for (const view of ['simple', 'all']) for (const [q, ok] of SYN) {
     const r = await p.eval(`(async () => { __poly.setView(${JSON.stringify(view)}); const { search } = await import('./src/poly/find.js'); const e = search(__poly.findIndex(), ${JSON.stringify(q)})[0]; return e ? { name: e.name, where: e.where, ok: ${ok} } : null; })()`);
     ((out.synonyms ??= {})[view] ??= {})[q] = r && `${r.name} · ${r.where}`; if (!r?.ok) fail('COVER', `${view}: "${q}" → ${r ? `${r.name} · ${r.where}` : 'nothing'}`);
@@ -137,7 +138,9 @@ try {
   await p.eval('document.activeElement.blur(); __poly.setSheet(__poly.sheet.tab, false)');
 
   // ---- CLICK: the same order from empty canvas; nothing edited ----
-  const findSpot = () => p.eval(`(() => { for (let y = 40; y < innerHeight - 200; y += 20) for (let x = Math.round(innerWidth * .25); x < innerWidth * .7; x += 20) { const e = document.elementFromPoint(x, y); if (e?.id === 'cv' && __poly.scene.locate(x, y).lane < 0) return [x, y]; } return null; })()`);
+  // (RD-5: the narrow page's console sits under the rings: a control focused down there scrolls the page, so the search
+  // starts from the top)
+  const findSpot = () => p.eval(`(() => { scrollTo({ top: 0, behavior: 'instant' }); for (let y = 40; y < innerHeight - 200; y += 20) for (let x = Math.round(innerWidth * .25); x < innerWidth * .7; x += 20) { const e = document.elementFromPoint(x, y); if (e?.id === 'cv' && __poly.scene.locate(x, y).lane < 0) return [x, y]; } return null; })()`);
   const spot = await findSpot();
   // narrow windows: the open sheet is full height (no canvas to click), so the stack there is the share menu over the
   // docked sheet, and focus mode below
