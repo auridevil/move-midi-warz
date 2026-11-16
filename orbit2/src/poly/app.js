@@ -2453,9 +2453,13 @@ function accName(el) {
   const n = (by && squash(by.split(/\s+/).map(id => document.getElementById(id)?.textContent || '').join(' '))) || el.getAttribute('aria-label') || (lab && labelText(lab)) || (el.matches('select, input, textarea') ? '' : squash(el.textContent)) || el.title || '';
   return squash(String(n).split(',')[0]);
 }
-/** Hidden for a reason the sheet can't undo (no Web MIDI, a closed popup, the lock panel without a step): out of the index.
- *  A closed tab's pane, the closed sheet and a closed drawer are not reasons: find opens them. */
-const findHidden = (el) => { for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body')) return true; return false; };
+/** Hidden for a reason the sheet can't undo (no Web MIDI, a closed popup, the lock panel without a step, steps 17–32 of a
+ *  16-step lane: display none on the control itself): out of the index. A closed tab's pane, the closed sheet, a closed
+ *  drawer and simple view's tucked drawers (.adv) are not reasons: find opens them. */
+const findHidden = (el) => {
+  if (!el.matches('.adv') && getComputedStyle(el).display === 'none') return true;
+  for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body')) return true; return false;
+};
 /** Where a control lives, as the list says it: the tab, the drawer, the group label round it. */
 function findWhere(el) {
   const tab = el.closest('[role=tabpanel]')?.dataset.sheet, d = el.closest('details'), sum = d && el.tagName !== 'SUMMARY' ? squash(d.querySelector(':scope > summary')?.textContent).slice(0, 28) : '';

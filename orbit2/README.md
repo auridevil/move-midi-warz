@@ -36,6 +36,8 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   actions in `src/poly/find.js`; Enter runs an action or shows and focuses the control; recents in
   `midi-warz.orbit2.find`). One Esc order, `escStep` in `find.js`: popup → step locks → sheet → focus mode → give the
   keys back; a click on empty canvas is one Esc and never edits (`__poly.escapeOnce / escState / findIndex / openFind`).
+  Browser check: `node orbit2/tools/find-check.mjs --size 1512x860` (COVER every control Chrome's accessibility tree
+  names is in the index, KEYS "stems" in 4 keys, ESC / CLICK the order, OWN key ownership; exit 1 on a failure).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;
