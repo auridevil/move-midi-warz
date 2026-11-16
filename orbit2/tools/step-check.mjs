@@ -173,6 +173,10 @@ async function mouseLatch(p) {
   // an Esc during that look closes the mouse's page: the release then gives back nothing (round 3)
   await p.eval(`__poly.editLocks(${i})`); await sleep(60); await send(p, bytes.step(o, true)); await sleep(650); await p.key('Escape'); await sleep(80); await send(p, bytes.step(o, false)); await sleep(80);
   const escHeld = await p.eval(SEL); if (escHeld.sel.length || escHeld.stepTab !== 'true') fails.push(`Esc during a Move look over a mouse step page: the release brought a step back: ${JSON.stringify(escHeld)}`);
+  // a browser without Element.checkVisibility (iOS Safari 16.4–17.3 runs the app): Esc still closes a step, no page error
+  const errs0 = p.errors.length; await p.eval('delete Element.prototype.checkVisibility'); await p.eval(`__poly.editLocks(${i})`); await sleep(60); await p.key('Escape'); await sleep(80);
+  const oldSafari = { row: (await p.eval(STATE)).row, errors: p.errors.slice(errs0) };
+  if (oldSafari.row === 'step' || oldSafari.errors.length) fails.push(`without checkVisibility (older iOS Safari) Esc: ${JSON.stringify(oldSafari)}`);
   return { opened: opened.word, switched: switched.word, planet: planet?.word ?? null, edited, done: done.row, esc: esc.row, more: more.knobs, focus: [touched.focus, focusAfter], left: left.knobs, focusMode: { kept: fm, page: fmPage, then: fmClosed }, forgot, moveLook, back, closed, fails };
 }
 

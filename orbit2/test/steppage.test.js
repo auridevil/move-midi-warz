@@ -120,4 +120,6 @@ test('RD-6 static: one lock editor on the console (no radial menu), its words an
   assert.match(css, /\.gauge\.ring \.g-track \{ stroke: var\(--gk\);[^}]*\} \.gauge\.ring\.follows \.g-track \{ stroke-dasharray/);
   // the Move's LEDs and the cells draw the loops from one function
   assert.equal(app.match(/stepLoops\(/g).length, 2);
+  // RD-6 round 4: no checkVisibility: iOS Safari 16.4–17.3 runs the app (the import map) without it, and Esc threw there
+  for (const f of ['poly/app.js', 'poly/pages.js', 'poly/scene.js', 'gauge.js', 'ui.js']) assert.doesNotMatch(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'), /\.checkVisibility\b/, f);
 });
