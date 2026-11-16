@@ -256,7 +256,6 @@ body.chaos::before { display: none; }
    would take an implicit row: it gets 0 px (grid-auto-rows), so it can't shrink the stage row and move the rings */
 :root { --col-l: 300px; --col-r: 428px; --console-h: 144px; }
 @media (max-width: 1400px) { :root { --col-l: 256px; --col-r: 380px; --console-h: 128px; } }
-@media (max-width: 1240px) { :root { --console-h: 144px; } }   /* narrower, the top strip wraps to 135 px: the 144 px row until RD-5's console */
 #stage { display: none; }
 @media not all and (max-width: 1100px) {
   body.chaos:has(#stage) { display: grid; height: 100vh; height: 100dvh; overflow: hidden; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr) var(--console-h); grid-auto-rows: 0; }
@@ -276,21 +275,76 @@ body.chaos::before { display: none; }
 .ring-menu button.lk { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l), 0 2px 10px rgba(0, 0, 0, .5); }
 .ring-menu button:focus-visible { outline: 2px solid var(--l); outline-offset: 2px; }
 .chaos-bar { position: relative; z-index: 3; background: transparent; border-bottom: 0; }
-/* C2: the status line, the header's last row */
-.readout { flex-basis: 100%; margin: 0; font: 400 var(--t-s)/1.6 var(--font-body); letter-spacing: .14em; text-transform: lowercase; color: var(--d); }
-/* C1: the transport strip, in the header between the title and the Move */
-.tstrip { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-/* RD-2 holds the layout: weight 400 made the strip's words 2 px narrower, and the strip sits flush right, so every control
-   in it slid 2 px right. This margin puts them back on the RD-1 positions until the console (RD-5) replaces the strip */
-@media not all and (max-width: 1100px) { .tstrip { margin-right: 2px; } }
-.tstrip .big-btn { padding: 8px 18px; font-size: var(--t-l); line-height: 17.8px; min-width: 96px; }   /* play: the large size in its 14 px box */
-.tstrip-tempo .gauge, .tstrip-fx .gauge { flex-direction: row; gap: 4px; padding: 0 6px 0 2px; }   /* arc + "120 bpm" in a row; the label is spoken, not shown */
-.tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-label { display: none; }
-/* RD-2: "120 bpm" drew at 12 px (.gauge .g-val came later and won); at the values' 13 px it keeps its old measure, so
-   the strip does not move (desktop and phone) */
-.tstrip-tempo .g-val { margin: 0; white-space: nowrap; letter-spacing: -.04em; }
-/* P6: the performance filter knob, the tempo's shape; its value says "off" / "LP 40" / "HP 25" */
-.tstrip-fx .gauge svg { width: 30px; height: 30px; } .tstrip-fx .g-val { margin: 0; font-size: var(--t-m); white-space: nowrap; min-width: 40.8px; } .tstrip-fx .g-label { display: none; }   /* 40.8: its old 3.4 em at 12 px */
+/* ---- RD-5 the console: the Move's face (DECISION "The screen at 1512×860"). Three groups over the grid's columns:
+   transport under the lane list, the selected lane under the stage (its header, the 8 knobs of the page, the 16 cells),
+   the action words under the sheet. Its top rule is the selected lane's ink (app.js sets --lane), red while record is
+   armed and playing. 1512: 144 px, 64 px play, 40 px cells; ≤ 1400 px: 128 px, 52 px play, 34 px knobs, 44 px cells
+   (DECISION 1280×720) ---- */
+.console { --ink: color-mix(in srgb, var(--lane, var(--l)) 80%, var(--v)); --play: 64px; --knob: 34px; --cell: 40px; --kv: 22px; }
+@media (max-width: 1400px) { .console { --play: 52px; --knob: 30px; --cell: 44px; --kv: var(--t-l); } }   /* 74 px a knob: the value at 15 px fits "100%" */
+/* 128 px hold a 32 px header (every target ≥ 32 px), the knobs and the 44 px cells with 6 px round them */
+@media not all and (max-width: 1100px) { @media (max-width: 1400px) { .lane-face { padding: 6px 12px; gap: 3px; } .tgroup, .acts { padding-top: 6px; padding-bottom: 6px; } } }
+.console.bar { display: grid; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr); align-items: stretch; align-content: stretch; gap: 0; padding: 0; background: var(--plate); border-top: 1px solid var(--ink); }
+.console.rec-live { border-top: 2px solid var(--rec); }   /* DECISION: armed and playing, a 2 px red line along the top edge */
+.tgroup { display: grid; grid-template-columns: var(--play) auto minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); align-items: center; gap: 0 14px; padding: 8px 12px 8px 24px; min-width: 0; }
+.tgroup #btn-play { grid-column: 1; grid-row: 1 / 3; align-self: center; }
+.tgroup .barbeat { grid-column: 2; grid-row: 1 / 3; }
+.tgroup #btn-fill { grid-column: 3; grid-row: 1; } .tgroup #btn-latch { grid-column: 3; grid-row: 2; }
+.tgroup #fx-gauge { grid-column: 1 / 3; grid-row: 3; } .tgroup #btn-throw { grid-column: 3; grid-row: 3; }
+/* play: the 64 px outlined ring (2 px --l), its glyph ■ / ▷ the state that never repaints anything else */
+.play-ring { width: var(--play); height: var(--play); min-width: 0; padding: 0; border-radius: 50%; border: 1px solid var(--l); font-size: var(--t-l); line-height: 1; display: flex; align-items: center; justify-content: center; }
+/* the bar·beat counter: 18 px, weight 500 (DECISION "Numeral weight"), figures that don't jitter */
+.barbeat { font: 500 18px/1 var(--font-body); font-variant-numeric: tabular-nums; color: var(--l); letter-spacing: .02em; }
+/* the action words (DECISION "Outlined boxes vs hairlines"): type on a 1 px --b hairline, no box; "on" = the 2 px --l
+   line; the 40 px hit area is the ::after rule above */
+.aword { background: transparent; border: 0; border-bottom: 1px solid var(--b); border-radius: 0; box-shadow: none; padding: 6px 2px 5px; font-size: var(--t-m); line-height: 19.5px; justify-self: start; white-space: nowrap; }
+.aword:hover { border-color: var(--l); }
+.aword.armed, .aword[aria-pressed=true], .aword.on { border-bottom: 2px solid var(--l); padding-bottom: 4px; box-shadow: none; }
+/* the filter knob in a row: arc + "off" / "LP 40" (its label is spoken); centre detent, double-click = off (gauge.js) */
+.tstrip-fx .gauge { flex-direction: row; gap: 6px; padding: 0; } .tstrip-fx .gauge svg { width: 30px; height: 30px; }
+.tstrip-fx .g-val { margin: 0; font-size: var(--t-m); white-space: nowrap; min-width: 40.8px; } .tstrip-fx .g-label { display: none; }
+.tstrip-tempo .gauge { flex-direction: row; gap: 4px; } .tstrip-tempo .gauge svg { width: 30px; height: 30px; } .tstrip-tempo .g-val { margin: 0; white-space: nowrap; }
+/* the selected lane: its header line, then the 8 knobs, then the 16 cells */
+.lane-face { display: grid; grid-template-rows: auto minmax(0, 1fr) var(--cell); gap: 4px; padding: 8px 12px 10px; min-width: 0; }
+.lane-head { display: flex; align-items: center; gap: 4px 14px; min-width: 0; white-space: nowrap; font-size: var(--t-s); line-height: 16.5px; letter-spacing: var(--tr-12); color: var(--d); }
+.lh-lane { color: var(--ink); } .lh-lane::before { content: '● '; }
+.lane-head select { min-height: 0; padding: 0 4px; border: 0; box-shadow: none; border-bottom: 1px solid var(--b); border-radius: 0; font-size: var(--t-s); background: var(--v); max-width: 140px; }
+.move-chip { margin-left: auto; color: var(--d); } .move-chip.own { color: var(--l); } .move-chip:empty { display: none; }
+.page-tabs { display: flex; gap: 4px; } .move-chip:empty + .page-tabs { margin-left: auto; }
+.page-tabs button { min-height: 0; padding: 2px 8px; font-size: var(--t-s); line-height: 15.2px; letter-spacing: var(--tr-12); }
+.page-tabs button[aria-pressed=true] { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }   /* state needs a shape: the 2 px outline */
+/* the 8 knobs: arcs in the lane's ink (rhythm), filled pies on a lane-tinted band (sound); the value 22 px weight 500 */
+.knobs { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 0 4px; align-items: center; min-height: 0; }
+.knobs > i { display: block; min-width: 0; font-style: normal; }
+.knobs .gauge { display: grid; grid-template-columns: var(--knob) minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 5px; align-items: center; justify-items: start; padding: 0; }
+.knobs .gauge svg { grid-row: 1 / 3; width: var(--knob); height: var(--knob); }
+.knobs .g-val { margin: 0; font: 500 var(--kv)/1.1 var(--font-body); letter-spacing: -.02em; color: var(--l); white-space: nowrap; overflow: hidden; max-width: 100%; }
+.knobs .g-label { margin: 0; font-size: var(--t-s); line-height: 13px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.knobs .gauge .g-mark { top: -2px; right: auto; left: calc(var(--knob) - 10px); }
+.gauge.pie .g-track { stroke: color-mix(in srgb, var(--gc, var(--l)) 30%, var(--v)); }   /* the band: the lane's colour, dim */
+.gauge.pie .g-fill { fill: var(--gk); stroke: none; } .gauge.pie .g-dot { display: none; }
+/* the 16 cells (the Move's step buttons): a lane of 32 shows the 16 of its page; a step's condition sits inside it */
+.console .stepsui { grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 4px; margin: 0; row-gap: 0; }
+.console .stepsui .st { height: var(--cell); }
+.stepsui .st.out { display: none; }
+.console .stepsui .st.tg::after { inset: auto 0 2px 0; font-size: var(--t-s); line-height: 1; }
+.console .stepsui .st.ph::before { inset: -5px 0 auto 0; }
+/* the action words, two to a row, under the sheet */
+.acts { display: grid; grid-template-columns: repeat(2, max-content); grid-template-rows: repeat(3, minmax(0, 1fr)); align-items: center; align-content: stretch; gap: 0 28px; padding: 8px 24px; }
+.acts .share-wrap { justify-self: start; }
+/* the right column's head: the Move pill and "?" */
+.hud-top { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.pane .wordmark { padding: 4px 0 2px; }   /* h1's own look (Major Mono, only here) */
+/* narrow windows: the console stacks under the rings and the lane list (transport, the lane, the action words) */
+@media (max-width: 1100px) {
+  .console.bar { grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 10px 16px; border-top: 0; background: transparent; }
+  .tgroup, .acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; padding: 0; }
+  .lane-face { grid-template-rows: auto auto auto; gap: 8px; padding: 0; }
+  .lane-head { flex-wrap: wrap; white-space: normal; }
+  .knobs { grid-template-columns: repeat(4, minmax(0, 1fr)); row-gap: 8px; }
+  body:has(#sheet) .knobs .gauge svg { width: var(--knob); height: var(--knob); }   /* not the phone's 40 px sheet knobs */
+  .console .stepsui { grid-template-columns: repeat(8, minmax(0, 1fr)); row-gap: 6px; }
+}
 /* nerd stats: the old readout rows, small and scrollable */
 .nerd-stats { margin: 6px 0 2px; font: 11px/1.6 ui-monospace, monospace; color: var(--muted); white-space: pre; overflow-x: auto; }
 .hud { z-index: 3; display: flex; flex-direction: column; gap: 10px; align-items: flex-end; overflow-y: auto; overscroll-behavior: contain; padding-right: 2px; }
@@ -331,8 +385,6 @@ body.chaos::before { display: none; }
 .stressbar i { display: block; height: 100%; width: 0; background: var(--d); transition: width .2s, background .3s; }
 .stepsui { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; margin: 8px 0; }   /* 8 in a row: a target 32 px wide too (16 in a row were 22 px) */
 /* L1: a lane of up to 16 steps keeps the strip above (steps 17–32 hidden); a longer one is two rows of 16, a bar each */
-.stepsui.short .st:nth-child(n+17) { display: none; }
-.stepsui:not(.short) { grid-template-columns: repeat(16, 1fr); column-gap: 3px; }
 /* a cell: a --b edge; lit = the lane's colour dimmed over the void (on 45 %, accent 62 %, ghost 22 %: Greta), never above the cap */
 .stepsui .st { height: 32px; min-width: 0; padding: 0; border: 1px solid var(--b); border-radius: 4px; background: transparent; box-shadow: none; cursor: pointer; transition: none; }
 .stepsui .st:hover { border-color: var(--l); box-shadow: none; } .stepsui .st.on, .stepsui .st.on:hover { background: color-mix(in srgb, var(--lane, var(--l)) 45%, var(--v)); } .stepsui .st.acc, .stepsui .st.acc:hover { background: color-mix(in srgb, var(--lane, var(--l)) 62%, var(--v)); }
@@ -347,7 +399,7 @@ body.chaos::before { display: none; }
 body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: rgba(12, 9, 25, 0.88); }   /* the void, nearly opaque */
 .sliders label[title] { cursor: help; }
 /* RD-3: the left column (.col-left) holds the legend (RD-5's lane list and the peek go here) */
-@media not all and (max-width: 1100px) { #legend { flex: none; flex-direction: column; align-items: flex-start; padding: 16px 0 12px 24px; } }   /* one lane a line */
+@media not all and (max-width: 1100px) { #legend { flex: none; padding: 16px 12px 12px 24px; } }   /* one lane a row */
 @media (max-width: 1100px) { .col-left { display: contents; } }
 /* RD-3 the sheet: six tabs over one scrolling body; the drawers inside are re-hosted as they were. Wide: the whole right
    column under what is on (welcome, quest, jam take), down to the console, closed on load (RD-4); closed it keeps only
@@ -381,7 +433,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
   .hud { overflow: hidden; }
   .hud > :not(.sheet) { margin-right: 24px; max-width: calc(100% - 24px); }   /* a full-width one (the jam take) fits beside its margin, not 24 px past the column's edge */
   .hud > .sheet { align-self: stretch; flex: 1 1 0; min-height: min(340px, 100%); border: 1px solid var(--b); border-width: 1px 0 0 1px; border-radius: 12px 0 0 0; background: rgba(12, 9, 25, 0.88); }
-  .hud > .sheet:not(.open) { flex: none; min-height: 0; }
+  .hud > .sheet:not(.open) { display: none; }   /* RD-5: closed, nothing of it on the face ("all ⌘K", ⌘K, / and the A on a knob open it) */
 }
 /* narrow windows: a bottom sheet. Closed, its tab row docks along the bottom edge; open, it takes the full height and
    scrolls inside (the floating play stays over it on a phone, so the body keeps room under its last row) */
@@ -600,7 +652,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
    is the bottom sheet (above). .hud makes no layer here, so the sheet's own z-index sits over the page */
 @media (max-width: 1100px) {
   body:has(#sheet) { overflow-y: auto; display: flex; flex-direction: column; min-height: 100vh; }
-  body:has(#sheet) .chaos-bar { order: 0; } body:has(#sheet) .hud { order: 2; }
+  body:has(#sheet) .chaos-bar { order: 2; } body:has(#sheet) .hud { order: 2; }   /* RD-5: the console under the rings and the lane list */
   body:has(#sheet) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; z-index: auto; }
   body:has(#sheet) .hud-row { justify-content: flex-start; }
   body.sheet-open:has(#sheet) .chaos-bar { z-index: auto; }   /* open full height: the sheet covers the header, the phone's play (z 8) still floats over it */
@@ -733,7 +785,7 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
 }
 @media (pointer: coarse) and (max-width: 440px) { body:has(#sheet) .stepsui { grid-template-columns: repeat(4, 1fr); } }
 /* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */
-@media (pointer: coarse) { body:has(#sheet) .stepsui:not(.short) { grid-template-columns: repeat(8, 1fr); } }
+@media (max-width: 1100px) { @media (pointer: coarse) { body:has(#sheet) .stepsui { grid-template-columns: repeat(8, 1fr); } } }
 /* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
    (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
 body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }
@@ -747,13 +799,18 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .help-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
 .help-head h2 { margin: 0; font-size: 13px; }
 .help .gtable.keys th { width: 30%; white-space: normal; }
-/* C5: the ring legend (colour dot, voice, length × speed) */
-.ring-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 18px; font: 400 var(--t-s)/1.6 var(--font-body); letter-spacing: .12em; text-transform: lowercase; color: var(--d); pointer-events: none; z-index: 3; }
-.ring-legend li { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; } .ring-legend li[hidden] { display: none; }   /* a 4-lane pattern: no dots for lanes 5–6 */
-.ring-legend li::before { content: ''; width: 9px; height: 9px; border-radius: 50%; background: var(--lane); box-shadow: 0 0 8px var(--lane); }
-.ring-legend li.sel { color: var(--ink); }
-.ring-legend li.muted { opacity: .55; } .ring-legend li.muted::before { background: #8b84a8; box-shadow: none; }
-@media (max-width: 1100px) { body:has(#sheet) #legend { position: static; order: 1; margin: 8px 16px 12px; letter-spacing: .36em; } }
+/* RD-5 the lane list (was C5's legend): a row per lane, inner ring first: dot, voice, length · ×speed, a tap selects it;
+   the selected row in its lane's 2 px ink; a muted lane's name in the label grey and its dot hollow; the M lamp beside
+   it ("on" = the 2 px outline, dashed while a mute waits for the bar line, "S" while soloed). 40 px rows */
+.ring-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; z-index: 3; }
+.ring-legend li { display: flex; align-items: center; gap: 6px; min-width: 0; } .ring-legend li[hidden] { display: none; }   /* a 4-lane pattern: no rows for lanes 5–6 */
+.lane-list .lane-tab { --lane: inherit; border-color: var(--b); box-shadow: inset 0 0 0 1px var(--b); flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 10px; text-align: left; color: var(--l); font-size: var(--t-m); line-height: 19.5px; letter-spacing: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lane-list .lane-tab::before { content: ''; flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+.lane-list li.sel .lane-tab { color: var(--ink); border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+.lane-list li.muted .lane-tab { color: var(--d); } .lane-list li.muted .lane-tab::before { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink); }
+.lane-m { flex: none; width: 40px; min-height: 40px; padding: 0; font-size: var(--t-s); line-height: 1; }
+.lane-m.pend { border-style: dashed; }
+@media (max-width: 1100px) { body:has(#sheet) #legend { position: static; order: 1; margin: 8px 16px 4px; flex-direction: row; flex-wrap: wrap; } body:has(#sheet) #legend li { flex: 1 1 calc(50% - 4px); } }
 /* RD-2 holds the in-flow legend's measure: in Major Mono it was this wide, so it wraps where it did (a phone: two lines)
    and nothing under it moves, until RD-10 turns it into a row of colour dots */
 /* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps

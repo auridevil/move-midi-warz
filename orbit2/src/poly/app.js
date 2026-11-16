@@ -18,7 +18,7 @@ import { HOLD_MS, MuteQueue, FillLatch, Guard, condLoops, loopWindow, fxFreqs, s
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
-import { makeGauge } from '../gauge.js';
+import { makeGauge, bindRow } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
@@ -46,6 +46,8 @@ const slogWords = () => patternWords(m.toJSON());
 const slogBefore = () => { slog.begin(); return slogWords(); };   // an action that replaces the pattern: hand edits first
 if (!m.lanes.some(l => l.hits.some(Boolean))) { m.lanes[0].setEuclid(2); m.lanes[1].setEuclid(2); m.lanes[1].rotation = 1; m.lanes[2].setEuclid(8); m.lanes[3].setEuclid(2); } // kick 1·3, snare 2·4, hats in 8ths, perc 5 over 8ths
 let tempo = getTempo(112), awake = false, playing = false, shift = false, vol = 0.8;
+const barBeat = $('barbeat');   // RD-5: the console's bar·beat counter ("03.2"), beside play
+let statusLine = '';            // RD-5: the old readout's status line (readout()), off the face: the console log shows it
 // every edit lands in save(): that's where undo history is recorded (knob turns within 0.7 s fold into one step).
 // Mute, solo and the selected lane are performance moves, not edits: they are left out of the step key (perfKey), so
 // they never make an undo step and Undo keeps them as they are; undoing a load (setup, slot, link, init, groove, a
@@ -402,6 +404,8 @@ function onTick(t, time, cyc, ts) {
   // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
+  // RD-5 the bar·beat counter: worked out here (integers), drawn on its beat by Tone.Draw (no DOM in the clock)
+  const bt = bars.len / meterParts(m.meter).num; if ((t - bars.at) % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor((t - bars.at) / bt) + 1}`; T.getDraw().schedule(() => { barBeat.textContent = bb; }, time); }
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
@@ -438,7 +442,7 @@ async function togglePlay() {
   slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
-  $('btn-play').textContent = playing ? '■ stop' : '▶ play'; paintPlayhead(); paintLeds(); readout(); giftPlay?.();
+  { const b = $('btn-play'); b.textContent = playing ? '■' : '▷'; b.setAttribute('aria-label', playing ? 'stop' : 'play'); if (!playing) barBeat.textContent = '01.1'; } recLine(); paintPlayhead(); paintLeds(); readout(); giftPlay?.();
   slog?.act('transport', playing ? 'stopped' : 'playing', playing ? 'playing' : 'stopped', { absorb: true });   // a stop lands the waiting mutes
 }
 $('btn-play').onclick = togglePlay;
@@ -542,7 +546,7 @@ const PARAMS = [
 ];
 function tuneSay(v) { return v === 0 ? 'centre' : `${Math.abs(v)}% ${v > 0 ? 'up' : 'down'}`; }   // spoken: ±100 = about an octave
 const sliders = {};   // k -> gauge handle ({ set, value })
-const laneTabs = [];  // the four coloured lane buttons: a touch-friendly alternative to tapping a ring
+const laneTabs = [], laneMs = [];  // RD-5 the lane list: a row per lane (select it) and its M lamp (mute; Shift / long press = solo)
 function buildSliders() {
   const el = $('sliders'); el.innerHTML = '';
   // A3: chance and tune record (as step locks) when knobs record; the rest are the grid, never recorded
@@ -552,10 +556,18 @@ function buildSliders() {
   const sw = document.createElement('div'); sw.className = 'ctl swing-tpl'; sw.title = INFO['swing template']; sw.innerHTML = '<span class="ctl-lbl">swing template</span>'; sw.appendChild(ui.swingTpl.el); sliders.swing.el.after(sw);
   const ge = $('global-sliders'); ge.innerHTML = '';
   // exact: a clock-in tempo of 127.5 shows as 127.5 (turning the knob still moves in whole bpm)
-  sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, fmt: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => handTempo(v) });
-  $('tempo-gauge').replaceChildren(sliders.tempo.el);   // C1: tempo sits in the transport strip
+  sliders.tempo = makeGauge({ label: 'tempo', min: 40, max: 240, value: tempo, exact: true, say: (v) => v + ' bpm', title: INFO.tempo, color: 'var(--ember-magenta)', onChange: (v) => handTempo(v) });
+  $('tempo-gauge').replaceChildren(sliders.tempo.el);   // its home in the sheet; the rhythm page shows it as knob 8 (RD-5)
   sliders.humanize = makeGauge({ label: 'humanize', min: 0, max: 100, value: Math.round(m.humanize * 100), fmt: (v) => v + '%', title: INFO.humanize, color: 'var(--nebula-purple)', onChange: (v) => { m.humanize = v / 100; save(); readout(); } }); ge.appendChild(sliders.humanize.el);
-  for (let i = 0; i < MAX_LANES; i++) { const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.style.setProperty('--lane', LANE_HEX[i]); b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.onclick = () => { m.select(i); sync(); }; $('lane-tabs').appendChild(b); laneTabs.push(b); }
+  // RD-5 the lane list: a row selects its lane, M mutes it (as the Move's Mute: never an undo step, "on next bar" too);
+  // Shift+click or a long press solos it (Shift + Mute on the Move)
+  for (let i = 0; i < MAX_LANES; i++) {
+    const li = document.createElement('li'); li.style.setProperty('--lane', LANE_HEX[i]);
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.onclick = () => { m.select(i); lockStep = -1; sync(); };
+    const mb = document.createElement('button'); mb.type = 'button'; mb.className = 'lane-m'; mb.textContent = 'M';
+    mb.onclick = (e) => { if (e.shiftKey) toggleSolo(i); else toggleMute(i); }; longPress(mb, () => toggleSolo(i));
+    li.append(b, mb); $('legend').appendChild(li); laneTabs.push(b); laneMs.push(mb);
+  }
   // picked with the mouse, a select lets go of the focus, so the arrow keys don't keep changing it (see controlOwnsKey)
   const vs = $('voice-select'); vs.innerHTML = ''; for (const k of VOICE_KEYS) vs.add(new Option(VOICES[k].label, k)); vs.onchange = () => { setVoice(m.selected, vs.value); letGoAfterPointer(vs); };
   const ks = $('kit-select'); ks.innerHTML = ''; const cu = new Option('custom', 'custom'); cu.disabled = true; ks.add(cu); for (const k of KIT_KEYS) ks.add(new Option(KITS[k].name, k)); ks.onchange = () => { applyKit(ks.value); letGoAfterPointer(ks); };
@@ -574,11 +586,56 @@ function sync() {
   sliders.tempo.set(tempo); sliders.humanize.set(Math.round(m.humanize * 100)); ui.meter?.set(m.meter);
   muteQ.trim(m.lanes.length);   // a lane the pattern no longer has (6 → 4, a slot) has no mute waiting
   $('lane-name').textContent = `Lane ${m.selected + 1} · ${voiceLabel(m.lane)}${m.lane.muted ? ' (muted)' : ''}`;
-  ui.laneCount?.set(m.lanes.length); laneTabs.forEach((b, i) => { b.hidden = i >= m.lanes.length; if (b.hidden) return; b.textContent = `${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ' ·m' : ''}${muteQ.has(i) ? ' ⇥' : ''}`; b.classList.toggle('pend', muteQ.has(i)); b.title = muteQ.has(i) ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `select lane ${i + 1} (Alt+${i + 1})`; b.classList.toggle('sel', i === m.selected); b.setAttribute('aria-pressed', i === m.selected); b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(m.lanes[i])}${m.lanes[i].muted ? ', muted' : ''}${muteQ.has(i) ? `, ${muteWord(i)} on the next bar` : ''}`); }); renderVoiceOptions(); renderLaneMix(); renderKit();
-  $('lane-drawer').open = true; $('lane-drawer').style.setProperty('--lane', LANE_HEX[m.selected]);   /* RD-2: its border, steps and playhead take the lane's ink (CSS) */ for (const p of PARAMS) sliders[p.k].setColor(LANE_HEX[m.selected]);
+  ui.laneCount?.set(m.lanes.length); renderLanes(); renderVoiceOptions(); renderLaneMix(); renderKit();
+  // RD-2 / RD-5: the lane drawer and the console take the selected lane's ink (borders, cells, playhead, every lane knob)
+  const hex = LANE_HEX[m.selected]; $('lane-drawer').open = true; $('lane-drawer').style.setProperty('--lane', hex); $('topbar').style.setProperty('--lane', hex);
+  for (const p of PARAMS) sliders[p.k].setColor(hex); for (const k of SOUND_KEYS) sliders['snd:' + k].setColor(hex);
   $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : '';
-  renderSteps(); renderLocks(); renderAuto(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes(); renderQuest();
+  renderPage(); renderSteps(); renderLocks(); renderAuto(); renderGen(); paintLeds(); save(); readout(); renderStrokeNotes(); renderQuest();
 }
+/** RD-5 the lane list: each row its voice and length · ×speed (inner ring first), the selected one outlined; its M lamp
+ *  lit when muted, dashed while a mute waits for the bar line, "S" while soloed. */
+function renderLanes() {
+  laneTabs.forEach((b, i) => {
+    const li = b.parentElement, l = m.lanes[i]; li.hidden = !l; if (!l) return;
+    const t = `${voiceLabel(l)} ${l.length}·×${RATIO_LABEL[l.ratioIndex]}`; if (b.textContent !== t) b.textContent = t;
+    const q = muteQ.has(i);
+    li.classList.toggle('sel', i === m.selected); li.classList.toggle('muted', !!l.muted); b.setAttribute('aria-pressed', i === m.selected);
+    b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(l)}`);
+    const mb = laneMs[i]; mb.textContent = l.solo ? 'S' : 'M'; mb.classList.toggle('pend', q); mb.setAttribute('aria-pressed', l.muted ? 'true' : 'false');
+    mb.setAttribute('aria-label', `mute lane ${i + 1}${l.solo ? ', solo' : ''}${q ? `, ${muteWord(i)} on the next bar` : ''}`);
+    mb.title = q ? `lane ${i + 1}: ${muteWord(i)} on the next bar line` : `mute lane ${i + 1} · Shift+click or long-press = solo`;
+  });
+}
+// ---- RD-5 the console's knob row: one page at a time (rhythm = the Move's knobs 1–8, sound = Shift + knobs). The
+// gauges are the sheet's own, moved into the row (gauge.js bindRow): a page's knobs leave the sheet while the row shows
+// them and go back when it doesn't. The mouse latches a page with its tab; the Move's Shift shows sound while held ----
+const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'];   // the Move's knobs 1–7 (8 = tempo)
+const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
+const knobPage = { latch: 'rhythm', shown: null };
+const pageShown = () => (shift || kbdShift ? 'sound' : knobPage.latch === 'step' ? 'rhythm' : knobPage.latch);   // RD-5: the step page is drawn by RD-6
+function renderPage() {
+  const pg = pageShown(), lane = m.lane, first = cellFirst();
+  // a knob the pointer holds stays put: the row flips once it is let go (#knobs pointerup below)
+  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g.held))) { knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg; }
+  for (const t of ['rhythm', 'sound', 'step']) $('pg-' + t).setAttribute('aria-pressed', String(t === knobPage.latch));
+  $('pg-step').setAttribute('aria-disabled', String(lockStep < 0));
+  const lh = `${m.selected + 1} · ${voiceLabel(lane)}${lane.muted ? ' · M' : ''}`; if ($('lh-lane').textContent !== lh) $('lh-lane').textContent = lh;
+  $('lh-steps').textContent = `steps ${Math.min(first + 1, lane.length)}–${Math.min(first + STEP_BTNS, lane.length)} of ${lane.length}`;
+}
+for (const t of ['rhythm', 'sound']) $('pg-' + t).onclick = () => { knobPage.latch = t; renderPage(); };
+$('knobs').addEventListener('pointerup', () => setTimeout(renderPage), true);   // a held knob let go: a flip it held back happens now
+// ⇧ held on the keyboard shows the sound page too (DECISION: "Move Shift, ⇧ held, or the sound tab"); a text field's
+// Shift is its own
+let kbdShift = false;
+const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); };
+addEventListener('keydown', (e) => { if (e.key === 'Shift' && !(e.target instanceof Element && e.target.closest('input, textarea'))) setKbdShift(true); });
+addEventListener('keyup', (e) => { if (e.key === 'Shift') setKbdShift(false); }); addEventListener('blur', () => setKbdShift(false));
+// RD-5: the step page is RD-6's; until then its tab opens the step's locks in the sheet (a cell's long-press picks the step)
+$('pg-step').onclick = () => { if (lockStep < 0) return toast('long-press, right-click or Alt+click a cell for its locks', 2500); reveal('lockpanel').scrollIntoView({ block: 'nearest' }); };
+/** The first of the 16 steps the cells show: the 16 holding the step being edited, else the Move's step buttons' (the
+ *  16 holding the pad page: they follow the playhead, or the page Back pinned). */
+const cellFirst = () => (lockStep >= 0 ? STEP_BTNS * Math.floor(lockStep / STEP_BTNS) : pages.stepFirst(m.lane, playing));
 /** The MIDI drawer names the note of every stroke the lanes can play now (strokeNotes; it follows voices and notes). */
 function renderStrokeNotes() {
   const rows = strokeNotes(pmidi.lanes), now = m.lanes.flatMap((l, i) => ARTICS[l.voice] ? [`lane ${i + 1} ${voiceLabel(l)}: ${ARTICS[l.voice].map((s, a) => `${s} ${rows[i][a]}`).join(' · ')}`] : []);
@@ -612,17 +669,19 @@ function buildSteps() {
   }
 }
 /** The step of the selected lane sounding now, lit on the strip while playing (only the old and new button change). */
-let playheadAt = -1;
+let playheadAt = -1, cellsAt = 0;   // cellsAt: the first step the cells show (renderSteps)
 function paintPlayhead() {
   const i = playing && m.lane.shown != null && m.lane.shown < m.lane.length ? m.lane.shown : -1; if (i === playheadAt) return;
+  if (cellFirst() !== cellsAt) { renderSteps(); renderPage(); return; }   // RD-5: the cells follow the Move's step page (a 32-step lane's second half)
   stepBtns[playheadAt]?.classList.remove('ph'); stepBtns[i]?.classList.add('ph'); playheadAt = i;
 }
 function renderSteps() {
-  const lane = m.lane; playheadAt = -1; $('stepsui').classList.toggle('short', lane.length <= 16);   // L1: steps 17–32 only for a lane that reaches them
+  const lane = m.lane; playheadAt = -1;
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
+  const first = cellsAt = cellFirst();   // RD-5: 16 cells, the Move's 16 step buttons (L1's steps 17–32 on their page)
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));
-    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}`;
+    b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
@@ -844,7 +903,9 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   const qTick = m.origin + q.step * lane.stepTicks(); if (qTick > clockRef.tick) skip.add(`${li}:${qTick}`);   // not scheduled yet: don't play it twice
   scene.flash(li, q.index, accent); m.select(li); sync();
 }
-function setRec(on) { if (on !== rec.armed) slog?.act('record', rec.armed, on); if (!on) gestEnd(true); rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; saveSettings(); paintLeds(); readout(); }
+function setRec(on) { if (on !== rec.armed) slog?.act('record', rec.armed, on); if (!on) gestEnd(true); rec.armed = on; $('btn-rec').classList.toggle('armed', on); $('btn-rec').textContent = on ? '● recording' : '● arm record'; recLine(); saveSettings(); paintLeds(); readout(); }
+/** RD-5: armed and playing, a 2 px red line along the console's top edge (the one red on the face but the recorders). */
+const recLine = () => $('topbar').classList.toggle('rec-live', rec.armed && playing);
 function buildRecUI() {
   $('btn-rec').onclick = () => setRec(!rec.armed);
   sliders.accentVel = makeGauge({ label: 'accent above', min: 1, max: 127, value: rec.accentVel, say: (v) => `velocity ${v}`, title: INFO['accent above'], onChange: (v) => { rec.accentVel = v; saveSettings(); } }); $('rec-gauges').appendChild(sliders.accentVel.el);   // no colour: grey like every non-lane knob (RD-2: a rose arc read as recording)
@@ -1136,7 +1197,7 @@ function setFill(on) { if (fillHold === on) return; fillHold = on; fill = fillHo
 function armLatch() { latch.arm(); fill = fillHold || latch.on; renderFill(); }
 function renderFill() {
   $('btn-fill').classList.toggle('armed', fill); const b = $('btn-latch'); b.classList.toggle('armed', latch.state !== 'off');
-  b.textContent = latch.state === 'armed' ? 'fill: next bar…' : latch.on ? 'fill: this bar' : 'fill next bar'; b.setAttribute('aria-pressed', latch.state !== 'off');
+  b.textContent = latch.state === 'armed' ? 'fill next…' : latch.on ? 'fill this bar' : 'fill next'; b.setAttribute('aria-pressed', latch.state !== 'off');
   paintLeds(); readout();
 }
 /** P2: mute or unmute lane li without selecting it: at once, or on the next bar line while playing with "mute on next
@@ -1693,7 +1754,7 @@ function buildExportUI() {
 
 // ---- undo / redo / fill buttons ----
 function buildEditUI() {
-  $('btn-undo').onclick = undo; $('btn-redo').onclick = redo;
+  $('btn-undo').onclick = undo; $('btn-redo').onclick = redo; $('btn-all').onclick = () => openFind();   // RD-5 "all ⌘K": the sheet with find
   const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
   $('btn-latch').onclick = armLatch; $('btn-latch').title = INFO['fill latch'];
   // P6: the filter knob (double-click = off) and the hold-to-throw button, beside fill in the transport strip
@@ -2060,7 +2121,7 @@ move.addEventListener('encoder', (e) => {
     if (pk.src === 'snd') { m.lane.setSound(pk.k, m.lane.sound[pk.k] + delta * 0.02); applySound(m.selected); if (awake && !playing) hitSound(m.lane, T.now(), false); sync(); return; }
     nudge(pk.k, delta * 2); return;
   }
-  const keys = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune']; if (index === 7) handTempo(tempo + delta); else nudge(keys[index], delta * (index >= 4 ? 2 : 1));
+  if (index === 7) handTempo(tempo + delta); else nudge(RHYTHM_KEYS[index], delta * (index >= 4 ? 2 : 1));
 });
 // A6: a touched knob (encoder touch, notes 0–7) is a gesture from touch to release, on the parameter it is then (Shift:
 // the sound); a held step makes it a lock edit instead. The volume knob's touch (8) is not one.
@@ -2089,7 +2150,7 @@ move.addEventListener('wheelPush', (e) => {
 });
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
 move.addEventListener('button', (e) => {
-  const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
+  const { name, pressed } = e.detail; if (name === 'shift') { shift = pressed; $('shift-ind').textContent = shift ? 'shift held: knobs sculpt the sound' : ''; renderPage(); paintLeds(); return; }   // the track buttons show lanes 5–6 while Shift is held
   if (name === 'loop') { loopHeld = pressed; if (!pressed) { if (chainPick.length === 1) recallSlot(chainPick[0]); else if (chainPick.length > 1) chainSlots(chainPick); chainPick = []; } paintLeds(); return; }
   if (name === 'duplicate') { dupHeld = pressed; paintLeds(); return; }
   if (name === 'back') { if (pressed) pages.backDown(); else pages.backUp(); paintLeds(); return; }   // L5 pages
@@ -2345,11 +2406,12 @@ if (DEBUG) setInterval(() => {
   $('stress-val').parentElement.title = `stress ${Math.round(lvl * 100)}% · frame ${frameMs.toFixed(0)} ms · audio headroom ${stress.headMs.toFixed(0)} ms · visuals ${Math.round(quality * 100)}%`;
 }, 300);
 // C2: one status line (tempo, play state, slot, rec, evolve, kit + whatever is live right now); the per-lane rows and
-// the sound row repeat the knobs, so they sit in the collapsed "nerd stats" drawer with the rest of the details
+// the sound row repeat the knobs, so they sit in the collapsed "nerd stats" drawer with the rest of the details. RD-5:
+// the line left the face (statusLine keeps it for the console log)
 function readout() {
   poke();
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
-  $('readout').textContent = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? `rec ●${rec.knobs !== 'off' ? ` knobs ${rec.knobs}` : ''}` : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
+  statusLine = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? `rec ●${rec.knobs !== 'off' ? ` knobs ${rec.knobs}` : ''}` : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
     ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(pfx.filter ? [filterSay(Math.round(pfx.filter * 100))] : []), ...(pfx.throw ? ['THROW'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
     const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
@@ -2358,15 +2420,9 @@ function readout() {
       `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
     $('nerd-stats').textContent = lines.join('\n');
   }
-  renderLegend(); announceChanges();
+  renderLanes(); announceChanges();
 }
 $('nerd').addEventListener('toggle', () => { if ($('nerd').open) readout(); });
-// C5: the lane names live in a fixed legend (colour dot, voice, length × speed), not on the rings
-function renderLegend() {
-  const ul = $('legend'); if (!ul.children.length) LANE_HEX.forEach((hex) => { const li = document.createElement('li'); li.style.setProperty('--lane', hex); ul.appendChild(li); });
-  [...ul.children].forEach((li, i) => { li.hidden = i >= m.lanes.length; });   // L2: 4 or 6
-  m.lanes.forEach((l, i) => { const li = ul.children[i], t = `${voiceLabel(l)} ${l.length} ×${RATIO_LABEL[l.ratioIndex]}${l.muted ? ' · muted' : ''}`; if (li.textContent !== t) li.textContent = t; li.classList.toggle('sel', i === m.selected); li.classList.toggle('muted', !!l.muted); });
-}
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
 // you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
 // What the machine does on its own (evolve, slots switching on the clock) is not announced (hush).
@@ -2414,7 +2470,8 @@ function setSheet(tab, open, user = false) {
   $('sheet-body').hidden = !sheet.open; $('sheet-x').hidden = !sheet.open; $('find-box').hidden = !sheet.open; if (!sheet.open) { findList(false); $('find').value = ''; }
   // focus never stays on what just hid (the pane left behind, the closed body, the × itself): the selected tab takes it.
   // No box = hidden (getClientRects: checkVisibility is missing on older iOS Safari)
-  if (a && a !== document.body && $('sheet').contains(a) && !a.getClientRects().length) $('tab-' + sheet.tab).focus({ preventScroll: true });
+  // (RD-5: a closed sheet is not drawn on wide windows: its door, "all ⌘K", takes it)
+  if (a && a !== document.body && $('sheet').contains(a) && !a.getClientRects().length) { const t = $('tab-' + sheet.tab); (t.getClientRects().length ? t : $('btn-all')).focus({ preventScroll: true }); }
   if (sheet.open && sheet.tab === 'lane' && was !== 'lane') renderAuto();   // the automation strip measures its canvas: drawn again once it has a size
   // a tab that is one drawer (perform, export) shows it open: the tab was the click, a closed header would ask for another
   // (and a reload that brings the tab back brings it open too)
@@ -2443,7 +2500,7 @@ setSheet(sheet.tab, false);
 // init…) or shows the control: its tab, its drawers, the focus on it, the keys its own. Empty = the recents. The field
 // owns its keys (B8); ↑↓ pick, Esc empties it, an empty field's Esc is the Esc order's ----
 const FIND_SEL = 'button, select, input, textarea, summary, a[href], [role=slider], [role=tab], [role=radio], [role=switch], [role=checkbox]';
-const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv';   // the field itself, the modal cards, the canvas's own popup
+const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv, #btn-all';   // the field itself (and "all ⌘K", its door), the modal cards, the canvas's own popup
 let findRecents = (() => { try { return recentsFrom(localStorage.getItem(FIND_KEY)); } catch { return []; } })();
 let findIndex = [], findHits = [], findAt = 0;
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -2570,7 +2627,7 @@ function setFocusMode(on, esc = false) {
   if (on) {   // before the panels go: hidden, the page is one window tall and scrollY already 0
     const a = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY, cols: columns().map(c => c.scrollTop) };
-    if (a?.closest('header, .hud, #col-left')) a.blur();   // focus must not stay in a hidden panel
+    if (a?.closest('#topbar, .hud, #col-left')) a.blur();   // focus must not stay in a hidden panel
   }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
   poke();   // the rings stay where the stage cell puts them (A7: F on or off); a phone's canvas resize redraws itself

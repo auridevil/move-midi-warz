@@ -8,7 +8,7 @@ import { SHEET_TABS, sheetFrom, tabMove } from '../src/poly/sheet.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const TABS = ['lane', 'pattern', 'groove', 'perform', 'export', 'setup'];
-const sheet = html.slice(html.indexOf('<section id="sheet"'), html.indexOf('</section>'));
+const sheet = html.slice(html.indexOf('<section id="sheet"'), html.indexOf('</section>', html.indexOf('<section id="sheet"')));   // the sheet's own close (RD-5's console is a section too)
 const panes = Object.fromEntries(TABS.map((t, i) => { const a = sheet.indexOf(`id="pane-${t}"`), b = i < TABS.length - 1 ? sheet.indexOf(`id="pane-${TABS[i + 1]}"`) : sheet.length; return [t, sheet.slice(a, b)]; }));
 // the opening tags called `name` in a piece of the page: their attributes (a bare one is true) and where the tag ends
 const tags = (s, name) => [...s.matchAll(new RegExp(`<${name}\\b((?:[^>"]|"[^"]*")*)>`, 'g'))]
@@ -33,9 +33,13 @@ test('RD-3 the 13 drawers all live in the sheet, in the tab Greta\'s table gives
   for (const t of TABS) assert.deepEqual(drawers(panes[t]), where[t], `tab ${t}`);
 });
 
-test('RD-3 the old right column\'s controls: lane chips in lane; init … clear and the grooves in pattern; what is on stays above the sheet', () => {
-  assert.match(panes.lane, /id="lane-tabs"/);
-  for (const id of ['btn-init', 'btn-save', 'btn-load', 'btn-random', 'btn-wild', 'btn-clear', 'grooves']) assert.match(panes.pattern, new RegExp(`id="${id}"`), id);
+test('RD-3 the old right column\'s controls: init … clear and the grooves in pattern; what is on stays above the sheet (RD-5: the lane chips are the lane list, randomize an action word)', () => {
+  assert.doesNotMatch(html, /id="lane-tabs"/);
+  const left = html.slice(html.indexOf('id="col-left"'), html.indexOf('<div class="hud">')), face = html.slice(html.indexOf('id="topbar"'), html.indexOf('</section>', html.indexOf('id="topbar"')));
+  assert.match(left, /id="legend"/, 'the lane list heads the left column');
+  for (const id of ['btn-play', 'btn-fill', 'btn-latch', 'fx-gauge', 'btn-throw', 'voice-select', 'knobs', 'stepsui', 'btn-undo', 'btn-random', 'btn-jam', 'btn-share', 'btn-all']) assert.match(face, new RegExp(`id="${id}"`), `${id} on the console`);
+  for (const id of ['btn-init', 'btn-save', 'btn-load', 'btn-redo', 'btn-tap', 'tempo-gauge', 'btn-wild', 'btn-clear', 'grooves']) assert.match(panes.pattern, new RegExp(`id="${id}"`), id);
+  assert.match(panes.setup, /id="live-mode"/); assert.match(panes.setup, /class="wordmark"/);
   for (const id of ['view-mode', 'stress-meter']) assert.match(panes.setup, new RegExp(`id="${id}"`), id);
   const hud = html.slice(html.indexOf('<div class="hud">'), html.indexOf('<section id="sheet"'));
   for (const id of ['welcome', 'quest', 'jam-panel']) assert.match(hud, new RegExp(`id="${id}"`), `${id} above the sheet`);

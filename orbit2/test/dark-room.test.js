@@ -47,9 +47,10 @@ test('RD-2 red means recording: of the buttons in the record shape (.rec-btn), o
   const plain = css.match(/^([^{\n]*)\{ color: var\(--l\); border-color: var\(--l\); box-shadow: inset 0 0 0 1px var\(--l\); \}/m);
   assert.ok(plain, 'the plain "on" for a record-shaped button');
   for (const id of shaped.filter(id => !RECORDERS.includes(id))) assert.ok(plain[1].includes(`#${id}.armed`), `${id} armed is the plain on, not red`);
-  // the record red's only rules: an armed recorder, jam while it records (button, panel, progress); nothing at rest
+  // the record red's only rules: the console's top line while armed and playing (RD-5), an armed recorder, jam while it
+  // records (button, panel, progress); nothing at rest
   const red = css.split('\n').filter(l => /var\(--rec\)/.test(l) && !/^\s*--v:/.test(l)).map(l => l.trim().split(/\s*\{/)[0]);
-  assert.deepEqual(red, ['.rec-btn.armed', '.jam-btn.on', '.jam-panel', '.jam-bar i']);
+  assert.deepEqual(red, ['.console.rec-live', '.rec-btn.armed', '.jam-btn.on', '.jam-panel', '.jam-bar i']);
 });
 
 test('RD-2 lock knobs: the lane\'s ink, dotted where the step follows the lane (no translucent colour under the track)', () => {

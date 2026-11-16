@@ -25,9 +25,9 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   const val = document.createElement('b'); val.className = 'g-val'; const lab = document.createElement('span'); lab.className = 'g-label'; lab.textContent = label;
   val.setAttribute('aria-hidden', 'true'); lab.setAttribute('aria-hidden', 'true');
   const mark = document.createElement('i'); mark.className = 'g-mark'; mark.textContent = 'A'; mark.hidden = true; mark.setAttribute('aria-hidden', 'true'); el.append(svg, val, lab, mark);
-  let v = value;
+  let v = value, pie = false;   // RD-5: the sound page draws its knobs as filled pies (setShape)
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
-  const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? arc(24, 24, 18, START, a) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
+  const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? (pie ? `M 24 24 L ${24 + 18 * Math.cos(START)} ${24 + 18 * Math.sin(START)} ${arc(24, 24, 18, START, a).replace(/^M [^A]+/, '')} Z` : arc(24, 24, 18, START, a)) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
   const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
   // drag: 150 px of travel = full range; Shift = 5× finer. onStart first: it may set where the drag starts (A3)
   let drag = null;
@@ -45,5 +45,22 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   el.addEventListener('dblclick', () => set(value, true));
   render();
   return { el, set, get value() { return v; }, get held() { return !!drag; }, setLabel: (t) => { lab.textContent = t; name = short(t); aria(); }, setColor: (c) => { fill.setAttribute('stroke', c); dot.setAttribute('fill', c); el.style.setProperty('--gc', c); },
-    setMark: (on) => { if (marked === !!on) return; marked = !!on; mark.hidden = !marked; aria(); } };
+    setMark: (on) => { if (marked === !!on) return; marked = !!on; mark.hidden = !marked; aria(); },
+    setShape: (s) => { if (pie === (s === 'pie')) return; pie = s === 'pie'; el.classList.toggle('pie', pie); render(); } };
+}
+/**
+ * RD-5 page binding: the console's knob row shows one page's gauges at a time. bindRow(slots, gauges, shape) moves each
+ * gauge's own element into its slot (the same gauge, so its handlers, its "A" mark and what a held hand shows come with
+ * it) and leaves a marker where it lived; a gauge the row lets go goes back to that place. Nothing is rebuilt, so a knob
+ * the pointer holds keeps its capture when it is not the one leaving.
+ */
+const homes = new WeakMap();   // gauge element → { h: the comment marking its home, g: the gauge }
+export function bindRow(slots, gauges, shape = 'arc') {
+  const want = new Set(gauges.map(g => g?.el));
+  for (const s of slots) { const el = s.firstElementChild, o = el && homes.get(el); if (!o || want.has(el)) continue; homes.delete(el); o.g.setShape('arc'); if (o.h.parentNode) o.h.replaceWith(el); else el.remove(); }
+  slots.forEach((s, i) => {
+    const g = gauges[i]; if (!g) return;
+    if (g.el.parentNode !== s) { if (!homes.has(g.el)) { const h = document.createComment('gauge home'); g.el.before(h); homes.set(g.el, { h, g }); } s.replaceChildren(g.el); }
+    g.setShape(shape);
+  });
 }

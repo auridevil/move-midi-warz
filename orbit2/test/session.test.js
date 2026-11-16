@@ -73,10 +73,11 @@ test('RD-1 accident tagger: intended, a double press, a slip, a side effect, out
 });
 
 test('RD-1 baseline-set fixes: the mouse finds the knob it means, a drop says which way, chained slips, turns, emptied lanes', () => {
-  // the mouse drags the gauge the expectation names: #sliders holds app.js PARAMS in order (euclid = euclidK, offset = offsetMs)
-  const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), block = src.slice(src.indexOf('const PARAMS = ['), src.indexOf('];', src.indexOf('const PARAMS = [')));
-  const order = [...block.matchAll(/\{ k: '(\w+)'/g)].map(x => ({ euclid: 'euclidK', offset: 'offsetMs' })[x[1]] || x[1]);
-  for (const [t, n] of Object.entries(MOUSE_GAUGE)) assert.equal(order[n - 1], t, `#sliders .gauge:nth-child(${n}) is ${t}`);
+  // the mouse drags the gauge the expectation names: RD-5's console row holds app.js RHYTHM_KEYS in order, then the tempo
+  // (euclid = euclidK)
+  const src = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8'), keys = /const RHYTHM_KEYS = \[([^\]]*)\]/.exec(src)[1];
+  const order = [...[...keys.matchAll(/'(\w+)'/g)].map(x => ({ euclid: 'euclidK' })[x[1]] || x[1]), 'tempo'];
+  for (const [t, n] of Object.entries(MOUSE_GAUGE)) assert.equal(order[n - 1], t, `#knobs slot ${n} is ${t}`);
   const mouse = performer({ seed: 5, minutes: 30, persona: 'kai', mouse: true }), drags = mouse.filter(x => x.kind === 'drag' && x.intent === 'knobs');
   assert.ok(drags.length > 5);
   for (const d of drags) { const n = +/nth-child\((\d+)\)/.exec(d.sel)[1]; assert.equal(`.${order[n - 1]}`, d.expect[0].slice(d.expect[0].indexOf('.'))); }

@@ -124,7 +124,7 @@ const PAGE = String.raw`(() => {
   // hueKind; a stray hue anywhere, or record red off a recorder that records, is reported. The canvas is light, not a
   // control: left out (RD-8)
   const hueKind = ${hueKind};
-  const RECORDING = '#btn-rec.armed, #btn-mic.armed, .jam-btn.on, .jam-panel';
+  const RECORDING = '#btn-rec.armed, #btn-mic.armed, .jam-btn.on, .jam-panel, .console.rec-live';   // RD-5: the console's red top line, armed and playing
   function hues() {
     const root = getComputedStyle(document.documentElement), hex = (h) => [1, 3, 5].map(i => parseInt(h.trim().slice(i, i + 2), 16));
     const lanes = [...document.querySelectorAll('#legend li')].map(li => hex(li.style.getPropertyValue('--lane'))), rec = hex(root.getPropertyValue('--rec')), v = hex(root.getPropertyValue('--v'));

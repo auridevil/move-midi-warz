@@ -20,8 +20,10 @@ export const bytes = {
 export const trackOf = (li) => `track${4 - li}`;
 /** The Move's knob row without Shift (app.js 'encoder'), as setlog targets of the selected lane. */
 export const KNOB_TARGETS = ['length', 'euclidK', 'rotation', 'ratio', 'swing', 'prob', 'tune', null];   // knob 8 = tempo
-/** The lane gauges in #sliders (app.js PARAMS, grid order: swing last), as the 1-based nth-child of each setlog target. */
-export const MOUSE_GAUGE = { length: 1, euclidK: 2, rotation: 3, ratio: 4, prob: 5, tune: 6, offsetMs: 7, velHuman: 8, swing: 9 };
+/** RD-5: the mouse drags the console's knob row (rhythm page, the Move's order: app.js RHYTHM_KEYS, knob 8 = tempo), as
+ *  the 1-based slot of each setlog target. (RD-1 dragged #sliders in PARAMS order.) */
+export const MOUSE_GAUGE = { length: 1, euclidK: 2, rotation: 3, ratio: 4, swing: 5, prob: 6, tune: 7, tempo: 8 };
+export const knobSel = (n) => `#knobs > :nth-child(${n}) .gauge`;
 
 // ---- what counts as what (DECISION A3) ----
 const DESTRUCTIVE = new Set(['init', 'randomize', 'clear', 'load', 'slot', 'chain']);   // a slot recall or a chain loads a slot: a load
@@ -69,7 +71,7 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
   const out = [], end = minutes * 60000; let t = 1000, sel = 0, playing = false, evolving = false, id = 0, g = 0;
   const muted = new Set(), saved = new Set();
   const add = (o) => { out.push({ id: id++, at: Math.round(t), g, ...o }); t += (o.hold || 0) + 400 + rng() * 600; };
-  const select = (li, intent) => { if (li === sel) return; sel = li; add(mouse ? { intent, kind: 'click', sel: `#lane-tabs button:nth-child(${li + 1})`, expect: ['select'] } : { intent, kind: 'move.select', lane: li, expect: ['select'] }); };
+  const select = (li, intent) => { if (li === sel) return; sel = li; add(mouse ? { intent, kind: 'click', sel: `#legend li:nth-child(${li + 1}) .lane-tab`, expect: ['select'] } : { intent, kind: 'move.select', lane: li, expect: ['select'] }); };
   const play = (intent) => { playing = !playing; add(mouse ? { intent, kind: pick(rng, ['click', 'key']), sel: '#btn-play', key: ' ', expect: ['transport'] } : { intent, kind: 'move.play', expect: ['transport'] }); };
   const muteAct = (li, on, intent) => mouse ? { intent, kind: 'click', sel: '#btn-mute', expect: [`lane${li + 1}.mute=${on}`] } : { intent, kind: 'move.mute', lane: li, expect: [`lane${li + 1}.mute=${on}`] };
   play('start');
@@ -94,7 +96,7 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
       // what the knob does to the steps is the turn too: a shorter lane keeps only the hits that fit (Lane.resize clamps
       // euclid hits), and the hits knob re-fills the lane from E(k), so on a hand-drawn lane held at 0 it logs the steps
       const expect = sound ? [target] : k === 0 ? [target, `lane${sel + 1}.euclidK`] : k === 1 ? [target, `lane${sel + 1}.hits*`] : [target];
-      add(mouse ? { intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${MOUSE_GAUGE[KNOB_TARGETS[k]]})`, dy: -turns * 6, expect } : { intent, kind: 'move.knob', knob: k, shift: sound, turns, expect });
+      add(mouse ? { intent, kind: 'drag', sel: knobSel(MOUSE_GAUGE[KNOB_TARGETS[k]]), dy: -turns * 6, expect } : { intent, kind: 'move.knob', knob: k, shift: sound, turns, expect });
     } else if (intent === 'evolve') {
       if (mouse) { add({ intent, kind: 'click', sel: '#btn-evolve', expect: ['evolve'] }); } else add({ intent, kind: 'move.button', button: 'minus', expect: ['evolve'] });
       evolving = !evolving;
@@ -104,7 +106,7 @@ export function performer({ seed = 1, minutes = 40, persona = 'noor', mouse = fa
       else add({ intent, kind: 'move.slotRecall', slot: s, expect: ['slot'] });
     } else if (intent === 'tempo') {
       const d = rng() < 0.5 ? -2 : 2;
-      add(mouse ? { intent, kind: 'drag', sel: '.tstrip-tempo .gauge', dy: -d * 3, expect: ['tempo'] } : { intent, kind: 'move.knob', knob: 7, shift: false, turns: d, expect: ['tempo'] });
+      add(mouse ? { intent, kind: 'drag', sel: knobSel(MOUSE_GAUGE.tempo), dy: -d * 3, expect: ['tempo'] } : { intent, kind: 'move.knob', knob: 7, shift: false, turns: d, expect: ['tempo'] });
     }
     t += between(rng, p.rest) * 1000;   // listening
   }
@@ -132,7 +134,7 @@ export function injectSlips(script, { rate = 0.08, seed = 1, kinds = SLIPS } = {
     else {   // stray-knob: the hand brushes another knob on its way
       out.push(a);
       const mouse = /^(click|key|hold|drag)$/.test(a.kind);
-      out.push(mouse ? { id: id++, at: a.at + 300, g: a.g, intent: a.intent, kind: 'drag', sel: `#sliders .gauge:nth-child(${1 + Math.floor(rng() * 5)})`, dy: (rng() < 0.5 ? -1 : 1) * (6 + Math.floor(rng() * 12)), expect: [], slip: { kind: k, of: a.id } }
+      out.push(mouse ? { id: id++, at: a.at + 300, g: a.g, intent: a.intent, kind: 'drag', sel: knobSel(1 + Math.floor(rng() * 5)), dy: (rng() < 0.5 ? -1 : 1) * (6 + Math.floor(rng() * 12)), expect: [], slip: { kind: k, of: a.id } }
         : { id: id++, at: a.at + 300, g: a.g, intent: a.intent, kind: 'move.knob', knob: Math.floor(rng() * 7), shift: rng() < 0.4, turns: (rng() < 0.5 ? -1 : 1) * (1 + Math.floor(rng() * 3)), expect: [], slip: { kind: k, of: a.id } });
     }
   }

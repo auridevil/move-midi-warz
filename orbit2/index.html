@@ -21,39 +21,50 @@
   <canvas id="cv"></canvas>
   <!-- RD-3: the stage cell of the grid (styles.css); the rings are measured from it alone (app.js layoutStage) -->
   <div id="stage" aria-hidden="true"></div>
-  <header class="bar chaos-bar" id="topbar">
-    <h1><a href="../index.html" class="home">MIDI Warz</a> <span class="sub" title="a testing copy of orbits">orbits 2 · lab</span></h1>
-    <!-- C1 transport strip: what you reach for while playing, in one place (on a phone play floats in the thumb zone) -->
-    <div id="transport" class="tstrip" role="group" aria-label="transport">
-      <button id="btn-play" class="primary big-btn">▶ play</button>
-      <div id="tempo-gauge" class="tstrip-tempo"></div>
-      <button id="btn-tap" class="small" title="Tap tempo: tap on the beat">tap</button>
-      <button id="btn-undo" title="Undo (Cmd/Ctrl+Z)">undo</button>
-      <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z)">redo</button>
-      <button id="btn-fill" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill (hold)</button>
-      <button id="btn-latch" class="small" type="button" aria-pressed="false">fill next bar</button>
+  <!-- RD-5 the console: the Move's face along the bottom (DECISION "The screen at 1512×860"). Transport on the left, the
+       selected lane in the middle (its header, the 8 knobs of the page, the 16 cells), the action words on the right.
+       It keeps the old strip's id and class (focus mode, the phone's floating play); on narrow windows it stacks under
+       the rings. The status line left the face: the console log (` or Sheet → setup) shows it -->
+  <section class="bar chaos-bar console" id="topbar" aria-label="console">
+    <div id="transport" class="tgroup" role="group" aria-label="transport">
+      <button id="btn-play" class="play-ring" type="button" aria-label="play">▷</button>
+      <b id="barbeat" class="barbeat" aria-hidden="true" title="bar · beat">01.1</b>
+      <button id="btn-fill" class="aword" type="button" title="Hold for fills: steps set to 'fill' play, 'not fill' rest (keyboard: hold 0)">fill hold</button>
+      <button id="btn-latch" class="aword" type="button" aria-pressed="false">fill next</button>
       <div id="fx-gauge" class="tstrip-fx"></div>
-      <button id="btn-throw" class="small" type="button" aria-pressed="false" title="Hold: delay throw on the whole mix (send and feedback up while held, back on release; Move: hold +)">throw (hold)</button>
-      <button id="btn-jam" class="jam-btn" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
+      <button id="btn-throw" class="aword" type="button" aria-pressed="false" title="Hold: delay throw on the whole mix (send and feedback up while held, back on release; Move: hold +)">throw hold</button>
+    </div>
+    <div id="lane-face" class="lane-face" role="group" aria-label="selected lane">
+      <div class="lane-head">
+        <span id="lh-lane" class="lh-lane"></span>
+        <select id="voice-select" aria-label="voice"></select>
+        <span id="lh-steps" class="lh-steps"></span>
+        <span id="move-chip" class="move-chip" title="What the Move's knobs edit now: white when the Move owns the row, grey when it edits something not drawn"></span>
+        <div id="page-tabs" class="page-tabs" role="group" aria-label="knob page">
+          <button type="button" id="pg-rhythm" aria-pressed="true" title="The lane's rhythm: length, hits, shift, speed, swing, chance, tune and the tempo (the Move's knobs)">rhythm</button>
+          <button type="button" id="pg-sound" aria-pressed="false" title="The lane's sound (the Move's Shift + knobs; hold Shift here too)">sound ⇧</button>
+          <button type="button" id="pg-step" aria-pressed="false" title="A step's locks: long-press, right-click or Alt+click a cell first">step</button>
+        </div>
+      </div>
+      <div id="knobs" class="knobs" role="group" aria-label="knobs"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div id="stepsui" class="stepsui cells" role="group" aria-label="steps"></div>
+    </div>
+    <div class="acts" role="group" aria-label="actions">
+      <button id="btn-undo" class="aword" type="button" title="Undo (Cmd/Ctrl+Z; Shift+Cmd/Ctrl+Z = redo)">undo</button>
+      <button id="btn-random" class="aword" type="button" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
+      <button id="btn-jam" class="aword jam-btn" type="button" title="Jam: record what you play as one track per lane, up to 256 beats">● jam</button>
       <!-- I2 / I3: share in one tap (the link); … = 4 bars of audio and the other ways -->
       <span class="share-wrap">
-        <button id="btn-share" type="button" title="Share this beat: copies a link anyone can open (on a phone: the share sheet)">share</button><button id="btn-share-more" class="small share-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu" aria-label="more ways to share" title="More ways to share">…</button>
+        <button id="btn-share" class="aword" type="button" title="Share this beat: copies a link anyone can open (on a phone: the share sheet)">share</button><button id="btn-share-more" class="aword share-more" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="share-menu" aria-label="more ways to share" title="More ways to share">…</button>
         <div id="share-menu" class="share-menu" role="group" aria-label="share" hidden>
           <button id="share-link" type="button" title="A link with the whole pattern in it (not samples)">link</button>
           <button id="share-audio" type="button" title="Render 4 bars and share the WAV (or download it)">4 bars of audio</button>
           <button id="share-postcard" type="button" title="Record 4 bars of the rings and their sound as a video (WebM), with the remix link">postcard (video)</button>
         </div>
       </span>
-      <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
+      <button id="btn-all" class="aword" type="button" title="Every control: the sheet with find (Cmd/Ctrl+K or /)">all ⌘K</button>
     </div>
-    <div class="status" id="move-status" hidden>
-      <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
-      <button id="btn-connect" class="primary" type="button">Connect Move</button>
-      <span id="live-mode"></span>
-    </div>
-    <!-- C2 one status line; the per-lane and sound rows live in "nerd stats" (Sheet → setup) -->
-    <p id="readout" class="readout"></p>
-  </header>
+  </section>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <!-- I2: a shared beat opens as a gift (filled by app.js showGift) -->
@@ -96,11 +107,21 @@
   </dialog>
   <!-- RD-3: the left column of the grid (on narrow windows its children join the page's own stack) -->
   <div class="col-left" id="col-left">
-  <!-- C5: which ring is which (filled by app.js); heads the left column on wide windows, sits under the canvas on narrow ones -->
-  <ul id="legend" class="ring-legend" aria-label="lanes, inner ring first"></ul>
+  <!-- RD-5 the lane list (filled by app.js): a row per lane, inner ring first (dot, voice, length · ×speed: a tap selects
+       it) and its M lamp (mute; Shift+click or a long press = solo). Heads the left column on wide windows, sits under
+       the canvas on narrow ones -->
+  <ul id="legend" class="ring-legend lane-list" aria-label="lanes, inner ring first"></ul>
   </div>
-  <!-- RD-3: the right column: what is on (welcome, quest, jam take: RD-7's pills go here), then the one sheet -->
+  <!-- RD-3: the right column: the Move pill and help, what is on (welcome, quest, jam take: RD-7's pills go here), then
+       the one sheet -->
   <div class="hud">
+    <div class="hud-top">
+      <div class="status" id="move-status" hidden>
+        <span id="midi-state" class="pill pill-off" role="status">Move: not connected</span>
+        <button id="btn-connect" class="small" type="button">Connect Move</button>
+      </div>
+      <button id="btn-help" class="help-btn" type="button" aria-label="help" aria-haspopup="dialog" title="Keys and mouse tricks (?)">?</button>
+    </div>
     <div id="welcome" class="welcome" role="region" aria-label="welcome back" hidden><span>welcome back · your beat is here</span><button id="wb-keep" class="primary small" title="Play the beat you left">keep jamming</button><button id="wb-fresh" class="small" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="small wb-x" aria-label="dismiss" title="dismiss">×</button></div>
     <!-- I6: the quest you are on (filled by app.js renderQuest) -->
     <div id="quest" class="quest" role="region" aria-label="quest" hidden><span class="quest-k">quest <b id="quest-n"></b></span><b id="quest-title" class="quest-title"></b><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-skip" class="small" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button><button id="quest-x" class="small" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span></div>
@@ -130,11 +151,11 @@
       </div>
       <div id="sheet-body" class="sheet-body">
         <div role="tabpanel" id="pane-lane" class="pane" data-sheet="lane" aria-labelledby="tab-lane">
-    <div id="lane-tabs" class="lane-tabs" role="group" aria-label="lane"></div>
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
+      <!-- RD-5: the knobs the console's page shows live there; the rest of the lane's (push / pull, vel humanize, the
+           swing template, and the other page's) stay here -->
       <div id="sliders" class="gauges"></div>
-      <div id="stepsui" class="stepsui" role="group" aria-label="steps"></div>
       <!-- A4: the selected lane's automation: one parameter (picker), its curve or its locks, the playhead -->
       <div id="auto-strip" class="auto-strip" hidden>
         <canvas id="auto-cv" class="auto-cv" aria-hidden="true"></canvas>
@@ -169,7 +190,6 @@
       </div>
       <h3 class="subh">sound</h3>
       <div class="sliders">
-        <label>voice <select id="voice-select"></select></label>
         <label>kit (all lanes) <select id="kit-select"></select></label>
       </div>
       <div class="row-ctl">
@@ -204,7 +224,10 @@
       <button id="btn-init" title="Empty pattern: the same number of lanes, length 4, ×1, one kick on step 1 (undoable)">init</button>
       <button id="btn-save" title="Save this setup under a name (library)">save</button>
       <button id="btn-load" title="Open the library of saved setups">load</button>
-      <button id="btn-random" title="Roll a groove from a family (tresillo, clave, 4 vs 3, 5 over 4, four on the floor, boom bap). Shift+click, long-press or right-click: wild (undoable)">randomize</button>
+      <button id="btn-redo" title="Redo (Shift+Cmd/Ctrl+Z; Move: Shift + Undo)">redo</button>
+      <button id="btn-tap" title="Tap tempo: tap on the beat (Move: Shift + Record)">tap tempo</button>
+      <!-- the tempo knob's home while the console shows the sound page (on the rhythm page it is knob 8, as on the Move) -->
+      <span id="tempo-gauge" class="tstrip-tempo"></span>
       <button id="btn-wild" title="Wild randomize: any length, fill and rotation on every lane (undoable)">wild</button>
       <button id="btn-clear">clear lane</button>
     </div>
@@ -315,6 +338,8 @@
     </details>
         </div>
         <div role="tabpanel" id="pane-setup" class="pane" data-sheet="setup" aria-labelledby="tab-setup" hidden>
+    <!-- the wordmark is not on the face (DECISION): it heads the setup tab, the home link with it -->
+    <h1 class="wordmark"><a href="../index.html" class="home">MIDI Warz</a> <span class="sub" title="a testing copy of orbits">orbits 2 · lab</span></h1>
     <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
     <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
     <details class="drawer" id="settings-drawer">
@@ -325,6 +350,7 @@
         <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
         <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
       </div>
+      <div class="row-ctl"><span id="live-mode"></span></div>
     </details>
     <details class="drawer adv" id="midi-drawer">
       <summary>MIDI</summary>

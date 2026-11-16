@@ -69,7 +69,7 @@ try {
   // every action find runs is findable now (sheet and share menu closed), the share menu's by their own words
   out.actions = await p.eval(`(async () => { const { ACTIONS, search } = await import('./src/poly/find.js'); const idx = __poly.findIndex(), keys = new Set(idx.filter(e => e.action).map(e => e.key)); return { missing: Object.keys(ACTIONS).filter(k => !keys.has(k)), postcard: search(idx, 'postcard')[0]?.key, audio: search(idx, 'share audio')[0]?.key }; })()`);
   if (out.actions.missing.length || out.actions.postcard !== 'share-postcard' || out.actions.audio !== 'share-audio') fail('COVER', `actions: ${JSON.stringify(out.actions)}`);
-  const playing = () => p.eval(`document.getElementById('btn-play').textContent.includes('stop')`);
+  const playing = () => p.eval(`document.getElementById('btn-play').getAttribute('aria-label') === 'stop'`);   // RD-5: the ring says ■ / ▷, its name says stop / play
   const stems = ['/', 's', 't', 'Enter'];
   await press(p, '/', 'Slash'); await p.sleep(150);
   out.rows = await p.eval(`[...document.querySelectorAll('#find-list li')].map(l => Math.round(l.getBoundingClientRect().height * 10) / 10)`);
