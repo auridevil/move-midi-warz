@@ -27,7 +27,7 @@ import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
 import { attachSetlog, patternWords } from './setlog.js';
-import { pillsOn, pillLayout, pillOff } from './pills.js';
+import { PILL_ORDER, pillsOn, pillLayout, pillOff, focusAfter } from './pills.js';
 
 const $ = (id) => document.getElementById(id);
 const T = window.Tone;
@@ -2019,14 +2019,14 @@ async function renderRing(log, ramps, endFrame, endTime) {
 // RD-7: the take is a pill (renderPills): its words change with its state only, never with the beats (they count on the
 // jam word and the canvas); the take's details are the download's title
 function renderJam() {
-  const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam');
+  const st = jam.state, b = Math.floor(jam.beats), btn = $('btn-jam'), had = document.activeElement;   // (discard: the focus is handed on)
   btn.classList.toggle('on', st === 'rec' || st === 'armed'); btn.textContent = st === 'rec' ? `■ jam ${b}/${JAM_BEATS}` : st === 'armed' ? '● jam: next bar…' : st === 'finishing' ? '◌ jam: closing…' : '● jam';
   if (st === 'done') {
     const secs = jam.chunks ? jam.chunks[0][0].reduce((a, c) => a + c.length, 0) / jam.sr : 0;
     const t = `the take: ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lane tracks + raw mix (.zip)${jam.ringJob ? ' · rendering the ring-out…' : jam.ring ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}`;
     if ($('jam-dl').title !== t) $('jam-dl').title = t;
   }
-  setHidden($('jam-dl'), st !== 'done'); setHidden($('jam-discard'), st !== 'done'); readout();   // only when it changes: this runs every beat of a take, inside the status region
+  setHidden($('jam-dl'), st !== 'done'); setHidden($('jam-discard'), st !== 'done'); keepFocus(had); readout();   // only when it changes: this runs every beat of a take, inside the status region
 }
 async function downloadJam() {
   slog?.act('export', null, 'jam');
@@ -2144,9 +2144,22 @@ function pillState() {
     jam: { state: jam.state, bars: jam.bar ? Math.round(jam.beats * PPQ / jam.bar) : 0 } };
 }
 function setHidden(el, h) { if (el.hidden !== h) el.hidden = h; }   // a write of the same value is still a mutation (a live region hears it)
+// RD-07 round 1: the focus in the region whose button goes out of sight (its pill went, it folded, its drop-down closed)
+// is handed on (pills.js focusAfter): never dropped to the page, never left on a folded button nobody can see that
+// Enter still presses (Vera: Esc on "+N more", then Enter, discarded a take). had = the focus before the change
+const pillKey = (el) => (el.closest('#quest-more') ? 'hint' : el.id === 'sp-more' ? 'more' : el.closest('#pills > .spill')?.dataset.pill);
+const pillSeen = (el) => !el.closest('[hidden]') && !(el.closest('#pills > .fold') && !pillsOpen);
+function keepFocus(had) {
+  if (!(had instanceof HTMLElement) || !$('pills').contains(had) || pillSeen(had)) return;
+  const k = pillKey(had); if (!k) return;
+  const drawnNow = PILL_ORDER.filter(p => { const el = $(PILL_EL[p]); return !el.hidden && !el.classList.contains('fold'); });
+  const to = focusAfter(k, drawnNow, !$('sp-more').hidden, !!(k === 'hint' ? $('quest') : had.closest('.spill'))?.classList.contains('fold'));
+  const el = to === 'more' ? $('sp-more') : to === 'help' ? $('btn-help') : [...$(PILL_EL[to]).querySelectorAll('button')].find(b => !b.hidden);
+  if (el) focusAs(el, keyFocused.has(had));
+}
 function renderPills() {
   if (!pillsLive) return;
-  const s = pillState(), words = Object.fromEntries(pillsOn(s).map(p => [p.k, p.text])), keys = pillsForce || Object.keys(words);
+  const had = document.activeElement, s = pillState(), words = Object.fromEntries(pillsOn(s).map(p => [p.k, p.text])), keys = pillsForce || Object.keys(words);
   if (pillsForce) for (const k of keys) words[k] ??= PILL_STANDIN[k];
   const lay = pillLayout(keys); if (!lay.more) pillsOpen = false;
   for (const [k, id] of Object.entries(PILL_EL)) {
@@ -2160,27 +2173,34 @@ function renderPills() {
   const more = $('sp-more'), mt = `+${lay.more} more ▾`; setHidden(more, !lay.more); if (lay.more && more.textContent !== mt) more.textContent = mt;
   if (more.getAttribute('aria-expanded') !== String(pillsOpen)) more.setAttribute('aria-expanded', String(pillsOpen));
   $('pills').classList.toggle('more-open', pillsOpen);
+  keepFocus(had);
 }
 function setPillsOpen(on) { pillsOpen = !!on; if (pillsOpen) questMore(false); renderPills(); }
 /** The quest's drop-down: its hint (written now, for the beat on screen), show me, skip. */
 function questMore(on) {
-  const d = $('quest-more'); setHidden(d, !on); $('quest-go').setAttribute('aria-expanded', String(!!on));
+  const d = $('quest-more'), go = $('quest-go'), had = document.activeElement, ex = String(!!on);
+  setHidden(d, !on); if (go.getAttribute('aria-expanded') !== ex) go.setAttribute('aria-expanded', ex); keepFocus(had);
   if (on) { pillsOpen = false; renderQuest(); }
 }
 /** A pill's first button: the mode's control shown in the sheet (its tab and drawer; simple gives way to everything for
- *  an advanced one) with the focus on it, as find does. */
+ *  an advanced one) with the focus on it, as find does. The keys go with it only when the keyboard pressed the pill: after
+ *  a click, Space still plays and stops (Kai: click "rec armed", Space disarmed record mid-set) */
 function pillGo(el) {
   el = typeof el === 'string' ? $(el) : el; if (!el) return; setPillsOpen(false);
   if (!el.matches('button, select, input, summary')) el = el.querySelector('button, select, input') || el;   // a group: its first control
   if (el.closest('.adv') && quests.view === 'simple') setView('all');
-  if (focusMode) setFocusMode(false); reveal(el); el.scrollIntoView({ block: 'nearest' }); focusAs(el, true);
+  if (focusMode) setFocusMode(false); reveal(el); el.scrollIntoView({ block: 'nearest' }); focusAs(el, lastInput !== 'pointer');
 }
 /** Quest "show me" (Rio): the gesture drawn once on the rings as a ghost hand (scene.js, read-only; any key or click
- *  hides it); a quest played in the sheet shows its control instead. */
+ *  hides it); a quest played in the sheet shows its control instead. A phone is a page with the pills under the rings:
+ *  the rings come into view first, or the hand is drawn where nobody sees it (RD-07 round 1, Maya). */
 function showMe() {
   const q = currentQuest(quests.done), g = q?.show?.(m); questMore(false); if (!g) return;
   if (g.id) return pillGo(g.id);
-  if (focusMode) setFocusMode(false); scene.ghost({ kind: g.kind, li: g.li }); poke();
+  if (focusMode) setFocusMode(false);
+  const geo = scene.geo(), c = $('cv').getBoundingClientRect(), top = c.top + geo.cy - geo.outer, bottom = c.top + geo.cy + geo.outer;
+  if (top < 0 || bottom > innerHeight) scrollBy({ top: top < 0 ? top - 12 : Math.min(top - 12, bottom - innerHeight + 12), behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' });
+  scene.ghost({ kind: g.kind, li: g.li }); poke();
 }
 addEventListener('pointerdown', () => { if (scene.ghosting) scene.ghost(null); }, true);
 addEventListener('keydown', () => { if (scene.ghosting) scene.ghost(null); }, true);

@@ -1022,3 +1022,33 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   scene's hand already takes the step's lock (`moveKey` → `lock:vel`, nothing drawn for it), and turning that knob
   edits the step's lock (the first turn shows the page and the peek follows). Harmless, but the two disagree for the
   touch's length: let the hand follow the row's page until the look.
+- **Mis-click room in the pills** (RD-07 round 1: verifier; for Noor / Greta, RD-9's A3): in the welcome pill "start
+  fresh" (init, undoable) touches play and × with 0 px gaps (the old bar had 8 px); in the take's pill "⤓ download"
+  touches "discard" (no undo). Vera's mis-click run is a first visit with no take, so it never sees them: room (or a
+  second press) for the destructive button, and a returning visit + a finished take in the mis-click run.
+- **The pills' rows and the sheet** (RD-07 round 1: verifier, architect; for Noor): the worst real case at 1280×720 (a
+  chain of 8, solo on 6 lanes, evolve, the quest, the take folded) takes 5 rows, and the sheet, held at its 340 px
+  floor, runs ~8 px into the console row (the usual real states: 370 px); the PILLS / SHEET gates' stand-in words
+  (`PILL_STANDIN` in `app.js`) are shorter than real ones (six real pills: 3 rows, 412 px vs 450): move them into the
+  tools at real lengths. The sheet moves with the pill rows (one pill at 1280×720 ends at 92 px, six at 170), so a mode
+  turned on from inside the sheet can move it under the pointer: reserve the rows, or a `clickGuard` after a row change.
+- **The pills' code** (RD-07 round 1: architect): `pillText` is the tested source of every pill's words, but the quest's
+  and welcome's are written elsewhere (`renderQuest`, the HTML): let `renderPills` write them all. `renderPills` runs
+  twice per `sync()` and on every `readout()` with ~9 lookups each (look the nodes up once). "Write only on change" is
+  guarded by pills-check's ANNOUNCE only (a stub-DOM unit test, or the check in `npm test`). `sp-chain-x` clicks
+  `chain-stop`, `sp-dice-x` / `sp-clock-x` copy their controls' handlers (named functions); the unused `jam-panel` class.
+  Solo is saved per slot, so a chain over slots that differ in solo shows and hides the solo pill at each switch; a
+  queued slot is not shown while a chain runs.
+- **The pills' words and access** (RD-07 round 1: maya, greta, kai; the phone and Tab order are RD-10's): the ghost hand
+  is a ring and a dot nothing names (a caption, "drag the ring out"); the quest titles read technical ("rotate the snare
+  onto 2 and 4"); the quest × says "switch to simple to see them again" but nothing on screen is named "simple"; folded
+  pills stay in the accessibility tree at 22 × 32 (`inert` while folded and closed would re-announce them on unfold);
+  a queued mute is named only by a count; Esc does not cancel an armed take; the take's pill trails `jam.state` by
+  ~80 ms as recording starts; phone: the pills row sits below the fold and "+N more" / the quest's × lie past the row
+  until it is scrolled, with nothing hinting that it scrolls; the pills come after help in the Tab order and the
+  dropped pills before "+N more".
+- **Tools after RD-07 round 1** (verifier, sound): `face-audit.mjs` waits 60 s for the page and 120 s for a render eval;
+  under load (other agents' browsers) both fail: configurable, like `cdp.mjs`'s `CDP_START_MS` (60 s now).
+- **A muted lane's tail** (RD-07 round 1, sound; pre-existing): a pending mute stops new hits on the bar line, but the
+  lane's last hit keeps ringing (its delay echo, up to −32.9 dBFS 200 ms after the line); a take's sub and mix end at
+  −41 dBFS, a −41.5 dBFS step where the loop wraps.

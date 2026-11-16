@@ -139,8 +139,10 @@
          turns on and goes when it turns off: one status region, so each is announced once; its words never count with the
          clock. The first button opens the mode's settings in the sheet (or does the pill's one job), × turns the mode
          off. At most 4 drawn, then "+N more ▾" (the rest drop down over the sheet). The welcome bar, the quest card and
-         the jam panel are pills now (ids kept) -->
-    <div id="pills" class="pills" role="status" aria-label="what is on">
+         the jam panel are pills now (ids kept). Not atomic (a status region is, by default): a pill that appears is read
+         by itself, not the whole region again; "+N more" counts without a word (aria-live off), and the region stays in
+         the page when it is empty, or the first pill after nothing would not be read (RD-07 round 1) -->
+    <div id="pills" class="pills" role="status" aria-atomic="false" aria-label="what is on">
       <span id="sp-rec" class="spill seg sp-rec" data-pill="rec" hidden><button id="sp-rec-go" type="button" title="Record: its settings in the sheet (quantize, knobs off / touch / latch)"></button><button id="sp-rec-x" class="sp-x" type="button" aria-label="record off" title="record off">×</button></span>
       <span id="sp-chain" class="spill seg" data-pill="chain" hidden><button id="sp-chain-go" type="button" title="Slots and the chain: the pattern tab"></button><button id="sp-chain-x" class="sp-x" type="button" aria-label="stop the chain" title="stop the chain">×</button></span>
       <span id="sp-solo" class="spill seg" data-pill="solo" hidden><button id="sp-solo-go" type="button" title="Solo: only soloed lanes play (the lane list: Shift+click or long-press an M)"></button><button id="sp-solo-x" class="sp-x" type="button" aria-label="solo off on every lane" title="solo off on every lane">×</button></span>
@@ -151,7 +153,7 @@
       <!-- I6: the quest you are on; its first button opens the hint, show me and skip (a drop-down, not announced) -->
       <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span>
       <span id="jam-panel" class="spill seg sp-rec jam-panel" data-pill="jam" hidden><button id="jam-go" type="button" title="The take ends on a bar line (stop it with jam)"><span id="jam-text"></span></button><button id="jam-dl" type="button" hidden>⤓ download</button><button id="jam-discard" type="button" hidden>discard</button></span>
-      <button id="sp-more" class="sp-more" type="button" aria-expanded="false" hidden></button>
+      <button id="sp-more" class="sp-more" type="button" aria-expanded="false" aria-live="off" hidden></button>
       <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button></span></div>
     </div>
     <!-- RD-3 the sheet: every drawer and the old right column, re-hosted as they were (ids kept), in six tabs (Greta's

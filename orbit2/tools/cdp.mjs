@@ -27,14 +27,19 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   // --disable-audio-output: a fake output stream clocks the AudioContext, so the transport runs (silently) even when the
   // Mac's own output device stalls (then currentTime freezes and nothing plays, on any commit)
   const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-audio-output', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
-  for (let i = 0; i < 60; i++) { try { await fetch(`http://127.0.0.1:${debugPort}/json/version`); break; } catch { await sleep(250); } }
+  // a machine busy with other agents' browsers can take far longer than 15 s to start one (RD-07 round 1: every review
+  // run failed with ECONNREFUSED at load ~100): wait up to CDP_START_MS (60 s), and say so when it never came up
+  const startMs = +process.env.CDP_START_MS || 60000, t0 = Date.now();
+  for (let up = false; !up;) {
+    try { await fetch(`http://127.0.0.1:${debugPort}/json/version`); up = true; } catch { if (Date.now() - t0 > startMs) { chrome.kill('SIGKILL'); server.kill('SIGKILL'); throw new Error(`cdp: Chrome opened no debug port ${debugPort} in ${startMs / 1000} s (CDP_START_MS)`); } await sleep(250); }
+  }
   const base = `http://localhost:${port}`;
   return {
     base,
     async open(path, { width = 1440, height = 900, mobile = false, wait = 3500 } = {}) {
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(webSocketDebuggerUrl);
-      await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 10 s')), 10000).unref(); });
+      await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 30 s')), 30000).unref(); });
       let id = 0; const pending = new Map(), errors = [];
       ws.onmessage = (m) => {
         const d = JSON.parse(m.data);

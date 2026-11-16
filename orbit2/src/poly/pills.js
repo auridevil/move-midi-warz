@@ -22,7 +22,8 @@ export function pillText(k, s) {
     case 'rec': return s.rec?.armed ? `● rec armed${s.rec.knobs && s.rec.knobs !== 'off' ? ` · ${s.rec.knobs}` : ''}` : null;
     case 'chain': {
       const c = s.chain; if (!c) return null;
-      if (c.chain?.length > 1) return `chain ${c.chain.map(i => i + 1).join(' → ')}`;   // the slot it is on moves with the clock: not said
+      // the slot it is on moves with the clock: not said; mutes waiting for the bar are (state always visible)
+      if (c.chain?.length > 1) return `chain ${c.chain.map(i => i + 1).join(' → ')}${c.mutes > 0 ? ` · ${plural(c.mutes, 'mute')} · next bar` : ''}`;
       const at = c.switchAt === 'now' ? 'next tick' : c.switchAt === 'cycle' ? 'next cycle' : 'next bar';
       const parts = [c.pending >= 0 ? `slot ${c.pending + 1}` : '', c.mutes > 0 ? plural(c.mutes, 'mute') : ''].filter(Boolean);
       return parts.length ? `${parts.join(' · ')} · ${c.pending >= 0 ? at : 'next bar'}` : null;
@@ -52,3 +53,18 @@ export function pillLayout(on, max = PILL_MAX) {
 
 /** Which pills a × turns off (the jam's take has download / discard instead; a waiting slot or mute just lands). */
 export const pillOff = (k, s) => (k === 'chain' ? (s.chain?.chain?.length || 0) > 1 : k !== 'jam');
+
+/**
+ * Where the focus goes when what held it goes out of sight: its pill went (a ×, a take discarded), it folded, or its
+ * drop-down closed (Esc on "+N more", show me). Never to the page, and never left on a button nobody can see that
+ * Enter still presses (RD-07 round 1). k = what held it: a pill's key, 'more' ("+N more") or 'hint' (the quest's
+ * drop-down); drawn = the pills drawn now (keys, not folded); more = "+N more" drawn; folded = k's pill is folded.
+ * Returns a pill key (its first button), 'more' or 'help' ("?" above the pills).
+ */
+export function focusAfter(k, drawn, more, folded = false) {
+  const own = k === 'hint' ? 'quest' : k;
+  if (drawn.includes(own)) return own;                 // its pill is still drawn (the hint closed, a button of it went)
+  if (folded && more) return 'more';                   // out of sight under "+N more": back to it
+  const i = PILL_ORDER.indexOf(own), next = PILL_ORDER.slice(i + 1).find(x => drawn.includes(x)) ?? PILL_ORDER.slice(0, Math.max(0, i)).reverse().find(x => drawn.includes(x));
+  return next ?? (more ? 'more' : 'help');             // the next pill, the one before, "+N more", "?"
+}

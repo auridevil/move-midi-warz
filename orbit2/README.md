@@ -66,12 +66,18 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   sheet (or does the pill's job: welcome = play, quest = its hint with "show me" and skip, jam = stop the take /
   download · discard), × turns the mode off. At most 4 drawn, then "+N more ▾" drops the rest down over the sheet. Pure
   half in `src/poly/pills.js` (`pillText`, `pillLayout`); `app.js renderPills` keeps every pill's node in place and
-  writes only what changed, so the words never move with the clock (each pill announced once). Quest "show me": the
+  writes only what changed, so the words never move with the clock (each pill announced once). The region is not atomic
+  (`aria-atomic="false"`: a new pill is read alone), "+N more" counts silently (`aria-live="off"`), and it stays in the
+  page when empty (never `display: none`: a live region must exist before its first pill). A button that goes out of
+  sight with the focus on it hands the focus on (`pills.js focusAfter`, `app.js keepFocus`: its pill, "+N more", the
+  next pill, "?"), never to the page; a click on a pill's words leaves Space to play / stop. Quest "show me": the
   gesture drawn once on the rings as a ghost hand (`scene.js ghost`, `ghostAt`, read-only; any key or press hides it),
   or the control for a quest played in the sheet. `__poly.showPills([keys])` forces a layout for tests. Browser check:
   `node orbit2/tools/pills-check.mjs` (ANNOUNCE a MutationObserver on the region while playing with five modes and a jam
   take on: 0 changes per bar; SHEET 6 pills at 1280×720 and 1512×860, the sheet ≥ 340 px under them, rings fixed (A7);
-  KEEP the jam take, a pending mute, clock follow, the quest, welcome back, Esc). The face audit's "pills" state turns
+  KEEP the jam take, a pending mute, clock follow, the quest, welcome back, Esc; A11Y the accessibility tree: polite,
+  not atomic, there when empty; FOCUS Esc on "+N more", a ×, show me, a discarded take, a click then Space, show me on a
+  phone scrolled to the pills). The face audit's "pills" state turns
   six on (PILLS gate). Find's empty list offers nothing destructive (`FIND_DEFAULTS`; Vera's mis-click run).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9

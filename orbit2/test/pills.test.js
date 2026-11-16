@@ -3,11 +3,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PILL_ORDER, PILL_MAX, pillText, pillsOn, pillLayout, pillOff } from '../src/poly/pills.js';
+import { PILL_ORDER, PILL_MAX, pillText, pillsOn, pillLayout, pillOff, focusAfter } from '../src/poly/pills.js';
 import { QUESTS } from '../src/poly/quests.js';
 import { ghostAt, ringGeo } from '../src/poly/scene.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8');
 const all = { rec: { armed: true, knobs: 'latch' }, chain: { chain: [0, 2], pending: 2, switchAt: 'bar', mutes: 0 }, solo: ['shaker'], evolve: { on: true, every: 4 },
   dice: { locked: true, seed: 4127, repeat: 1 }, clock: { follow: 'tempo', inName: 'Move' }, welcome: true, quest: { n: 1, of: 5, title: 'make 3 against 4' }, jam: { state: 'done', bars: 8 } };
 
@@ -39,6 +40,8 @@ test('RD-7 the words: state, never a counter that moves with the clock (A4: anno
   assert.equal(pillText('chain', { chain: { chain: [], pending: 4, switchAt: 'bar', mutes: 0 } }), 'slot 5 · next bar');
   assert.equal(pillText('chain', { chain: { chain: [], pending: 4, switchAt: 'cycle', mutes: 2 } }), 'slot 5 · 2 mutes · next cycle');
   assert.equal(pillText('chain', { chain: { chain: [], pending: -1, switchAt: 'cycle', mutes: 1 } }), '1 mute · next bar', 'mutes land on the bar line');
+  // RD-07 round 1 (Kai, Arjun): a running chain no longer hides the mutes waiting for the bar
+  assert.equal(pillText('chain', { chain: { chain: [0, 2], pending: 2, switchAt: 'bar', mutes: 2 } }), 'chain 1 → 3 · 2 mutes · next bar');
   assert.equal(pillText('solo', { solo: ['kick', 'clap'] }), 'solo · kick, clap');
   assert.equal(pillText('evolve', all), 'evolve · every 4 bars'); assert.equal(pillText('evolve', { evolve: { on: true, every: 1 } }), 'evolve · every 1 bar');
   assert.equal(pillText('dice', all), 'dice 4127'); assert.equal(pillText('dice', { dice: { locked: true, seed: 9, repeat: 4 } }), 'dice 9 · repeat 4');
@@ -68,6 +71,32 @@ test('RD-7 the page: one status region, a node per pill in the fixed order, the 
   assert.match(region, /<div id="quest-more" class="quest-more" aria-live="off"/, 'the hint changes with the beat on screen: never read out by itself');
   assert.doesNotMatch(html, /id="jam-fill"|class="jam-bar"/, 'no beat-by-beat progress bar in the region');
   assert.ok(html.indexOf('id="pills"') < html.indexOf('<section id="sheet"'), 'the sheet comes under the last pill');
+  // RD-07 round 1 (Vera, Greta, Arjun): a pill that appears is read by itself, not the whole region again (a status region
+  // is atomic by default); the "+N more" count is not read; the region is never display: none, even empty (a live
+  // region that appears with its first pill does not read it)
+  assert.match(region, /<div id="pills" [^>]*aria-atomic="false"/, 'not atomic');
+  assert.match(region, /<button id="sp-more" [^>]*aria-live="off"/, '"+N more" counts without a word');
+  const empty = css.split('\n').find(l => l.startsWith('.pills:not(:has('));
+  assert.ok(empty && !/display:\s*none/.test(empty), `the empty region stays in the page: ${empty}`);
+  assert.doesNotMatch(css, /(^|\n)\s*\.pills[^{\n]*\{[^}]*display:\s*none/, 'no rule takes the region out of the page');
+});
+
+test('RD-7 the focus goes on when what held it goes out of sight: never to the page, never left on a folded button', () => {
+  const drawn = ['rec', 'solo', 'evolve', 'dice'];
+  assert.equal(focusAfter('clock', drawn, true, true), 'more', 'Esc on "+N more" with the focus on a folded pill: back to "+N more"');
+  assert.equal(focusAfter('jam', drawn, true, true), 'more', 'a folded take discarded while "+N more" is drawn: "+N more"');
+  assert.equal(focusAfter('solo', ['rec', 'evolve', 'dice'], false), 'evolve', 'a × on a drawn pill: the next pill drawn');
+  assert.equal(focusAfter('dice', ['rec', 'solo', 'evolve'], false), 'evolve', 'the last one drawn: the one before');
+  assert.equal(focusAfter('jam', [], false), 'help', 'nothing left: "?" above the pills');
+  assert.equal(focusAfter('jam', [], true, false), 'more', 'nothing drawn but "+N more"');
+  assert.equal(focusAfter('hint', ['rec', 'quest'], false), 'quest', 'the hint closed (show me, Esc): its pill');
+  assert.equal(focusAfter('hint', drawn, true, true), 'more', 'the hint of a folded quest: "+N more"');
+  assert.equal(focusAfter('hint', ['rec', 'jam'], false), 'jam', 'the last quest skipped: the pill after the quest\'s place');
+  assert.equal(focusAfter('chain', ['rec', 'chain', 'solo'], false), 'chain', 'a button of a pill still drawn went (the chain\'s ×): that pill');
+  assert.equal(focusAfter('more', ['rec', 'solo'], false), 'rec', '"+N more" itself went (5 → 4 pills): the first pill');
+  for (const k of [...PILL_ORDER, 'more', 'hint']) for (const more of [true, false]) {
+    const to = focusAfter(k, drawn, more, false); assert.ok(drawn.includes(to) || to === 'more' || to === 'help', `${k}: ${to}`);
+  }
 });
 
 test('RD-7 "show me": every quest has one; a ring gesture names a lane, a sheet quest a control on the page', () => {

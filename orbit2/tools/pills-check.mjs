@@ -15,18 +15,28 @@
 //           next bar: the pill says it, the lane mutes on the bar line, then the pill goes); MIDI clock follow (its pill,
 //           × = follow off); the quest (hint drop-down, skip → the next quest, show me draws the ghost hand and a key hides
 //           it, × hides the quests); welcome back on a returning visit (play from the pill, it goes); Esc closes "+N more".
+// A11Y      (RD-07 round 1) Chrome's accessibility tree: the region is a polite live region, NOT atomic (a pill that
+//           appears is read by itself, not the whole region again), and it stays in the tree with no pill on (one that
+//           appears with its first pill does not read it): empty, then evolve on.
+// FOCUS     (RD-07 round 1) the focus is never dropped to the page nor left on a button out of sight: Esc on "+N more"
+//           with the focus on a folded pill's × → "+N more" (and Enter there turns nothing off); a × by the keyboard →
+//           the next pill; show me by the keyboard → the quest pill; a folded take discarded → "+N more"; a click on a
+//           pill's words, then Space → play / stop (not the control the pill showed); show me on a phone scrolled down to
+//           the pills → the rings in view while the hand draws.
 import { launch } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const only = arg('--only', 'ANNOUNCE,SHEET,KEEP').split(','), shots = arg('--shots', null), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), root = arg('--root', undefined);
+const only = arg('--only', 'ANNOUNCE,SHEET,KEEP,A11Y,FOCUS').split(','), shots = arg('--shots', null), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), root = arg('--root', undefined);
 const PILLS6 = ['rec', 'chain', 'solo', 'evolve', 'welcome', 'quest'];
 const out = {}, fails = [];
 const check = (sec, ok, what) => { if (!ok) fails.push(`${sec}: ${what}`); };
 const ready = async (p) => { for (let i = 0; i < 240; i++) { if (await p.eval('!!window.__poly')) return; await p.sleep(250); } throw new Error('orbit2 did not start'); };
 const until = async (p, expr, ms = 15000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { if (await p.eval(expr)) return true; await p.sleep(50); } return false; };
 const pillWords = `[...document.querySelectorAll('#pills > .spill:not([hidden])')].map(e => e.dataset.pill + (e.classList.contains('fold') ? '(fold)' : '') + ': ' + e.textContent.replace('×', '').trim())`;
+// a first visit in a profile an earlier section used (its pattern saved → welcome back; its quest × → quests hidden)
+const fresh = async (b, opts) => { const p = await b.open('orbit2/index.html', opts); await ready(p); await p.eval('localStorage.clear()'); await p.send('Page.reload'); await p.sleep(1500); await ready(p); await p.sleep(300); return p; };
 
 const b = await launch({ port, debugPort, ...(root ? { root } : {}) });
 try {
@@ -122,6 +132,81 @@ try {
     check('KEEP', wb.after.hidden, `welcome after play: ${JSON.stringify(wb.after)}`); out.welcome = wb;
     await p2.eval(`document.getElementById('btn-play').click()`);
     out.errors = [...p.errors, ...p2.errors];
+  }
+  if (only.includes('A11Y')) {
+    const p = await fresh(b, { width: 1512, height: 860 });
+    await p.send('Accessibility.enable'); await p.send('DOM.enable');
+    const ax = async (sel) => {
+      const doc = (await p.send('DOM.getDocument', { depth: 0 })).result.root, { nodeId } = (await p.send('DOM.querySelector', { nodeId: doc.nodeId, selector: sel })).result;
+      const n = (await p.send('Accessibility.getPartialAXTree', { nodeId, fetchRelatives: false })).result.nodes[0], prop = (k) => n.properties?.find(q => q.name === k)?.value?.value;
+      return { ignored: !!n.ignored, role: n.role?.value, live: prop('live'), atomic: prop('atomic') };
+    };
+    const a = { quest: await ax('#pills') };
+    await p.eval(`document.getElementById('quest-x').click()`); await p.sleep(200); a.empty = await ax('#pills');
+    // empty, the region adds no gap: the sheet sits 10 px (the column's gap) under the top row, as with no region at all
+    await p.eval(`__poly.setSheet('export', true)`); await p.sleep(200);
+    const gap = await p.eval(`Math.round(document.getElementById('sheet').getBoundingClientRect().top - document.querySelector('.hud-top').getBoundingClientRect().bottom)`);
+    await p.eval('__poly.setEvolve(true)'); await p.sleep(200); a.evolve = await ax('#pills');
+    out.a11y = { ...a, emptyGap: gap };
+    for (const k of ['quest', 'empty', 'evolve']) check('A11Y', !a[k].ignored && a[k].role === 'status' && a[k].live === 'polite' && a[k].atomic === false, `${k}: ${JSON.stringify(a[k])}`);
+    check('A11Y', gap === 10, `the empty region left ${gap} px between the top row and the sheet (10 expected)`);
+    check('A11Y', !p.errors.length, `page errors: ${p.errors.join(' | ')}`);
+  }
+  if (only.includes('FOCUS')) {
+    const f = {}, p = await fresh(b, { width: 1512, height: 860 });
+    const act = () => p.eval(`document.activeElement?.id || document.activeElement?.tagName`);
+    const mid = (id) => p.eval(`(() => { const r = document.getElementById(${JSON.stringify(id)}).getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`);
+    // six pills: rec · solo · evolve · dice drawn, clock and the quest folded under "+2 more"
+    await p.eval(`(() => { const P = __poly; P.applyTempo(180); P.setRec(true); P.toggleSolo(1); P.setEvolve(true); P.dice.locked = true; P.pmidi.inName = 'Clock in'; P.pmidi.setFollow('tempo'); P.renderPills(); })()`); await p.sleep(150);
+    await p.eval(`document.getElementById('sp-more').focus()`); await p.key('Enter'); await p.sleep(100); f.open = await p.eval('__poly.pillsOpen');
+    await p.eval(`document.getElementById('sp-clock-x').focus()`); await p.key('Escape'); await p.sleep(100);
+    f.esc = { open: await p.eval('__poly.pillsOpen'), focus: await act() };
+    await p.key('Enter'); await p.sleep(100); f.enter = { follow: await p.eval('__poly.pmidi.follow'), open: await p.eval('__poly.pillsOpen') };
+    check('FOCUS', f.open && !f.esc.open && f.esc.focus === 'sp-more', `Esc on "+N more" from a folded ×: ${JSON.stringify(f.esc)}`);
+    check('FOCUS', f.enter.follow === 'tempo', `Enter after that Esc turned clock follow "${f.enter.follow}"`);
+    if (f.enter.open) { await p.key('Escape'); await p.sleep(100); }
+    // a × by the keyboard: the next pill drawn
+    await p.eval(`document.getElementById('sp-evolve-x').focus()`); await p.key('Enter'); await p.sleep(150);
+    f.x = { evolve: await p.eval('__poly.evo.on'), focus: await act() };
+    check('FOCUS', !f.x.evolve && f.x.focus === 'sp-dice-go', `× on evolve by the keyboard: ${JSON.stringify(f.x)}`);
+    // a click on a pill's words, then Space: the transport (Kai), not the control the pill showed
+    await p.eval(`document.getElementById('btn-play').click()`); await p.sleep(400);
+    const [rx, ry] = await mid('sp-rec-go'); await p.click(rx, ry); await p.sleep(250);
+    f.space = { focus: await act(), before: await p.eval(`document.getElementById('btn-play').getAttribute('aria-label')`) };
+    await p.key(' '); await p.sleep(300);
+    Object.assign(f.space, { after: await p.eval(`document.getElementById('btn-play').getAttribute('aria-label')`), armed: await p.eval('__poly.rec.armed') });
+    check('FOCUS', f.space.focus === 'btn-rec' && f.space.before === 'stop' && f.space.after === 'play' && f.space.armed, `a click on "rec armed" (the focus on record in the sheet), then Space: ${JSON.stringify(f.space)}`);
+    await p.eval('__poly.setSheet(__poly.sheet.tab, false)');
+    // a take ready, folded (rec · solo · dice · clock drawn; the quest and the take under "+2 more"), discarded from the
+    // drop-down by the keyboard: back to "+N more"
+    await p.eval('__poly.toggleJam()'); check('FOCUS', await until(p, `__poly.jam.state === 'rec'`), 'the take never started');
+    await p.sleep(1500); await p.eval('__poly.stopJam()'); check('FOCUS', await until(p, `__poly.jam.state === 'done'`, 20000), 'the take never closed');
+    await p.eval(`document.getElementById('btn-play').getAttribute('aria-label') === 'stop' && document.getElementById('btn-play').click()`);
+    await p.eval('__poly.setPillsOpen(true)'); await p.sleep(100);
+    f.discard = { folded: await p.eval(`document.getElementById('jam-panel').classList.contains('fold')`) };
+    await p.eval(`document.getElementById('jam-discard').focus()`); await p.key('Enter'); await p.sleep(200);
+    Object.assign(f.discard, { state: await p.eval('__poly.jam.state'), focus: await act() });
+    check('FOCUS', f.discard.folded && f.discard.state === 'idle' && f.discard.focus === 'sp-more', `a folded take discarded by the keyboard: ${JSON.stringify(f.discard)}`);
+    // show me by the keyboard: back on the quest pill, the hand drawn
+    await p.eval(`(() => { const P = __poly; P.setPillsOpen(false); P.setRec(false); P.toggleSolo(1); P.dice.locked = false; P.pmidi.setFollow('off'); P.renderPills(); })()`); await p.sleep(150);
+    await p.eval(`document.getElementById('quest-go').focus()`); await p.key('Enter'); await p.sleep(150);
+    await p.eval(`document.getElementById('quest-show').focus()`); await p.key('Enter'); await p.sleep(150);
+    f.show = { focus: await act(), ghost: await p.eval('__poly.scene.ghosting'), hint: await p.eval(`!document.getElementById('quest-more').hidden`) };
+    check('FOCUS', f.show.focus === 'quest-go' && f.show.ghost && !f.show.hint, `show me by the keyboard: ${JSON.stringify(f.show)}`);
+    out.focus = f; out.focusErrors = [...p.errors];
+    check('FOCUS', !p.errors.length, `page errors: ${p.errors.join(' | ')}`);
+    // show me on a phone, scrolled down to the pills (they sit under the rings there): the rings come into view
+    const q = await fresh(b, { width: 390, height: 844, mobile: true });
+    await q.eval(`document.getElementById('quest-go').scrollIntoView({ block: 'center', behavior: 'instant' })`); await q.sleep(200);
+    const ringsAt = () => q.eval(`(() => { const g = __poly.scene.geo(), c = document.getElementById('cv').getBoundingClientRect(); return { top: Math.round(c.top + g.cy - g.outer), bottom: Math.round(c.top + g.cy + g.outer), vh: innerHeight, y: Math.round(scrollY) }; })()`);
+    const phone = { before: await ringsAt() };
+    let [qx, qy] = await q.eval(`(() => { const r = document.getElementById('quest-go').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await q.tap(qx, qy); await q.sleep(300);
+    [qx, qy] = await q.eval(`(() => { const r = document.getElementById('quest-show').getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()`); await q.tap(qx, qy); await q.sleep(900);
+    Object.assign(phone, { after: await ringsAt(), ghost: await q.eval('__poly.scene.ghosting') });
+    if (shots) await q.shot(join(shots, '390x844-show-me.png'));
+    out.phoneShowMe = phone;
+    check('FOCUS', phone.before.top < 0 && phone.after.top >= 0 && phone.after.bottom <= phone.after.vh && phone.ghost, `show me on a phone: ${JSON.stringify(phone)}`);
+    check('FOCUS', !q.errors.length, `phone page errors: ${q.errors.join(' | ')}`);
   }
 } finally { await b.close(); }
 

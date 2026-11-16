@@ -399,7 +399,9 @@ body.chaos::before { display: none; }
    --d. Never more than 4 drawn: the rest (.fold) are out of sight but still in the status region, and drop down over
    the sheet from "+N more ▾"; the quest's hint drops down the same way. Neither ever pushes the sheet down */
 .pills { position: relative; z-index: 2; display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; max-width: 100%; }
-.pills:not(:has(> .spill:not([hidden]))) { display: none; }   /* nothing on: no gap above the sheet */
+/* nothing on: still in the page (a live region that appears with its first pill is not read out: RD-07 round 1), 0 px
+   tall, and its margin takes back the column's 10 px gap, so the sheet sits where it would without it */
+.pills:not(:has(> .spill:not([hidden]))) { margin-bottom: -10px; }
 .spill { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); background: var(--v); max-width: 100%; }
 .spill[hidden] { display: none; }
 .spill.sp-rec { border-color: var(--rec); box-shadow: inset 0 0 0 1px var(--rec); }
