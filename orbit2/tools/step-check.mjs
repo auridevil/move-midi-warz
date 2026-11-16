@@ -142,13 +142,13 @@ async function glance(p, { seed, trials = 20, shots }) {
     const li = Math.floor(rng() * n), turn = rng() < 0.5, knob = Math.floor(rng() * 7), tab = rng() < 0.5 ? 'rhythm' : 'sound';
     await p.eval(`document.getElementById('pg-${tab}').click()`);
     await send(p, bytes.btn(trackOf(li), true)); await send(p, bytes.btn(trackOf(li), false)); await sleep(40);
-    const len = await p.eval('__poly.m.lane.length'), s = Math.floor(rng() * Math.min(16, len));
+    const len = await p.eval('__poly.m.lane.length'), s = Math.floor(rng() * Math.min(16, len)), set = await p.eval('JSON.stringify(__poly.m)');
     await send(p, bytes.step(s, true)); await sleep(120);
     if (turn) { await send(p, bytes.touch(knob, true)); await send(p, bytes.enc(knob, rng() < 0.5 ? 1 : -1)); }
     await sleep(turn ? 300 : 450 - 120 + 300);   // the shutter: 300 ms after the turn, or after LOOK_MS
     const st = await p.eval(STATE); if (shots && t < 4) await p.shot(`${shots}/a2-step-${seed}-${t + 1}.png`);
     if (turn) await send(p, bytes.touch(knob, false)); await send(p, bytes.step(s, false)); await sleep(500);
-    await p.eval('__poly.undo()'); await sleep(30);   // the turn's lock or the tap: leave the set as it was
+    if ((await p.eval('JSON.stringify(__poly.m)')) !== set) { await p.eval('__poly.undo()'); await sleep(30); }   // the turn's lock: leave the set as it was (a look edits nothing: no undo then)
     rows.push({ trial: t + 1, lane: li + 1, step: s + 1, turn, got: st, ok: st.row === 'step' && st.word.startsWith(`step ${s + 1} `) && st.lane === li + 1 });
   }
   const right = rows.filter(r => r.ok).length; return { seed, right, of: trials, misses: rows.filter(r => !r.ok), fails: right < THRESH.glance ? [`seed ${seed}: ${right}/${trials}`] : [] };

@@ -151,6 +151,19 @@ test('RD-1 Move bytes, glance trials and scoring, the Move drawing', () => {
   assert.equal(Object.values(s.byPage).reduce((n, b) => n + b.of, 0), 20); for (const [pg, b] of Object.entries(s.byPage)) assert.equal(b.right, k.filter(x => x.page === pg).length);
   const two = all.map((a, i) => (i < 3 ? { ...a, lane: a.lane === 1 ? 2 : 1 } : a)), s2 = scoreGlance(k, two); assert.equal(s2.right, 17); assert.equal(s2.pass, false); assert.equal(s2.pageRight, 20);
   assert.equal(scoreGlance(k, []).right, 0);
+  // RD-6: the step page alone; half its trials turn a knob (a stream of their own: lanes and knobs stay the seed's)
+  const st = glanceTrials(20, 1, 4, ['step']); assert.ok(st.every(x => x.page === 'step')); assert.equal(st.filter(x => x.turn).length, 10);
+  assert.deepEqual(st.map(x => [x.lane, x.knob, x.step]), k.map(x => [x.lane, x.knob, x.step])); assert.deepEqual(st, glanceTrials(20, 1, 4, ['step']));
+  assert.notDeepEqual(st.map(x => x.turn), glanceTrials(20, 2, 4, ['step']).map(x => x.turn), 'another seed turns other trials');
+  // … and the judge names the held step: with ask 'step' a step trial needs it ("step 3", "3", 3), other pages don't
+  const ask = ['page', 'lane', 'step'], said = st.map(x => ({ trial: x.trial, page: 'step', lane: x.lane, step: x.trial % 3 ? x.step : `step ${x.step}` }));
+  const s3 = scoreGlance(st, said, 18, ask); assert.equal(s3.right, 20); assert.equal(s3.stepRight, 20);
+  const x1 = (v) => (parseInt(String(v).replace(/\D/g, ''), 10) % 8) + 1, off = said.map((a, i) => (i < 3 ? { ...a, step: x1(a.step) } : a));   // another step
+  const s4 = scoreGlance(st, off, 18, ask); assert.equal(s4.right, 17); assert.equal(s4.stepRight, 17); assert.equal(s4.pageRight, 20); assert.equal(s4.pass, false);
+  assert.equal(scoreGlance(st, said.map(({ step, ...a }) => a), 18, ask).right, 0, 'no step named: wrong');
+  assert.equal(scoreGlance(st, said.map(({ step, ...a }) => a)).right, 20, 'RD-1 / RD-5 scoring (page and lane) is unchanged');
+  assert.equal(scoreGlance(k, all, 18, ask).right, 20 - k.filter(x => x.page === 'step').length, 'other pages never need a step');
+  assert.equal(s3.rows[0].turn, st[0].turn); assert.equal(s3.rows[0].step, st[0].step);
   const leds = ledsOf([[0x90 * 256 + MOVE.PAD, 120], [0x90 * 256 + MOVE.STEP + 15, 8], [0xB0 * 256 + MOVE.BTN.play, 120]]);
   assert.equal(leds.pads[0], 120); assert.equal(leds.pads[1], 0); assert.equal(leds.steps[15], 8); assert.equal(leds.buttons.play, 120); assert.equal(leds.buttons.mute, 0);
   const svg = drawMove(leds, (i) => `#${i.toString(16).padStart(6, '0')}`);
