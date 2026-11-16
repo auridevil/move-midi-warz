@@ -67,6 +67,23 @@ test('RD-5 edge cases: a quick tap never flashes a page; the mouse changes the l
   assert.deepEqual(pick(resolvePage({ latch: 'rhythm', kbdShift: true }), 'row', 'move', 'own'), { row: 'sound', move: 'rhythm', own: false });
 });
 
+test('RD-5 the console log: read-only text over the stage, off by default, never a live region, ` and Sheet → setup, remembered', () => {
+  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8'), css = readFileSync(new URL('../styles.css', import.meta.url), 'utf8'), app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  const tag = /<pre id="console-log"[^>]*>/.exec(html)?.[0];
+  assert.ok(tag, 'the overlay is a <pre>, not a control'); assert.match(tag, /\bhidden\b/, 'off on a first visit'); assert.doesNotMatch(tag, /aria-live|role=/, 'never a live region');
+  assert.match(html, /id="console-log-chip"/, 'its switch in Sheet → setup');
+  assert.match(app, /const face = \{ log: false \}/, 'off by default');
+  assert.match(app, /typeof o\.face\?\.log === 'boolean'\) face\.log = o\.face\.log/, 'read back from the settings (only a boolean)');
+  assert.match(app, /JSON\.stringify\(\{[^}]*\bface \}\)/, 'saved with the settings');
+  // the key: after controlOwnsKey (a field, a focused control keep their keys), no modifiers
+  const keys = app.slice(app.indexOf("window.addEventListener('keydown'")), own = keys.indexOf('if (controlOwnsKey(e)) return;'), bq = keys.indexOf("e.code === 'Backquote'");
+  assert.ok(own > 0 && bq > own, 'the ` key comes after key ownership');
+  // A7: it sits in the stage cell without sizing a track (grid-row 1, the stage's column), click-through; under the cap
+  const rule = /@media not all and \(max-width: 1100px\) \{ \.console-log \{([^}]*)\}/.exec(css)?.[1] || '';
+  assert.match(rule, /grid-column: 2; grid-row: 1/); assert.match(/\.console-log \{([^}]*)\}/.exec(css)[1], /pointer-events: none/);
+  assert.match(/\.console-log \{([^}]*)\}/.exec(css)[1], /color: var\(--l\)/, 'the light grey (0.470, under 0.475)');
+});
+
 test('RD-5 the console: the rhythm page is the Move\'s knob row in order (app.js RHYTHM_KEYS = the encoder handler\'s, 8 = tempo)', () => {
   const app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
   assert.match(app, /const RHYTHM_KEYS = \['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'\]/);

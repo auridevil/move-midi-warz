@@ -345,6 +345,11 @@ body.chaos::before { display: none; }
 .peek-name { font-size: var(--t-m); line-height: 19.5px; color: var(--l); }
 .peek-mean { font-size: var(--t-m); line-height: 19.5px; color: var(--d); }
 @media (max-width: 1100px) { .peek { display: none !important; } }   /* narrow: no left column (RD-10 places it) */
+/* RD-5 the console log: monospace text on a near-opaque plate in the stage cell's top-left corner (the plate keeps it
+   4.5:1 over a planet passing behind), click-through. Placed in the grid's stage cell with the stage (not sizing it) */
+.console-log { position: fixed; top: 12px; left: 12px; z-index: 2; margin: 0; padding: 6px 10px; max-width: calc(100vw - 24px); overflow: hidden; pointer-events: none; font: 400 var(--t-s)/1.6 ui-monospace, monospace; color: var(--l); white-space: pre; background: rgba(12, 9, 25, 0.95); border-radius: 6px; }
+.console-log[hidden] { display: none; }
+@media not all and (max-width: 1100px) { .console-log { position: static; grid-column: 2; grid-row: 1; align-self: start; justify-self: start; margin: 12px; max-width: calc(100% - 24px); max-height: calc(100% - 24px); } }
 .pane .wordmark { padding: 4px 0 2px; }   /* h1's own look (Major Mono, only here) */
 /* narrow windows: the console stacks under the rings and the lane list (transport, the lane, the action words) */
 @media (max-width: 1100px) {

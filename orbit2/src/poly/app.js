@@ -97,9 +97,10 @@ let barWait = null;
 const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null')); } catch { return questsFrom(null); } })();
 quests.view = startView(quests.view, firstVisit);
 let questLog = [], questTimer = 0, cheerTimer = 0;
+const face = { log: false };   // RD-5: the console-log overlay (` or Sheet → setup), off by default, remembered
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; } } catch {}
-const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage })); } catch {} };
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; } } catch {}
+const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage, face })); } catch {} };
 const setLineage = (from) => { lineage = from || null; saveSettings(); };
 
 // ---- sounds ----
@@ -521,6 +522,7 @@ const INFO = {
   scale: 'Snap this lane\'s tune (and its tune locks, pitch ramps and the evolve tune moves) to a scale from the voice\'s own note: major, minor, pentatonic, or just intonation (pure ratios like 3/2 and 5/4 instead of equal steps). Pitched voices only. On marimba, conga and bongo the color knob bends the pitch too, so a color modulator or color dice takes them off the scale.',
   solo: 'Solo: only soloed lanes play (several can be).',
   'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back; a slot coming in on that line gets it too). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
+  'console log': 'The console log: the status line and the per-lane and sound rows as plain text over the rings (key `). Text only, nothing to press.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
   'fx filter': 'Performance filter on the whole mix, before the master compressor: left = low-pass (darker, down to 200 Hz), right = high-pass (thinner, up to 6 kHz), centre = off. Glides, so a fast turn doesn\'t crackle. Move: the jog wheel (it stops at the centre on the way across; push it = off; Shift + wheel = humanize). Exports leave it out unless "print FX" is on.',
   'fill latch':'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
@@ -1404,6 +1406,7 @@ function buildMixUI() {
   $('btn-solo').onclick = () => toggleSolo(); $('btn-mute').onclick = () => toggleMute(m.selected);
   ui.muteBar = mount('mute-bar', toggleChip({ label: 'on next bar', on: perf.muteBar, title: INFO['mute next bar'], onChange: (v) => { perf.muteBar = v; saveSettings(); if (!v) flushMutes(); } }));
   ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; padHints = 3; saveSettings(); paintLeds(); } }));
+  ui.consoleLog = mount('console-log-chip', toggleChip({ label: 'console log', on: face.log, title: INFO['console log'], onChange: setLog }));
   ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
 
@@ -2291,6 +2294,7 @@ window.addEventListener('keydown', (e) => {
   // RD-4 ⌘K / Ctrl+K and / = find, from anywhere but a text field (it owns its keys); / not from a select (type-ahead)
   if (opensFind(e, !(e.target instanceof Element) ? '' : e.target.closest(TEXT_SEL) ? 'text' : e.target.closest('select') ? 'select' : '')) { e.preventDefault(); openFind(); return; }
   if (controlOwnsKey(e)) return;
+  if (e.code === 'Backquote' && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); setLog(!face.log); return; }   // RD-5: ` = the console log (a field keeps its keys: above)
   if (slog && e.key.toLowerCase() === 'l' && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); const f = slog.file({ page: location.pathname, tempo }); download(f.text, f.name, 'application/json'); return; }   // RD-1: L saves the setlog
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
   if (e.key === '0') { setFill(true); return; }
@@ -2471,21 +2475,29 @@ if (DEBUG) setInterval(() => {
 }, 300);
 // C2: one status line (tempo, play state, slot, rec, evolve, kit + whatever is live right now); the per-lane rows and
 // the sound row repeat the knobs, so they sit in the collapsed "nerd stats" drawer with the rest of the details. RD-5:
-// the line left the face (statusLine keeps it for the console log)
+// the line left the face; the console log (` or Sheet → setup) shows it with the per-lane and sound rows (consoleLog)
 function readout() {
   poke();
   const slot = `slot ${bank.current >= 0 ? bank.current + 1 : '–'}${bank.pending >= 0 ? ` → ${bank.pending + 1}` : ''}`;
   statusLine = [`${tempo} bpm`, ...(m.meter !== '4/4' ? [m.meter] : []), playing ? 'playing' : 'stopped', slot, rec.armed ? `rec ●${rec.knobs !== 'off' ? ` knobs ${rec.knobs}` : ''}` : 'rec ○', `evolve ${evo.on ? 'on' : 'off'}`, `kit ${KITS[m.kitKey()]?.name || 'custom'}`,
     ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(pfx.filter ? [filterSay(Math.round(pfx.filter * 100))] : []), ...(pfx.throw ? ['THROW'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
-  if ($('nerd').open) {   // written only while someone reads it (opening the drawer fills it)
-    const sd = m.lane.sound, lines = [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
+  if ($('nerd').open) $('nerd-stats').textContent = nerdLines().join('\n');   // written only while someone reads it (opening the drawer fills it)
+  if (face.log) paintLog();
+  renderLanes(); announceChanges();
+}
+/** "Nerd stats": the engine line, a row per lane, the selected lane's sound row, what is queued or locked. */
+function nerdLines() {
+    const sd = m.lane.sound; return [`engine ${engine}   meter ${m.meter}   cycle ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(1)} beats   humanize ${(m.humanize * 100).toFixed(0)}%`,
       ...m.lanes.map((l, i) => `${i === m.selected ? '▸' : ' '} ${voiceLabel(l).padEnd(7)} len ${String(l.length).padStart(2)}  ×${RATIO_LABEL[l.ratioIndex].padEnd(3)} E${l.euclidK} rot ${l.rotation} swing ${Math.round(l.swing * 100)}%${l.swingTpl !== 'mpc' ? ` ${SWING_TEMPLATES[l.swingTpl].name}` : ''}${l.offsetMs ? ` ${l.offsetMs > 0 ? '+' : ''}${l.offsetMs}ms` : ''} prob ${Math.round(l.prob * 100)}%${l.muted ? '  muted' : ''}${l.solo ? '  solo' : ''}${l.choke >= 0 ? `  chokes ${l.choke + 1}` : ''}`),
       `  sound  ${SOUND_KEYS.map(k => `${k} ${Math.round(sd[k] * 100)}`).join('  ')}`,
       `${bank.pending >= 0 ? `slot ${bank.pending + 1} queued   ` : ''}${bank.chain.length > 1 ? `chain ${bank.chain.map(i => i + 1).join('·')}   ` : ''}${libCurrent && lib.get(libCurrent) ? `setup “${lib.get(libCurrent).name}”   ` : ''}${dice.locked ? `dice ${dice.seed}${dice.repeat > 1 ? `/${dice.repeat}` : ''}   ` : ''}evolve ${evo.on ? `every ${evo.every} bar${evo.every > 1 ? 's' : ''} ${evo.amount}%${lastEvolve ? ` (${lastEvolve})` : ''}` : 'off'}${pmidi.out ? `   midi → ${pmidi.out.name}${pmidi.clockOut ? ' +clock' : ''}` : ''}${pmidi.follow !== 'off' && pmidi.extBpm ? `   ext ${pmidi.extBpm} bpm` : ''}`];
-    $('nerd-stats').textContent = lines.join('\n');
-  }
-  renderLanes(); announceChanges();
 }
+// ---- RD-5 the console log (DECISION, kept by the conductor): the old readout as read-only monospace text over the
+// stage: the status line, then the per-lane and sound rows of the nerd stats. ` or Sheet → setup toggles it; off by
+// default, remembered. Text, not a control (A5), not a live region, under the luminance cap, and outside the grid's
+// tracks: it never moves the rings (A7) ----
+function paintLog() { const lines = nerdLines(), t = [statusLine, ...lines.slice(1, m.lanes.length + 2)].join('\n'); if ($('console-log').textContent !== t) $('console-log').textContent = t; }
+function setLog(on) { face.log = !!on; $('console-log').hidden = !face.log; ui.consoleLog?.set(face.log); if (face.log) paintLog(); saveSettings(); }
 $('nerd').addEventListener('toggle', () => { if ($('nerd').open) readout(); });
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
 // you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
@@ -2708,4 +2720,5 @@ function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
 // (RD-3: the Move table is a drawer in Sheet → setup now, not a popup, so a click elsewhere no longer folds it shut)
 window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
+$('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)
 readout(); layoutStage(); scene.start();

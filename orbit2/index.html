@@ -21,6 +21,9 @@
   <canvas id="cv"></canvas>
   <!-- RD-3: the stage cell of the grid (styles.css); the rings are measured from it alone (app.js layoutStage) -->
   <div id="stage" aria-hidden="true"></div>
+  <!-- RD-5 the console log (` or Sheet → setup → settings): the old readout as read-only text over the stage, off by
+       default. Not a control, not a live region; it sits in the stage cell without sizing it, so the rings never move -->
+  <pre id="console-log" class="console-log" hidden></pre>
   <!-- RD-5 the console: the Move's face along the bottom (DECISION "The screen at 1512×860"). Transport on the left, the
        selected lane in the middle (its header, the 8 knobs of the page, the 16 cells), the action words on the right.
        It keeps the old strip's id and class (focus mode, the phone's floating play); on narrow windows it stacks under
@@ -90,6 +93,8 @@
       <tr><th>Space</th><td>play / stop</td></tr>
       <tr><th>F</th><td>focus mode: only the orbits (F or Esc to come back; while record is armed F plays its pad)</td></tr>
       <tr><th>?</th><td>this help</td></tr>
+      <tr><th>`</th><td>the console log: the status and every lane's numbers as text over the rings (also Sheet → setup)</td></tr>
+      <tr><th>⇧ held</th><td>the console shows the sound page (the Move's Shift + knobs)</td></tr>
       <tr><th>z–, · a–k · q–i · 1–8</th><td>8 steps of lanes 1 · 2 · 3 · 4 (one row per lane, like the Move's pads, on the page the pads show; lanes 3–6 once lane 5 or 6 is selected, until lane 1 or 2 is) · Shift = accent · F is focus mode until record is armed · record armed: play and record</td></tr>
       <tr><th>hold 0</th><td>fill</td></tr>
       <tr><th>Alt+1–6</th><td>select a lane</td></tr>
@@ -354,7 +359,7 @@
         <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
         <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
       </div>
-      <div class="row-ctl"><span id="live-mode"></span></div>
+      <div class="row-ctl"><span id="live-mode"></span><span id="console-log-chip"></span></div>
     </details>
     <details class="drawer adv" id="midi-drawer">
       <summary>MIDI</summary>
