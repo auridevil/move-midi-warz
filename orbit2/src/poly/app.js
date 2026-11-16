@@ -2753,8 +2753,9 @@ function closePopups() { closeShareMenu(); closeSlotMenu(); }
 // RD-6: an open step is drawn by the step page, its "more…" panel, or its cell's selection outline (the step tab's step
 // after another tab): any of them, really seen, makes it the layer an Esc closes. Seen: focus mode hides the console
 // with visibility (so the rings never move), which keeps its boxes: a hidden page or outline is no layer then. (A box
-// and the inherited visibility: checkVisibility is missing on older iOS Safari, which runs the app)
-const seen = (el) => !!el && drawn(el) && getComputedStyle(el).visibility === 'visible';
+// and the inherited visibility: checkVisibility is missing on older iOS Safari, which runs the app; Chrome keeps a box
+// for what a closed <details> holds, so a closed drawer's content is not seen either)
+const seen = (el) => !!el && drawn(el) && getComputedStyle(el).visibility === 'visible' && !el.closest('details:not([open])');
 const stepDrawn = () => lockStep >= 0 && ((knobPage.shown === 'step' && seen($('knobs'))) || seen($('lockpanel')) || (stepBtns[lockStep]?.classList.contains('sel') && seen(stepBtns[lockStep])));
 const escState = () => ({ dialog: !!popupOpen(), step: stepDrawn(), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
