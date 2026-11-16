@@ -200,7 +200,7 @@ the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10,
 - **RD-3** Stage and sheet: three-column grid + console row, rings fixed, drawers re-hosted (ids kept) in a 428 px sheet. ✅
 - **RD-4** Find and one Escape: ⌘K / `/` search with synonyms and recents, one Esc order, sheet closed by default. ✅
 - **RD-5** The console: the Move's face on screen (8 knobs, 16 cells, transport, MOVE ⇢ chip, peek, lane list), plus the switchable console-log overlay (`` ` ``). ✅
-- **RD-6** Step page and the ring answers the hand: one lock editor, Nils's state table, read-only canvas answers.
+- **RD-6** Step page and the ring answers the hand: one lock editor, Nils's state table, read-only canvas answers. ✅
 - **RD-7** Pills: one status region (max 4 + "+N more"), replaces welcome bar, quest card, jam panel; quest "show me".
 - **RD-8** Light on the canvas: sun numeral, generative arc, slot moons, one arc label, fill flare.
 - **RD-9** The set: F mode keeps state, night brightness, "?" draws the Move, final setlog sets (A3).
