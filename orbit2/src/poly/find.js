@@ -87,8 +87,12 @@ export const ACTIONS = {
   'share-audio': ['share 4 bars of audio', ''],
   'share-postcard': ['share a postcard (video)', 'webm'],
 };
-/** What an empty search offers after the recents: the things people reach for (Rio: "the keyboard user's map"). */
-export const FIND_DEFAULTS = ['btn-play', 'exp-all', 'exp-stems', 'btn-random', 'btn-init', 'btn-share', 'btn-focus'];
+/** What an empty search offers after the recents: the things people reach for (Rio: "the keyboard user's map"). RD-7:
+ *  nothing destructive (A3: stop, randomize, init) in it: the list drops open under the field on a click, so a stray
+ *  second click there must not stop or wipe the beat (Vera's mis-click run found it); those are one word away. */
+export const FIND_DEFAULTS = ['exp-all', 'exp-stems', 'btn-share', 'btn-focus'];
+/** A3's destructive actions: never offered unasked. */
+export const FIND_UNASKED = ['btn-play', 'btn-random', 'btn-wild', 'btn-init', 'btn-clear', 'btn-load'];
 
 /** Lower-case words of a text: letters and digits, "7/8" and "1:3" kept whole, accents and symbols (⤓ ▶ ×) dropped. */
 export function words(s) {

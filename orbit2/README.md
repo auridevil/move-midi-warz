@@ -68,7 +68,11 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   half in `src/poly/pills.js` (`pillText`, `pillLayout`); `app.js renderPills` keeps every pill's node in place and
   writes only what changed, so the words never move with the clock (each pill announced once). Quest "show me": the
   gesture drawn once on the rings as a ghost hand (`scene.js ghost`, `ghostAt`, read-only; any key or press hides it),
-  or the control for a quest played in the sheet. `__poly.showPills([keys])` forces a layout for tests.
+  or the control for a quest played in the sheet. `__poly.showPills([keys])` forces a layout for tests. Browser check:
+  `node orbit2/tools/pills-check.mjs` (ANNOUNCE a MutationObserver on the region while playing with five modes and a jam
+  take on: 0 changes per bar; SHEET 6 pills at 1280×720 and 1512×860, the sheet ≥ 340 px under them, rings fixed (A7);
+  KEEP the jam take, a pending mute, clock follow, the quest, welcome back, Esc). The face audit's "pills" state turns
+  six on (PILLS gate). Find's empty list offers nothing destructive (`FIND_DEFAULTS`; Vera's mis-click run).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

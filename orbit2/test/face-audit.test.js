@@ -41,6 +41,16 @@ test('RD-3 face audit A6: a panel its column cuts off fails (sideways at all; th
   assert.equal(one([{ el: 'section#sheet', x: 0, y: 30, pad: 16, cut: true }]).length, 1, 'past the padding: a row of the sheet is out of reach');
 });
 
+test('RD-7 face audit PILLS: six pills keep the sheet ≥ 340 px under the last one and draw at most 4 (wide windows only)', () => {
+  const pl = (o = {}) => ({ on: 6, drawn: 4, more: '+2 more ▾', sheet: 450, sheetTop: 142, pillsBottom: 132, wide: true, ...o });
+  const one = (o) => verdicts(report(o)).map(f => `${f.test} ${f.size}`);
+  assert.deepEqual(one({ '1280x720': { pills: pl() } }), []);
+  assert.deepEqual(one({ '1280x720': { pills: pl({ sheet: THRESHOLDS.pillSheet - 1 }) } }), ['PILLS 1280x720']);
+  assert.deepEqual(one({ '1512x860': { pills: pl({ drawn: 6, more: '' }) } }), ['PILLS 1512x860']);
+  assert.deepEqual(one({ '1512x982': { pills: pl({ sheetTop: 100 }) } }), ['PILLS 1512x982'], 'the sheet comes under the pills, never over them');
+  assert.deepEqual(one({ '390x844m': { pills: pl({ sheet: 0, wide: false }) } }), [], 'the phone\'s sheet is a bottom sheet');
+});
+
 test('RD-1 A9: the WAV reader, the render diff, and a fingerprint that a 1-LSB wobble keeps and a 1 dB change moves', () => {
   const n = 44100, ch = [new Float32Array(n), new Float32Array(n)];
   for (let i = 0; i < n; i++) { const env = Math.exp(-(i % 11025) / 2000); ch[0][i] = Math.sin(i * 0.05) * 0.5 * env; ch[1][i] = Math.sin(i * 0.031) * 0.4 * env; }

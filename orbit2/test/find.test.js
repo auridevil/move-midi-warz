@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SYNONYMS, ACTIONS, FIND_DEFAULTS, RECENTS_MAX, ESC_ORDER, words, entry, search, recentsFrom, pushRecent, opensFind, escStep } from '../src/poly/find.js';
+import { SYNONYMS, ACTIONS, FIND_DEFAULTS, FIND_UNASKED, RECENTS_MAX, ESC_ORDER, words, entry, search, recentsFrom, pushRecent, opensFind, escStep } from '../src/poly/find.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
@@ -98,6 +98,9 @@ test('RD-4 the words: lower case, accents and symbols dropped, 7/8 and 1:3 kept 
 test('RD-4 an empty search: the recents first, then the defaults; recents survive any saved value', () => {
   const idx = page(true);
   assert.deepEqual(search(idx, '').map(e => e.key), FIND_DEFAULTS);
+  // RD-7: nothing destructive offered unasked (a stray click under the field stopped the music in Vera's run)
+  for (const k of FIND_UNASKED) assert.ok(!FIND_DEFAULTS.includes(k), k);
+  assert.equal(search(idx, 'play')[0]?.key, 'btn-play', 'still one word away');
   assert.deepEqual(search(idx, '  ', ['tempo', 'gone', 'btn-play']).slice(0, 3).map(e => e.key), ['tempo', 'btn-play', 'exp-all'], 'a recent no longer on the page drops');
   for (const bad of [null, '', '{', '"x"', '7', '{"a":1}', '[1,null,{}]']) assert.deepEqual(recentsFrom(bad), [], String(bad));
   assert.deepEqual(recentsFrom('["a","b","a","",3,"c"]'), ['a', 'b', 'c']);

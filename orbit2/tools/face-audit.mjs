@@ -44,7 +44,10 @@ export const THRESHOLDS = {
   controls: 50, controlsWorst: 62,                              // A5 (at 1512×860)
   a1Sizes: ['1512x860', '1280x720', '390x844m'], a5Size: '1512x860', a6Sizes: ['1512x860', '1512x982', '1280x720'], a7Sizes: ['1512x860', '1512x982', '1280x720'],
   typeSizes: [11, 13, 15, 18, 22], typeLarge: 40,               // TYPE (RD-2): three sizes; RD-5 adds the bar·beat 18 and the console's knob values 22 (DECISION "Numeral weight", 500); 300 only at 40 px and up
+  pillSheet: 340, pillsMax: 4,                                  // PILLS (RD-7): 6 pills on, the sheet ≥ 340 px under them, ≤ 4 drawn
 };
+/** RD-7: the six pills the "pills" state turns on (4 drawn + "+2 more"; DECISION: 1280×720 with 6 pills). */
+export const PILLS6 = ['rec', 'chain', 'solo', 'evolve', 'welcome', 'quest'];
 /** RD-2 colour = sound: a colour ([r, g, b] 0–255) is 'grey' (chroma ≤ 40: the void's greys, a muted dot), 'lane' (a mix
  *  of one lane colour over the void, any amount, every channel within 8), 'rec' (the same for record red) or 'stray'.
  *  Runs in the page too (serialized): no outside names. */
@@ -124,7 +127,7 @@ const PAGE = String.raw`(() => {
   // hueKind; a stray hue anywhere, or record red off a recorder that records, is reported. The canvas is light, not a
   // control: left out (RD-8)
   const hueKind = ${hueKind};
-  const RECORDING = '#btn-rec.armed, #btn-mic.armed, .jam-btn.on, .jam-panel, .console.rec-live';   // RD-5: the console's red top line, armed and playing
+  const RECORDING = '#btn-rec.armed, #btn-mic.armed, .jam-btn.on, .jam-panel, .console.rec-live, #sp-rec';   // RD-7: the record and jam pills   // RD-5: the console's red top line, armed and playing
   function hues() {
     const root = getComputedStyle(document.documentElement), hex = (h) => [1, 3, 5].map(i => parseInt(h.trim().slice(i, i + 2), 16));
     const lanes = [...document.querySelectorAll('#legend li')].map(li => hex(li.style.getPropertyValue('--lane'))), rec = hex(root.getPropertyValue('--rec')), v = hex(root.getPropertyValue('--v'));
@@ -321,9 +324,20 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
       await p.eval(`window.__faSheet = __poly.sheet; window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open)`);
       for (const t of tabs) { await p.eval(`(() => { __poly.setSheet(${JSON.stringify(t)}, true); document.querySelectorAll('#pane-${t} details').forEach(d => { d.open = true; }); })()`); await state(`tab ${t}`); if (shots && t !== 'lane') await p.shot(join(shots, `${size}-tab-${t}.png`)); }
       await p.eval('__poly.setSheet(__faSheet.tab, false)'); await state('closed'); if (shots) await p.shot(join(shots, `${size}-sheet-closed.png`));
-      await p.eval(`(() => { __poly.setSheet(__faSheet.tab, __faSheet.open); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); window.__faPills = ['welcome', 'quest', 'jam-panel'].map(id => document.getElementById(id).hidden); ['welcome', 'quest', 'jam-panel'].forEach(id => { document.getElementById(id).hidden = false; }); })()`);
-      await state('pills'); if (shots) await p.shot(join(shots, `${size}-pills.png`));
-      await p.eval(`['welcome', 'quest', 'jam-panel'].forEach((id, i) => { document.getElementById(id).hidden = window.__faPills[i]; })`);
+      // RD-7: six pills on (4 drawn + "+2 more") with the sheet open under them: A6 / A7 as a state, the sheet's height
+      // (PILLS: ≥ 340 px), then "+2 more" dropped down over it. A page from before the pills: the three panels shown
+      const pills = await p.eval('!!window.__poly.showPills');
+      if (pills) {
+        await p.eval(`(() => { document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); __poly.setSheet(__faSheet.tab, true); __poly.showPills(${JSON.stringify(PILLS6)}); })()`);
+        await state('pills'); if (shots) await p.shot(join(shots, `${size}-pills.png`));
+        out.pills = await p.eval(`(() => { const s = document.getElementById('sheet').getBoundingClientRect(), r = document.getElementById('pills').getBoundingClientRect(); return { on: ${PILLS6.length}, drawn: [...document.querySelectorAll('#pills > .spill:not([hidden]):not(.fold)')].length, more: document.getElementById('sp-more').hidden ? '' : document.getElementById('sp-more').textContent, sheet: Math.round(s.height), sheetTop: Math.round(s.top), pillsBottom: Math.round(r.bottom), wide: !matchMedia('(max-width: 1100px)').matches }; })()`);
+        await p.eval('__poly.setPillsOpen(true)'); await state('pills open'); if (shots) await p.shot(join(shots, `${size}-pills-open.png`));
+        await p.eval(`(() => { __poly.setPillsOpen(false); __poly.showPills(null); __poly.setSheet(__faSheet.tab, __faSheet.open); })()`);
+      } else {
+        await p.eval(`(() => { __poly.setSheet(__faSheet.tab, __faSheet.open); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); window.__faPills = ['welcome', 'quest', 'jam-panel'].map(id => document.getElementById(id).hidden); ['welcome', 'quest', 'jam-panel'].forEach(id => { document.getElementById(id).hidden = false; }); })()`);
+        await state('pills'); if (shots) await p.shot(join(shots, `${size}-pills.png`));
+        await p.eval(`['welcome', 'quest', 'jam-panel'].forEach((id, i) => { document.getElementById(id).hidden = window.__faPills[i]; })`);
+      }
     }
     await p.eval('__poly.setFocusMode(true)'); await state('focus'); await p.eval('__poly.setFocusMode(false)');
     // RD-6 the step page (a cell's long-press on the first hit): A6 / A7 as a state, and A1 measured as the first load is
@@ -473,6 +487,11 @@ export function verdicts(report, t = THRESHOLDS) {
   for (const s of report.sizes) if (s.type?.fails.length) fails.push({ test: 'TYPE', size: s.size, what: `${s.type.fails.length} text kinds off the type rules: ${s.type.fails.slice(0, 4).map(f => f.what).join('; ')}` });
   for (const s of report.sizes) { const bad = (s.hits || []).filter(h => !h.ok); if (bad.length) fails.push({ test: 'HIT', size: s.size, what: `${bad.length} action words without a 40 px hit area: ${bad.map(h => `${h.el} ${h.w}×${h.h}`).join(', ')}` }); }
   for (const s of report.sizes) { const bad = (s.reach || []).filter(r => !r.exists || !r.drawn); if (bad.length) fails.push({ test: 'IDS', size: s.size, what: `${bad.length} RD-1 control ids ${bad.some(r => !r.exists) ? 'gone or ' : ''}not drawn with their tab open: ${bad.map(r => `${r.id}${r.exists ? ` (tab ${r.tab})` : ' (gone)'}`).join(', ')}` }); }
+  // RD-7: on the wide windows (A6's sizes), six pills keep the sheet ≥ 340 px and draw at most 4 (the rest "+N more")
+  for (const k of t.a6Sizes) { const pl = by[k]?.pills; if (!pl?.wide) continue;
+    if (pl.sheet < t.pillSheet) fails.push({ test: 'PILLS', size: k, what: `${pl.on} pills: the sheet is ${pl.sheet} px (< ${t.pillSheet})` });
+    if (pl.drawn > t.pillsMax || (pl.on > t.pillsMax && !pl.more)) fails.push({ test: 'PILLS', size: k, what: `${pl.on} pills: ${pl.drawn} drawn, "${pl.more}"` });
+    if (pl.sheetTop < pl.pillsBottom) fails.push({ test: 'PILLS', size: k, what: `the sheet (top ${pl.sheetTop}) is not under the last pill (${pl.pillsBottom})` }); }
   for (const s of report.sizes) if (s.hues?.length) fails.push({ test: 'HUE', size: s.size, what: `${s.hues.length} colours that are no lane's, or red off a recording: ${s.hues.slice(0, 5).map(h => `${h.el} ${h.prop} rgb(${h.rgb}) ${h.kind}`).join('; ')}` });
   return fails;
 }
@@ -485,6 +504,7 @@ export function summary(report) {
     L.push(`text: ${s.text.n} runs, min ${s.text.min}:1, ${s.text.fails.length} under ${THRESHOLDS.text}:1${s.text.fails.length ? ` (worst: ${s.text.fails.slice(0, 5).map(f => `${f.contrast} "${f.text}"`).join(', ')})` : ''}`);
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     if (s.stepPage) { const sp = s.stepPage; L.push(`step page (step ${sp.step}): text ${sp.text.n} runs min ${sp.text.min}:1 (${sp.text.fails.length} under) · edges ${sp.edges.n} min ${sp.edges.min}:1 (${sp.edges.fails.length} under) · brightest control ${sp.controlMax}`); }
+    if (s.pills) L.push(`pills: ${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);
     if (s.hits) L.push(`hit areas: ${s.hits.filter(h => h.ok).length} of ${s.hits.length} action words in view take 40 px${s.hits.some(h => !h.ok) ? ` (not: ${s.hits.filter(h => !h.ok).map(h => h.el).join(', ')})` : ''}`);
     if (s.reach) { const by = {}; for (const r of s.reach) by[r.tab || 'face'] = (by[r.tab || 'face'] || 0) + 1; L.push(`RD-1 control ids: ${s.reach.filter(r => r.exists && r.drawn).length} of ${s.reach.length} drawn with their tab open (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ')})`); }

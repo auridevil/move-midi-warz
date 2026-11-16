@@ -2026,7 +2026,7 @@ function renderJam() {
     const t = `the take: ${nBars(Math.round(jam.beats * PPQ / jam.bar))}${jam.meter !== '4/4' ? ` of ${jam.meter}` : ''} at ${jam.tempo} bpm · ${secs.toFixed(1)} s · ${jam.lanes} lane tracks + raw mix (.zip)${jam.ringJob ? ' · rendering the ring-out…' : jam.ring ? ' + ring-out files' : ''}${jam.tempoMoved ? ' · the tempo moved during the take, so it is not whole bars at one tempo' : ''}`;
     if ($('jam-dl').title !== t) $('jam-dl').title = t;
   }
-  $('jam-dl').hidden = $('jam-discard').hidden = st !== 'done'; readout();
+  setHidden($('jam-dl'), st !== 'done'); setHidden($('jam-discard'), st !== 'done'); readout();   // only when it changes: this runs every beat of a take, inside the status region
 }
 async function downloadJam() {
   slog?.act('export', null, 'jam');
@@ -2143,7 +2143,7 @@ function pillState() {
     clock: { follow: pmidi.follow, inName: pmidi.inName }, welcome: welcomeOn, quest: q && !quests.hidden ? { n: QUESTS.indexOf(q) + 1, of: QUESTS.length, title: q.title } : null,
     jam: { state: jam.state, bars: jam.bar ? Math.round(jam.beats * PPQ / jam.bar) : 0 } };
 }
-const setHidden = (el, h) => { if (el.hidden !== h) el.hidden = h; };
+function setHidden(el, h) { if (el.hidden !== h) el.hidden = h; }   // a write of the same value is still a mutation (a live region hears it)
 function renderPills() {
   if (!pillsLive) return;
   const s = pillState(), words = Object.fromEntries(pillsOn(s).map(p => [p.k, p.text])), keys = pillsForce || Object.keys(words);
