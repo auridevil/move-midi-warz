@@ -22,7 +22,7 @@ import { makeGauge } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
-import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, escStep } from './find.js';
+import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
@@ -2163,8 +2163,8 @@ window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') { if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return; e.preventDefault(); if (e.shiftKey) redo(); else undo(); return; }
   // ? = help from anywhere but a text field: a button or a drawer header the keyboard reached has no use for it
   if (e.key === '?' && !e.metaKey && !e.ctrlKey && !(e.target instanceof Element && e.target.closest(TEXT_SEL))) { e.preventDefault(); openHelp(); return; }
-  // RD-4 ⌘K / Ctrl+K and / = find, from anywhere but a text field (it owns its keys) or a select (/ is type-ahead there)
-  if ((((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'k') || (e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey)) && !(e.target instanceof Element && e.target.closest(`${TEXT_SEL}, select`))) { e.preventDefault(); openFind(); return; }
+  // RD-4 ⌘K / Ctrl+K and / = find, from anywhere but a text field (it owns its keys); / not from a select (type-ahead)
+  if (opensFind(e, !(e.target instanceof Element) ? '' : e.target.closest(TEXT_SEL) ? 'text' : e.target.closest('select') ? 'select' : '')) { e.preventDefault(); openFind(); return; }
   if (controlOwnsKey(e)) return;
   if (slog && e.key.toLowerCase() === 'l' && !e.altKey && !e.metaKey && !e.ctrlKey) { e.preventDefault(); const f = slog.file({ page: location.pathname, tempo }); download(f.text, f.name, 'application/json'); return; }   // RD-1: L saves the setlog
   if (e.key === ' ') { e.preventDefault(); togglePlay(); return; }
@@ -2408,7 +2408,8 @@ function setSheet(tab, open, user = false) {
   const was = sheet.tab, a = document.activeElement; sheet.tab = SHEET_TABS.includes(tab) ? tab : sheet.tab; sheet.open = !!open;
   $('sheet').classList.toggle('open', sheet.open); document.body.classList.toggle('sheet-open', sheet.open);
   for (const t of SHEET_TABS) { const b = $('tab-' + t), on = t === sheet.tab; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('pane-' + t).hidden = !on; }
-  $('sheet-body').hidden = !sheet.open; $('sheet-x').hidden = !sheet.open; $('find-box').hidden = !sheet.open; if (!sheet.open) findList(false);
+  // closed, find forgets its query: the next ⌘K / / opens on the recents
+  $('sheet-body').hidden = !sheet.open; $('sheet-x').hidden = !sheet.open; $('find-box').hidden = !sheet.open; if (!sheet.open) { findList(false); $('find').value = ''; }
   // focus never stays on what just hid (the pane left behind, the closed body, the × itself): the selected tab takes it.
   // No box = hidden (getClientRects: checkVisibility is missing on older iOS Safari)
   if (a && a !== document.body && $('sheet').contains(a) && !a.getClientRects().length) $('tab-' + sheet.tab).focus({ preventScroll: true });
@@ -2455,23 +2456,28 @@ function accName(el) {
 }
 /** Hidden for a reason the sheet can't undo (no Web MIDI, a closed popup, the lock panel without a step, steps 17–32 of a
  *  16-step lane: display none on the control itself): out of the index. A closed tab's pane, the closed sheet, a closed
- *  drawer and simple view's tucked drawers (.adv) are not reasons: find opens them. */
+ *  drawer and simple view's tucked drawers (.adv) are not reasons: find opens them. Nor is the closed share menu for
+ *  the actions in it (4 bars of audio, the postcard): Enter presses them without opening it. */
 const findHidden = (el) => {
   if (!el.matches('.adv') && getComputedStyle(el).display === 'none') return true;
-  for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body')) return true; return false;
+  const runs = !!ACTIONS[el.id];
+  for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body') && !(runs && n.id === 'share-menu')) return true;
+  return false;
 };
-/** Where a control lives, as the list says it: the tab, the drawer, the group label round it. */
+/** Where a control lives, as the list says it: the tab, the drawer, the group label round it (each said once: the
+ *  export tab's Export drawer is "export"). */
 function findWhere(el) {
   const tab = el.closest('[role=tabpanel]')?.dataset.sheet, d = el.closest('details'), sum = d && el.tagName !== 'SUMMARY' ? squash(d.querySelector(':scope > summary')?.textContent).slice(0, 28) : '';
   const grp = el.closest('[role=radiogroup], [role=group]')?.getAttribute('aria-label'), lbl = squash(el.closest('.ctl')?.querySelector('.ctl-lbl')?.textContent);
-  return [tab, sum, grp, lbl].filter(Boolean).filter((w, i, a) => a.indexOf(w) === i).join(' · ');
+  return [tab, sum, grp, lbl].filter(Boolean).filter((w, i, a) => a.findIndex(x => x.toLowerCase() === w.toLowerCase()) === i).join(' · ');
 }
 /** Every labelled control on the page now, as index entries (`el` kept for running it). */
 function buildFindIndex() {
+  const everything = new Map(PARAMS.map(p => [sliders[p.k]?.el, p.label]));   // I7: in simple view the shift knob is "rotation" too
   return [...document.querySelectorAll(FIND_SEL)].filter(el => !el.closest(FIND_OUT) && !findHidden(el) && !(el.matches('input') && el.type === 'hidden')).flatMap(el => {
     const name = accName(el); if (!name) return [];
     const act = ACTIONS[el.id], where = findWhere(el);
-    const e = entry({ key: el.id || `${where}|${name}`, name: act ? act[0] : name, where, action: !!act || el.matches('[role=tab]'), extra: [act?.[1], act && name, el.tagName === 'SELECT' && [...el.options].map(o => o.text).join(' ')].filter(Boolean).join(' ') });
+    const e = entry({ key: el.id || `${where}|${name}`, name: act ? act[0] : name, where, action: !!act || el.matches('[role=tab]'), alias: everything.get(el), extra: [act?.[1], act && name, el.tagName === 'SELECT' && [...el.options].map(o => o.text).join(' ')].filter(Boolean).join(' ') });
     return [Object.assign(e, { el })];
   });
 }
@@ -2480,67 +2486,74 @@ function findList(show) {
   list.innerHTML = '';
   findHits.forEach((h, i) => {
     const li = document.createElement('li'); li.id = `find-o${i}`; li.setAttribute('role', 'option'); li.setAttribute('aria-selected', String(i === findAt));
-    li.textContent = h.name; if (h.where) { const w = document.createElement('span'); w.className = 'find-where'; w.textContent = h.where; li.appendChild(w); }
+    li.textContent = h.name; if (h.where) { const w = document.createElement('span'); w.className = 'find-where'; w.textContent = h.where; li.appendChild(w); li.setAttribute('aria-label', `${h.name}, ${h.where}`); }   // read with a pause, not run together
     li.onpointerdown = (e) => e.preventDefault();   // the field keeps the focus (and the keys)
     li.onclick = () => findRun(h); list.appendChild(li);
   });
-  if (!findHits.length) { const li = document.createElement('li'); li.className = 'find-none'; li.textContent = 'nothing by that name'; list.appendChild(li); }
+  if (!findHits.length) { const li = document.createElement('li'); li.className = 'find-none'; li.setAttribute('role', 'option'); li.setAttribute('aria-disabled', 'true'); li.textContent = 'nothing by that name'; list.appendChild(li); }
   if (findHits.length) inp.setAttribute('aria-activedescendant', `find-o${findAt}`); else inp.removeAttribute('aria-activedescendant');
 }
 function findQuery() { findHits = search(findIndex, $('find').value, findRecents); findAt = 0; findList(true); }
+/** The field takes the focus, however it got there (⌘K, /, a click, Tab): the page is read now, so a control drawn since
+ *  the last time (steps 17–32 of a longer lane, a sixth lane) is found, and the sheet's state is what Enter goes back to */
+function findFocus() { findBefore = { open: sheet.open, tab: sheet.tab }; findIndex = buildFindIndex(); findQuery(); }
 function openFind() {
   if (focusMode) setFocusMode(false);   // the sheet is hidden in focus mode
-  findBefore = { open: sheet.open, tab: sheet.tab }; if (!sheet.open) setSheet(sheet.tab, true);
-  findIndex = buildFindIndex(); const inp = $('find'); focusAs(inp, true); inp.select(); findQuery();
+  const was = { open: sheet.open, tab: sheet.tab }, inp = $('find'); if (!sheet.open) setSheet(sheet.tab, true);
+  if (document.activeElement === inp) findFocus(); else focusAs(inp, true);   // focusing it runs findFocus
+  findBefore = was; inp.select();
 }
-/** Run a result: an action is pressed (the sheet goes back as it was when it lies outside the sheet); a control is shown
- *  (its tab, its drawers; simple view gives way to everything for an advanced one) and focused, the keys its own. */
+/** Run a result: an action is pressed (the sheet goes back as it was when it lies outside the sheet), and the keys stay
+ *  the page's (Space after "export stems" plays, it doesn't export again); a tab is shown; a control is shown (its tab,
+ *  its drawers; simple view gives way to everything for an advanced one) and focused, the keys its own. */
 function findRun(h) {
-  const el = h.el; findRecents = pushRecent(findRecents, h.key); try { localStorage.setItem(FIND_KEY, JSON.stringify(findRecents)); } catch {}
-  $('find').value = ''; findList(false); if (!el?.isConnected) return;
+  const el = h.el, inp = $('find'); findRecents = pushRecent(findRecents, h.key); try { localStorage.setItem(FIND_KEY, JSON.stringify(findRecents)); } catch {}
+  inp.value = ''; findList(false); if (!el?.isConnected) return;
   if (el.closest('.adv') && quests.view === 'simple') setView('all');
-  const inSheet = $('sheet').contains(el);
-  if (h.action && !el.matches('[role=tab]')) {
-    if (!inSheet) { if (findBefore && !findBefore.open) setSheet(sheet.tab, false); $('find').blur(); el.click(); return; }
-    reveal(el); el.click(); if (el.getClientRects().length) focusAs(el, true); return;
+  const inSheet = $('sheet').contains(el), back = findBefore && !findBefore.open;   // the sheet was closed before find
+  if (el.matches('[role=tab]')) { setSheet(el.id.slice(4), true, true); focusAs(el, true); return; }   // shown, never toggled shut (a phone's tab click would)
+  if (h.action) {
+    // outside the sheet: the field lets go first (closing the sheet with the focus in it would hand the focus, and the
+    // keys, to its tab), then the sheet goes back as it was
+    if (!inSheet) { keyFocused.delete(inp); inp.blur(); if (back) setSheet(sheet.tab, false); el.click(); return; }
+    reveal(el); el.click(); if (el.getClientRects().length) focusAs(el, false); return;
   }
-  if (el.matches('[role=tab]')) { el.click(); focusAs(el, true); return; }
-  reveal(el); if (!inSheet && findBefore && !findBefore.open) setSheet(sheet.tab, false);
+  reveal(el); if (!inSheet && back) setSheet(sheet.tab, false);
   el.scrollIntoView({ block: 'nearest' }); focusAs(el, true);
   if (!el.getClientRects().length) toast(`${h.name}: not on this screen`, 2500);
 }
 {
   const inp = $('find');
-  inp.addEventListener('input', findQuery); inp.addEventListener('focus', () => { if (!findIndex.length) findIndex = buildFindIndex(); findQuery(); });
+  inp.addEventListener('input', findQuery); inp.addEventListener('focus', findFocus);
   inp.addEventListener('blur', () => findList(false));
   inp.addEventListener('keydown', (e) => {
     const d = { ArrowDown: 1, ArrowUp: -1 }[e.key];
     if (d) { e.preventDefault(); if (findHits.length) { findAt = (findAt + d + findHits.length) % findHits.length; findList(true); $(`find-o${findAt}`)?.scrollIntoView({ block: 'nearest' }); } }
     else if (e.key === 'Enter') { e.preventDefault(); if (findHits[findAt]) findRun(findHits[findAt]); }
-    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (inp.value) { inp.value = ''; findQuery(); } else { inp.blur(); escapeOnce(); } }
+    else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (e.repeat) return; if (inp.value) { inp.value = ''; findQuery(); } else { inp.blur(); escapeOnce(); } }
   });
 }
 // ---- RD-4 one Escape: dialog → step page → sheet → focus mode → give the keys back (DECISION §2), one layer per press,
-// only what is open and drawn counts (the lock panel hidden in focus mode is not a layer then). A click on empty canvas
-// is the same (scene pointer events above). A modal card (help, the shared beat) closes itself; a text field owns its
-// Esc (B8); a popup's own handler (slot menu, ring menu, share menu) answers it first when the focus is in it ----
-const popupOpen = () => (!$('share-menu').hidden && 'share') || (slotMenuFor >= 0 && 'slot') || (!ringMenu.hidden && 'ring') || null;
-function closePopups() { closeShareMenu(); closeSlotMenu(); closeRingMenu(); }
+// only what is open and drawn counts (the lock panel hidden in focus mode, a slot menu whose tab was left, are not
+// layers then: they close quietly with the next one). A click on empty canvas is the same (scene pointer events above).
+// A modal card (help, the shared beat) closes itself; a text field owns its Esc (B8); a popup's own handler (slot menu,
+// ring menu, share menu) answers it first when the focus is in it; a held Esc is one press ----
 const drawn = (el) => !!el.getClientRects().length;
+const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || (!ringMenu.hidden && drawn(ringMenu) && 'ring') || null;
+function closePopups() { closeShareMenu(); closeSlotMenu(); closeRingMenu(); }
 const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && drawn($('lockpanel')), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
   const a = document.activeElement, step = escStep(escState());
-  if (step === 'dialog') closePopups();
-  else if (step === 'step') { editLocks(lockStep); if (a instanceof HTMLElement && !drawn(a)) a.blur(); }
+  closePopups();   // the dialog step, and a popup open but not drawn (no layer) goes with whatever this press closes
+  if (step === 'step') { editLocks(lockStep); if (a instanceof HTMLElement && !drawn(a)) a.blur(); }
   else if (step === 'sheet') setSheet(sheet.tab, false, true);
   else if (step === 'focus') setFocusMode(false, true);
-  else if (a instanceof HTMLElement && a !== document.body) { keyFocused.delete(a); a.blur(); }
+  else if (step === 'keys' && a instanceof HTMLElement && a !== document.body) { takeKeysBack(); a.blur(); }
   return step;
 }
-const TYPING_SEL = 'input:not([type=checkbox], [type=radio], [type=range], [type=button], [type=file], [type=color]), textarea, [contenteditable]:not([contenteditable=false])';
 addEventListener('keydown', (e) => {
-  if (e.key !== 'Escape' || e.defaultPrevented || $('help').open || $('gift').open) return;
-  if (e.target instanceof Element && e.target.closest(TYPING_SEL)) return;
+  if (e.key !== 'Escape' || e.repeat || e.defaultPrevented || $('help').open || $('gift').open) return;
+  if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return;
   escapeOnce();
 });
 // ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----

@@ -19,7 +19,7 @@ export const SYNONYMS = [
   ['humanize', 'human', 'feel', 'sloppy'],
   ['stems', 'multitrack', 'tracks', 'daw'],
   ['meter', 'time signature', 'signature'],
-  ['tempo', 'bpm'],
+  ['tempo', 'bpm', 'faster', 'slower', 'fast', 'slow'],
   ['tap', 'tap tempo'],
   ['mute', 'silence'],
   ['throw', 'echo', 'dub', 'delay'],
@@ -29,7 +29,7 @@ export const SYNONYMS = [
   ['dice', 'seed', 'roll'],
   ['randomize', 'random', 'generate'],
   ['wild', 'chaos'],
-  ['init', 'empty', 'blank', 'from scratch'],
+  ['init', 'empty', 'blank', 'from scratch', 'start over'],
   ['save', 'store'],
   ['load', 'recall', 'library'],
   ['slots', 'patterns', 'scenes', 'slot'],
@@ -49,7 +49,7 @@ export const SYNONYMS = [
   ['engine', 'dsp', 'synth'],
   ['condition', 'trig'],
   ['decay', 'release', 'envelope'],
-  ['level', 'volume', 'gain'],
+  ['level', 'volume', 'gain', 'louder', 'quieter', 'loud', 'quiet'],
   ['pan', 'stereo'],
   ['drive', 'distortion', 'saturation'],
   ['clock', 'sync', 'follow'],
@@ -101,9 +101,11 @@ for (const g of SYNONYMS) for (const m of g) { const ws = words(m); if (ws.lengt
 
 /** One index entry: `key` (stable: the id, else where + name; recents keep it), `name` (what the list shows), `where`
  *  (the tab · drawer · group it sits in), `action` (Enter runs it), `extra` (words it is found by but not named:
- *  select options, the action's words). It is found by its name's words, its where, and every synonym of those. */
-export function entry({ key, name, where = '', action = false, extra = '' }) {
-  const own = words(name), near = [...words(where), ...words(extra)];
+ *  select options, the action's words), `alias` (another name it has, found as its name: a lane knob's everything word
+ *  in simple view, I7's "shift" is the rotation knob). It is found by its names' words, its where, and every synonym of
+ *  those. */
+export function entry({ key, name, where = '', action = false, extra = '', alias = '' }) {
+  const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   const synOf = (ws) => { const out = new Set(); for (const w of ws) for (const s of (GROUP_OF.get(w) || [])) for (const x of words(s)) out.add(x); return out; };
   const syn = [...synOf(own)].filter(w => !own.includes(w));
   return { key, name, where, action, own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)) };
@@ -145,6 +147,15 @@ export function recentsFrom(text) {
 }
 /** `key` used now: first, once, the list kept short. */
 export const pushRecent = (recents, key) => [key, ...recents.filter(k => k !== key)].slice(0, RECENTS_MAX);
+
+/** Does this key open find? ⌘K / Ctrl+K from anywhere but a text field (it owns its keys: Ctrl+K deletes to the end of
+ *  the line there); / from anywhere but a text field or a select (type-ahead). `at` is where the focus is: 'text',
+ *  'select' or '' (the page, a button, a knob). */
+export function opensFind(e, at = '') {
+  if (at === 'text') return false;
+  if ((e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) return String(e.key).toLowerCase() === 'k';
+  return e.key === '/' && !e.metaKey && !e.ctrlKey && !e.altKey && at !== 'select';
+}
 
 /** The one Esc order (DECISION §2: dialog → step page → sheet → focus mode → give the keys back): which of the open
  *  layers one Esc (or one click on empty canvas) closes. `s` says which are open (and drawn) now. */

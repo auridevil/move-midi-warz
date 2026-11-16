@@ -5,17 +5,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { SYNONYMS, ACTIONS, FIND_DEFAULTS, RECENTS_MAX, ESC_ORDER, words, entry, search, recentsFrom, pushRecent, escStep } from '../src/poly/find.js';
+import { SYNONYMS, ACTIONS, FIND_DEFAULTS, RECENTS_MAX, ESC_ORDER, words, entry, search, recentsFrom, pushRecent, opensFind, escStep } from '../src/poly/find.js';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
 const src = ['../src/ui.js', '../src/gauge.js', '../src/poly/app.js'].map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n') + html;
 
 // the names the page gives these controls (read off orbit2/index.html at 1512×860 with __poly.findIndex()), in both views
-// (I7: simple says hits / shift / speed / chance on the lane knobs, everything the technical words)
+// (I7: simple says hits / shift / speed / chance on the lane knobs, everything the technical words; app.js gives each
+// lane knob its everything word as an alias, so "rotation" is the shift knob in both)
 const lane = 'lane · Lane 1 · kick', weights = 'groove · how often each change', touches = 'groove · Evolve · touches';
+const KNOBS = ['length', 'euclid hits', 'rotation', 'speed ×', 'probability', 'tune', 'push / pull', 'vel humanize', 'swing'], PLAIN = { 1: 'hits', 2: 'shift', 3: 'speed', 4: 'chance' };
 const page = (simple) => [
-  ...['length', simple ? 'hits' : 'euclid hits', simple ? 'shift' : 'rotation', simple ? 'speed' : 'speed ×', simple ? 'chance' : 'probability', 'tune', 'push / pull', 'vel humanize', 'swing'].map((name, i) => ({ key: `knob-${i}`, name, where: lane })),
+  ...KNOBS.map((all, i) => ({ key: `knob-${i}`, name: (simple && PLAIN[i]) || all, alias: all, where: lane })),
+  { key: 'snd-level', name: 'level', where: `${lane} · sound` },
   ...Array.from({ length: 16 }, (_, i) => ({ key: `step-${i}`, name: `step ${i + 1}`, where: `${lane} · steps` })),
   ...['AND', 'XOR'].map(name => ({ key: `mask-${name}`, name, where: `${lane} · euclid mask` })),
   ...['hits', 'rotation', 'speed', 'chance'].map(n => ({ key: `w-${n}`, name: `${n} weight`, where: weights })),
@@ -35,10 +38,31 @@ test('RD-4 the synonyms test: euclid, rotation, ratio, probability, stems, 7/8 e
     assert.deepEqual(top('probability'), ['knob-4'], 'probability → the chance knob');
     assert.deepEqual(top('stems'), ['exp-stems'], 'stems → export stems (the action before the dry stems switch)');
     assert.deepEqual(top('7/8'), ['meter-7/8'], '7/8 → the meter');
-    // simple view: an evolve weight is named "rotation weight", so the lane's shift knob is second there; first in everything
-    assert.ok(top('rotation', 2).includes('knob-2'), `rotation → the shift knob (${simple ? 'simple' : 'everything'})`);
-    if (!simple) assert.deepEqual(top('rotation'), ['knob-2']);
+    // simple view: an evolve weight is named "rotation weight", and the knob named "shift" still comes first (its alias
+    // is its whole name)
+    assert.deepEqual(top('rotation'), ['knob-2'], `rotation → the shift knob (${simple ? 'simple' : 'everything'})`);
   }
+});
+
+test('RD-4 a beginner\'s plain words: louder, slower, faster, start over', () => {
+  for (const simple of [true, false]) {
+    const idx = page(simple), top = (q) => search(idx, q)[0]?.key;
+    assert.equal(top('louder'), 'snd-level'); assert.equal(top('quiet'), 'snd-level');
+    assert.equal(top('slower'), 'tempo'); assert.equal(top('faster'), 'tempo');
+    assert.equal(top('start over'), 'btn-init');
+    assert.equal(top('shift'), 'knob-2', 'the plain word finds the knob in everything too');
+  }
+  // an alias is found as the name but never shown: the list says what the page says
+  const e = entry({ key: 'k', name: 'shift', alias: 'rotation' });
+  assert.equal(e.name, 'shift'); assert.deepEqual(e.own, ['shift', 'rotation']);
+});
+
+test('RD-4 the keys that open find: ⌘K / Ctrl+K but not from a text field, / but not from a text field or a select', () => {
+  const k = (key, mods = {}) => ({ key, metaKey: false, ctrlKey: false, altKey: false, shiftKey: false, ...mods });
+  for (const at of ['', 'select']) { assert.ok(opensFind(k('k', { metaKey: true }), at), `⌘K ${at}`); assert.ok(opensFind(k('K', { ctrlKey: true }), at), `Ctrl+K ${at}`); }
+  assert.ok(opensFind(k('/'))); assert.ok(!opensFind(k('/'), 'select'), '/ is type-ahead in a select');
+  for (const e of [k('k', { metaKey: true }), k('k', { ctrlKey: true }), k('/')]) assert.ok(!opensFind(e, 'text'), 'a text field owns its keys');
+  for (const e of [k('k'), k('k', { metaKey: true, shiftKey: true }), k('k', { ctrlKey: true, altKey: true }), k('/', { metaKey: true }), k('/', { altKey: true }), k('?')]) assert.ok(!opensFind(e), JSON.stringify(e));
 });
 
 test('RD-4 A4\'s search part: "stems" in under five keys (/ s t Enter), and the knob before "tap tempo"', () => {
@@ -104,9 +128,9 @@ test('RD-4 static guards: every action and default is a button on the page; the 
   // menuitem: the canvas's ring menu (out: a popup of the canvas); option / combobox: find's own list and field
   for (const r of roles) if (!['menuitem', 'option', 'combobox'].includes(r)) assert.ok(sel.includes(`[role=${r}]`), r);
   for (const tag of ['button', 'select', 'input', 'textarea', 'summary', 'a[href]']) assert.ok(sel.split(', ').includes(tag), tag);
-  // the find field and the help / gift cards are out of the index; ⌘K and / never fire inside a text field or a select
+  // the find field and the help / gift cards are out of the index; the page asks opensFind (tested above) where the focus is
   assert.match(app, /const FIND_OUT = '#find-box, dialog,/);
-  assert.match(app, /e\.key === '\/' && !e\.metaKey[^\n]*closest\(`\$\{TEXT_SEL\}, select`\)/);
+  assert.match(app, /opensFind\(e, [^\n]*closest\(TEXT_SEL\) \? 'text' : [^\n]*closest\('select'\) \? 'select'/);
   // one Escape handler on the window (popups keep their own, which stop the event first)
   const onWindow = [...app.matchAll(/^(?:window\.)?addEventListener\('keydown', \(e\) => \{([^\n]*\n){0,2}/gm)].map(m => m[0]);
   assert.equal(onWindow.filter(s => s.includes("'Escape'")).length, 1, 'one window Esc handler');

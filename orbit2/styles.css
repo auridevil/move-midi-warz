@@ -729,6 +729,7 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
   body:has(#sheet) .stepsui .st { height: 44px; }
   body:has(#sheet) .ldot { width: 44px; height: 44px; }
   .slot-menu [data-act=close] { min-width: 44px; }
+  .find-list li { min-height: 44px; align-items: center; }   /* RD-4: a found row is a tap target too */
 }
 @media (pointer: coarse) and (max-width: 440px) { body:has(#sheet) .stepsui { grid-template-columns: repeat(4, 1fr); } }
 /* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */

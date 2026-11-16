@@ -1,14 +1,22 @@
 // RD-4 browser check: find and one Escape on the real page, in a muted headless Chrome (cdp.mjs).
 //
-//   node orbit2/tools/find-check.mjs [--port 5400 --debug 9400] [--size 1512x860] [--json out.json]
+//   node orbit2/tools/find-check.mjs [--port 5400 --debug 9400] [--size 1512x860] [--json out.json] [--root /tmp/x]
+//   (--root: check another checkout, a `git archive` of a commit with node_modules linked in)
 //
 // COVER  every labelled control is in the index: Chrome's accessibility tree is the judge (every node with an
-//        interactive role and a name, with every tab, drawer and the everything view shown), not app.js's own selector
-// KEYS   "stems" by search in under 5 keys (A4): / s t Enter lands on export stems, its tab open, the focus on it
-// ESC    the one order, one layer a press: popup → step locks → sheet → focus mode → the keys back to the page
+//        interactive role and a name, with every tab, drawer and the everything view shown), not app.js's own selector;
+//        the synonyms test top 1 by element in both views; every action of find.js ACTIONS findable on a fresh page
+//        (the closed share menu's too: "postcard", "share audio")
+// KEYS   "stems" by search in under 5 keys (A4): / s t Enter lands on export stems, its tab open, the focus on it, and
+//        Space then plays (the keys are the page's after an action); ↑↓ then Enter on play outside the sheet leaves the
+//        keys to the page too (Space stops, a pad key toggles); the list's rows ≥ 32 px (44 on a phone)
+// STALE  the field reached by a click (not ⌘K or /) searches the page as it is now: "step 20" after a lane grew to 32
+// ESC    the one order, one layer a press: popup → step locks → sheet → focus mode → the keys back to the page; a held
+//        Esc is one press; a slot menu left behind in another tab is no layer
 // CLICK  the same order from clicks on empty canvas, and no click ever edits (pattern, undo history, tempo)
 // OWN    key ownership holds (B8): Space plays, a pad row key toggles its step, hold 0 = fill, Alt+1 selects, a text
-//        field keeps / and the pad keys, ⌘K in the find field does nothing, an RD-3 save with open: true loads closed
+//        field keeps / and the pad keys, ⌘K in the find field does nothing, ⌘K from a select opens find (/ stays the
+//        select's), an RD-3 save with open: true loads closed
 // Exit 1 when a check fails. Prints one JSON summary.
 import { launch } from './cdp.mjs';
 import { writeFileSync } from 'node:fs';
@@ -16,9 +24,11 @@ import { writeFileSync } from 'node:fs';
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const [W, H] = arg('--size', '1512x860').split('x').map(Number), out = { size: `${W}x${H}`, fails: [] };
 const fail = (test, what) => out.fails.push({ test, what });
-const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug', 9400) });
-const press = async (p, key, code, modifiers = 0, up = true) => { const text = key.length === 1 && !(modifiers & 6) ? key : key === 'Enter' ? '\r' : undefined; await p.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers, text, ...(key === 'Escape' ? { windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 } : {}) }); if (up) await p.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers }); };
-const KEY = { '/': 'Slash', ' ': 'Space', Escape: 'Escape', Enter: 'Enter' }, code = (k) => KEY[k] || (/^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`);
+const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug', 9400), ...(arg('--root') ? { root: arg('--root') } : {}) });
+const VK = { Escape: 27, ArrowDown: 40, ArrowUp: 38 };
+const press = async (p, key, code, modifiers = 0, up = true, autoRepeat = false) => { const text = key.length === 1 && !(modifiers & 6) ? key : key === 'Enter' ? '\r' : undefined; await p.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, modifiers, text, autoRepeat, ...(VK[key] ? { windowsVirtualKeyCode: VK[key], nativeVirtualKeyCode: VK[key] } : {}) }); if (up) await p.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, modifiers }); };
+const KEY = { '/': 'Slash', ' ': 'Space', Escape: 'Escape', Enter: 'Enter', ArrowDown: 'ArrowDown', ArrowUp: 'ArrowUp' }, code = (k) => KEY[k] || (/^\d$/.test(k) ? `Digit${k}` : `Key${k.toUpperCase()}`);
+const keys = async (p, ks) => { for (const k of ks) await press(p, k, code(k)); };
 const STATE = `JSON.stringify({ esc: __poly.escState(), sheet: __poly.sheet, focus: __poly.focusMode, act: document.activeElement === document.body ? 'body' : document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName })`;
 const EDITS = `JSON.stringify([__poly.m.toJSON(), __poly.hist.past.length, __poly.hist.future.length, __poly.hist.cur?.full?.length, __poly.clock && document.querySelector('#tempo-gauge [role=slider]')?.getAttribute('aria-valuenow')])`;
 try {
@@ -44,17 +54,47 @@ try {
     if (missing.length) fail('COVER', `${view}: ${missing.length} labelled controls not in the index: ${missing.slice(0, 8).join('; ')}`);
     await p.eval(`(() => { const s = __poly.sheet; __poly.setSheet(s.tab, false); document.querySelectorAll('details').forEach(d => { d.open = false; }); })()`);
   }
-  for (const [q, want] of [['euclid', /hits/], ['rotation', /shift|rotation/], ['ratio', /speed/], ['probability', /chance|probability/], ['stems', /stems/], ['7/8', /^7\/8$/]]) {
-    const top = await p.eval(`(async () => { const { search } = await import('./src/poly/find.js'); return search(__poly.findIndex(), ${JSON.stringify(q)}).slice(0, 2).map(e => e.name); })()`);
-    (out.synonyms ??= {})[q] = top; if (!top.some(n => want.test(n))) fail('COVER', `"${q}" → ${top.join(' | ')}`);
+  // the synonyms test, top 1, judged by the element (a lane knob in #sliders, the stems button, the meter's 7/8), in both views
+  const SYN = [['euclid', `!!e.el.closest('#sliders') && /hits/.test(e.name)`], ['rotation', `!!e.el.closest('#sliders') && /shift|rotation/.test(e.name)`], ['ratio', `!!e.el.closest('#sliders') && /speed/.test(e.name)`], ['probability', `!!e.el.closest('#sliders') && /chance|probability/.test(e.name)`], ['stems', `e.el.id === 'exp-stems'`], ['7/8', `e.name === '7/8' && !!e.el.closest('#meter')`]];
+  for (const view of ['simple', 'all']) for (const [q, ok] of SYN) {
+    const r = await p.eval(`(async () => { __poly.setView(${JSON.stringify(view)}); const { search } = await import('./src/poly/find.js'); const e = search(__poly.findIndex(), ${JSON.stringify(q)})[0]; return e ? { name: e.name, where: e.where, ok: ${ok} } : null; })()`);
+    ((out.synonyms ??= {})[view] ??= {})[q] = r && `${r.name} · ${r.where}`; if (!r?.ok) fail('COVER', `${view}: "${q}" → ${r ? `${r.name} · ${r.where}` : 'nothing'}`);
   }
 
   // ---- KEYS: a fresh page, the sheet closed ----
   await p.send('Page.reload'); await p.sleep(3500); await p.captureDownloads();
   const s0 = await st(); if (s0.sheet.open) fail('KEYS', 'the sheet is open on load');
-  const keys = ['/', 's', 't', 'Enter']; for (const k of keys) await press(p, k, code(k)); await p.sleep(300);
-  const s1 = await st(); out.stems = { keys: keys.length, focus: s1.act, tab: s1.sheet.tab, open: s1.sheet.open };
-  if (!(keys.length < 5 && s1.act === 'exp-stems' && s1.sheet.tab === 'export' && s1.sheet.open)) fail('KEYS', `stems: ${JSON.stringify(out.stems)}`);
+  // every action find runs is findable now (sheet and share menu closed), the share menu's by their own words
+  out.actions = await p.eval(`(async () => { const { ACTIONS, search } = await import('./src/poly/find.js'); const idx = __poly.findIndex(), keys = new Set(idx.filter(e => e.action).map(e => e.key)); return { missing: Object.keys(ACTIONS).filter(k => !keys.has(k)), postcard: search(idx, 'postcard')[0]?.key, audio: search(idx, 'share audio')[0]?.key }; })()`);
+  if (out.actions.missing.length || out.actions.postcard !== 'share-postcard' || out.actions.audio !== 'share-audio') fail('COVER', `actions: ${JSON.stringify(out.actions)}`);
+  const playing = () => p.eval(`document.getElementById('btn-play').textContent.includes('stop')`);
+  const stems = ['/', 's', 't', 'Enter'];
+  await press(p, '/', 'Slash'); await p.sleep(150);
+  out.rows = await p.eval(`[...document.querySelectorAll('#find-list li')].map(l => Math.round(l.getBoundingClientRect().height * 10) / 10)`);
+  if (!out.rows.length || Math.min(...out.rows) < (W < 700 ? 44 : 32)) fail('KEYS', `list rows ${out.rows.join(', ')} px (≥ ${W < 700 ? 44 : 32})`);
+  await keys(p, stems.slice(1)); await p.sleep(300);
+  const s1 = await st(); out.stems = { keys: stems.length, focus: s1.act, tab: s1.sheet.tab, open: s1.sheet.open };
+  if (!(stems.length < 5 && s1.act === 'exp-stems' && s1.sheet.tab === 'export' && s1.sheet.open)) fail('KEYS', `stems: ${JSON.stringify(out.stems)}`);
+  // after an action the keys are the page's: Space plays (it doesn't press export stems again)
+  await press(p, ' ', 'Space'); await p.sleep(200); const spacePlays = await playing(); if (spacePlays) { await press(p, ' ', 'Space'); await p.sleep(300); }
+  if (!spacePlays) fail('KEYS', 'Space after "export stems" did not play');
+  await p.eval('document.activeElement.blur(); __poly.setSheet(__poly.sheet.tab, false)');
+  // ↑↓ then Enter on play (outside the sheet): the keys stay the page's, not a sheet tab's
+  const lanes = `JSON.stringify(__poly.m.lanes.map(l => l.toJSON()))`;
+  await keys(p, ['/', 'p', 'l', 'a', 'y', 'ArrowDown', 'ArrowUp', 'Enter']); await p.sleep(300);
+  const pk = { playing: await playing(), act: (await st()).act }; await press(p, ' ', 'Space'); await p.sleep(200); pk.space = await playing();
+  const lr = await p.eval(lanes); await press(p, 'q', 'KeyQ'); pk.pad = (await p.eval(lanes)) !== lr; if (pk.pad) await press(p, 'q', 'KeyQ');
+  out.pick = pk; if (!(pk.playing && pk.act === 'body' && !pk.space && pk.pad)) fail('KEYS', `↑↓ Enter on play: ${JSON.stringify(pk)}`);
+  if (await playing()) await press(p, ' ', 'Space');
+
+  // ---- STALE: the field reached by a click searches the page as it is now ----
+  await press(p, '/', 'Slash'); await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape');
+  await p.eval(`(() => { __poly.m.select(0); __poly.m.lanes[0].resize(32); __poly.sync(); __poly.setSheet('lane', true); })()`); await p.sleep(200);
+  const box = (sel) => p.eval(`(() => { const r = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()`);
+  await p.click(...await box('#find')); await p.sleep(150); await keys(p, [...'step 20']); await p.sleep(150);
+  out.stale = await p.eval(`document.querySelector('#find-list li')?.firstChild?.textContent`);
+  if (out.stale !== 'step 20') fail('STALE', `"step 20" after the lane grew → ${out.stale}`);
+  await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape'); await p.eval(`(() => { __poly.m.lanes[0].resize(16); __poly.sync(); document.activeElement.blur(); })()`);
 
   // ---- ESC: share menu over the step locks over the open sheet; then focus mode ----
   const stack = `(() => { __poly.setSheet('lane', true); const l = __poly.m.lane; let i = 0; while (i < l.length && !l.hitAt(i)) i++; if (i === l.length) { l.toggle(l.stepIndex(0)); __poly.sync(); i = 0; } __poly.editLocks(i); document.getElementById('btn-share-more').click(); document.activeElement.blur(); })()`;
@@ -68,6 +108,18 @@ try {
   // a text field owns its Esc: the sheet stays open while the cursor is in the setup's name field
   await p.eval(`(() => { __poly.reveal('lib-name'); document.getElementById('lib-name').focus(); })()`); await press(p, 'Escape', 'Escape');
   if (!(await st()).sheet.open) fail('ESC', 'Esc in a text field closed the sheet');
+  await p.eval('document.activeElement.blur(); __poly.setSheet(__poly.sheet.tab, false)');
+  // a held Esc (one press, then the key's repeats) closes one layer
+  await p.eval(stack); await press(p, 'Escape', 'Escape', 0, false); for (let k = 0; k < 3; k++) await press(p, 'Escape', 'Escape', 0, false, true);
+  await p.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27, nativeVirtualKeyCode: 27 });
+  out.held = layers(await st()); if (out.held !== 'step+sheet') fail('ESC', `a held Esc: dialog+step+sheet → ${out.held}`);
+  await keys(p, ['Escape', 'Escape', 'Escape']);
+  // a slot menu left open in the pattern tab is no layer once another tab shows: one Esc closes the sheet (and the menu)
+  await p.eval(`(() => { __poly.setSheet('pattern', true); const s = document.querySelector('#slots button'); __poly.reveal(s); s.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true })); })()`); await p.sleep(100);
+  const opened = (await st()).esc.dialog; await p.click(...await box('#tab-lane')); await p.sleep(150); await press(p, 'Escape', 'Escape'); await p.sleep(100);
+  const after = await st(), menuHidden = await p.eval(`document.getElementById('slot-menu').hidden`);
+  out.undrawn = { opened, sheet: after.sheet.open, menuHidden };
+  if (!(opened && !after.sheet.open && menuHidden)) fail('ESC', `slot menu left in the pattern tab: ${JSON.stringify(out.undrawn)}`);
   await p.eval('document.activeElement.blur(); __poly.setSheet(__poly.sheet.tab, false)');
 
   // ---- CLICK: the same order from empty canvas; nothing edited ----
@@ -95,7 +147,6 @@ try {
   }
 
   // ---- OWN: key ownership ----
-  const playing = () => p.eval(`document.getElementById('btn-play').textContent.includes('stop')`);
   await press(p, ' ', 'Space'); const pl = await playing(); await press(p, ' ', 'Space'); if (!(pl && !(await playing()))) fail('OWN', 'Space does not play / stop');
   const row = `JSON.stringify(__poly.m.lanes.map(l => l.toJSON()))`, r0 = await p.eval(row);
   await press(p, 'q', 'KeyQ'); if (await p.eval(row) === r0) fail('OWN', 'a pad row key did not toggle its step'); await press(p, 'q', 'KeyQ');
@@ -110,6 +161,11 @@ try {
   await press(p, '/', 'Slash'); await p.eval('document.activeElement.blur()');
   await press(p, '/', 'Slash'); await press(p, 'k', 'KeyK', 4); const inFind = await st();
   if (inFind.act !== 'find' || !inFind.sheet.open) fail('OWN', `⌘K in the find field moved: ${inFind.act}`);
+  await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape');
+  // a select: / is its type-ahead, ⌘K opens find
+  await p.eval(`(() => { const s = document.getElementById('voice-select'); __poly.reveal(s); s.focus(); })()`);
+  const selId = (await st()).act; await press(p, '/', 'Slash'); const slashSel = (await st()).act; await press(p, 'k', 'KeyK', 4); const kSel = (await st()).act;
+  out.select = { select: selId, slash: slashSel, cmdK: kSel }; if (!(slashSel === selId && kSel === 'find')) fail('OWN', `from a select: ${JSON.stringify(out.select)}`);
   await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape');
   // an RD-3 save that says open: true loads closed, its tab kept
   await p.eval(`localStorage.setItem('midi-warz.orbit2.sheet', JSON.stringify({ tab: 'groove', open: true }))`); await p.send('Page.reload'); await p.sleep(3500);

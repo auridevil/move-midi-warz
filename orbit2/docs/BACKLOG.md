@@ -920,8 +920,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   window). A zoomed-iframe state in the face audit or the smoke would test the behaviour (a `(min-width: 1100.5px)`
   would slip past the regex).
 - **Keys in and around the sheet** (RD-03 round 1: greta, verifier, architect; RD-4's Esc order): Tab from a tab stops
-  on the × before the pane; Esc does not close the phone's full-height sheet; Esc still closes the Move table drawer
-  (its popup days); there is no ⌘O (the library opens from load / save).
+  on the × before the pane; there is no ⌘O (the library opens from load / save). (RD-4: Esc closes the phone's
+  full-height sheet in the one order and no longer folds the Move table drawer.)
 - **The phone sheet** (RD-03 round 1, rio; RD-7 / RD-10): a quest whose drawer sits in a closed tab lights only that tab
   in the docked row (a newcomer has to guess); a reload remembers the tab but opens the dock closed, by design, with no
   cue.
@@ -932,3 +932,26 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Tools for the sheet** (RD-03 round 1, sound): headless Chrome drops a real click on a sheet tab about 1 s after a
   reload (like Play's 1.5 s: wait, or use `__poly.setSheet` / `reveal`); an A9 clock state that plays while switching
   tabs and scrolling the sheet (sound's round-1 numbers as its baseline: main thread 47–74 ms/s, layout ≤ 1.9 ms/s).
+- **Find's recents and the destructive actions** (RD-04 round 1: verifier, architect; for Noor): a destructive recent
+  (init, clear lane, randomize, wild, load) sits first in the empty list, so `/` Enter, two keys, runs it again (undo
+  brings the pattern back). Options: no picked row for an empty query, or a destructive action never first. Recents of a
+  control without an id are keyed `where|name`, and the where holds the selected lane's name and the view's words, so
+  they go stale when the lane or the view changes.
+- **The find row moves the tab row** (RD-04 round 1, architect; for Noor): the find box shows above the tabs only while
+  the sheet is open, so a tab click that opens the sheet moves the tab row 48 px down under the pointer (y 170 → 218 at
+  1512×860). Options: the field under the tabs, its height kept while closed, or the field only for ⌘K / `/`.
+- **Esc in focus mode with the sheet open** (RD-04 round 1, architect; RD-9 / Noor): focus mode hides the sheet, so the
+  hidden sheet is no layer and Esc leaves focus mode first, then closes the sheet, the reverse of DECISION's literal
+  "sheet → focus mode" (a fair reading of "only what is drawn counts"; RD-9's F rules should say).
+- **Find while playing** (RD-04 round 1, sound; RD-10): each keystroke runs the search and rebuilds the list; typing at
+  machine speed while playing took the worst Tone.Loop margin to 5.7–13.7 ms ahead (idle 36), 4–11 ms after a key (p95
+  still −41.8…−43.2 ms, stress 0, nothing late). Debounce the list, and measure on a phone.
+- **Find's words and rows** (RD-04 round 1: greta, maya, rio): a name without its lane is ambiguous ("hits" on the lane
+  knob vs "+ hits" in groove's evolve touches) and the where is cut at 55 % of a narrow sheet's row; the native search ×
+  beside Esc (kept: the phone's only way to empty the field without a keyboard); a tab's own result reads oddly among
+  the actions; "drums" → the kit first, "record" brings two knob options ("off", "touch") into the top four; nothing on
+  the phone's face says search exists, and its full-height sheet leaves no empty canvas to tap (RD-5's "all ⌘K", RD-10).
+- **Find's tests pin text** (RD-04 round 1, architect): `find.test.js`'s static guards read app.js (the `FIND_OUT`
+  literal, the `opensFind` call, the keydown handlers that name 'Escape', the role strings) and its `page()` fixture is
+  a hand copy of the page's names, so it can drift without failing; `find-check.mjs` judges the behaviour in a browser.
+  (verifier, tool) cdp.mjs `downloads()` waited its 120 s after an export run from find, with "Failed to fetch".
