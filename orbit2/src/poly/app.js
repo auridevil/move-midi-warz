@@ -666,7 +666,7 @@ function renderPage() {
   const chip = $('move-chip'); chip.textContent = move.inControl ? r.chip : ''; chip.classList.toggle('own', r.own);   // only with a Move to name
   // RD-6: the step page's words (clear / more… / done) in the header, where "steps 1–16 of 16" was; the cells follow
   // what the hands make of them (steps, the step's 16 loops, or the slots while Loop is held)
-  const onStep = r.row === 'step'; $('step-tools').hidden = !onStep; $('lh-steps').hidden = onStep;
+  const onStep = r.row === 'step'; if ($('step-tools').hidden === onStep) { $('step-tools').hidden = !onStep; $('lh-steps').hidden = onStep; }
   if (r.cells !== cellsMode || (r.cells === 'loops' && r.step !== cellsStep)) renderSteps();
   paintPeek();
 }
@@ -789,8 +789,9 @@ function renderSteps() {
   if (lockStep >= lane.length) lockStep = -1;   // a shorter loop closes the lock panel: no step stays "expanded"
   const first = cellsAt = cellFirst(), hs = new Set([...pages.held.values()].map(h => h.step));   // RD-5: 16 cells, the Move's 16 step buttons (L1's steps 17–32 on their page); a Move step held is outlined
   const r = knobPage.r, mode = cellsMode = r?.cells === 'slots' ? 'slots' : r?.cells === 'loops' && r.step >= 0 && r.step < lane.length ? 'loops' : 'steps';
-  cellsStep = mode === 'loops' ? r.step : -1; cellsLoop = lane.loopN; $('stepsui').dataset.cells = mode;
-  $('stepsui').setAttribute('aria-label', mode === 'loops' ? `the loops of step ${r.step + 1}` : mode === 'slots' ? 'slots' : 'steps');
+  cellsStep = mode === 'loops' ? r.step : -1; cellsLoop = lane.loopN;
+  const su = $('stepsui'), name = mode === 'loops' ? `the loops of step ${r.step + 1}` : mode === 'slots' ? 'slots' : 'steps';
+  if (su.dataset.cells !== mode) su.dataset.cells = mode; if (su.getAttribute('aria-label') !== name) su.setAttribute('aria-label', name);
   if (mode !== 'steps') return renderDots(mode, lane, first, hs);
   stepBtns.forEach((b, i) => {
     const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));

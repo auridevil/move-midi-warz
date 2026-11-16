@@ -146,20 +146,33 @@ try {
   // docked sheet, and focus mode below
   const narrow = W <= 1100;
   if (!spot) fail('CLICK', 'no empty canvas found'); else {
-    out.clickAt = spot; await p.eval(narrow ? `document.getElementById('btn-share-more').click(); document.activeElement.blur()` : stack); const before = await p.eval(EDITS), seq = [layers(await st())];
+    // (RD-6: on the phone the open share menu scrolls the page down to the console, so `spot` went onto a ring and the
+    // second click selected a lane; back to the top, where the spot was found)
+    out.clickAt = spot; await p.eval(narrow ? `document.getElementById('btn-share-more').click(); document.activeElement.blur(); scrollTo({ top: 0, behavior: 'instant' })` : stack); const before = await p.eval(EDITS), seq = [layers(await st())];
     for (let k = 0; k < (narrow ? 2 : 4); k++) { await p.click(...spot); await p.sleep(80); seq.push(layers(await st())); }
     out.clickOrder = seq;
     if (seq.join(' > ') !== (narrow ? 'dialog > - > -' : 'dialog+step+sheet > step+sheet > sheet > - > -')) fail('CLICK', seq.join(' > '));
     // focus mode: a phone's canvas takes the window, so the empty spot is looked for again
-    await press(p, 'f', 'KeyF'); await p.sleep(300); const fSpot = await findSpot(); out.focusClickAt = fSpot;
+    // (RD-6: wait until the canvas stops resizing, so the spot found is still empty when clicked: a spot found mid-resize
+    // could land on a ring and select its lane, which read as an edit here now and then on the phone)
+    const settleCv = async () => { await p.sleep(300); for (let k = 0, last = ''; k < 30; k++) { const now = await p.eval(`JSON.stringify([document.getElementById('cv').getBoundingClientRect(), __poly.scene.geo().cx, __poly.scene.geo().cy])`); if (now === last) break; last = now; await p.sleep(100); } };
+    await press(p, 'f', 'KeyF'); await settleCv();
+    const fSpot = await findSpot(); out.focusClickAt = fSpot;
     if (!fSpot) fail('CLICK', 'no empty canvas in focus mode'); else { await p.click(...fSpot); if ((await st()).focus) fail('CLICK', 'a click on empty canvas left focus mode on'); }
-    await p.sleep(300);
-    // a drag that starts off the rings is no click
-    await p.eval(narrow ? `document.getElementById('btn-share-more').click(); document.activeElement.blur()` : `__poly.setSheet(__poly.sheet.tab, true)`);
-    for (const [type, dx] of [['mousePressed', 0], ['mouseMoved', 30], ['mouseReleased', 30]]) await p.send('Input.dispatchMouseEvent', { type, x: spot[0] + dx, y: spot[1], button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+    // a drag that starts off the rings is no click (from a spot found again once focus mode's resize is over, and one
+    // whose 30 px drag stays off the rings too)
+    await settleCv(); await p.eval(narrow ? `document.getElementById('btn-share-more').click(); document.activeElement.blur()` : `__poly.setSheet(__poly.sheet.tab, true)`);
+    const dSpot = (await p.eval(`(() => { scrollTo({ top: 0, behavior: 'instant' }); for (let y = 40; y < innerHeight - 200; y += 20) for (let x = Math.round(innerWidth * .25); x < innerWidth * .7; x += 20) { const ok = (x) => document.elementFromPoint(x, y)?.id === 'cv' && __poly.scene.locate(x, y).lane < 0; if (ok(x) && ok(x + 15) && ok(x + 30)) return [x, y]; } return null; })()`)) || spot; out.dragAt = dSpot;
+    for (const [type, dx] of [['mousePressed', 0], ['mouseMoved', 30], ['mouseReleased', 30]]) await p.send('Input.dispatchMouseEvent', { type, x: dSpot[0] + dx, y: dSpot[1], button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
     if (!narrow && !(await st()).sheet.open) fail('CLICK', 'a drag from empty canvas closed the sheet');
     if (narrow) await press(p, 'Escape', 'Escape');
-    if (await p.eval(EDITS) !== before) fail('CLICK', 'a click on empty canvas edited something');
+    const after = await p.eval(EDITS);
+    if (after !== before) {   // say what changed: the pattern (and which keys of which lane), the undo history, the tempo
+      const [a, b] = [JSON.parse(before), JSON.parse(after)], what = ['pattern', 'undo past', 'undo future', 'undo current', 'tempo'].filter((_, k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+      const keys = a[0].lanes ? a[0].lanes.flatMap((l, i) => Object.keys(l).filter(k => JSON.stringify(l[k]) !== JSON.stringify(b[0].lanes[i]?.[k])).map(k => `lane ${i + 1}.${k}`)) : [];
+      const top = Object.keys(a[0]).filter(k => k !== 'lanes' && JSON.stringify(a[0][k]) !== JSON.stringify(b[0][k]));
+      fail('CLICK', `a click on empty canvas edited something: ${what.join(', ')}${keys.length || top.length ? ` (${[...top, ...keys].join(', ')})` : ''}`);
+    }
     await p.eval(`__poly.setSheet(__poly.sheet.tab, false)`);
   }
 

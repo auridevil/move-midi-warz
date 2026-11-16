@@ -340,8 +340,9 @@ body.chaos::before { display: none; }
 .stepsui .st.held { outline: 2px solid var(--l); outline-offset: 1px; }
 /* RD-6 the step page. Its knobs are rings: the track a whole circle in the lane's ink, solid where the step is locked,
    dashed where it follows the lane (the value arc dotted then too, as RD-2's lock knobs) */
-.gauge.ring .g-track { stroke: var(--gk); stroke-width: 2.5; } .gauge.ring.follows .g-track { stroke-dasharray: 4 4; }
-.gauge.ring .g-fill { stroke-width: 5; }
+.gauge.ring .g-track { stroke: var(--gk); stroke-width: 6; stroke-linecap: butt; } .gauge.ring.follows .g-track { stroke-dasharray: 8 2.5; }
+.gauge.ring .g-fill { stroke-width: 9; stroke-opacity: .55; }   /* the value: a wider band over the ring (A1: the ring is the knob's edge, 6 px like an arc's track; short gaps, so a
+   dashed ring with no value drawn still reads 3:1) */
 /* its 16 cells are loop dots (lit = the step plays on that loop, dashed = it depends on fill or the step before, a ring =
    the loop playing now); with Loop held on the Move they are the 16 slots (lit = saved, a ring = playing, dashed =
    queued, the cell outlined = picked for a chain). The cell keeps its edge and its size: only the dot inside changes */

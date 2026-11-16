@@ -57,6 +57,9 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   (`scene.js setHand`, `HAND_LOOK`): while a knob is touched or dragged (+ `HAND_MS`) the selected ring shows what it
   did (shift slides the planets with a trail, hits re-spread, swing moves the off-beats, chance arcs, push leads / lags,
   new ticks pulse) and a held step gets a halo; the touched knob gets a lane-colour plate. Read-only: `locate` never moves.
+  Browser check: `node orbit2/tools/step-check.mjs` (MOVE hold-step + knobs / jog / push, TAP the 450 ms rule with a
+  flash observer, MOUSE the latch, LOOP the slots, HAND incl. the halo, the scripted A2 for the step page, FRAME p95
+  with hands on knobs vs RD-1 + 1 ms); the face audit has a "step page" state (A1 / A6 / A7 with it open).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

@@ -326,6 +326,18 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
       await p.eval(`['welcome', 'quest', 'jam-panel'].forEach((id, i) => { document.getElementById(id).hidden = window.__faPills[i]; })`);
     }
     await p.eval('__poly.setFocusMode(true)'); await state('focus'); await p.eval('__poly.setFocusMode(false)');
+    // RD-6 the step page (a cell's long-press on the first hit): A6 / A7 as a state, and A1 measured as the first load is
+    // (the ring knobs, the loop dots and its words on their real background); then closed again
+    // (a first visit is the simple view, where the step locks are tucked: the state shows it in "everything", then goes back)
+    const stepAt = await p.eval(`(() => { const l = __poly.m.lane; let i = 0; while (i < l.length && !l.hitAt(i)) i++; if (i >= l.length || !__poly.editLocks) return -1; window.__faView = __poly.quests.view; __poly.setView('everything'); __poly.editLocks(i); return __poly.page.row === 'step' ? i : -2; })()`);
+    if (stepAt === -2) throw new Error('the step page did not open (RD-6 state)');
+    if (stepAt >= 0) {
+      await state('step page'); await p.eval('__fa.hideText(true)'); await settle(p); const sbg = await shot64(p); await p.eval('__fa.hideText(false)'); await settle(p); const sfull = await shot64(p);
+      if (shots) writeFileSync(join(shots, `${size}-step-page.png`), Buffer.from(sfull, 'base64'));
+      const sm = await p.eval(`__fa.measure(${JSON.stringify(sbg)}, ${JSON.stringify(sfull)})`);
+      out.stepPage = { step: stepAt + 1, text: { n: sm.text.length, min: sm.text.length ? Math.min(...sm.text.map(t => t.contrast)) : null, fails: sm.text.filter(t => t.contrast < THRESHOLDS.text) }, edges: { n: sm.edges.length, min: sm.edges.length ? Math.min(...sm.edges.map(e => e.edge)) : null, fails: sm.edges.filter(e => e.edge < THRESHOLDS.edge) }, controlMax: sm.ctlMax, controlMaxAt: sm.ctlMaxAt };
+      await p.eval(`(() => { __poly.editLocks(${stepAt}); __poly.setView(window.__faView); })()`); await settle(p);
+    }
     // playing: rings, frame time, light while the planets flash
     await play(p); await p.sleep(800); await state('playing');
     await p.eval('window.__faStop = __fa.frames()'); let canvasMax = 0;
@@ -439,6 +451,11 @@ export function verdicts(report, t = THRESHOLDS) {
     for (const st of ['stopped', 'playing']) { const l = s.light[st]; if (!l) continue;
       if (l.controlMax > t.controlLum) fails.push({ test: 'A1', size: k, what: `${st}: a control pixel at luminance ${l.controlMax} (> ${t.controlLum}): ${l.controlMaxAt}` });
       if (!(l.canvasMax > l.controlMax)) fails.push({ test: 'A1', size: k, what: `${st}: brightest canvas pixel ${l.canvasMax} is not above the brightest control pixel ${l.controlMax}` }); }
+    const sp = s.stepPage; if (sp) {   // RD-6: the step page open
+      if (sp.text.fails.length) fails.push({ test: 'A1', size: k, what: `step page: ${sp.text.fails.length} text runs under ${t.text}:1 (min ${sp.text.min})` });
+      if (sp.edges.fails.length) fails.push({ test: 'A1', size: k, what: `step page: ${sp.edges.fails.length} control edges under ${t.edge}:1 (min ${sp.edges.min}): ${sp.edges.fails.slice(0, 4).map(e => e.el ?? e.name).join(', ')}` });
+      if (sp.controlMax > t.controlLum) fails.push({ test: 'A1', size: k, what: `step page: a control pixel at luminance ${sp.controlMax}: ${sp.controlMaxAt}` });
+    }
   }
   { const s = by[t.a5Size]; if (s) {
     if (s.controls.visible > t.controls) fails.push({ test: 'A5', size: t.a5Size, what: `${s.controls.visible} visible controls (> ${t.controls})` });
@@ -467,6 +484,7 @@ export function summary(report) {
     L.push(`controls: ${s.controls.visible} visible / ${s.controls.total} drawn / ${s.controls.dom} in the DOM · 6 lanes: ${s.controls6?.visible} visible · the brief's count (boxes, closed drawers included): ${s.controls.brief.inWindow} in the window / ${s.controls.brief.boxes}`);
     L.push(`text: ${s.text.n} runs, min ${s.text.min}:1, ${s.text.fails.length} under ${THRESHOLDS.text}:1${s.text.fails.length ? ` (worst: ${s.text.fails.slice(0, 5).map(f => `${f.contrast} "${f.text}"`).join(', ')})` : ''}`);
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
+    if (s.stepPage) { const sp = s.stepPage; L.push(`step page (step ${sp.step}): text ${sp.text.n} runs min ${sp.text.min}:1 (${sp.text.fails.length} under) · edges ${sp.edges.n} min ${sp.edges.min}:1 (${sp.edges.fails.length} under) · brightest control ${sp.controlMax}`); }
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);
     if (s.hits) L.push(`hit areas: ${s.hits.filter(h => h.ok).length} of ${s.hits.length} action words in view take 40 px${s.hits.some(h => !h.ok) ? ` (not: ${s.hits.filter(h => !h.ok).map(h => h.el).join(', ')})` : ''}`);
     if (s.reach) { const by = {}; for (const r of s.reach) by[r.tab || 'face'] = (by[r.tab || 'face'] || 0) + 1; L.push(`RD-1 control ids: ${s.reach.filter(r => r.exists && r.drawn).length} of ${s.reach.length} drawn with their tab open (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ')})`); }

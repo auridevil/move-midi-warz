@@ -31,7 +31,7 @@ import { join } from 'node:path';
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 const pct = (a, p) => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y); return s[Math.min(s.length - 1, Math.floor(p / 100 * s.length))]; };
 const send = (p, b) => p.eval(`__poly.move.receive(new Uint8Array(${JSON.stringify(b)}))`);
-const STATE = `(() => { const g = (i) => document.getElementById(i); return { row: g('knobs').dataset.page, chip: g('move-chip').textContent, own: g('move-chip').classList.contains('own'), word: g('lh-page').textContent, lane: parseInt(g('lh-lane').textContent, 10), held: [...document.querySelectorAll('#stepsui .st.held')].map(b => parseInt(b.getAttribute('aria-label').slice(5), 10)), peek: g('peek').hidden ? null : g('peek-name').textContent }; })()`;
+const STATE = `(() => { const g = (i) => document.getElementById(i); return { row: g('knobs').dataset.page, chip: g('move-chip').textContent, own: g('move-chip').classList.contains('own'), word: g('lh-page').textContent, lane: parseInt(g('lh-lane').textContent, 10), held: [...document.querySelectorAll('#stepsui .st')].flatMap((b, i) => b.classList.contains('held') ? [i + 1] : []), peek: g('peek').hidden ? null : g('peek-name').textContent }; })()`;
 export const THRESH = { peekMs: 30, glance: 18, destructive: 0 };
 
 async function moveRows(p) {
