@@ -76,8 +76,12 @@ async function moveHold(p) {
   if (out.after.row === 'step') fails.push('the page stayed after the release');
   // every Move edit path borrows the editor, also as the first thing inside LOOK_MS: knob 8, the jog, its push
   out.firsts = {};
-  for (const [name, edit] of [['knob 8', [bytes.touch(7, true), bytes.enc(7, 1), bytes.touch(7, false)]], ['jog', [bytes.wheel(1)]], ...(artics ? [['push', [[0xB0, WHEEL_PUSH_CC, 127], [0xB0, WHEEL_PUSH_CC, 0]]]] : [])]) {
-    await send(p, bytes.step(i, true)); await sleep(80); for (const x of edit) await send(p, x); await sleep(60); await send(p, bytes.step(i, false)); await sleep(80);
+  // (round 3: also Shift + knob 8, two steps held, and an early edit then held past LOOK_MS)
+  const j = await p.eval(`(() => { const l = __poly.m.lane; for (let s = Math.min(16, l.length) - 1; s >= 0; s--) if (s !== ${i}) return s; return ${i}; })()`);
+  for (const [name, edit, also = null, hold = 60] of [['knob 8', [bytes.touch(7, true), bytes.enc(7, 1), bytes.touch(7, false)]], ['jog', [bytes.wheel(1)]], ...(artics ? [['push', [[0xB0, WHEEL_PUSH_CC, 127], [0xB0, WHEEL_PUSH_CC, 0]]]] : []),
+    ['Shift + knob 8', [bytes.btn('shift', true), bytes.touch(7, true), bytes.enc(7, 1), bytes.touch(7, false), bytes.btn('shift', false)]], ['two held', [bytes.touch(0, true), bytes.enc(0, 1), bytes.touch(0, false)], j], ['held on past LOOK_MS', [bytes.touch(0, true), bytes.enc(0, -1), bytes.touch(0, false)], null, 700]]) {
+    await send(p, bytes.step(i, true)); if (also != null) await send(p, bytes.step(also, true)); await sleep(80); for (const x of edit) await send(p, x); await sleep(hold);
+    if (also != null) await send(p, bytes.step(also, false)); await send(p, bytes.step(i, false)); await sleep(80);
     const s = out.firsts[name] = await p.eval(SEL); if (s.sel.length || s.stepTab !== 'true') fails.push(`a Move edit by ${name} inside LOOK_MS left a step selected: ${JSON.stringify(s)}`);
   }
   return { ...out, fails };
@@ -145,10 +149,18 @@ async function mouseLatch(p) {
   if (more.hidden || more.knobs.some(k => ROW_LOCK_LABELS.includes(k))) fails.push(`more… on the step page: ${JSON.stringify(more)}`);
   if (touched.panel.hidden || touched.focus !== 'nudge' || focusAfter !== 'nudge') fails.push(`a Move touch over more… (focus on nudge): panel ${touched.panel.hidden ? 'hidden' : 'shown'}, focus ${touched.focus} → ${focusAfter}`);
   if (left.knobs.some(k => ROW_LOCK_LABELS.includes(k))) fails.push(`the rhythm tab left the step page and the sheet shows the page's knobs (a second lock editor): ${JSON.stringify(left)}`);
-  // … and an Esc closes that remembered step, even with the sheet closed (its cell's outline is what shows it)
-  await p.eval(`__poly.setSheet(null, false)`); await sleep(60); const kept = await p.eval(SEL); await p.key('Escape'); await sleep(80); const forgot = await p.eval(SEL);
+  // … and an Esc closes that remembered step, even with the sheet closed (its cell's outline is what shows it); in focus
+  // mode the console is hidden, so the first Esc leaves focus mode (RD-4: only what is seen is a layer), the next closes it
+  await p.eval(`__poly.setSheet(null, false)`); await sleep(60); const kept = await p.eval(SEL);
+  await p.eval('__poly.setFocusMode(true)'); await sleep(80); await p.key('Escape'); await sleep(80); const fm = { focus: await p.eval('__poly.focusMode'), ...(await p.eval(SEL)) };
+  await p.key('Escape'); await sleep(80); const forgot = await p.eval(SEL);
   if (!kept.sel.includes(i + 1)) fails.push(`the step tab's step after the rhythm tab: ${JSON.stringify(kept)}`);
+  if (fm.focus || !fm.sel.includes(i + 1)) fails.push(`focus mode + a kept step: the first Esc must leave focus mode, not close the hidden step: ${JSON.stringify(fm)}`);
   if (forgot.sel.length || forgot.stepTab !== 'true') fails.push(`Esc did not close the step kept after the rhythm tab: ${JSON.stringify(forgot)}`);
+  // the same with the step page latched: hidden in focus mode, so focus mode goes first
+  await p.eval(`__poly.editLocks(${i})`); await sleep(60); await p.eval('__poly.setFocusMode(true)'); await sleep(80); await p.key('Escape'); await sleep(80);
+  const fmPage = { focus: await p.eval('__poly.focusMode'), row: (await p.eval(STATE)).row }; await p.key('Escape'); await sleep(80); const fmClosed = (await p.eval(STATE)).row;
+  if (fmPage.focus || fmPage.row !== 'step' || fmClosed === 'step') fails.push(`focus mode over a latched step page: Esc → ${JSON.stringify(fmPage)}, then ${fmClosed}`);
   // a Move look at another step over the mouse's step page (Nils's edge case): the Move wins, then the mouse's step;
   // Esc then closes it all (no cell left selected, the step tab off)
   await p.eval(`__poly.editLocks(${i})`); await sleep(60);
@@ -158,7 +170,10 @@ async function mouseLatch(p) {
   const closed = await p.eval(`({ row: document.getElementById('knobs').dataset.page, sel: [...document.querySelectorAll('#stepsui .st')].flatMap((b, k) => b.classList.contains('sel') ? [k + 1] : []), stepTab: document.getElementById('pg-step').getAttribute('aria-disabled') })`);
   if (!moveLook.startsWith(`step ${o + 1} `) || back !== `step ${i + 1}`) fails.push(`a Move look at step ${o + 1} over the mouse's step ${i + 1}: ${moveLook} → ${back}`);
   if (closed.row === 'step' || closed.sel.length || closed.stepTab !== 'true') fails.push(`Esc after a Move look over a mouse step page left the step selected: ${JSON.stringify(closed)}`);
-  return { opened: opened.word, switched: switched.word, planet: planet?.word ?? null, edited, done: done.row, esc: esc.row, more: more.knobs, focus: [touched.focus, focusAfter], left: left.knobs, forgot, moveLook, back, closed, fails };
+  // an Esc during that look closes the mouse's page: the release then gives back nothing (round 3)
+  await p.eval(`__poly.editLocks(${i})`); await sleep(60); await send(p, bytes.step(o, true)); await sleep(650); await p.key('Escape'); await sleep(80); await send(p, bytes.step(o, false)); await sleep(80);
+  const escHeld = await p.eval(SEL); if (escHeld.sel.length || escHeld.stepTab !== 'true') fails.push(`Esc during a Move look over a mouse step page: the release brought a step back: ${JSON.stringify(escHeld)}`);
+  return { opened: opened.word, switched: switched.word, planet: planet?.word ?? null, edited, done: done.row, esc: esc.row, more: more.knobs, focus: [touched.focus, focusAfter], left: left.knobs, focusMode: { kept: fm, page: fmPage, then: fmClosed }, forgot, moveLook, back, closed, fails };
 }
 
 async function loopHold(p) {

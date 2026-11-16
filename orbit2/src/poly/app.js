@@ -845,7 +845,7 @@ const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 // "more…" does, for the locks the 8 knobs don't hold (nudge, stroke, slice, start / end, direction, the condition's
 // loop and the repeats' shape), the old lock panel in Sheet → lane
 function openStep(i) { if (i < 0 || i >= m.lane.length || (lockStep !== i && locksTucked())) return; lockStep = i; renderSteps(); renderLocks(); latchStep(i); }
-function editLocks(i) { if (lockStep === i) { lockStep = -1; renderSteps(); renderLocks(); latchStep(-1); } else openStep(i); }
+function editLocks(i) { if (lockStep === i) { if (knobPage.forced) knobPage.forced.prev = -1; lockStep = -1; renderSteps(); renderLocks(); latchStep(-1); } else openStep(i); }   // closed under a Move hold: its release gives back nothing either
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
 function stepEdited() { renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
@@ -2751,8 +2751,10 @@ const drawn = (el) => !!el.getClientRects().length;
 const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || null;
 function closePopups() { closeShareMenu(); closeSlotMenu(); }
 // RD-6: an open step is drawn by the step page, its "more…" panel, or its cell's selection outline (the step tab's step
-// after another tab): any of them makes it the layer an Esc closes
-const stepDrawn = () => lockStep >= 0 && (knobPage.shown === 'step' || drawn($('lockpanel')) || (stepBtns[lockStep]?.classList.contains('sel') && drawn(stepBtns[lockStep])));
+// after another tab): any of them, really seen, makes it the layer an Esc closes. Seen: focus mode hides the console
+// with visibility (so the rings never move), which keeps its boxes: a hidden page or outline is no layer then
+const seen = (el) => !!el?.checkVisibility({ visibilityProperty: true, checkVisibilityCSS: true });
+const stepDrawn = () => lockStep >= 0 && ((knobPage.shown === 'step' && seen($('knobs'))) || seen($('lockpanel')) || (stepBtns[lockStep]?.classList.contains('sel') && seen(stepBtns[lockStep])));
 const escState = () => ({ dialog: !!popupOpen(), step: stepDrawn(), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
   knobPage.lost = null;   // RD-5: a knob the row took the focus from doesn't get it back after an Esc
