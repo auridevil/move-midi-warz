@@ -849,6 +849,9 @@ function editLocks(i) { if (lockStep === i) { lockStep = -1; renderSteps(); rend
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
 function stepEdited() { renderSteps(); renderLocks(); renderPage(); save(); paintLeds(); readout(); }
+/** A Move hold edits step i (knobs 1–7, knob 8, a slice, the jog, its push): it borrows the lock editor as a look does
+ *  (renderPage), so letting go gives it back, edited or not, also when the edit came before the look (inside LOOK_MS). */
+function borrowStep(i) { if (lockStep === i) return; knobPage.forced ??= { prev: lockStep }; lockStep = i; }
 /** Lock parameter k on the step the lock panel edits to v (null = unlock), then audition it and record it. */
 function lockHere(k, v) {
   if (lockStep < 0) return; const lane = m.lane, i = lane.stepIndex(lockStep); if (v == null) lane.unlock(i, k); else lane.setLock(i, k, v);
@@ -858,13 +861,16 @@ function lockHere(k, v) {
 /** S3: a start / end gauge in % of the sample (the lane's row and the lock panel); onChange gets 0..1. */
 function trimGauge(k, onChange) { return makeGauge({ label: k, value: k === 'end' ? 100 : 0, fmt: v => v + '%', title: INFO.trim, onChange: (v) => onChange(v / 100) }); }
 function buildLockGauges() {
-  const el = $('lock-gauges'); el.innerHTML = '';
+  // RD-6 one lock editor: the step page's knobs 1–7 (tune … color) wait in a hidden holder when the row doesn't show them
+  // (gauge.js bindRow sends them back there), never in "more…"; nudge, the one lock knob the row has no slot for, is
+  // "more…"'s
+  const el = $('lock-gauges'), row = $('step-knobs'), ROW_LOCKS = ROW_KEYS.step.slice(0, 7); el.innerHTML = ''; row.replaceChildren();
   for (const k of LOCK_KEYS) {
     // A3: recording, a lock knob writes onto the steps that play (a gesture), not the one step the panel shows
     const u = LOCK_UI[k]; const g = makeGauge({ label: u.label, min: u.min ?? 0, max: u.max ?? 100, value: 0, fmt: u.fmt, say: u.say || u.fmt || ((v) => v + '%'), title: INFO['lock ' + k] || INFO[k] || '', color: 'var(--signal-cyan)',
       onChange: (v) => { if (handTurn('lock', k, v / 100) === undefined || lockStep < 0) return; const lane = m.lane; lane.setLock(lane.stepIndex(lockStep), k, v / 100); auditionLock(); stepEdited(); },
       onStart: (v) => handHold('lock', k, v / 100), onEnd: () => handLetGo('lock', k) });
-    sliders['lock:' + k] = g; el.appendChild(g.el);
+    sliders['lock:' + k] = g; (ROW_LOCKS.includes(k) ? row : el).appendChild(g.el);
   }
   const setTrig = (patch) => { if (lockStep < 0) return; m.lane.setTrig(m.lane.stepIndex(lockStep), patch); auditionLock(); stepEdited(); };
   // RD-6 the step page's knob 8: the condition (the Move's hold step + knob 8, the same order), or the repeats (+ Shift).
@@ -873,7 +879,7 @@ function buildLockGauges() {
   const condSay = (c) => ({ always: 'every loop', fill: 'only with fill', 'not fill': 'only without fill', first: 'only the first loop', 'not first': 'after the first loop', pre: 'if the last condition passed', 'not pre': 'if the last condition failed' })[c] ?? `loop ${c.replace(':', ' of every ')}`;
   sliders['lock:cond'] = makeGauge({ label: 'condition', min: 0, max: CONDS.length - 1, value: 0, fmt: v => COND_SHORT[CONDS[v]] ?? CONDS[v], say: v => condSay(CONDS[v]), title: INFO.condition, onChange: (v) => setTrig({ cond: CONDS[v] }) });
   sliders['lock:ratchet'] = makeGauge({ label: 'repeats', min: 1, max: MAX_RATCHET, value: 1, fmt: v => '×' + v, say: v => v === 1 ? 'one hit' : `${v} hits inside the step`, title: 'Repeat the hit inside its step', onChange: (v) => setTrig({ ratchet: v }) });
-  $('step-knob8').replaceChildren(sliders['lock:cond'].el, sliders['lock:ratchet'].el);
+  row.append(sliders['lock:cond'].el, sliders['lock:ratchet'].el);
   $('st-clear').onclick = () => { if (lockStep < 0) return; const i = m.lane.stepIndex(lockStep); m.lane.clearLocks(i); m.lane.trigs[i] = null; stepEdited(); };
   $('st-more').onclick = () => { if (lockStep >= 0) reveal('lockpanel').scrollIntoView({ block: 'nearest' }); };
   $('st-done').onclick = () => { if (lockStep >= 0 && knobPage.latch === 'step') editLocks(lockStep); else latchStep(-1); };
@@ -925,9 +931,11 @@ function renderSliceLock(lane, lk) {
   const si = lane.stepIndex(lockStep), cur = lane.sliceAt(si, lk);
   [...el.children].forEach((b, k) => { const on = k ? lk.slice != null && cur === k - 1 : lk.slice == null; b.classList.toggle('on', on); b.setAttribute('aria-pressed', on); b.classList.toggle('dflt', k > 0 && lk.slice == null && cur === k - 1); });
 }
-/** RD-6 one lock editor: the old lock panel (Sheet → lane) is only "more…" of the step page on the row, so it shows only
- *  then. Its 7 lock gauges go home into it whenever the row leaves the step page (gauge.js bindRow): hidden with it. */
-function lockPanelShown() { const lp = $('lockpanel'), hide = lockStep < 0 || knobPage.shown !== 'step'; if (lp.hidden !== hide) lp.hidden = hide; }
+/** RD-6 one lock editor: the old lock panel (Sheet → lane) is only "more…", the rest of the open step's locks (never the
+ *  page's knobs: their home is the hidden #step-knobs). A step is open while lockStep ≥ 0: the step page shown or
+ *  latched, a Move hold borrowing it, or the step tab's step after another tab; the panel, the step tab and Esc
+ *  (escState) all read that one rule, and Esc closes it. */
+function lockPanelShown() { const lp = $('lockpanel'), hide = lockStep < 0; if (lp.hidden !== hide) lp.hidden = hide; }
 function renderLocks() {   // always after renderSteps, which closes a step a shorter loop left out
   const lane = m.lane; lockPanelShown(); if (lockStep < 0) return;   // the values even while hidden: the row may show them next
   const lk = lane.lockAt(lockStep) || {}, keys = Object.keys(lk);
@@ -2253,20 +2261,20 @@ move.addEventListener('encoder', (e) => {
   if (index < 8 && !hands.touch.has(index)) { touchTail(); renderPage(); peekAt(index, 'turn'); peekOff('turn'); sceneHand('turn', moveKey(index)); sceneHand('turn', null); }
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
-    for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }
+    for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); borrowStep(i); }
     auditionLock(); stepEdited(); return;
   }
   if (held.size && index === 6 && m.lane.voice === 'sample' && m.lane.sliceCount()) {   // S1: on a slice set, hold step(s) + knob 7 = which slice, every 4 clicks either way
     const lane = m.lane, top = lane.sliceCount() - 1; let moved = false;
     for (const h of held.values()) {
-      const i = h.step, si = lane.stepIndex(i), k = Math.trunc((h.sl = (h.sl || 0) + delta) / 4); h.used = true; lockStep = i;
+      const i = h.step, si = lane.stepIndex(i), k = Math.trunc((h.sl = (h.sl || 0) + delta) / 4); h.used = true; borrowStep(i);
       if (k) { h.sl -= k * 4; lane.setLock(si, 'slice', Math.max(0, Math.min(top, lane.sliceAt(si, lane.locks[si]) + k))); moved = true; }
     }
     if (moved) auditionLock(); stepEdited(); return;
   }
   if (held.size && index < LOCK_KEYS.length) {   // hold step(s) + knob 1–7 = lock tune · prob · vel · decay · tone · snap · color on those steps
     const k = LOCK_KEYS[index], lane = m.lane, span = k === 'tune' ? 0.02 : 0.02;
-    for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); lockStep = i; }
+    for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), k, lockValue(lane, i, k) + delta * span); borrowStep(i); }
     auditionLock(); stepEdited(); return;
   }
   // A3 / A6: a knob that can record (Shift + knobs = the sound, knob 6 / 7 = chance / tune) is a gesture, on the parameter
@@ -2299,7 +2307,7 @@ move.addEventListener('encoderTouch', (e) => {
 });
 move.addEventListener('wheel', (e) => {
   if (held.size) {   // G1: hold step(s) + jog wheel = nudge those steps early / late, 5 % of a step per click
-    const lane = m.lane; for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); lockStep = i; }
+    const lane = m.lane; for (const h of held.values()) { const i = h.step; h.used = true; lane.setLock(lane.stepIndex(i), 'nudge', Math.round((lockValue(lane, i, 'nudge') + e.detail.delta * 0.05) * 100) / 100); borrowStep(i); }
     stepEdited(); return;
   }
   if (!shift) return setFilter(stepFilter(pfx.filter, e.detail.delta));   // P6: the wheel = the performance filter (it stops at "off" on the way across)
@@ -2308,7 +2316,7 @@ move.addEventListener('wheel', (e) => {
 move.addEventListener('wheelPush', (e) => {
   if (e.detail.pressed && !held.size) return setFilter(0);   // P6: push the wheel with no step held = filter off
   if (!e.detail.pressed || !held.size || !ARTICS[m.lane.voice]) return; const lane = m.lane;
-  for (const h of held.values()) { h.used = true; lane.cycleArtic(lane.stepIndex(h.step)); lockStep = h.step; }
+  for (const h of held.values()) { h.used = true; lane.cycleArtic(lane.stepIndex(h.step)); borrowStep(h.step); }
   auditionLock(); stepEdited();
 });
 move.addEventListener('volume', (e) => { vol = Math.max(0, Math.min(1, vol + e.detail.delta * 0.02)); kit?.master.gain.rampTo(vol, 0.05); });
@@ -2742,7 +2750,10 @@ function findRun(h) {
 const drawn = (el) => !!el.getClientRects().length;
 const popupOpen = () => (!$('share-menu').hidden && drawn($('share-menu')) && 'share') || (slotMenuFor >= 0 && drawn($('slot-menu')) && 'slot') || null;
 function closePopups() { closeShareMenu(); closeSlotMenu(); }
-const escState = () => ({ dialog: !!popupOpen(), step: lockStep >= 0 && (drawn($('lockpanel')) || knobPage.shown === 'step'), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
+// RD-6: an open step is drawn by the step page, its "more…" panel, or its cell's selection outline (the step tab's step
+// after another tab): any of them makes it the layer an Esc closes
+const stepDrawn = () => lockStep >= 0 && (knobPage.shown === 'step' || drawn($('lockpanel')) || (stepBtns[lockStep]?.classList.contains('sel') && drawn(stepBtns[lockStep])));
+const escState = () => ({ dialog: !!popupOpen(), step: stepDrawn(), sheet: sheet.open && drawn($('sheet-body')), focus: focusMode });
 function escapeOnce() {
   knobPage.lost = null;   // RD-5: a knob the row took the focus from doesn't get it back after an Esc
   const a = document.activeElement, step = escStep(escState());

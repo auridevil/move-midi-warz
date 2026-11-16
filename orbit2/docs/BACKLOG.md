@@ -1017,3 +1017,8 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   button 3 locked step 3): Back + a step pins a half; worth a look with the step page.
 - **Tools after RD-06 round 1** (sound): `step-check --only FRAME` measures 8 s without hands, then 8 s with: on a loaded
   machine the idle run can read higher than the hands' (1.30 vs 1.00 ms p95); interleave or repeat them before gating.
+- **The peek and the hand on a step not yet looked at** (RD-06 round 2, verifier): a Move touch that lands while a step
+  is held but not yet looked at keeps its own page (T0′, the tap rule): the peek says "knob 3 · rotation" while the
+  scene's hand already takes the step's lock (`moveKey` → `lock:vel`, nothing drawn for it), and turning that knob
+  edits the step's lock (the first turn shows the page and the peek follows). Harmless, but the two disagree for the
+  touch's length: let the hand follow the row's page until the look.
