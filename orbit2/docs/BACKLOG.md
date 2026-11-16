@@ -963,3 +963,31 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   `app.js` is 2,590 lines; the find glue (~90) is the next module if RD-5's "all ⌘K" grows it. The share menu's rows say
   "share" twice ("share 4 bars of audio · share"). (tool) cdp.mjs `key('Backspace')` sends no key code, so it doesn't
   edit a field.
+- **The console in its own module** (RD-05 round 1, architect): `app.js` is ~2,750 lines; the console glue (~150:
+  `renderLanes`, `knobPage` / `hands` / `pageNow` / `renderPage`, the peek, the keyboard ⇧, the console log) belongs in
+  `src/poly/console.js`, and the pure parts in `pages.js` with tests (`PEEK_SAYS`; the touch set and its 400 ms tail:
+  several touches, expiry); `pageGauges` repeats `ROW_KEYS`; two `console.test.js` tests match source text.
+- **⇧ held vs a fine drag** (RD-05 round 1, architect; for Noor): DECISION's "⇧ held = the sound page" meets gauge.js's
+  "Shift = 5× finer": Shift pressed before a drag flips the row, so a Shift-drag meant as a fine swing turns color (slot
+  5). Since round 1 a knob with the focus keeps its Shift (click it, then Shift-drag it: fine), but Shift first, then a
+  drag, still flips. Options: fine drags on Alt, or keyboard ⇧ shows sound only while no pointer is down.
+- **Words on the console row** (RD-05 round 1: verifier, noor; RD-10 / Noor): in the everything view the rhythm row's
+  names are cut at 1512×860 ("euclid h…", "probabi…"; the simple view's hits / shift / chance fit). RD-10 removes the
+  views: pick the words the row shows then.
+- **Holds on the face's targets** (RD-05 round 1: verifier, noor, kai; for Noor): randomize keeps its hold (long-press /
+  right-click / Shift+click = wild, as at `12a25f8`; one undo step) although principle 3 keeps randomize off holds; a
+  mis-clicked M lamp mutes the kick (the run's only direct hit besides play: a hold, or Shift-only?); a lit M is an
+  outline and a letter (a fill would read faster in the dark).
+- **The filter's glide** (RD-05 round 1: sound, verifier): the jump to off glides in linear Hz (30 ms: LP 80 passes
+  10 kHz in ~15 ms; pre-existing P6, the wheel's push too): a glide in log frequency sounds like a sweep. A double-click
+  to off within the setlog's knob merge (0.7 s) of a drag has no entry of its own.
+- **The bar·beat counter's layout** (RD-05 round 1, sound): one page layout per beat (2.4 a second, 1.2 ms/s vs 0.01 at
+  `12a25f8`): a fixed box (`contain: strict`, room for "99.12") keeps it to a repaint.
+- **Light and room on the console** (RD-05 round 1: noor, verifier, nils): the console log (~550 px, 6 lines) lies over
+  the top of the outer rings (dim, read-only; a narrower block or a corner anchor would keep them clean); the quest card
+  crowds the Move pill (RD-7); phone: the floating play covers the first knob row's 4th knob and the docked tabs cut
+  the second row's names (RD-10); a volume-knob touch (note 8) shows nothing; the hidden peek keeps its last text.
+- **Tools after RD-05 round 1** (architect, sound, noor): the mis-click run reads the setlog 70 ms after a click (a
+  next-bar effect is charged to a later click); the face audit judges the play ring by its brightest 5 % of box pixels
+  (measure along the ring); `face-audit --audio` launches time out under load (retry inside `ready()`); `cdp.mjs
+  key('`')` sends no code (`key('`', 'Backquote')` works: a default code map).

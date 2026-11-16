@@ -8,12 +8,25 @@
 // before a drag takes its start: either may set() the knob somewhere else first (A3: the gauge can show what plays, a
 // lock or a curve, while the knob itself is the lane value). setMark(true) shows a small "A" (automated) and says it to
 // screen readers.
+// detent (RD-5, the filter's "off"): a value the knob stops on. A drag holds it for DETENT_PX of travel on the way
+// across (and a slip from it stays on it); a key or wheel step that would cross it lands on it (as the Move's wheel,
+// perform.js stepFilter). The arc fills from it, so on the detent the knob shows no fill.
 const NS = 'http://www.w3.org/2000/svg';
 const arc = (cx, cy, r, a0, a1) => { const p = (a) => [cx + r * Math.cos(a), cy + r * Math.sin(a)]; const [x0, y0] = p(a0), [x1, y1] = p(a1); const large = a1 - a0 > Math.PI ? 1 : 0; return `M ${x0} ${y0} A ${r} ${r} 0 ${large} 1 ${x1} ${y1}`; };
 const short = (t) => String(t).split(' · ')[0];   // 'master tempo · knob 8' → 'master tempo': the hint is for eyes
-const START = Math.PI * 0.75, SWEEP = Math.PI * 1.5;
+const START = Math.PI * 0.75, SWEEP = Math.PI * 1.5, DETENT_PX = 10;
+/** A key or wheel step from `from` to `to` that would cross the detent d stops on it (d null: no detent). */
+export const stopAt = (from, to, d) => (d == null || from === d || Math.sign(to - d) === Math.sign(from - d) ? to : d);
+/** A drag's value from v0 after `t` of travel (value units) with a detent d holding `g` of it: crossing d, or leaving it,
+ *  costs g of travel, the value staying on d meanwhile. */
+export function dragDetent(v0, t, d, g) {
+  const raw = v0 + t; if (d == null) return raw;
+  const s = Math.sign(v0 - d); if (!s) return Math.abs(t) <= g ? d : raw - Math.sign(t) * g;
+  const past = (raw - d) * s;   // ≥ 0: still on the start's side
+  return past >= 0 ? raw : past >= -g ? d : raw + s * g;
+}
 
-export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, exact = false, fmt = (v) => v, say = fmt, color = 'var(--signal-cyan)', title = '', onChange, onStart, onEnd, prime }) {
+export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, exact = false, fmt = (v) => v, say = fmt, color = 'var(--signal-cyan)', title = '', detent = null, onChange, onStart, onEnd, prime }) {
   const el = document.createElement('div'); el.className = 'gauge'; el.title = title; el.tabIndex = 0; el.style.setProperty('--gc', color);   // the stylesheet may tone the colour (orbit2 RD-2: 80 % over the void)
   let name = short(label), marked = false; const aria = () => el.setAttribute('aria-label', marked ? `${name}, automated` : name);
   el.setAttribute('role', 'slider'); aria(); el.setAttribute('aria-valuemin', min); el.setAttribute('aria-valuemax', max);
@@ -27,20 +40,22 @@ export function makeGauge({ label, min = 0, max = 100, step = 1, value = min, ex
   const mark = document.createElement('i'); mark.className = 'g-mark'; mark.textContent = 'A'; mark.hidden = true; mark.setAttribute('aria-hidden', 'true'); el.append(svg, val, lab, mark);
   let v = value, pie = false;   // RD-5: the sound page draws its knobs as filled pies (setShape)
   const clamp = (x) => Math.min(max, Math.max(min, Math.round(x / step) * step));
-  const render = () => { const f = (v - min) / (max - min || 1); const a = START + SWEEP * f; fill.setAttribute('d', f > 0.001 ? (pie ? `M 24 24 L ${24 + 18 * Math.cos(START)} ${24 + 18 * Math.sin(START)} ${arc(24, 24, 18, START, a).replace(/^M [^A]+/, '')} Z` : arc(24, 24, 18, START, a)) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
+  const ang = (x) => START + SWEEP * (x - min) / (max - min || 1);   // the arc fills from min, or from the detent
+  const render = () => { const a = ang(v), a0 = ang(detent ?? min), lo = Math.min(a0, a), hi = Math.max(a0, a); fill.setAttribute('d', (hi - lo) / SWEEP > 0.001 ? (pie ? `M 24 24 L ${24 + 18 * Math.cos(lo)} ${24 + 18 * Math.sin(lo)} ${arc(24, 24, 18, lo, hi).replace(/^M [^A]+/, '')} Z` : arc(24, 24, 18, lo, hi)) : ''); dot.setAttribute('cx', 24 + 18 * Math.cos(a)); dot.setAttribute('cy', 24 + 18 * Math.sin(a)); val.textContent = fmt(v); el.setAttribute('aria-valuenow', v); el.setAttribute('aria-valuetext', String(say(v))); };
   const set = (x, emit = false) => { const n = exact && !emit ? Math.min(max, Math.max(min, x)) : clamp(x); const changed = n !== v; v = n; render(); if (emit && changed) onChange?.(v); };
+  const by = (x) => set(stopAt(v, x, detent), true);   // a key or wheel step (it stops on a detent on the way across)
   // drag: 150 px of travel = full range; Shift = 5× finer. onStart first: it may set where the drag starts (A3)
   let drag = null;
   el.addEventListener('pointerdown', (e) => { onStart?.(v); drag = { y: e.clientY, v }; el.setPointerCapture(e.pointerId); e.preventDefault(); });
-  el.addEventListener('pointermove', (e) => { if (!drag) return; const range = max - min, px = e.shiftKey ? 750 : 150; set(drag.v + (drag.y - e.clientY) / px * range, true); });
+  el.addEventListener('pointermove', (e) => { if (!drag) return; const range = max - min, px = e.shiftKey ? 750 : 150; set(dragDetent(drag.v, (drag.y - e.clientY) / px * range, detent, DETENT_PX / px * range), true); });
   const up = () => { if (!drag) return; drag = null; onEnd?.(v); }; el.addEventListener('pointerup', up); el.addEventListener('pointercancel', up);
-  el.addEventListener('wheel', (e) => { e.preventDefault(); prime?.(); set(v + (e.deltaY < 0 ? 1 : -1) * step * (e.shiftKey ? 1 : Math.max(1, Math.round((max - min) / 50))), true); }, { passive: false });
+  el.addEventListener('wheel', (e) => { e.preventDefault(); prime?.(); by(v + (e.deltaY < 0 ? 1 : -1) * step * (e.shiftKey ? 1 : Math.max(1, Math.round((max - min) / 50)))); }, { passive: false });
   const KEYS = new Set(['ArrowUp', 'ArrowRight', 'ArrowDown', 'ArrowLeft', 'PageUp', 'PageDown', 'Home', 'End']);
   el.addEventListener('keydown', (e) => {
     if (!KEYS.has(e.key)) return; prime?.(); e.preventDefault();
     const big = Math.max(step, Math.round((max - min) / 20)), page = Math.max(big, Math.round((max - min) / 5));
-    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') set(v + (e.shiftKey ? step : big), true); else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') set(v - (e.shiftKey ? step : big), true);
-    else if (e.key === 'PageUp') set(v + page, true); else if (e.key === 'PageDown') set(v - page, true); else if (e.key === 'Home') set(min, true); else set(max, true);
+    if (e.key === 'ArrowUp' || e.key === 'ArrowRight') by(v + (e.shiftKey ? step : big)); else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') by(v - (e.shiftKey ? step : big));
+    else if (e.key === 'PageUp') by(v + page); else if (e.key === 'PageDown') by(v - page); else if (e.key === 'Home') set(min, true); else set(max, true);
   });
   el.addEventListener('dblclick', () => set(value, true));
   render();

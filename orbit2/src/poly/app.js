@@ -377,7 +377,7 @@ const pending = pendingSteps();   // E6: the jam log's early parts, by their ste
 /** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
  *  starts on the next bar line of the old one, so a bar is never cut short, and the lanes start there on step 1
  *  (m.setOrigin); a restart counts from tick 0 in the pattern's meter. barN: bar lines since Play, in any meter. */
-let bars = { at: 0, len: BAR_TICKS, next: null }, barN = 0;
+let bars = { at: 0, len: BAR_TICKS, next: null }, barN = 0, barBeats = { meter: null, num: 4 };
 const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; barN = 0; m.setOrigin(0); };
 function trackMeter(t) { const b = trackBars(bars, t, m.barTicks()); if (b !== bars) { bars = b; m.setOrigin(bars.at); } }
 const tickSec = () => 60 / tempo / PPQ;
@@ -405,8 +405,10 @@ function onTick(t, time, cyc, ts) {
   // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
   // its way home can bring back another meter, which starts on this bar line too
   const line = t > 0 && onBar(t, bars); if (line) barN++;
-  // RD-5 the bar·beat counter: worked out here (integers), drawn on its beat by Tone.Draw (no DOM in the clock)
-  const bt = bars.len / meterParts(m.meter).num, inBar = (((t - bars.at) % bars.len) + bars.len) % bars.len; if (inBar % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor(inBar / bt) + 1}`; T.getDraw().schedule(() => { barBeat.textContent = bb; }, time); }
+  // RD-5 the bar·beat counter: worked out here (integers; the meter's beats a bar read when it changes), drawn on its
+  // beat by Tone.Draw (no DOM in the clock), not after a stop (a beat queued just before it would undo its "01.1")
+  if (m.meter !== barBeats.meter) barBeats = { meter: m.meter, num: meterParts(m.meter).num };
+  const bt = bars.len / barBeats.num, inBar = (((t - bars.at) % bars.len) + bars.len) % bars.len; if (inBar % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor(inBar / bt) + 1}`; T.getDraw().schedule(() => { if (playing) barBeat.textContent = bb; }, time); }
   if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
@@ -618,8 +620,9 @@ const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', '
 const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: LOCK_KEYS.slice(0, 7) };   // knob 8 on a step = its condition (the sheet)
 const pageGauges = (pg) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? ROW_KEYS.step.map(k => sliders['lock:' + k]) : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
 // latch: the page the screen chose; step: the step a cell's long-press latched (on lane `lane`), back: where it came from
-const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r: null, forced: null };   // forced: the lock editor before a Move look took it
-const hands = { touch: new Set(), touchUntil: 0, loop: false };   // the Move's encoders touched, the touch's tail, Loop held
+const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r: null, forced: null, lost: null };   // forced: the lock editor before a Move look took it; lost: a knob the row took the focus from
+const hands = { touch: new Set(), touchUntil: 0, loop: false, timer: 0 };   // the Move's encoders touched, the touch's tail (one timer), Loop held
+const touchTail = () => { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; clearTimeout(hands.timer); hands.timer = setTimeout(renderPage, TOUCH_HOLD_MS + 10); };
 /** What the hands and the latch make of the row now (pages.js). A latched step goes with its lane, or a shorter loop. */
 function pageNow() {
   const now = performance.now(), h = pages.held.size ? [...pages.held.values()][0] : null, look = pages.looked(now);
@@ -641,7 +644,15 @@ function renderPage() {
   else if (r.row !== 'step' && knobPage.forced) { lockStep = knobPage.forced.prev < lane.length ? knobPage.forced.prev : -1; knobPage.forced = null; renderSteps(); renderLocks(); }
   // a knob the pointer holds stays put: the row flips once it is let go (#knobs pointerup below)
   const pg = r.row, first = cellFirst();
-  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g?.held))) { knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg; }
+  if (pg !== knobPage.shown && !(knobPage.shown && pageGauges(knobPage.shown).some(g => g?.held))) {
+    const fo = document.activeElement?.closest?.('.gauge') ? document.activeElement : null;   // a knob that moves loses the focus
+    knobPage.shown = pg; bindRow([...$('knobs').children], pageGauges(pg), pg === 'sound' ? 'pie' : 'arc'); $('knobs').dataset.page = pg;
+    if (fo && document.activeElement !== fo) knobPage.lost = { el: fo, owned: keyFocused.has(fo) };   // (never at load: nothing has the focus)
+  }
+  // … and gets it back, with its keys, where it is drawn again (the row, the open sheet), unless the focus went elsewhere
+  const lost = knobPage.lost, at = document.activeElement;
+  if (lost && at && at !== document.body) knobPage.lost = null;
+  else if (lost && lost.el.getClientRects().length) { knobPage.lost = null; focusAs(lost.el, lost.owned); }
   for (const t of PAGES) $('pg-' + t).setAttribute('aria-pressed', String(t === knobPage.shown));   // the tab of the page drawn
   $('pg-step').setAttribute('aria-disabled', String(lockStep < 0));
   const lh = `${m.selected + 1} · ${voiceLabel(lane)}${lane.muted ? ' · M' : ''}`; if ($('lh-lane').textContent !== lh) $('lh-lane').textContent = lh;
@@ -654,38 +665,46 @@ for (const t of ['rhythm', 'sound']) $('pg-' + t).onclick = () => { knobPage.lat
 // the step tab: the step a cell's long-press (right-click, Alt+click) or a planet opened; none yet, it says how
 $('pg-step').onclick = () => { if (lockStep < 0) return toast('long-press, right-click or Alt+click a cell for its step page', 2500); latchStep(lockStep); };
 $('knobs').addEventListener('pointerup', () => setTimeout(renderPage), true);   // a held knob let go: a flip it held back happens now
-// ⇧ held on the keyboard shows the sound page too (DECISION: "Move Shift, ⇧ held, or the sound tab"); a text field's
-// Shift is its own
+// ⇧ held on the keyboard shows the sound page too (DECISION: "Move Shift, ⇧ held, or the sound tab"). Not where the
+// focus has a Shift of its own: a text field, a knob (Shift + arrows = fine steps). And ⇧ with another key is a chord
+// (Shift+Tab, + an arrow, + a letter), not a held ⇧: the row goes back before that key does anything, so Shift+Tab
+// lands on the page it left
 let kbdShift = false;
-const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); };
-addEventListener('keydown', (e) => { if (e.key === 'Shift' && !(e.target instanceof Element && e.target.closest('input, textarea'))) setKbdShift(true); });
+const setKbdShift = (on) => { if (kbdShift === on) return; kbdShift = on; renderPage(); }, MODS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock']);
+addEventListener('keydown', (e) => {
+  if (e.key !== 'Shift') { if (!MODS.has(e.key)) knobPage.lost = null; if (kbdShift) setKbdShift(false); return; }   // a key meanwhile: the knob's focus stays gone
+  if (!e.repeat && !(e.target instanceof Element && e.target.closest('input, textarea, .gauge'))) setKbdShift(true);
+}, true);
 addEventListener('keyup', (e) => { if (e.key === 'Shift') setKbdShift(false); }); addEventListener('blur', () => setKbdShift(false));
+addEventListener('pointerdown', () => { knobPage.lost = null; }, true);   // a click elsewhere too
 /** A Move encoder (0–7) touched or let go: the row flips to the Move's page for the touch and TOUCH_HOLD_MS after it. */
 function moveTouch(index, on) {
-  if (on) hands.touch.add(index); else { hands.touch.delete(index); hands.touchUntil = performance.now() + TOUCH_HOLD_MS; setTimeout(renderPage, TOUCH_HOLD_MS + 10); }
+  if (on && slog) { performance.mark('peek-touch'); peek.mark = true; }   // A8 from the touch, the row's flip included
+  if (on) hands.touch.add(index); else { hands.touch.delete(index); touchTail(); }
   renderPage(); if (on) peekAt(index, 'touch'); else peekOff('touch');
 }
 // ---- RD-5 the peek (left column): the touched knob's number (64 px, weight 300), its name and what it means in plain
 // words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
-// hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` and the frame that paints
-// it measures `peek` (performance entries) ----
+// hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` (moveTouch) and the task
+// after the frame that paints the peek measures `peek` (performance entries) ----
 const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, why: new Set(), timer: 0, mark: false };
 const PEEK_SAYS = {
   length: v => `${v} step${v === 1 ? '' : 's'} a loop`, euclid: v => v ? `${v} hit${v === 1 ? '' : 's'}, spread evenly` : 'no hits spread',
   rotation: v => v ? `the hits start ${v} step${v === 1 ? '' : 's'} later` : 'not shifted', ratio: v => `${RATIO_LABEL[v]} step${RATIO_LABEL[v] === '1' ? '' : 's'} a beat`,
   swing: v => v ? `every other step ${v}% late` : 'straight', prob: v => `plays ${v} of 100 loops`, tune: v => tuneSay(v), tempo: v => `${v} beats a minute`,
 };
-function peekAt(slot, why) { clearTimeout(peek.timer); peek.slot = slot; peek.why.add(why); if (why === 'touch' && slog) { performance.mark('peek-touch'); peek.mark = true; } paintPeek(); }
+function peekAt(slot, why) { clearTimeout(peek.timer); peek.slot = slot; peek.why.add(why); paintPeek(); }
 function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; paintPeek(); } }, PEEK_MS); }
 function paintPeek() {
   const el = $('peek'), g = peek.slot >= 0 ? $('knobs').children[peek.slot]?.firstElementChild : null;
   if (!g) { if (!el.hidden) el.hidden = true; return; }
   const k = ROW_KEYS[knobPage.shown]?.[peek.slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
-  $('peek-n').textContent = g.querySelector('.g-val').textContent;
-  $('peek-name').textContent = `knob ${peek.slot + 1} · ${label} · ${voiceLabel(m.lane)}`;
-  $('peek-mean').textContent = PEEK_SAYS[k]?.(v) ?? `${label} ${g.getAttribute('aria-valuetext')}`;
+  const put = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };   // it repaints with every move of its knob
+  put('peek-n', g.querySelector('.g-val').textContent);
+  put('peek-name', `knob ${peek.slot + 1} · ${label} · ${voiceLabel(m.lane)}`);
+  put('peek-mean', PEEK_SAYS[k]?.(v) ?? `${label} ${g.getAttribute('aria-valuetext')}`);
   el.hidden = false;
-  if (peek.mark) { peek.mark = false; requestAnimationFrame(() => performance.measure('peek', 'peek-touch')); }   // the frame that paints it
+  if (peek.mark) { peek.mark = false; requestAnimationFrame(() => setTimeout(() => performance.measure('peek', 'peek-touch'))); }   // after the frame that paints it
 }
 {
   const kn = $('knobs'), slotOf = (el) => [...kn.children].indexOf(el.closest('#knobs > *'));
@@ -693,6 +712,8 @@ function paintPeek() {
   for (const t of ['pointerup', 'pointercancel']) kn.addEventListener(t, () => peekOff('drag'));
   kn.addEventListener('focusin', (e) => { if (lastInput === 'key' && e.target.closest('.gauge')) peekAt(slotOf(e.target), 'focus'); });
   kn.addEventListener('focusout', () => peekOff('focus'));
+  // the peek follows its knob whatever moves it (a turn, the hand's value drawn each frame, a curve, the keys)
+  new MutationObserver(() => { if (peek.slot >= 0) paintPeek(); }).observe(kn, { subtree: true, childList: true, characterData: true });
 }
 /** The first of the 16 steps the cells show: the 16 holding the step being edited, else the Move's step buttons' (the
  *  16 holding the pad page: they follow the playhead, or the page Back pinned). */
@@ -1824,7 +1845,8 @@ function buildEditUI() {
   const f = $('btn-fill'); f.onpointerdown = () => setFill(true); for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) f.addEventListener(ev, () => setFill(false));
   $('btn-latch').onclick = armLatch; $('btn-latch').title = INFO['fill latch'];
   // P6: the filter knob (double-click = off) and the hold-to-throw button, beside fill in the transport strip
-  sliders.fxFilter = makeGauge({ label: 'filter', min: -100, max: 100, value: 0, fmt: (v) => (v ? `${v < 0 ? 'LP' : 'HP'} ${Math.abs(v)}` : 'off'), say: filterSay, title: INFO['fx filter'], color: 'var(--signal-cyan)', onChange: (v) => setFilter(v / 100) });
+  // RD-5: a centre detent (DECISION "Filter on the face"): off holds a few pixels of a drag, a step stops on it on the way across
+  sliders.fxFilter = makeGauge({ label: 'filter', min: -100, max: 100, value: 0, detent: 0, fmt: (v) => (v ? `${v < 0 ? 'LP' : 'HP'} ${Math.abs(v)}` : 'off'), say: filterSay, title: INFO['fx filter'], color: 'var(--signal-cyan)', onChange: (v) => setFilter(v / 100) });
   $('fx-gauge').replaceChildren(sliders.fxFilter.el);
   const th = $('btn-throw'); th.onpointerdown = () => { wake(); setThrow(true); }; for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) th.addEventListener(ev, () => setThrow(false));
   // keys hold it only when the keyboard reached it (controlOwnsKey): clicked, Space is the page's play / stop, as on every other button
@@ -2157,7 +2179,7 @@ move.addEventListener('step', (e) => {
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
   // RD-5: a turn with no touch (a controller without touch) flips the row and shows the peek as a touch would
-  if (index < 8 && !hands.touch.has(index)) { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; setTimeout(renderPage, TOUCH_HOLD_MS + 10); renderPage(); peekAt(index, 'turn'); peekOff('turn'); }
+  if (index < 8 && !hands.touch.has(index)) { touchTail(); renderPage(); peekAt(index, 'turn'); peekOff('turn'); }
   if (held.size && index === 7) {   // hold step(s) + knob 8 = condition; + Shift = repeats (ratchet)
     const lane = m.lane;
     for (const h of held.values()) { const i = h.step; h.used = true; const si = lane.stepIndex(i), t = lane.trigs[si] || { cond: 'always', ratchet: 1 }; lane.setTrig(si, shift ? { ratchet: t.ratchet + Math.sign(delta) } : { cond: CONDS[(CONDS.indexOf(t.cond) + Math.sign(delta) + CONDS.length) % CONDS.length] }); lockStep = i; }

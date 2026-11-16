@@ -5,6 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolvePage, TOUCH_HOLD_MS, LOOK_MS } from '../src/poly/pages.js';
+import { dragDetent, stopAt } from '../src/gauge.js';
 
 const pick = (r, ...k) => Object.fromEntries(k.map(x => [x, r[x]]));
 const S = { latch: 'sound' };   // the mouse latched SOUND
@@ -89,4 +90,24 @@ test('RD-5 the console: the rhythm page is the Move\'s knob row in order (app.js
   assert.match(app, /const RHYTHM_KEYS = \['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'\]/);
   assert.match(app, /if \(index === 7\) handTempo\(tempo \+ delta\); else nudge\(RHYTHM_KEYS\[index\]/, 'the Move\'s knobs 1–7 are the same keys');
   assert.match(app, /pg === 'sound' \? SOUND_KEYS\.map/, 'the sound page is Shift + knobs (SOUND_KEYS)');
+});
+
+test('RD-5 round 1: the filter\'s centre detent (DECISION "Filter on the face"): a drag holds off, a step stops on it', () => {
+  // the filter: −100…100, 150 px = the range, so 10 px of drag = 13.3 of value held by the detent at 0
+  const g = 10 / 150 * 200, walk = (v0, px) => Math.round(dragDetent(v0, px / 150 * 200, 0, g));
+  for (const px of [1, 2, 5, 9, 10, -1, -2, -10]) assert.equal(walk(0, px), 0, `a ${px} px slip from off stays off`);
+  assert.equal(walk(0, 15), 7, 'past the detent the knob moves on, minus the travel the detent held');
+  assert.equal(walk(0, -15), -7);
+  // from LP 10 up: it reaches off, stays there for 10 px, then goes on into HP
+  const across = Array.from({ length: 30 }, (_, i) => walk(-10, i + 1));
+  assert.deepEqual(across.slice(0, 8), [-9, -7, -6, -5, -3, -2, -1, 0]);
+  assert.equal(across.filter(v => v === 0).length, 10, 'off holds for 10 of the 30 pixels (at most 1 before)');
+  assert.ok(across.slice(18).every(v => v > 0) && across.every((v, i) => !i || v >= across[i - 1]), 'never back, then HP');
+  assert.equal(walk(30, -10), 17, 'a drag that does not reach the detent is the plain drag');
+  assert.equal(dragDetent(40, -5, null, g), 35, 'no detent: the plain drag');
+  // keys and the wheel: a step that would cross off lands on it; from off, it leaves
+  assert.equal(stopAt(-5, 5, 0), 0); assert.equal(stopAt(5, -5, 0), 0); assert.equal(stopAt(-15, -5, 0), -5);
+  assert.equal(stopAt(0, 10, 0), 10); assert.equal(stopAt(0, -10, 0), -10); assert.equal(stopAt(-5, 0, 0), 0); assert.equal(stopAt(-5, 5, null), 5);
+  const app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
+  assert.match(app, /sliders\.fxFilter = makeGauge\(\{[^}]*detent: 0/, 'the face\'s filter knob has the detent');
 });

@@ -3,14 +3,19 @@
 //
 //   node orbit2/tools/console-check.mjs                     # everything at 1512×860, a report on stdout
 //   node orbit2/tools/console-check.mjs --assert --json /tmp/x.json --clicks 600 --shots /tmp/orbit2-impl/
-//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK
+//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT   --root /tmp/x (a `git archive`)
 //
 // MOVE      Noor's sequence and the touch / turn rows through __poly.move.receive (touch notes 0–8, encoder CCs, Shift,
 //           steps): what the row draws, the chip, the header word, the held cell, the step untouched by a look.
-// A8        a Move encoder touch → the peek painted: the `peek` performance measures (?setlog), p95 < 30 ms.
-// A2        the scripted glance run (the DOM oracle; the player agents judge pictures in glance.mjs): select a lane on the
-//           Move, Shift or not, touch a knob and turn it a click, look 300 ms later: the page drawn and the lane in the
-//           header must be what the hands asked for; ≥ 18 of 20 per seed.
+// A8        a Move encoder touch → the peek painted: the `peek` performance measures (?setlog: from the touch to the task
+//           after the frame that paints it), p95 < 30 ms; the sound tab latched, so every touch flips the row too.
+// A2        the scripted glance run (the DOM oracle; the player agents judge pictures in glance.mjs): a random latch (the
+//           rhythm or sound tab), select a lane on the Move, Shift or not, touch a knob and turn it a click, look 300 ms
+//           later: the page drawn and the lane in the header must be what the hands asked for; ≥ 18 of 20 per seed.
+// FILTER    (round 1) the face's filter knob has its centre detent: a small slip from off stays off, a drag across holds
+//           off for a stretch, a key step across lands on off.
+// SHIFT     (round 1) a focused console knob keeps its keys: keyboard ⇧ does not flip the row under it (Shift + ↑ is its
+//           fine step), the Move's Shift gives the focus back on release, Shift+Tab from the cells lands on the row it left.
 // LOG       the console log on and off: the visible controls (the face audit's selector) and the rings must not change.
 // MISCLICK  Vera's run: random pointer clicks over the whole face while playing (a click a second for ten minutes,
 //           compressed). A click that lands ON a destructive control (randomize, play while playing, a kick's M, init /
@@ -56,7 +61,7 @@ async function moveRows(p) {
 }
 
 async function peekLatency(p, n = 40) {
-  await p.eval(`performance.clearMeasures('peek'); performance.clearMarks('peek-touch')`);
+  await p.eval(`(() => { document.getElementById('pg-sound').click(); performance.clearMeasures('peek'); performance.clearMarks('peek-touch'); })()`);   // each touch flips sound → rhythm
   for (let i = 0; i < n; i++) { await send(p, bytes.touch(i % 8, true)); await sleep(80); await send(p, bytes.touch(i % 8, false)); await sleep(480); }
   const ms = await p.eval(`performance.getEntriesByName('peek', 'measure').map(e => e.duration)`);
   return { n: ms.length, p50: pct(ms, 50), p95: pct(ms, 95), max: Math.max(...ms), fails: ms.length < n * 0.9 ? [`${ms.length} of ${n} touches measured`] : pct(ms, 95) >= THRESH.peekMs ? [`peek p95 ${pct(ms, 95).toFixed(1)} ms`] : [] };
@@ -65,13 +70,14 @@ async function peekLatency(p, n = 40) {
 async function glance(p, { seed, trials = 20, shots }) {
   const rng = mulberry32(seed * 7919 + 3), rows = [];
   for (let t = 1; t <= trials; t++) {
-    const lane = 1 + Math.floor(rng() * 4), page = rng() < 0.5 ? 'rhythm' : 'sound', knob = Math.floor(rng() * 7);
+    const lane = 1 + Math.floor(rng() * 4), page = rng() < 0.5 ? 'rhythm' : 'sound', knob = Math.floor(rng() * 7), latch = rng() < 0.5 ? 'rhythm' : 'sound';
+    await p.eval(`document.getElementById('pg-${latch}').click()`);   // the screen's page: the hands must win over it either way
     await send(p, bytes.btn(trackOf(lane - 1), true)); await sleep(60); await send(p, bytes.btn(trackOf(lane - 1), false)); await sleep(150);
     if (page === 'sound') { await send(p, bytes.btn('shift', true)); await sleep(60); }
     await send(p, bytes.touch(knob, true)); await sleep(80); await send(p, bytes.enc(knob, 1)); await sleep(300);   // the 300 ms shutter
     const s = await p.eval(STATE); if (shots && t <= 2) await p.shot(join(shots, `glance-s${seed}-${t}-${page}-lane${lane}.png`));
     await send(p, bytes.enc(knob, -1)); await send(p, bytes.touch(knob, false)); if (page === 'sound') await send(p, bytes.btn('shift', false)); await sleep(500);
-    rows.push({ trial: t, lane, page, knob: knob + 1, saw: { page: s.row, lane: s.lane }, ok: s.row === page && s.lane === lane });
+    rows.push({ trial: t, lane, page, latch, knob: knob + 1, saw: { page: s.row, lane: s.lane }, ok: s.row === page && s.lane === lane });
   }
   const right = rows.filter(r => r.ok).length; return { seed, right, of: trials, rows, fails: right < THRESH.glance ? [`seed ${seed}: ${right}/${trials}`] : [] };
 }
@@ -81,6 +87,41 @@ async function logToggle(p) {
   const off = await p.eval(COUNT); await p.key('`', 'Backquote'); await sleep(200); const on = await p.eval(COUNT); await p.key('`', 'Backquote'); await sleep(200); const back = await p.eval(COUNT);
   const fails = []; if (!on.log || back.log) fails.push('` did not toggle the log'); if (on.controls !== off.controls) fails.push(`controls ${off.controls} → ${on.controls} with the log on`); if (on.geo !== off.geo) fails.push('the rings moved with the log on'); if (on.scroll > 0) fails.push('the page scrolls with the log on');
   return { off: { controls: off.controls }, on: { controls: on.controls }, ringsSame: on.geo === off.geo && back.geo === off.geo, fails };
+}
+
+// real pointer / key input (trusted, as a hand's): a drag in px, a key with modifiers (8 = Shift)
+const mouse = (p, type, x, y) => p.send('Input.dispatchMouseEvent', { type, x, y, button: 'left', buttons: type === 'mouseReleased' ? 0 : 1, clickCount: 1 });
+const VK = { Shift: 16, Tab: 9, ArrowUp: 38, ArrowDown: 40 };
+const keyEv = (p, type, key, mods = 0) => p.send('Input.dispatchKeyEvent', { type, key, code: key === 'Shift' ? 'ShiftLeft' : key, modifiers: mods, windowsVirtualKeyCode: VK[key], nativeVirtualKeyCode: VK[key] });
+async function filterDetent(p) {
+  const at = await p.eval(`(() => { const r = document.querySelector('#fx-gauge .gauge').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`), filt = () => p.eval('Math.round(__poly.pfx.filter * 100)');
+  const slips = [];
+  for (const d of [2, -2, 5, -5]) { await p.eval('__poly.setFilter(0)'); await mouse(p, 'mousePressed', at.x, at.y); await mouse(p, 'mouseMoved', at.x, at.y - d); await mouse(p, 'mouseReleased', at.x, at.y - d); slips.push(await filt()); }
+  await p.eval('__poly.setFilter(-0.1)'); await mouse(p, 'mousePressed', at.x, at.y); const walk = [];
+  for (let d = 1; d <= 30; d++) { await mouse(p, 'mouseMoved', at.x, at.y - d); walk.push(await filt()); }
+  await mouse(p, 'mouseReleased', at.x, at.y - 30);
+  await p.eval(`(() => { __poly.setFilter(-0.05); document.querySelector('#fx-gauge .gauge').focus(); })()`); await p.key('ArrowUp'); const keyUp = await filt();
+  await p.eval('__poly.setFilter(0.05)'); await p.key('ArrowDown'); const keyDown = await filt(); await p.eval('(() => { document.activeElement.blur(); __poly.setFilter(0); })()');
+  const held = walk.filter(v => v === 0).length, fails = [];
+  if (slips.some(v => v !== 0)) fails.push(`a slip from off moved it: ${slips}`); if (held < 6) fails.push(`off held for ${held} of 30 px across`);
+  if (keyUp !== 0 || keyDown !== 0) fails.push(`a key step across off went to ${keyUp} / ${keyDown}`);
+  return { slips, walk: walk.join(' '), held, keys: [keyUp, keyDown], fails };
+}
+async function shiftFocus(p) {
+  const st = () => p.eval(`(() => { const a = document.activeElement; return { page: document.getElementById('knobs').dataset.page, focus: a === document.body || !a ? 'body' : (a.getAttribute('aria-label') || a.id || a.tagName), swing: Math.round(__poly.m.lane.swing * 100) }; })()`);
+  await p.eval(`(() => { document.getElementById('pg-rhythm').click(); __poly.m.lane.swing = 0; __poly.sync(); document.querySelector('#knobs > :nth-child(5) .gauge').focus(); })()`); await sleep(80);
+  await keyEv(p, 'keyDown', 'ArrowUp'); await keyEv(p, 'keyUp', 'ArrowUp'); const up = await st();
+  await keyEv(p, 'keyDown', 'Shift', 8); await sleep(40); const shift = await st();
+  await keyEv(p, 'keyDown', 'ArrowUp', 8); await keyEv(p, 'keyUp', 'ArrowUp', 8); const fine = await st(); await keyEv(p, 'keyUp', 'Shift'); await sleep(40); const after = await st();
+  await send(p, bytes.btn('shift', true)); await sleep(60); const moveShift = await st(); await send(p, bytes.btn('shift', false)); await sleep(60); const moveBack = await st();
+  await p.eval(`document.querySelector('#stepsui .st').focus()`); await keyEv(p, 'keyDown', 'Shift', 8); await keyEv(p, 'keyDown', 'Tab', 8); await keyEv(p, 'keyUp', 'Tab', 8);
+  const tab = await st(); await keyEv(p, 'keyUp', 'Shift'); await sleep(40); const tabAfter = await st(); await p.eval('document.activeElement.blur()');
+  const fails = [];
+  if (shift.page !== 'rhythm' || shift.focus !== 'swing') fails.push(`⇧ on a focused knob: ${JSON.stringify(shift)}`);
+  if (fine.swing !== up.swing + 1 || after.focus !== 'swing') fails.push(`Shift+↑ on it: ${JSON.stringify(fine)} → ${JSON.stringify(after)}`);
+  if (moveShift.page !== 'sound' || moveBack.focus !== 'swing') fails.push(`the Move's Shift: ${JSON.stringify(moveShift)} → ${JSON.stringify(moveBack)}`);
+  if (tab.page !== 'rhythm' || tabAfter.focus === 'body' || tabAfter.page !== 'rhythm') fails.push(`Shift+Tab from cell 1: ${JSON.stringify(tab)} → ${JSON.stringify(tabAfter)}`);
+  return { up, shift, fine, after, moveShift, moveBack, tab, tabAfter, fails };
 }
 
 // a destructive control's own box (A3's classes): a click on it is a hit, not a mis-click
@@ -108,9 +149,9 @@ async function misclick(p, { clicks = 600, seed = 11, w = 1512, h = 860 }) {
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
-  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK')).split(',')), shots = arg('--shots', null), out = {};
+  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT')).split(',')), shots = arg('--shots', null), out = {}, root = arg('--root', null);
   if (shots) mkdirSync(shots, { recursive: true });
-  const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400) });
+  const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), ...(root ? { root } : {}) });
   try {
     const fresh = async () => openSet(b, { groove: 'techno' });
     if (only.has('MOVE')) out.MOVE = await moveRows(await fresh());
@@ -118,6 +159,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (only.has('A2')) { const p = await fresh(); out.A2 = [await glance(p, { seed: 1, shots }), await glance(p, { seed: 2, shots })]; }
     if (only.has('LOG')) out.LOG = await logToggle(await fresh());
     if (only.has('MISCLICK')) { const p = await fresh(); out.MISCLICK = await misclick(p, { clicks: +arg('--clicks', 600) }); out.MISCLICK.errors = p.errors.length; }
+    if (only.has('FILTER')) out.FILTER = await filterDetent(await fresh());
+    if (only.has('SHIFT')) out.SHIFT = await shiftFocus(await fresh());
   } finally { await b.close(); }
   const fails = Object.entries(out).flatMap(([k, v]) => (Array.isArray(v) ? v.flatMap(x => x.fails) : v.fails).map(f => `${k}: ${f}`));
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(out, null, 1));
@@ -127,6 +170,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (out.A2) L.push(`A2    scripted glance (rhythm / sound): ${out.A2.map(g => `seed ${g.seed} ${g.right}/${g.of}`).join(', ')}`);
   if (out.LOG) L.push(`LOG   controls ${out.LOG.off.controls} off / ${out.LOG.on.controls} on, rings ${out.LOG.ringsSame ? 'fixed' : 'MOVED'}`);
   if (out.MISCLICK) L.push(`MISCLICK ${out.MISCLICK.clicks} clicks: ${Object.entries(out.MISCLICK.tally).map(([k, v]) => `${k} ${v}`).join(', ')} · direct hits on destructive controls ${out.MISCLICK.hits.length} (${out.MISCLICK.hits.map(h => `${h.on}→${h.target}`).join(', ') || '—'}) · mis-click accidents ${out.MISCLICK.accidents.length}${out.MISCLICK.accidents.length ? ` (${out.MISCLICK.accidents.map(a => `#${a.click} ${a.on}→${a.target}`).join(', ')})` : ''} · page errors ${out.MISCLICK.errors}`);
+  if (out.FILTER) L.push(`FILTER slips from off ${out.FILTER.slips.join(' ')} · across from LP 10, 1 px a step: off for ${out.FILTER.held} px (${out.FILTER.walk}) · a key across off: ${out.FILTER.keys.join(' / ')}`);
+  if (out.SHIFT) { const s = out.SHIFT; L.push(`SHIFT ⇧ on the focused swing knob: ${s.shift.page}, focus ${s.shift.focus}; Shift+↑ ${s.up.swing} → ${s.fine.swing}; the Move's Shift ${s.moveShift.page} → focus back on ${s.moveBack.focus}; Shift+Tab from cell 1 → ${s.tab.focus} (${s.tab.page}), after ⇧ ${s.tabAfter.focus}`); }
   console.log(L.join('\n')); if (fails.length) console.log(`FAIL\n  ${fails.join('\n  ')}`);
   if (has('--assert') && fails.length) process.exit(1);
 }
