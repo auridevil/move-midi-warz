@@ -97,6 +97,16 @@ test('RD-7 the focus goes on when what held it goes out of sight: never to the p
   for (const k of [...PILL_ORDER, 'more', 'hint']) for (const more of [true, false]) {
     const to = focusAfter(k, drawn, more, false); assert.ok(drawn.includes(to) || to === 'more' || to === 'help', `${k}: ${to}`);
   }
+  // RD-07 round 2 (Vera): never onto a pill whose first button acts: the take's stops it while it records, welcome's plays
+  const acts = { skip: ['welcome', 'jam'] };
+  assert.equal(focusAfter('solo', ['jam'], false, false, acts), 'help', 'a × with only a recording take left: "?", not the take\'s stop');
+  assert.equal(focusAfter('rec', ['welcome', 'quest'], false, false, { skip: ['welcome'] }), 'quest', 'past welcome\'s play');
+  assert.equal(focusAfter('jam', ['jam', 'rec'], false, false, acts), 'rec', 'not even its own pill when that button acts now');
+  assert.equal(focusAfter('solo', ['jam'], false, false), 'jam', 'a finished take\'s first button only shows its download: allowed');
+  // (Vera, Arjun) a folded quest's hint opened from "+N more": into the hint (show me), not back onto "+N more"
+  assert.equal(focusAfter('quest', drawn, true, true, { hint: true }), 'hint');
+  assert.equal(focusAfter('quest', drawn, true, true), 'more', 'the hint closed: "+N more"');
+  assert.equal(focusAfter('hint', drawn, true, true, { hint: false }), 'more', 'show me from a folded quest\'s hint: "+N more"');
 });
 
 test('RD-7 "show me": every quest has one; a ring gesture names a lane, a sheet quest a control on the page', () => {

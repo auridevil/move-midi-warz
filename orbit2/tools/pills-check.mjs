@@ -143,11 +143,13 @@ try {
     };
     const a = { quest: await ax('#pills') };
     await p.eval(`document.getElementById('quest-x').click()`); await p.sleep(200); a.empty = await ax('#pills');
+    const emptyH = await p.eval(`document.getElementById('pills').getBoundingClientRect().height`);
+    check('A11Y', emptyH === 0, `the empty region is ${emptyH} px tall (0 expected: it holds nothing)`);
     // empty, the region adds no gap: the sheet sits 10 px (the column's gap) under the top row, as with no region at all
     await p.eval(`__poly.setSheet('export', true)`); await p.sleep(200);
     const gap = await p.eval(`Math.round(document.getElementById('sheet').getBoundingClientRect().top - document.querySelector('.hud-top').getBoundingClientRect().bottom)`);
     await p.eval('__poly.setEvolve(true)'); await p.sleep(200); a.evolve = await ax('#pills');
-    out.a11y = { ...a, emptyGap: gap };
+    out.a11y = { ...a, emptyGap: gap, emptyH };
     for (const k of ['quest', 'empty', 'evolve']) check('A11Y', !a[k].ignored && a[k].role === 'status' && a[k].live === 'polite' && a[k].atomic === false, `${k}: ${JSON.stringify(a[k])}`);
     check('A11Y', gap === 10, `the empty region left ${gap} px between the top row and the sheet (10 expected)`);
     check('A11Y', !p.errors.length, `page errors: ${p.errors.join(' | ')}`);
@@ -165,6 +167,12 @@ try {
     check('FOCUS', f.open && !f.esc.open && f.esc.focus === 'sp-more', `Esc on "+N more" from a folded ×: ${JSON.stringify(f.esc)}`);
     check('FOCUS', f.enter.follow === 'tempo', `Enter after that Esc turned clock follow "${f.enter.follow}"`);
     if (f.enter.open) { await p.key('Escape'); await p.sleep(100); }
+    // the folded quest's hint opened from "+N more" by the keyboard: the focus into the hint (show me); Esc → "+N more"
+    await p.eval(`document.getElementById('sp-more').focus()`); await p.key('Enter'); await p.sleep(100);
+    await p.eval(`document.getElementById('quest-go').focus()`); await p.key('Enter'); await p.sleep(150);
+    f.hint = { focus: await act(), open: await p.eval(`!document.getElementById('quest-more').hidden`), more: await p.eval('__poly.pillsOpen') };
+    await p.key('Escape'); await p.sleep(100); f.hint.esc = await act();
+    check('FOCUS', f.hint.focus === 'quest-show' && f.hint.open && !f.hint.more && f.hint.esc === 'sp-more', `the folded quest's hint by the keyboard: ${JSON.stringify(f.hint)}`);
     // a × by the keyboard: the next pill drawn
     await p.eval(`document.getElementById('sp-evolve-x').focus()`); await p.key('Enter'); await p.sleep(150);
     f.x = { evolve: await p.eval('__poly.evo.on'), focus: await act() };
@@ -193,6 +201,15 @@ try {
     await p.eval(`document.getElementById('quest-show').focus()`); await p.key('Enter'); await p.sleep(150);
     f.show = { focus: await act(), ghost: await p.eval('__poly.scene.ghosting'), hint: await p.eval(`!document.getElementById('quest-more').hidden`) };
     check('FOCUS', f.show.focus === 'quest-go' && f.show.ghost && !f.show.hint, `show me by the keyboard: ${JSON.stringify(f.show)}`);
+    // a × with only a recording take left (Vera, round 2): not onto the take's first button (it ends the take): "?"
+    await p.key('Escape'); await p.eval(`(() => { document.getElementById('quest-x').click(); __poly.toggleSolo(1); __poly.toggleJam(); })()`);
+    check('FOCUS', await until(p, `__poly.jam.state === 'rec'`), 'the second take never started');
+    await p.eval(`document.getElementById('sp-solo-x').focus()`); await p.key('Enter'); await p.sleep(150);
+    f.take = { focus: await act() }; await p.key('Enter'); await p.sleep(150);
+    Object.assign(f.take, { state: await p.eval('__poly.jam.state'), help: await p.eval(`document.getElementById('help').open`) });
+    check('FOCUS', f.take.focus === 'btn-help' && f.take.state === 'rec', `a × beside a recording take, then Enter again: ${JSON.stringify(f.take)}`);
+    if (f.take.help) { await p.key('Escape'); await p.sleep(100); }
+    await p.eval('__poly.stopJam()');
     out.focus = f; out.focusErrors = [...p.errors];
     check('FOCUS', !p.errors.length, `page errors: ${p.errors.join(' | ')}`);
     // show me on a phone, scrolled down to the pills (they sit under the rings there): the rings come into view

@@ -58,13 +58,16 @@ export const pillOff = (k, s) => (k === 'chain' ? (s.chain?.chain?.length || 0) 
  * Where the focus goes when what held it goes out of sight: its pill went (a ×, a take discarded), it folded, or its
  * drop-down closed (Esc on "+N more", show me). Never to the page, and never left on a button nobody can see that
  * Enter still presses (RD-07 round 1). k = what held it: a pill's key, 'more' ("+N more") or 'hint' (the quest's
- * drop-down); drawn = the pills drawn now (keys, not folded); more = "+N more" drawn; folded = k's pill is folded.
- * Returns a pill key (its first button), 'more' or 'help' ("?" above the pills).
+ * drop-down); drawn = the pills drawn now (keys, not folded); more = "+N more" drawn; folded = k's pill is folded;
+ * skip = pills whose first button acts rather than shows (welcome's play, the take's stop while it records: a second
+ * Enter must not start the music or end a take, RD-07 round 2); hint = the quest's drop-down is open.
+ * Returns a pill key (its first button), 'hint' (the drop-down's first button), 'more' or 'help' ("?" above the pills).
  */
-export function focusAfter(k, drawn, more, folded = false) {
-  const own = k === 'hint' ? 'quest' : k;
-  if (drawn.includes(own)) return own;                 // its pill is still drawn (the hint closed, a button of it went)
+export function focusAfter(k, drawn, more, folded = false, { skip = [], hint = false } = {}) {
+  const own = k === 'hint' ? 'quest' : k, ok = drawn.filter(x => !skip.includes(x));
+  if (ok.includes(own)) return own;                    // its pill is still drawn (the hint closed, a button of it went)
+  if (own === 'quest' && k !== 'hint' && hint) return 'hint';   // a folded quest whose hint just opened: into the hint
   if (folded && more) return 'more';                   // out of sight under "+N more": back to it
-  const i = PILL_ORDER.indexOf(own), next = PILL_ORDER.slice(i + 1).find(x => drawn.includes(x)) ?? PILL_ORDER.slice(0, Math.max(0, i)).reverse().find(x => drawn.includes(x));
+  const i = PILL_ORDER.indexOf(own), next = PILL_ORDER.slice(i + 1).find(x => ok.includes(x)) ?? PILL_ORDER.slice(0, Math.max(0, i)).reverse().find(x => ok.includes(x));
   return next ?? (more ? 'more' : 'help');             // the next pill, the one before, "+N more", "?"
 }

@@ -1052,3 +1052,10 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **A muted lane's tail** (RD-07 round 1, sound; pre-existing): a pending mute stops new hits on the bar line, but the
   lane's last hit keeps ringing (its delay echo, up to −32.9 dBFS 200 ms after the line); a take's sub and mix end at
   −41 dBFS, a −41.5 dBFS step where the loop wraps.
+- **The pills' focus code, after RD-07 round 2** (architect, verifier, maya): the empty region's `margin-bottom: -10px`
+  copies `.hud { gap: 10px }` (two numbers that must change together; `position: absolute` on the empty region needs
+  none; pills-check A11Y guards the 10 px meanwhile); `keepFocus` in `renderPills` moves the focus before the caller that
+  owns the destination does (welcome: `wb-keep` → `btn-help` → `btn-play`; `pillGo`: "+N more", then the control;
+  `renderQuest` → `questMore(false)`: the quest pill, then the next pill): let the caller place it first, or a flag;
+  the quest's skip leaves the hint open with the focus on skip, so a double Enter skips two quests (no undo); after
+  show me on a phone the pills stay scrolled off the top (a scroll back after the hand, RD-10).

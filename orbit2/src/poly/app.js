@@ -2153,8 +2153,9 @@ function keepFocus(had) {
   if (!(had instanceof HTMLElement) || !$('pills').contains(had) || pillSeen(had)) return;
   const k = pillKey(had); if (!k) return;
   const drawnNow = PILL_ORDER.filter(p => { const el = $(PILL_EL[p]); return !el.hidden && !el.classList.contains('fold'); });
-  const to = focusAfter(k, drawnNow, !$('sp-more').hidden, !!(k === 'hint' ? $('quest') : had.closest('.spill'))?.classList.contains('fold'));
-  const el = to === 'more' ? $('sp-more') : to === 'help' ? $('btn-help') : [...$(PILL_EL[to]).querySelectorAll('button')].find(b => !b.hidden);
+  const skip = ['welcome', ...(jam.state === 'rec' || jam.state === 'armed' ? ['jam'] : [])];   // their first button plays / ends the take
+  const to = focusAfter(k, drawnNow, !$('sp-more').hidden, !!(k === 'hint' ? $('quest') : had.closest('.spill'))?.classList.contains('fold'), { skip, hint: !$('quest-more').hidden });
+  const el = to === 'more' ? $('sp-more') : to === 'help' ? $('btn-help') : to === 'hint' ? $('quest-show') : [...$(PILL_EL[to]).querySelectorAll('button')].find(b => !b.hidden);
   if (el) focusAs(el, keyFocused.has(had));
 }
 function renderPills() {

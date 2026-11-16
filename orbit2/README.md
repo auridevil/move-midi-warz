@@ -70,7 +70,9 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   (`aria-atomic="false"`: a new pill is read alone), "+N more" counts silently (`aria-live="off"`), and it stays in the
   page when empty (never `display: none`: a live region must exist before its first pill). A button that goes out of
   sight with the focus on it hands the focus on (`pills.js focusAfter`, `app.js keepFocus`: its pill, "+N more", the
-  next pill, "?"), never to the page; a click on a pill's words leaves Space to play / stop. Quest "show me": the
+  next pill, "?"; never onto welcome's play or a recording take's stop), never to the page; a click on a pill's words
+  leaves Space to play / stop. The take's pill changes its words with its state (next bar → recording → closing on the
+  bar → take ready): each is read once, on purpose (a state, not a counter). Quest "show me": the
   gesture drawn once on the rings as a ghost hand (`scene.js ghost`, `ghostAt`, read-only; any key or press hides it),
   or the control for a quest played in the sheet. `__poly.showPills([keys])` forces a layout for tests. Browser check:
   `node orbit2/tools/pills-check.mjs` (ANNOUNCE a MutationObserver on the region while playing with five modes and a jam
