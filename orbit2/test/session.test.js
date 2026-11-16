@@ -143,8 +143,12 @@ test('RD-1 Move bytes, glance trials and scoring, the Move drawing', () => {
   assert.deepEqual(bytes.enc(2, -1), [0xB0, 73, 127]); assert.deepEqual(bytes.enc(2, 3), [0xB0, 73, 3]); assert.equal(trackOf(0), 'track4'); assert.equal(trackOf(3), 'track1');
   const k = glanceTrials(20, 1); assert.equal(k.length, 20); assert.deepEqual(k, glanceTrials(20, 1));
   for (const x of k) { assert.ok(['rhythm', 'sound', 'step', 'slots'].includes(x.page)); assert.ok(x.lane >= 1 && x.lane <= 4); }
+  // RD-5: only the pages in play; a seed keeps its lanes and knobs (the RD-1 runs replay with the default)
+  const rs = glanceTrials(20, 1, 4, ['rhythm', 'sound']); assert.ok(rs.every(x => x.page === 'rhythm' || x.page === 'sound'));
+  assert.ok(rs.some(x => x.page === 'rhythm') && rs.some(x => x.page === 'sound')); assert.deepEqual(rs.map(x => [x.lane, x.knob]), k.map(x => [x.lane, x.knob]));
   assert.equal(pageWord('Step 5'), 'step'); assert.equal(pageWord('the sound page'), 'sound'); assert.equal(pageWord('slots'), 'slots'); assert.equal(pageWord('rhythm'), 'rhythm'); assert.equal(pageWord('no idea'), null);
   const all = k.map(x => ({ trial: x.trial, page: x.page, lane: x.lane })), s = scoreGlance(k, all); assert.equal(s.right, 20); assert.equal(s.pass, true);
+  assert.equal(Object.values(s.byPage).reduce((n, b) => n + b.of, 0), 20); for (const [pg, b] of Object.entries(s.byPage)) assert.equal(b.right, k.filter(x => x.page === pg).length);
   const two = all.map((a, i) => (i < 3 ? { ...a, lane: a.lane === 1 ? 2 : 1 } : a)), s2 = scoreGlance(k, two); assert.equal(s2.right, 17); assert.equal(s2.pass, false); assert.equal(s2.pageRight, 20);
   assert.equal(scoreGlance(k, []).right, 0);
   const leds = ledsOf([[0x90 * 256 + MOVE.PAD, 120], [0x90 * 256 + MOVE.STEP + 15, 8], [0xB0 * 256 + MOVE.BTN.play, 120]]);

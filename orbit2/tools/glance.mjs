@@ -7,10 +7,12 @@
 //   node orbit2/tools/glance.mjs --trials 20 --seed 1 --out /tmp/glance-kai/      # trial-01.png …, key.json, brief.txt
 //   node orbit2/tools/glance.mjs score /tmp/glance-kai/key.json answers.json        # answers: [{ trial, page, lane }]
 //   --port 5400 --debug-port 9400   --groove techno   --exposure 0.55 --gamma 1.5 --scale 0.71
+//   --pages rhythm,sound   the pages in play (RD-5's A2; default all four). The judge's brief still names all four.
+//   score … --record setlog/glance-x.json --player kai --commit abc1234   also writes the run's record (RD-1's format)
 //
 // Give each judge brief.txt and one image, nothing else (not the key, not the other images).
 import { launch } from './cdp.mjs';
-import { glanceTrials, scoreGlance, bytes, trackOf } from './session-core.mjs';
+import { glanceTrials, scoreGlance, bytes, trackOf, GLANCE_PAGES } from './session-core.mjs';
 import { openSet } from './session.mjs';
 import { writeFileSync, readFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -35,9 +37,9 @@ const DARKEN = `async (b64, exposure, gamma, scale) => {
   let s = ''; for (let i = 0; i < buf.length; i += 0x8000) s += String.fromCharCode(...buf.subarray(i, i + 0x8000)); return btoa(s);
 }`;
 
-export async function runGlance({ port = 5400, debugPort = 9400, path, groove = 'techno', trials = 20, seed = 1, out, exposure = 0.55, gamma = 1.5, scale = 0.71 } = {}) {
+export async function runGlance({ port = 5400, debugPort = 9400, path, groove = 'techno', trials = 20, seed = 1, out, exposure = 0.55, gamma = 1.5, scale = 0.71, pages = GLANCE_PAGES } = {}) {
   mkdirSync(out, { recursive: true });
-  const key = glanceTrials(trials, seed), b = await launch({ port, debugPort });
+  const key = glanceTrials(trials, seed, 4, pages), b = await launch({ port, debugPort });
   try {
     const p = await openSet(b, { path, groove }); const send = (x) => p.eval(`__poly.move.receive(new Uint8Array(${JSON.stringify(x)}))`);
     await send(bytes.btn('play', true)); await send(bytes.btn('play', false)); await sleep(1500);   // a set is playing
@@ -55,7 +57,7 @@ export async function runGlance({ port = 5400, debugPort = 9400, path, groove = 
       k.file = `trial-${String(k.trial).padStart(2, '0')}.png`;
       writeFileSync(join(out, k.file), Buffer.from(await p.eval(`(${DARKEN})(${JSON.stringify(result.data)}, ${exposure}, ${gamma}, ${scale})`), 'base64'));
     }
-    writeFileSync(join(out, 'key.json'), JSON.stringify({ seed, groove, exposure, gamma, scale, errors: p.errors, trials: key }, null, 1));
+    writeFileSync(join(out, 'key.json'), JSON.stringify({ seed, groove, path: path || 'orbit2/index.html', pages, exposure, gamma, scale, errors: p.errors, trials: key }, null, 1));
     writeFileSync(join(out, 'brief.txt'), BRIEF + '\n');
     return { key, errors: p.errors };
   } finally { await b.close(); }
@@ -67,9 +69,15 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const key = JSON.parse(readFileSync(process.argv[3], 'utf8')), ans = JSON.parse(readFileSync(process.argv[4], 'utf8'));
     const s = scoreGlance(key.trials || key, ans);
     for (const r of s.rows) console.log(`trial ${r.trial}: ${r.ok ? 'right' : 'WRONG'} · was ${r.page} lane ${r.lane} · said ${r.said ? `${r.said.page} lane ${r.said.lane}` : 'nothing'}`);
-    console.log(`${s.right} / ${s.of} right (page ${s.pageRight}, lane ${s.laneRight}) · A2 ${s.pass ? 'PASS' : 'FAIL'} (≥ 18 of 20)`);
+    console.log(`${s.right} / ${s.of} right (page ${s.pageRight}, lane ${s.laneRight}; ${Object.entries(s.byPage).map(([k, v]) => `${k} ${v.right}/${v.of}`).join(', ')}) · A2 ${s.pass ? 'PASS' : 'FAIL'} (≥ 18 of 20)`);
+    const rec = arg('--record', null);
+    if (rec) writeFileSync(rec, JSON.stringify({ format: 'orbits-glance', v: 1, player: arg('--player', null), page: key.path || 'orbit2/index.html', commit: arg('--commit', null), tool: 'orbit2/tools/glance.mjs',
+      judges: arg('--judges', 'one fresh sub-agent per image (model sonnet), shown brief.txt and that image only'), run: { seed: key.seed, groove: key.groove, pages: key.pages || GLANCE_PAGES, exposure: key.exposure, gamma: key.gamma, scale: key.scale, errors: key.errors },
+      brief: BRIEF, score: { right: s.right, of: s.of, pass: s.pass, pageRight: s.pageRight, laneRight: s.laneRight, byPage: s.byPage }, trials: s.rows.map(r => ({ trial: r.trial, page: r.page, lane: r.lane, said: r.said, ok: r.ok })) }, null, 1) + '\n');
   } else {
-    const out = arg('--out', '/tmp/orbit2-glance'), r = await runGlance({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), path: arg('--path', 'orbit2/index.html'), groove: arg('--groove', 'techno'), trials: +arg('--trials', 20), seed: +arg('--seed', 1), out, exposure: +arg('--exposure', 0.55), gamma: +arg('--gamma', 1.5), scale: +arg('--scale', 0.71) });
+    const pages = String(arg('--pages', GLANCE_PAGES.join(','))).split(',').filter(Boolean);
+    if (!pages.length || pages.some(x => !GLANCE_PAGES.includes(x))) throw new Error(`--pages: one or more of ${GLANCE_PAGES.join(', ')}`);
+    const out = arg('--out', '/tmp/orbit2-glance'), r = await runGlance({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), path: arg('--path', 'orbit2/index.html'), groove: arg('--groove', 'techno'), trials: +arg('--trials', 20), seed: +arg('--seed', 1), out, exposure: +arg('--exposure', 0.55), gamma: +arg('--gamma', 1.5), scale: +arg('--scale', 0.71), pages });
     console.log(`${r.key.length} trials in ${out} (key.json is the answer key: never show it to a judge; brief.txt is the judge's brief)`);
     if (r.errors.length) { console.error(`page errors: ${r.errors.join(' | ')}`); process.exitCode = 2; }
   }

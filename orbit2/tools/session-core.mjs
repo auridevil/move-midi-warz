@@ -176,10 +176,11 @@ export function tagAccidents(entries, runs, script) {
 
 // ---- glance trials (glance.mjs, A2) ----
 export const GLANCE_PAGES = ['rhythm', 'sound', 'step', 'slots'];
-/** n trials: { trial, lane (1-based), page, knob (rhythm / sound), step (step page, 1-based) }; seeded. */
-export function glanceTrials(n = 20, seed = 1, lanes = 4) {
+/** n trials: { trial, lane (1-based), page, knob (rhythm / sound), step (step page, 1-based) }; seeded. pages: the pages
+ *  in play (RD-5 judges rhythm / sound only); every trial draws four numbers, so a seed keeps its lanes and knobs. */
+export function glanceTrials(n = 20, seed = 1, lanes = 4, pages = GLANCE_PAGES) {
   const rng = mulberry32(seed * 31337 + 5);
-  return Array.from({ length: n }, (_, i) => { const page = GLANCE_PAGES[Math.floor(rng() * 4)]; return { trial: i + 1, lane: 1 + Math.floor(rng() * lanes), page, knob: Math.floor(rng() * 7), step: 1 + Math.floor(rng() * 8) }; });
+  return Array.from({ length: n }, (_, i) => { const page = pages[Math.floor(rng() * pages.length)]; return { trial: i + 1, lane: 1 + Math.floor(rng() * lanes), page, knob: Math.floor(rng() * 7), step: 1 + Math.floor(rng() * 8) }; });
 }
 /** A judge's words → one of GLANCE_PAGES (or null): "step 5" → step, "sound page" → sound, "slot" → slots. */
 export function pageWord(s) { const w = String(s || '').toLowerCase(); return /slot/.test(w) ? 'slots' : /step/.test(w) ? 'step' : /sound|timbre|tone/.test(w) ? 'sound' : /rhythm|pattern|main|lane page/.test(w) ? 'rhythm' : null; }
@@ -187,8 +188,9 @@ export function pageWord(s) { const w = String(s || '').toLowerCase(); return /s
 export function scoreGlance(key, answers, pass = 18) {
   const by = new Map(answers.map(a => [+a.trial, a]));
   const rows = key.map(k => { const a = by.get(k.trial), page = pageWord(a?.page), lane = a ? parseInt(a.lane, 10) : NaN; return { trial: k.trial, page: k.page, lane: k.lane, said: a ? { page: a.page, lane: a.lane } : null, pageOk: page === k.page, laneOk: lane === k.lane, ok: page === k.page && lane === k.lane }; });
-  const right = rows.filter(r => r.ok).length;
-  return { right, of: rows.length, pass: right >= Math.min(pass, rows.length) && rows.length > 0, pageRight: rows.filter(r => r.pageOk).length, laneRight: rows.filter(r => r.laneOk).length, rows };
+  const right = rows.filter(r => r.ok).length, byPage = {};
+  for (const r of rows) { const b = (byPage[r.page] ||= { right: 0, of: 0 }); b.of++; if (r.ok) b.right++; }
+  return { right, of: rows.length, pass: right >= Math.min(pass, rows.length) && rows.length > 0, pageRight: rows.filter(r => r.pageOk).length, laneRight: rows.filter(r => r.laneOk).length, byPage, rows };
 }
 
 // ---- the Move drawn (moveview.mjs, A10) ----
