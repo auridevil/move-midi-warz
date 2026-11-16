@@ -2143,7 +2143,7 @@ let lastInput = 'pointer';
 const takeKeysBack = () => { if (document.activeElement) keyFocused.delete(document.activeElement); };
 addEventListener('pointerdown', () => { lastInput = 'pointer'; takeKeysBack(); }, true);
 addEventListener('wheel', (e) => { if (e.target instanceof Element && e.target.closest('.gauge')) takeKeysBack(); }, { capture: true, passive: true });
-addEventListener('keydown', (e) => { if (e.key === 'Tab' || e.key.startsWith('Arrow')) lastInput = 'key'; }, true);   // the keys that move focus
+addEventListener('keydown', (e) => { if (e.key === 'Tab' || (e.key.startsWith('Arrow') && e.target?.id !== 'find')) lastInput = 'key'; }, true);   // the keys that move focus (find's ↑↓ pick a row, they move none)
 addEventListener('focusin', (e) => { if (lastInput === 'key') keyFocused.add(e.target); else keyFocused.delete(e.target); }, true);
 /** Focus a control on the page's behalf (no scroll) with the ownership given: focusin alone goes by the last input. */
 function focusAs(el, owned) { el.focus({ preventScroll: true }); if (owned) keyFocused.add(el); else keyFocused.delete(el); }
@@ -2404,8 +2404,10 @@ new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', 
 // it, so whatever shows a control (a lock editor, the library, find, a test) finds it drawn ----
 const sheetSaved = (() => { try { return sheetFrom(localStorage.getItem(SHEET_KEY)); } catch { return {}; } })();   // storage itself can throw (blocked)
 const sheet = { tab: sheetSaved.tab || 'lane', open: false };
+let findOpened = false;   // RD-4: find opened the sheet (⌘K or / with it shut), so a result outside it shuts it again
 function setSheet(tab, open, user = false) {
   const was = sheet.tab, a = document.activeElement; sheet.tab = SHEET_TABS.includes(tab) ? tab : sheet.tab; sheet.open = !!open;
+  if (user || !sheet.open) findOpened = false;   // shut, or a tab picked: the sheet is the player's now
   $('sheet').classList.toggle('open', sheet.open); document.body.classList.toggle('sheet-open', sheet.open);
   for (const t of SHEET_TABS) { const b = $('tab-' + t), on = t === sheet.tab; b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('pane-' + t).hidden = !on; }
   // closed, find forgets its query: the next ⌘K / / opens on the recents
@@ -2443,7 +2445,7 @@ setSheet(sheet.tab, false);
 const FIND_SEL = 'button, select, input, textarea, summary, a[href], [role=slider], [role=tab], [role=radio], [role=switch], [role=checkbox]';
 const FIND_OUT = '#find-box, dialog, #ring-menu, #stage, #cv';   // the field itself, the modal cards, the canvas's own popup
 let findRecents = (() => { try { return recentsFrom(localStorage.getItem(FIND_KEY)); } catch { return []; } })();
-let findIndex = [], findHits = [], findAt = 0, findBefore = null;
+let findIndex = [], findHits = [], findAt = 0;
 const squash = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 /** A label's own words: its text without the controls inside it (a select's options are not its name). */
 const labelText = (l) => squash([...l.childNodes].filter(n => !(n instanceof Element && n.matches('select, input, textarea, button'))).map(n => n.textContent).join(' '));
@@ -2495,13 +2497,13 @@ function findList(show) {
 }
 function findQuery() { findHits = search(findIndex, $('find').value, findRecents); findAt = 0; findList(true); }
 /** The field takes the focus, however it got there (⌘K, /, a click, Tab): the page is read now, so a control drawn since
- *  the last time (steps 17–32 of a longer lane, a sixth lane) is found, and the sheet's state is what Enter goes back to */
-function findFocus() { findBefore = { open: sheet.open, tab: sheet.tab }; findIndex = buildFindIndex(); findQuery(); }
+ *  the last time (steps 17–32 of a longer lane, a sixth lane) is found */
+function findFocus() { findIndex = buildFindIndex(); findQuery(); }
 function openFind() {
   if (focusMode) setFocusMode(false);   // the sheet is hidden in focus mode
-  const was = { open: sheet.open, tab: sheet.tab }, inp = $('find'); if (!sheet.open) setSheet(sheet.tab, true);
+  const inp = $('find'); if (!sheet.open) { setSheet(sheet.tab, true); findOpened = true; }
   if (document.activeElement === inp) findFocus(); else focusAs(inp, true);   // focusing it runs findFocus
-  findBefore = was; inp.select();
+  inp.select();
 }
 /** Run a result: an action is pressed (the sheet goes back as it was when it lies outside the sheet), and the keys stay
  *  the page's (Space after "export stems" plays, it doesn't export again); a tab is shown; a control is shown (its tab,
@@ -2510,7 +2512,7 @@ function findRun(h) {
   const el = h.el, inp = $('find'); findRecents = pushRecent(findRecents, h.key); try { localStorage.setItem(FIND_KEY, JSON.stringify(findRecents)); } catch {}
   inp.value = ''; findList(false); if (!el?.isConnected) return;
   if (el.closest('.adv') && quests.view === 'simple') setView('all');
-  const inSheet = $('sheet').contains(el), back = findBefore && !findBefore.open;   // the sheet was closed before find
+  const inSheet = $('sheet').contains(el), back = findOpened; findOpened = false;   // a result decides the sheet: shut again, or the player's
   if (el.matches('[role=tab]')) { setSheet(el.id.slice(4), true, true); focusAs(el, true); return; }   // shown, never toggled shut (a phone's tab click would)
   if (h.action) {
     // outside the sheet: the field lets go first (closing the sheet with the focus in it would hand the focus, and the

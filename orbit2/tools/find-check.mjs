@@ -6,10 +6,12 @@
 // COVER  every labelled control is in the index: Chrome's accessibility tree is the judge (every node with an
 //        interactive role and a name, with every tab, drawer and the everything view shown), not app.js's own selector;
 //        the synonyms test top 1 by element in both views; every action of find.js ACTIONS findable on a fresh page
-//        (the closed share menu's too: "postcard", "share audio")
+//        (the closed share menu's too: "postcard", "share audio"; Enter on "share audio" runs it)
 // KEYS   "stems" by search in under 5 keys (A4): / s t Enter lands on export stems, its tab open, the focus on it, and
 //        Space then plays (the keys are the page's after an action); ↑↓ then Enter on play outside the sheet leaves the
-//        keys to the page too (Space stops, a pad key toggles); the list's rows ≥ 32 px (44 on a phone)
+//        keys to the page too (Space stops, a pad key toggles), and so does ↑↓ Enter then the Esc that shuts the sheet;
+//        a sheet find opened shuts again after a result outside it (also after a window blur / focus); the list's rows
+//        ≥ 32 px (44 on a phone)
 // STALE  the field reached by a click (not ⌘K or /) searches the page as it is now: "step 20" after a lane grew to 32
 // ESC    the one order, one layer a press: popup → step locks → sheet → focus mode → the keys back to the page; a held
 //        Esc is one press; a slot menu left behind in another tab is no layer
@@ -85,7 +87,19 @@ try {
   const pk = { playing: await playing(), act: (await st()).act }; await press(p, ' ', 'Space'); await p.sleep(200); pk.space = await playing();
   const lr = await p.eval(lanes); await press(p, 'q', 'KeyQ'); pk.pad = (await p.eval(lanes)) !== lr; if (pk.pad) await press(p, 'q', 'KeyQ');
   out.pick = pk; if (!(pk.playing && pk.act === 'body' && !pk.space && pk.pad)) fail('KEYS', `↑↓ Enter on play: ${JSON.stringify(pk)}`);
-  if (await playing()) await press(p, ' ', 'Space');
+  if (await playing()) { await press(p, ' ', 'Space'); await p.sleep(300); }
+  // find's ↑↓ pick a row, they don't make the next focus the keyboard's: ↑↓ Enter on stems, Esc (the sheet shuts, its
+  // tab takes the focus), then Space still plays
+  await keys(p, ['/', 's', 't', 'ArrowDown', 'ArrowUp', 'Enter']); await p.sleep(300); await press(p, 'Escape', 'Escape'); await p.sleep(150);
+  const ek = { sheet: (await st()).sheet.open }; await press(p, ' ', 'Space'); await p.sleep(200); ek.space = await playing(); ek.sheetAfter = (await st()).sheet.open;
+  out.escKeys = ek; if (ek.space) { await press(p, ' ', 'Space'); await p.sleep(300); }
+  if (ek.sheet || !ek.space || ek.sheetAfter) fail('KEYS', `↑↓ Enter on stems, Esc, Space: ${JSON.stringify(ek)}`);
+  await p.eval('document.activeElement.blur()');
+  // find opened the sheet, so a result outside it shuts it again, even after the window lost and got back the focus
+  await keys(p, ['/', 'p', 'l', 'a', 'y']); await p.eval(`(() => { const f = document.getElementById('find'); f.dispatchEvent(new FocusEvent('blur')); f.dispatchEvent(new FocusEvent('focus')); })()`);
+  await press(p, 'Enter', 'Enter'); await p.sleep(300); const back = { sheet: (await st()).sheet.open, playing: await playing() };
+  out.back = back; if (back.playing) { await press(p, ' ', 'Space'); await p.sleep(300); }
+  if (back.sheet || !back.playing) fail('KEYS', `play after the window came back: ${JSON.stringify(back)}`);
 
   // ---- STALE: the field reached by a click searches the page as it is now ----
   await press(p, '/', 'Slash'); await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape');
@@ -167,6 +181,10 @@ try {
   const selId = (await st()).act; await press(p, '/', 'Slash'); const slashSel = (await st()).act; await press(p, 'k', 'KeyK', 4); const kSel = (await st()).act;
   out.select = { select: selId, slash: slashSel, cmdK: kSel }; if (!(slashSel === selId && kSel === 'find')) fail('OWN', `from a select: ${JSON.stringify(out.select)}`);
   await press(p, 'Escape', 'Escape'); await press(p, 'Escape', 'Escape');
+  // Enter runs an action of the closed share menu (its toast says it started; the reload below ends the render)
+  await keys(p, ['/', ...'share audio', 'Enter']); await p.sleep(400);
+  out.shareAudio = await p.eval(`({ toast: document.getElementById('toast').textContent, menuHidden: document.getElementById('share-menu').hidden })`);
+  if (!/rendering 4 bars/.test(out.shareAudio.toast) || !out.shareAudio.menuHidden) fail('COVER', `Enter on "share audio": ${JSON.stringify(out.shareAudio)}`);
   // an RD-3 save that says open: true loads closed, its tab kept
   await p.eval(`localStorage.setItem('midi-warz.orbit2.sheet', JSON.stringify({ tab: 'groove', open: true }))`); await p.send('Page.reload'); await p.sleep(3500);
   const old = await st(); if (old.sheet.open || old.sheet.tab !== 'groove') fail('OWN', `old save: ${JSON.stringify(old.sheet)}`);

@@ -955,3 +955,11 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   literal, the `opensFind` call, the keydown handlers that name 'Escape', the role strings) and its `page()` fixture is
   a hand copy of the page's names, so it can drift without failing; `find-check.mjs` judges the behaviour in a browser.
   (verifier, tool) cdp.mjs `downloads()` waited its 120 s after an export run from find, with "Failed to fetch".
+- **Find's index while the field keeps the focus** (RD-04 round 2: architect, verifier): the index is read when the field
+  gets the focus, so a page change while it keeps it (the Move lengthens a lane, a chain moves on, Web MIDI appears) is
+  missed until the next focus (a touch on a ring blurs the field); rebuilding in `findQuery` costs ≈ 1.4 ms a key (mind
+  sound's typing margin, RD-10). `TEXT_SEL`, the one "a field owns its keys" rule, counts every input: a future
+  checkbox or range input would own Esc and every page key, so give non-text inputs their own line when one appears.
+  `app.js` is 2,590 lines; the find glue (~90) is the next module if RD-5's "all ⌘K" grows it. The share menu's rows say
+  "share" twice ("share 4 bars of audio · share"). (tool) cdp.mjs `key('Backspace')` sends no key code, so it doesn't
+  edit a field.
