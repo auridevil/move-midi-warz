@@ -1096,3 +1096,17 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   size a cycle either way); `sunFace` could hand back the reserved width the plate takes (`scene.js` rebuilds
   `sunTemplates` for it). A live hit recorded on step 1 before the first block is scheduled is not in `skip` (`qTick >
   clockRef.tick` is false at 0), so the scheduler plays it again on the downbeat (as at the phase start).
+- **Review trees and the first blocks** (RD-08 round 4: verifier): a `git archive` tree has no `node_modules/movewire`,
+  so `app.js`'s import 404s, `__poly` never appears and `cdp.mjs` says nothing (a failed module load is no page
+  exception): `launch({ root })` could fall back to the repo's `node_modules` and cdp report failed loads (until then,
+  copy `node_modules/` into the archive). With fewer than two blocks `tickAt` still works back from one block at the
+  new tempo: a tempo change within ~50 ms of Play moves the still-negative heard tick back (−0.965 → −1.675 steps),
+  unseen (the light and live record clamp at 0); Play's start time as the line's first point would close it.
+- **The crawl on a meter change** (RD-08 round 4: implementer, from an interrupted attempt at the round; not raised by
+  a reviewer): a meter set while playing moves the crawl back a little, once. On the line where the new length starts
+  (every 1: 4/4 → 3/4 0.9663 → 0.9658, → 6/8 0.9483 → 0.9418; a longer bar jumps it forward as much): `genClock`
+  divides the heard tick's place in the bar by the scheduled `bars.len`, which switches 50–100 ms before the ear gets
+  there. With reduced motion one step back when the meter is set (every 4, 4/4 → 3/4: 0.4375 → 0.4167): the steps follow
+  `barBeats.num` at once while the bar keeps its old length until its line (RD-5's bar·beat counter does the same,
+  12/8 → 4/4: 25.5 → 25.3). Measure the fraction and the steps against the bar the ear is in (the old line and length
+  until the new line is heard).
