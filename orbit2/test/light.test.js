@@ -126,7 +126,7 @@ test('RD-8 static: read-only, the type rules, reduced motion, the sources, sprit
   // reduced motion: the crawl steps per beat, the hint cuts, the flare stands still
   assert.match(scene, /genProgress\(gs\.bars, gs\.every, gs\.frac, reduced \? gs\.beats : 0\)/); assert.match(scene, /env = reduced \? 1 :/); assert.match(scene, /sp = reduced \? 0\.4 : now \* 0\.0005/);
   // the frame budget: an idle page still draws nothing (the hint, a held fill and a font load wake it)
-  assert.match(scene, /&& !ghost && !hint && !fillOn && now >= wakeUntil\)/);
+  assert.match(scene, /&& !ghost && !hint && !hintShown && !fillOn && now >= wakeUntil\)/); assert.match(scene, /\n    hintShown = hint;/, 'the frame after the hint ends clears it');
   assert.ok(HINT_MS >= 4000 && HINT_MS <= 10000, 'a few seconds');
   // the app's sources: the generative clock from the last bar line, the slots, fill from anywhere, the first visit
   assert.match(app, /if \(line\) \{ barN\+\+; barAt = t; \}/); assert.match(app, /frac: playing \? \(heardTick\(\) - barAt\) \/ bars\.len : 0/);

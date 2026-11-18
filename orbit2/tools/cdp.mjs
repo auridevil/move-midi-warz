@@ -36,7 +36,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   const base = `http://localhost:${port}`;
   return {
     base,
-    async open(path, { width = 1440, height = 900, mobile = false, wait = 3500 } = {}) {
+    async open(path, { width = 1440, height = 900, mobile = false, wait = 3500, reducedMotion = false } = {}) {   // reducedMotion: the page loads with prefers-reduced-motion: reduce (RD-8)
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(webSocketDebuggerUrl);
       await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 30 s')), 30000).unref(); });
@@ -60,6 +60,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
       await send('Page.bringToFront'); await send('Emulation.setFocusEmulationEnabled', { enabled: true });
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
       if (mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
+      if (reducedMotion) await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });   // before the page reads matchMedia
       await send('Page.navigate', { url: `${base}/${path}` }); await sleep(wait);
       const page = {
         errors, send,

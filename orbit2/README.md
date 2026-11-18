@@ -96,7 +96,12 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   taking every rung above it; `LIGHT_ROOM` 40 px outside the outer ring is what words need there (1280×720 has 12: the
   crawl and the moons hug the ring, the words are in the caption). Every word is a cached sprite (`arcSprite`,
   `textSprite`, at most 32, made again once the fonts load): no `fillText` per frame. `__poly.scene.light` says what the
-  last frame measured and drew. The evolve pill reads "evolve" (the countdown is the arc).
+  last frame measured and drew. The evolve pill reads "evolve" (the countdown is the arc). Browser check: `node
+  orbit2/tools/light-check.mjs --assert` (LIGHT a first visit's "press play" then the beats, the label, the arc, the
+  moons, the caption, the pill; LADDER 6 lanes / 32 steps at 1512×860, 1280×720 and 390×844 against the ladder; FRAME
+  A9's frame p95 and the stress meter on that page; REDUCED the crawl steps per beat, the pulse off; CLICK nothing on
+  the canvas is a target; `--shots`, `--json`). `cdp.mjs open({ reducedMotion: true })` loads a page with
+  `prefers-reduced-motion: reduce`.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

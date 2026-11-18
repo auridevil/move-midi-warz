@@ -312,7 +312,7 @@ export function createScene(cv, o) {
     });
   }
   const WORD = 'rgba(236,233,247,.78)', DIM = 'rgba(236,233,247,.55)', BRIGHT = 'rgba(236,233,247,.95)';   // 78 % white: ≈ 9:1 on the void
-  let hintT0 = 0;   // RD-8 "press play": when the sun first showed it (0 = not yet)
+  let hintT0 = 0, hintShown = false;   // RD-8 "press play": when the sun first showed it (0 = not yet); drawn last frame (one more frame clears it)
   let lightNow = null;   // RD-8 what the last frame measured and drew (tools and tests read it: `light`)
   const plate = (() => {   // a soft dark disc under the sun's numeral, so it reads on a white-hot core (the glow stays round it)
     const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -415,7 +415,8 @@ export function createScene(cv, o) {
     const held = o.held?.() || [];
     // RD-8: "press play" for HINT_MS from the first frame it is asked for; a held fill flares; the fonts just loaded
     const hint = !!o.hint?.() && (hintT0 || (hintT0 = now), now - hintT0 < HINT_MS), fillOn = !!o.fill?.();
-    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean) && !ghost && !hint && !fillOn && now >= wakeUntil) { prev = now; return; }
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean) && !ghost && !hint && !hintShown && !fillOn && now >= wakeUntil) { prev = now; return; }
+    hintShown = hint;
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
@@ -603,7 +604,7 @@ export function createScene(cv, o) {
       slots: { gap: moonsOn ? arcRoom(rMoon, MOON_DEG) / Math.max(1, ss.filled.length - 1) : Infinity, num: moonsOn ? typeWidth([{ text: '16', color: '' }], LABEL_FONT, 0) : 0, room: moonsOn ? room : Infinity },
       gen: { arc: arcRoom(rWords), full: genOn ? typeWidth(genSegs(genWords(gs, true)), LABEL_FONT) : 0, room: genOn ? room : Infinity } });
     const plan = lightPlan(level, room);
-    lightNow = { level, room, far, plan, label: lab ? labOf(plan.extras) : '', labelFits: !!lab && typeWidth(labelSegs(labOf(plan.extras)), LABEL_FONT) <= arcRoom(rLab), gen: genOn ? genWords(gs, plan.genDetail) : '', genFits: genOn && far && typeWidth(genSegs(genWords(gs, plan.genDetail)), LABEL_FONT) <= arcRoom(rWords), moons: moonsOn, lines: [] };
+    lightNow = { level, room, far, plan, label: lab ? labOf(plan.extras) : '', labelFits: !!lab && typeWidth(labelSegs(labOf(plan.extras)), LABEL_FONT) <= arcRoom(rLab), gen: genOn ? genWords(gs, plan.genDetail) : '', genFits: genOn && far && typeWidth(genSegs(genWords(gs, plan.genDetail)), LABEL_FONT) <= arcRoom(rWords), moons: moonsOn, lines: [], hint, sun: '', crawl: null };
     ctx.globalCompositeOperation = 'source-over';
     // the sun: "press play" on a visit that has never played (HINT_MS, then the numeral; a cut with reduced motion), else
     // the beats until everything meets: counting down while it plays, the cycle's length stopped. 40 px weight 300 (28
@@ -615,7 +616,7 @@ export function createScene(cv, o) {
       const p = (now - hintT0) / HINT_MS, env = reduced ? 1 : Math.max(0, Math.min(1, p / 0.08, (1 - p) / 0.12)), s = textSprite([{ text: 'press play', color: BRIGHT }], NUMBER_FONT);
       ctx.globalAlpha = env; ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + 5 - s.base, s.w, s.h); ctx.globalAlpha = 1;
     } else if (al && al.cycle > 0) {
-      const n = playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat), lastBeat = playing && n === 1;
+      const n = playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat), lastBeat = playing && n === 1; lightNow.sun = String(n);
       const s = textSprite([{ text: String(n), color: BRIGHT }], small ? SUN_SMALL_FONT : SUN_FONT), c = textSprite([{ text: 'BEATS', color: lastBeat ? BRIGHT : DIM }], CAPS_FONT, TRACK);
       ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + (small ? 5 : 8) - s.base, s.w, s.h); ctx.drawImage(c.c, g.cx - c.w / 2, g.cy + (small ? 10 : 16), c.w, c.h);
     }
@@ -634,7 +635,7 @@ export function createScene(cv, o) {
     if (genOn) {
       const a0 = -Math.PI / 2 - (GEN_DEG / 2) * Math.PI / 180, a1 = a0 + (GEN_DEG * Math.PI) / 180;
       if (gs.evolve) {
-        const p = genProgress(gs.bars, gs.every, gs.frac, reduced ? gs.beats : 0), ah = a0 + (a1 - a0) * p;
+        const p = genProgress(gs.bars, gs.every, gs.frac, reduced ? gs.beats : 0), ah = a0 + (a1 - a0) * p; lightNow.crawl = p;
         ctx.strokeStyle = 'rgba(236,233,247,.14)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, a1); ctx.stroke();
         ctx.strokeStyle = 'rgba(236,233,247,.6)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, Math.max(a0 + 0.004, ah)); ctx.stroke(); ctx.lineCap = 'butt';
         ctx.fillStyle = BRIGHT; ctx.beginPath(); ctx.arc(g.cx + Math.cos(ah) * rGen, g.cy + Math.sin(ah) * rGen, 2.2, 0, TAU); ctx.fill();
