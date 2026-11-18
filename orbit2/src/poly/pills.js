@@ -29,7 +29,7 @@ export function pillText(k, s) {
       return parts.length ? `${parts.join(' · ')} · ${c.pending >= 0 ? at : 'next bar'}` : null;
     }
     case 'solo': return s.solo?.length ? `solo · ${s.solo.join(', ')}` : null;
-    case 'evolve': return s.evolve?.on ? `evolve · every ${plural(s.evolve.every, 'bar')}` : null;
+    case 'evolve': return s.evolve?.on ? 'evolve' : null;   // RD-8: the countdown is the arc on the canvas, shown once (no "every N bars" here)
     case 'dice': return s.dice?.locked ? `dice ${s.dice.seed}${s.dice.repeat > 1 ? ` · repeat ${s.dice.repeat}` : ''}` : null;
     case 'clock': return s.clock?.follow && s.clock.follow !== 'off' && s.clock.inName ? `clock · ${s.clock.inName}` : null;
     case 'welcome': return s.welcome ? 'welcome back · play' : null;

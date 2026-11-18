@@ -38,6 +38,7 @@ const SAVE = 'midi-warz.orbit2.v2'; // v2: step = quarter note at ratio 1
 const LANE_HEX = ['#f0abfc', '#67e8f9', '#fde047', '#a78bfa', '#86efac', '#fdba74'];   // L2: lanes 5–6 green, orange
 // first ever visit = nothing saved yet (read before the first sync() writes it): it gets the demo groove, not init
 let firstVisit = true; try { firstVisit = localStorage.getItem(SAVE) == null; } catch {}
+let neverPlayed = false;   // RD-8: a first visit that has not played yet: the sun reads "press play", the play ring pulses
 let m; try { m = Machine.from(JSON.parse(localStorage.getItem(SAVE) || 'null')); } catch { m = new Machine(); }
 // RD-1 setlog (?setlog only): the action log for the accident budget (setlog.js). Off, slog is null and every hook is
 // `slog?.…`: no listeners, no work, the arguments never evaluated. The Move's bytes mark their source on the way in.
@@ -379,8 +380,8 @@ const pending = pendingSteps();   // E6: the jam log's early parts, by their ste
 /** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
  *  starts on the next bar line of the old one, so a bar is never cut short, and the lanes start there on step 1
  *  (m.setOrigin); a restart counts from tick 0 in the pattern's meter. barN: bar lines since Play, in any meter. */
-let bars = { at: 0, len: BAR_TICKS, next: null }, barN = 0, barBeats = { meter: null, num: 4 };
-const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; barN = 0; m.setOrigin(0); };
+let bars = { at: 0, len: BAR_TICKS, next: null }, barN = 0, barAt = 0, barBeats = { meter: null, num: 4 };   // barAt: the tick of the last bar line (RD-8: the crawl counts from it)
+const resetBars = () => { bars = { at: 0, len: m.barTicks(), next: null }; barN = 0; barAt = 0; m.setOrigin(0); };
 function trackMeter(t) { const b = trackBars(bars, t, m.barTicks()); if (b !== bars) { bars = b; m.setOrigin(bars.at); } }
 const tickSec = () => 60 / tempo / PPQ;
 /** The cycle depends on the locked dice repeat too: every cycleTicks() caller passes this. */
@@ -406,7 +407,7 @@ function onTick(t, time, cyc, ts) {
   if ((t - m.origin) % cyc === 0) T.getDraw().schedule(() => scene.bloom(), time);   // the whole machine lines up again
   // evolve every N bars: the bar lines since Play, counted as they come in whatever meter (the anchor's own included);
   // its way home can bring back another meter, which starts on this bar line too
-  const line = t > 0 && onBar(t, bars); if (line) barN++;
+  const line = t > 0 && onBar(t, bars); if (line) { barN++; barAt = t; }
   // RD-5 the bar·beat counter: worked out here (integers; the meter's beats a bar read when it changes), drawn on its
   // beat by Tone.Draw (no DOM in the clock), not after a stop (a beat queued just before it would undo its "01.1")
   if (m.meter !== barBeats.meter) barBeats = { meter: m.meter, num: meterParts(m.meter).num };
@@ -444,7 +445,7 @@ function onTick(t, time, cyc, ts) {
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
 function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
-  slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); hideWelcome();
+  slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); neverPlayed = false; hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes)
   if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; clockRef = { tick: 0, time: T.getContext().rawContext.currentTime + 0.05 }; T.getTransport().start('+0.05'); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   { const b = $('btn-play'); b.textContent = playing ? '■' : '▷'; b.setAttribute('aria-label', playing ? 'stop' : 'play'); if (!playing) barBeat.textContent = '01.1'; } recLine(); paintPlayhead(); paintLeds(); readout(); giftPlay?.();
@@ -2135,7 +2136,7 @@ let pillsLive = false, pillsOpen = false, pillsForce = null;
 const PILL_EL = { rec: 'sp-rec', chain: 'sp-chain', solo: 'sp-solo', evolve: 'sp-evolve', dice: 'sp-dice', clock: 'sp-clock', welcome: 'welcome', quest: 'quest', jam: 'jam-panel' };
 const PILL_WORDS = { rec: 'sp-rec-go', chain: 'sp-chain-go', solo: 'sp-solo-go', evolve: 'sp-evolve-go', dice: 'sp-dice-go', clock: 'sp-clock-go', jam: 'jam-text' };   // welcome and quest keep their own
 // a test's stand-ins for pills whose mode is off (__poly.showPills: the 6-pill layout at 1280×720)
-const PILL_STANDIN = { rec: '● rec armed', chain: 'chain 1 → 2', solo: 'solo · kick', evolve: 'evolve · every 4 bars', dice: 'dice 1234', clock: 'clock · a MIDI clock', welcome: 'welcome back · play', quest: 'quest', jam: 'take ready · 4 bars' };
+const PILL_STANDIN = { rec: '● rec armed', chain: 'chain 1 → 2', solo: 'solo · kick', evolve: 'evolve', dice: 'dice 1234', clock: 'clock · a MIDI clock', welcome: 'welcome back · play', quest: 'quest', jam: 'take ready · 4 bars' };
 function pillState() {
   const q = currentQuest(quests.done);
   return { rec: { armed: rec.armed, knobs: rec.knobs }, chain: { chain: bank.chain, pending: bank.pending, switchAt: bank.switchAt, mutes: muteQ.size },
@@ -2220,7 +2221,7 @@ buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); b
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
 if (boot === 'link') loadShared({ first: firstVisit });
-else if (boot === 'first') { loadGroove(DEMO_GROOVE); hist.restart(); $('btn-play').classList.add('pulse'); }
+else if (boot === 'first') { loadGroove(DEMO_GROOVE); hist.restart(); $('btn-play').classList.add('pulse'); neverPlayed = true; }
 else welcomeOn = true;
 pillsLive = true; renderPills();
 spoken = null; clearTimeout(announceTimer);   // the page just opened: nothing to announce yet (readout() at the end starts it)
@@ -2549,7 +2550,12 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // RD-6 the halos: the Move's held steps once looked at (a tap draws nothing), and the step a step-page knob edits while a
 // hand is on it. Asked every frame: nothing allocated while nothing is held
 const NO_HELD = [];
-const scene = createScene($('cv'), { held: () => { if (!pages.held.size && !handOn.size) return NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: Math.max(0, heardTick() - m.origin), cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000 });
+const scene = createScene($('cv'), { held: () => { if (!pages.held.size && !handOn.size) return NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
+  // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
+  // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
+  // selected lane's words
+  gen: () => ({ evolve: evo.on, every: evo.every, home: evo.home > 0, bars: barN, frac: playing ? (heardTick() - barAt) / bars.len : 0, beats: Math.round(bars.len / PPQ), dice: dice.locked ? dice.seed : null, repeat: dice.repeat, coupling: m.couple?.mode || 'off', gravity: evo.gravity }),
+  slots: () => ({ filled: bank.slots.map(Boolean), current: bank.current, pending: bank.pending }), fill: () => fill, hint: () => neverPlayed, laneLabel: (li) => ({ name: voiceLabel(m.lanes[li]), ratio: RATIO_LABEL[m.lanes[li].ratioIndex] }) });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 // ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at
 // once when stopped, on its turn while playing), tap a planet = on → accent → off, drag along a ring = rotate it (whole
@@ -2699,7 +2705,7 @@ function layoutStage() {
   const c = $('stage').getBoundingClientRect();
   // a cell with no size (no grid laid out) never places the rings: they keep the canvas's own box rather than a corner
   if (NARROW.matches || !c.width || !c.height) { scene.setStage(null); poke(); return; }
-  scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth)); poke();
+  scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth), { x: c.left, y: c.top, w: c.width, h: c.height }); poke();   // RD-8: the cell too, for the light's room
 }
 new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', layoutStage);
 // ---- RD-3 the sheet: every drawer and the old right column in one place, six tabs (Greta's feature table). RD-4: closed

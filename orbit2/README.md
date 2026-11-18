@@ -81,6 +81,22 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   not atomic, there when empty; FOCUS Esc on "+N more", a ×, show me, a discarded take, a click then Space, show me on a
   phone scrolled to the pills). The face audit's "pills" state turns
   six on (PILLS gate). Find's empty list offers nothing destructive (`FIND_DEFAULTS`; Vera's mis-click run).
+- Light on the canvas (RD-8): the score speaks without opening anything, all of it read-only (`scene.js locate` never
+  changed; nothing on the canvas is a target). The **sun** reads the beats until everything meets (40 px weight 300, the
+  cycle's length when stopped) over a soft dark plate, "press play" on a visit that has never played (`HINT_MS`, the play
+  ring pulses slowly meanwhile), and flares while fill is held from anywhere. The **generative arc** over the top names
+  what is on (EVOLVE · DICE · COUPLING NEXT · GRAVITY, words only) with a crawl that moves continuously toward the next
+  mutation (`genProgress`, from the last bar line `barAt`; once per beat with reduced motion). The **slot moons** under
+  the rings: saved = a moon, playing = bright with its number, queued = a dashed ring. **One arc label** on the selected
+  lane (`laneLabel`: "CONGA 32 × 4", 13 px caps weight 500, the name in the lane's colour, mid-gap outside the ring,
+  inside for the outer lane; its extras while they fit and the ring is not a full strip). The **straight caption** at the
+  bottom right of the stage carries every number (`captionLines`: the cycle, "evolve in N bars", the seed, the playing
+  slot when the moons carry no number, the take's beat). **Yuki's ladder** (`lightLevel`, `lightPlan`): when space runs
+  out things go in order (unselected labels, extras, slot numbers, arc detail, words off the curve), the lowest rung gone
+  taking every rung above it; `LIGHT_ROOM` 40 px outside the outer ring is what words need there (1280×720 has 12: the
+  crawl and the moons hug the ring, the words are in the caption). Every word is a cached sprite (`arcSprite`,
+  `textSprite`, at most 32, made again once the fonts load): no `fillText` per frame. `__poly.scene.light` says what the
+  last frame measured and drew. The evolve pill reads "evolve" (the countdown is the arc).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

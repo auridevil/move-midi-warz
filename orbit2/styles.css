@@ -391,7 +391,7 @@ body.chaos::before { display: none; }
 /* play: an outlined ring (2 px --l, no fill), found by size and place, not by glare. It keeps the strip's slot until
    the console (RD-5) gives it its 64 px; the phone's floating play is the 64 px ring now */
 #btn-play { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }
-#btn-play.pulse { animation: play-pulse 1.4s ease-in-out infinite; box-shadow: inset 0 0 0 1px var(--l), 0 0 0 3px rgba(184,180,199,.45); }
+#btn-play.pulse { animation: play-pulse 2.6s ease-in-out infinite;   /* RD-8: a slow outline pulse on a visit that has never played */ box-shadow: inset 0 0 0 1px var(--l), 0 0 0 3px rgba(184,180,199,.45); }
 @keyframes play-pulse { 50% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 7px rgba(184,180,199,.1); } }
 @media (prefers-reduced-motion: reduce) { #btn-play.pulse { animation: none; } }
 /* RD-7 the pills (app.js renderPills): a row that wraps, right-aligned under the Move pill and "?", in the fixed order.

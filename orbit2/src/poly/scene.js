@@ -125,6 +125,115 @@ export function ghostAt(g, kind, li, p) {
 /** Ease out (cubic): a slide starts fast and settles. */
 const easeOut = (p) => 1 - (1 - Math.min(1, Math.max(0, p))) ** 3;
 
+// ---- RD-8 light on the canvas (Yuki's light without the control surface; DECISION §2 "Read-only light on the canvas"):
+// the sun numeral, the cycle caption in straight type, the generative arc with its crawling countdown, the slot moons,
+// ONE arc label on the selected lane, "press play" on a first visit and the fill flare. Pure first: the words, the
+// countdown and Yuki's ladder are tested without a canvas. Nothing here is hit-tested (locate is untouched) ----
+const FAMILY = '"Space Grotesk", system-ui, sans-serif';
+/** Type on the canvas: 13 px caps weight 500 for a word on a curve (Yuki's floor), 15 px for a number read in a glance,
+ *  40 px weight 300 for the sun (300 only at 40 px and up), 11 px for the sun's own caption; tracking .14 em on caps. */
+export const LABEL_PX = 13, NUMBER_PX = 15, SUN_PX = 40, SUN_SMALL_PX = 28, CAPS_PX = 11, TRACK = 0.14;
+export const LABEL_FONT = `500 ${LABEL_PX}px ${FAMILY}`, NUMBER_FONT = `500 ${NUMBER_PX}px ${FAMILY}`, SUN_FONT = `300 ${SUN_PX}px ${FAMILY}`, SUN_SMALL_FONT = `400 ${SUN_SMALL_PX}px ${FAMILY}`, CAPS_FONT = `500 ${CAPS_PX}px ${FAMILY}`;
+/** Type on a curve sits only where the curve runs within ±35° of horizontal: the bottom of a ring (the label) or the top
+ *  (the generative arc); the moons spread ±42° round 6 o'clock; the crawl's track is ±45° round 12. Degrees. */
+export const LABEL_DEG = 70, GEN_DEG = 90, MOON_DEG = 84;
+/** Px free outside the outer ring (to the stage's edge) before anything with words fits there: the arc's words and the
+ *  moons' numbers need it (1512×860 has 43, 1280×720 has 12: there the crawl and the moons hug the ring, the words go to
+ *  the straight caption). */
+export const LIGHT_ROOM = 40;
+/** "press play" in the sun on a visit that has never played: this long, then the numeral. */
+export const HINT_MS = 7000;
+/** The sun: beats until everything lines up again (the heard tick, fractional), 1 on the last beat. */
+export const beatsLeft = (tick, cycle, beat) => Math.max(1, Math.ceil((cycle - (((tick % cycle) + cycle) % cycle)) / beat));
+/** The sun, stopped: the cycle's length in beats (everything meets in N beats). */
+export const cycleBeats = (cycle, beat) => Math.max(1, Math.ceil(cycle / beat));
+/**
+ * The cycle caption (straight type, never on a curve): where you are in the full cycle, in bars; stopped, how long it is.
+ * A cycle that is not whole bars is said in beats (and only once: the sun counts them down).
+ */
+export function cycleLine(tick, cycle, bar, beat, playing) {
+  if (!(cycle > 0)) return '';
+  if (cycle % bar) { const n = cycleBeats(cycle, beat); return `cycle · ${n} beat${n === 1 ? '' : 's'}`; }
+  const n = cycle / bar; if (!playing) return `cycle · ${n === 1 ? 'one bar' : `${n} bars`}`;
+  return n === 1 ? 'cycle · every bar' : `cycle · bar ${Math.min(n, Math.floor((((tick % cycle) + cycle) % cycle) / bar) + 1)} of ${n}`;
+}
+/**
+ * How far the generative clock is toward the next mutation, 0..1: bars = bar lines since Play, every = bars between
+ * mutations, frac = how far into the bar the heard tick is (a little negative just after the line: the scheduler counts
+ * the line before the ear reaches it, and the crawl must not jump). Continuous; `beats` > 0 (reduced motion) steps it
+ * once per beat of the bar.
+ */
+export function genProgress(bars, every, frac, beats = 0) {
+  const e = Math.max(1, every | 0), f = beats > 0 ? Math.floor(Math.max(0, frac) * beats) / beats : frac;
+  return (((((bars % e) + f) % e) + e) % e) / e;
+}
+/** Bars until the next mutation (the straight caption's "evolve in N bars"): `every` on the line it just came. */
+export const barsToEvolve = (bars, every) => { const e = Math.max(1, every | 0); return e - (((bars % e) + e) % e); };
+/**
+ * The generative arc's words (caps on the curve, names only: a number you read is in the straight caption): what is on,
+ * in a fixed order. detail (Yuki's rung 4) says the coupling's shape and the gravity; without it "coupling 1 → 2" is
+ * "coupling" and gravity goes. s = { evolve, dice, coupling: 'off' | 'next' | 'matrix', gravity }. '' = nothing on.
+ * The longest ("EVOLVE · DICE · COUPLING MATRIX · GRAVITY") fits the ±35° band over 630 px rings.
+ */
+export function genWords(s, detail = true) {
+  const w = [];
+  if (s.evolve) w.push('EVOLVE');
+  if (s.dice) w.push('DICE');
+  if (s.coupling && s.coupling !== 'off') w.push(detail ? (s.coupling === 'next' ? 'COUPLING NEXT' : 'COUPLING MATRIX') : 'COUPLING');
+  if (detail && s.evolve && s.gravity > 0) w.push('GRAVITY');
+  return w.join(' · ');
+}
+/** A ring with more steps than this is a full strip (planets 11° apart): its label is the name-plate alone, as in Yuki's
+ *  6-lane mock, where both 32-step lanes read "CONGA 32 × 4" and the console shows the rest. */
+export const EXTRAS_MAX_STEPS = 16;
+/** The one arc label (the selected lane): "CONGA 32 × 4", plus its extras (hits, chance, push) while they fit (rung 2)
+ *  and the ring is not a full strip. */
+export function laneLabel(l, extras = true) {
+  const base = `${l.name} ${l.len} × ${l.ratio}`.toUpperCase(); if (!extras || l.len > EXTRAS_MAX_STEPS) return base;
+  const x = [`${l.hits} HIT${l.hits === 1 ? '' : 'S'}`];
+  if (l.chance < 1) x.push(`${Math.round(l.chance * 100)} %`);
+  if (l.push) x.push(`${l.push < 0 ? '−' : '+'}${Math.abs(Math.round(l.push))} MS`);
+  return [base, ...x].join(' · ');
+}
+/** Px along a curve of radius r within `deg` degrees (the ±35° band = 70). */
+export const arcRoom = (r, deg = LABEL_DEG) => (r * deg * Math.PI) / 180;
+/** The label sits in the middle of the gap outside the selected ring (as far from both rings' planets as it can be, at
+ *  most 37 px out), or inside it for the outer lane (outside is the moons' and the arcs' room): a signed offset from the
+ *  ring, px. gap = the px between two rings (ringGeo: gap × R; 74 with 4 lanes at 1512×860, 44 with 6). */
+export const labelOffset = (li, lanes, gap = 44) => { const d = Math.min(37, Math.round(gap / 2)); return li >= lanes - 1 ? -d : d; };
+/**
+ * Yuki's ladder (`proposals/yuki/answers.md` §1; DECISION "Arc labels"): what goes when space runs out, in this order
+ * and no other: 1 the unselected lanes' labels (never drawn: the decision keeps one), 2 the selected label's extras,
+ * 3 the slot numbers (the playing and the queued slot keep theirs), 4 the generative arc's detail, 5 the cycle caption
+ * off the curve (always straight here). The lowest rung that does not fit takes every rung above it with it, so the
+ * canvas never shows a lower rung without the ones above. room (px) = { label: { arc, full }, slots: { gap, num, room },
+ * gen: { arc, full, room } }: arc = the px the curve offers to type, full = the px the full words take, gap = the moons'
+ * spacing and num = the widest number, room = px free outside the outer ring (LIGHT_ROOM for anything with words).
+ * Returns 1..4 (1 = everything but the unselected labels).
+ */
+export function lightLevel(room) {
+  const gone = [room.label.full > room.label.arc, room.slots.gap < room.slots.num + 4 || room.slots.room < LIGHT_ROOM, room.gen.full > room.gen.arc || room.gen.room < LIGHT_ROOM];
+  const i = gone.lastIndexOf(true); return i < 0 ? 1 : i + 2;
+}
+/** What the level draws: the label's extras, which moons carry a number ('all' | 'some' = the playing and the queued |
+ *  'none' = no room outside the ring: the playing slot goes to the straight caption), the arc's detail. */
+export const lightPlan = (level, slotRoom = Infinity) => ({ extras: level < 2, slotNumbers: level < 3 ? 'all' : slotRoom >= LIGHT_ROOM ? 'some' : 'none', genDetail: level < 4 });
+/** Where moon k of n sits: the angle (rings' convention, 0 at 12 o'clock, clockwise) along ±MOON_DEG/2 round 6 o'clock,
+ *  slot 1 at the left. */
+export const moonAngle = (k, n = 16, deg = MOON_DEG) => Math.PI + ((deg / 2 - (k * deg) / Math.max(1, n - 1)) * Math.PI) / 180;
+/** The straight caption's lines (13 px, bottom right of the stage, numbers live here): the cycle, the generative facts,
+ *  the playing slot when the moons carry no number, the take. s = { cycle: cycleLine's text, evolve: { bars } | null,
+ *  dice: { seed, repeat } | null, slot: 1-based | null, jam: { beat, of } | null }. */
+export function captionLines(s) {
+  const out = [];
+  if (s.cycle) out.push(s.cycle);
+  if (s.evolve) out.push(`evolve in ${s.evolve.bars} bar${s.evolve.bars === 1 ? '' : 's'}`);
+  if (s.dice) out.push(`dice ${s.dice.seed}${s.dice.repeat > 1 ? ` · repeat ${s.dice.repeat}` : ''}`);
+  if (s.slot) out.push(`slot ${s.slot} playing`);
+  if (s.jam) out.push(`jam · beat ${s.jam.beat} of ${s.jam.of}`);
+  return out;
+}
+
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
   const c = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'); const h = size / 2;
@@ -145,6 +254,70 @@ export function createScene(cv, o) {
   let W = 0, H = 0, DPR = 1, bg = null, stars = [];
   const sprites = new Map(); const sprite = (hex) => { if (!sprites.has(hex)) sprites.set(hex, glowSprite(hex)); return sprites.get(hex); };
   const white = glowSprite('#ece9f7');
+  // RD-8 type on the canvas is cached as sprites (one drawImage per label per frame, never a fillText on a curve per
+  // frame): keyed by the words, the radius, the colours and the DPR, and by whether the font was there when it was made
+  // (a sprite made before Space Grotesk loaded is made again once it has). Bounded: the oldest goes past TEXT_SPRITES.
+  const TEXT_SPRITES = 32, texts = new Map(), mctx = document.createElement('canvas').getContext('2d');
+  const fontOk = (font) => { try { return document.fonts?.check(font) ?? true; } catch { return true; } };
+  let wakeUntil = 0;   // frames after the fonts load, so the sprites are made again with them
+  try { document.fonts?.addEventListener('loadingdone', () => { wakeUntil = performance.now() + 400; }); } catch {}
+  function cached(key, make) {
+    let s = texts.get(key); if (s) { texts.delete(key); texts.set(key, s); return s; }   // most recent last
+    s = make(); texts.set(key, s); if (texts.size > TEXT_SPRITES) texts.delete(texts.keys().next().value); return s;
+  }
+  /** Glyph widths of `text` in `font` plus a tracking of `track` em (caps are tracked, the sun is not). */
+  function glyphs(text, font, track) { mctx.font = font; const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1]) || 13, t = track * size; return [...text].map(ch => ({ ch, w: mctx.measureText(ch).width, t })); }
+  const spanOf = (gl) => gl.reduce((a, g) => a + g.w + g.t, 0) - (gl.length ? gl[gl.length - 1].t : 0);
+  /** Width (px) of segments [{ text, color }] in `font` with tracking, without making a sprite (the ladder measures first). */
+  function typeWidth(segs, font, track = TRACK) { return segs.reduce((a, s) => a + spanOf(glyphs(s.text, font, track)) + (s.text ? track * 13 : 0), 0); }
+  /**
+   * Straight type as a sprite: segments [{ text, color }], tracked when `track` > 0. { c, w, h, base }: draw c with its
+   * top left at (x, y − base) for the text's baseline at y (its left edge at x).
+   */
+  function textSprite(segs, font, track = 0) {
+    const key = `t|${font}|${track}|${DPR}|${fontOk(font)}|${segs.map(s => `${s.color}:${s.text}`).join('|')}`;
+    return cached(key, () => {
+      const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1]) || 13, parts = segs.map(s => ({ ...s, gl: glyphs(s.text, font, track) }));
+      const w = Math.ceil(parts.reduce((a, p) => a + spanOf(p.gl) + track * size, 0)) + 2, h = Math.ceil(size * 1.4), base = Math.round(size * 1.05);
+      const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR); c.height = Math.ceil(h * DPR); const g = c.getContext('2d'); g.setTransform(DPR, 0, 0, DPR, 0, 0);
+      g.font = font; g.textBaseline = 'alphabetic'; g.textAlign = 'left'; let x = 1;
+      for (const p of parts) { g.fillStyle = p.color; for (const gg of p.gl) { g.fillText(gg.ch, x, base); x += gg.w + gg.t; } x += track * size; }
+      return { c, w, h, base };
+    });
+  }
+  /**
+   * Type on a curve as a sprite: segments along a circle of radius r centred on the rings, at the top (reads clockwise,
+   * the tops out) or the bottom (reads left to right, the tops in), centred on 12 or 6 o'clock, 13 px caps tracked .14 em.
+   * { c, x, y, w, h }: draw c at (cx + x, cy + y). Each glyph is set upright on its own tangent.
+   */
+  function arcSprite(segs, r, top, font = LABEL_FONT, track = TRACK) {
+    const key = `a|${font}|${Math.round(r)}|${top}|${DPR}|${fontOk(font)}|${segs.map(s => `${s.color}:${s.text}`).join('|')}`;
+    return cached(key, () => {
+      const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1]) || 13, parts = segs.map(s => ({ ...s, gl: glyphs(s.text, font, track) }));
+      const total = parts.reduce((a, p) => a + spanOf(p.gl) + track * size, 0) - track * size, span = total / r, half = span / 2;
+      const x0 = -((r + size) * Math.sin(half) + size), w = -2 * x0, y0 = top ? -(r + size) : (r - size) * Math.cos(half) - size, y1 = top ? -(r - size) * Math.cos(half) + size : r + size, h = y1 - y0;
+      const c = document.createElement('canvas'); c.width = Math.ceil(w * DPR); c.height = Math.ceil(h * DPR); const g = c.getContext('2d');
+      g.setTransform(DPR, 0, 0, DPR, -x0 * DPR, -y0 * DPR); g.font = font; g.textBaseline = 'middle'; g.textAlign = 'center';
+      let a = -half;   // along the arc from its start, in radians
+      for (const p of parts) {
+        g.fillStyle = p.color;
+        for (const gg of p.gl) {
+          const mid = a + gg.w / 2 / r, th = top ? -Math.PI / 2 + mid : Math.PI / 2 - mid;
+          g.save(); g.translate(Math.cos(th) * r, Math.sin(th) * r); g.rotate(top ? th + Math.PI / 2 : th - Math.PI / 2); g.fillText(gg.ch, 0, 0); g.restore();
+          a += (gg.w + gg.t) / r;
+        }
+        a += (track * size) / r;
+      }
+      return { c, x: x0, y: y0, w, h };
+    });
+  }
+  const WORD = 'rgba(236,233,247,.78)', DIM = 'rgba(236,233,247,.55)', BRIGHT = 'rgba(236,233,247,.95)';   // 78 % white: ≈ 9:1 on the void
+  let hintT0 = 0;   // RD-8 "press play": when the sun first showed it (0 = not yet)
+  let lightNow = null;   // RD-8 what the last frame measured and drew (tools and tests read it: `light`)
+  const plate = (() => {   // a soft dark disc under the sun's numeral, so it reads on a white-hot core (the glow stays round it)
+    const c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d'), gr = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(12,8,28,.8)'); gr.addColorStop(0.55, 'rgba(12,8,28,.55)'); gr.addColorStop(1, 'rgba(12,8,28,0)'); g.fillStyle = gr; g.fillRect(0, 0, 128, 128); return c;
+  })();
   const last = [];        // per lane: { index, t } of the latest step, for the smooth playhead
   const energy = new Array(MAX_LANES).fill(0), flash = new Map();   // energy per lane (decays), flash per "lane:index"
   const misses = new Map();   // V6: "lane:index" → { t, why } of a step that came round and stayed silent (prob / cond / dice)
@@ -164,11 +337,11 @@ export function createScene(cv, o) {
     else if (hand && hand.until === Infinity) hand.until = now + HAND_MS;
   }
 
-  let stage = null;
+  let stage = null, cell = null;   // RD-8 cell: the stage cell between the columns (the light's room and the caption's corner)
   const geo = () => ringGeo(W, H, stage, o.machine().lanes.length);
-  /** s: { x, y, w, h } in client px, or null for the whole canvas. */
-  function setStage(s) {
-    const b = cv.getBoundingClientRect(), n = s && { x: Math.round(s.x - b.left), y: Math.round(s.y - b.top), w: Math.round(s.w), h: Math.round(s.h) };
+  /** s: the rings' box { x, y, w, h } in client px (ringBox), or null for the whole canvas; c: the stage cell it came from. */
+  function setStage(s, c = null) {
+    const b = cv.getBoundingClientRect(), toCv = (r) => r && { x: Math.round(r.x - b.left), y: Math.round(r.y - b.top), w: Math.round(r.w), h: Math.round(r.h) }, n = toCv(s); cell = toCv(c);
     if (JSON.stringify(n) === JSON.stringify(stage)) return; stage = n; backdrop();   // same canvas: only the nebulae follow the rings
   }
   const nodeXY = (g, li, i, len) => { const a = (i / len) * TAU - Math.PI / 2, r = g.ring(li); return [g.cx + Math.cos(a) * r, g.cy + Math.sin(a) * r, a]; };
@@ -240,7 +413,9 @@ export function createScene(cv, o) {
     // stopped and nothing fading out: leave the last frame on screen (idle CPU ~0)
     // RD-6: a hand on a knob, a held step, an answer fading, or the frame after the last one (to clear it) keeps drawing
     const held = o.held?.() || [];
-    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean) && !ghost) { prev = now; return; }
+    // RD-8: "press play" for HINT_MS from the first frame it is asked for; a held fill flares; the fonts just loaded
+    const hint = !!o.hint?.() && (hintT0 || (hintT0 = now), now - hintT0 < HINT_MS), fillOn = !!o.fill?.();
+    if (!o.isBusy() && !o.isRecording?.() && o.jamProgress?.() == null && !waves.length && !sparks.length && !beams.length && !blooms.length && !misses.size && energy.every(e => e < 0.01) && !hand && !held.length && !answered && !slides.some(Boolean) && !spreads.some(Boolean) && !grows.some(Boolean) && !ghost && !hint && !fillOn && now >= wakeUntil) { prev = now; return; }
     const dt = Math.min(64, now - prev); prev = now; avgDt += (dt - avgDt) * 0.05;
     quality = avgDt > 26 ? 0.35 : avgDt > 20 ? 0.7 : 1;    // shed particles/stars when the machine struggles
     const m = o.machine(), g = geo(), playing = o.isPlaying(), sel = m.selected;
@@ -268,6 +443,16 @@ export function createScene(cv, o) {
     ctx.globalAlpha = 0.35 + Math.min(0.65, tot * 0.25); ctx.drawImage(sprite(o.laneHex[0]), g.cx - coreR * 2, g.cy - coreR * 2, coreR * 4, coreR * 4);
     ctx.globalAlpha = 0.25 + energy[3] * 0.3; ctx.drawImage(sprite(o.laneHex[3]), g.cx - coreR * 3, g.cy - coreR * 3, coreR * 6, coreR * 6);
     ctx.globalAlpha = 1;
+    // RD-8 the fill flare (Rio): while fill is held from anywhere (the button, key 0, the Move's Layout, a latched bar)
+    // the sun flares: a brighter core and a four-point star turning slowly (still with reduced motion). Light, not a
+    // target: the sun is a display.
+    if (fillOn) {
+      const L = g.R * 0.2, sp = reduced ? 0.4 : now * 0.0005, fr = coreR * 2.4;
+      ctx.globalAlpha = 0.55; ctx.drawImage(white, g.cx - fr, g.cy - fr, fr * 2, fr * 2);
+      ctx.globalAlpha = 1; ctx.strokeStyle = 'rgba(236,233,247,.7)'; ctx.lineWidth = 1; ctx.beginPath();
+      for (let k = 0; k < 2; k++) { const q = sp + k * Math.PI / 2; ctx.moveTo(g.cx - Math.cos(q) * L, g.cy - Math.sin(q) * L); ctx.lineTo(g.cx + Math.cos(q) * L, g.cy + Math.sin(q) * L); }
+      ctx.stroke();
+    }
     // cycle bloom: when every lane lines up, a chromatic shockwave leaves the core
     for (let i = blooms.length - 1; i >= 0; i--) {
       const age = (now - blooms[i].t) / 1600; if (age > 1) { blooms.splice(i, 1); continue; }
@@ -398,43 +583,108 @@ export function createScene(cv, o) {
 
     // live record armed: the outer orbit breathes red
     if (o.isRecording?.()) {
-      const pulse = 0.5 + 0.5 * Math.sin(now * 0.006), r = g.outer + 26;
+      const pulse = 0.5 + 0.5 * Math.sin(now * 0.006), r = g.outer + 20;   // RD-8: between the cycle arc and the crawl / the moons
       ctx.strokeStyle = `rgba(239,68,68,${0.25 + pulse * 0.35})`; ctx.lineWidth = 1.5 + pulse * 2; ctx.setLineDash([6, 10]); ctx.lineDashOffset = -now * 0.02;
       ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke(); ctx.setLineDash([]);
     }
-    // alignment countdown, so the bloom is a payoff you see coming. In the middle of the core, inside the kick ring:
-    // no planet, comet or burst ever lands there (every ring's step 1 is at 12 o'clock). A dark pill, two lines when
-    // one doesn't fit the ring; the words stay bright, the last beat lights the pill's rim (steady when motion is
-    // reduced).
-    const al = playing && o.align?.(), at = al ? alignText(al.tick, al.cycle, al.bar, al.beat) : '';
+    // ---- RD-8 the light that speaks without opening anything. Measured first (Yuki's ladder, lightLevel): the room
+    // outside the outer ring (to the stage's edge, or the canvas's), the type each curve carries, what each label needs.
+    // Then drawn, 'source-over' (type, not light). The old core pill ("aligns in N bars") is the sun now. ----
+    const al = o.align?.() || null, room = Math.max(0, (cell ? Math.min(g.cy - cell.y, cell.y + cell.h - g.cy) : Math.min(g.cy, H - g.cy)) - g.outer);
+    const gs = o.gen?.() || null, genOn = !!gs && !!(gs.evolve || gs.dice || (gs.coupling && gs.coupling !== 'off'));
+    const ss = o.slots?.() || null, moonsOn = !!ss && (ss.filled.some(Boolean) || ss.current >= 0 || ss.pending >= 0);
+    const far = room >= LIGHT_ROOM, rGen = g.outer + (far ? 24 : 7), rWords = g.outer + 36, rMoon = g.outer + (far ? 24 : 7);
+    const lane = m.lanes[sel], lab = lane && o.laneLabel?.(sel), rLab = lane ? g.ring(sel) + labelOffset(sel, m.lanes.length, g.gap * g.R) : 0;
+    const labOf = (extras) => laneLabel({ name: lab.name, len: lane.length, ratio: lab.ratio, hits: lane.hits.slice(0, lane.length).filter(Boolean).length, chance: lane.prob ?? 1, push: lane.offsetMs }, extras);
+    const labelSegs = (t) => { const n = lab.name.toUpperCase(); return [{ text: n, color: lane.muted || (anySolo && !lane.solo) ? MUTED : o.laneHex[sel] }, { text: t.slice(n.length).trimStart(), color: WORD }]; };
+    const genSegs = (t) => [{ text: t, color: WORD }];
+    const level = lightLevel({
+      label: { arc: arcRoom(rLab), full: lab ? typeWidth(labelSegs(labOf(true)), LABEL_FONT) : 0 },
+      slots: { gap: moonsOn ? arcRoom(rMoon, MOON_DEG) / Math.max(1, ss.filled.length - 1) : Infinity, num: moonsOn ? typeWidth([{ text: '16', color: '' }], LABEL_FONT, 0) : 0, room: moonsOn ? room : Infinity },
+      gen: { arc: arcRoom(rWords), full: genOn ? typeWidth(genSegs(genWords(gs, true)), LABEL_FONT) : 0, room: genOn ? room : Infinity } });
+    const plan = lightPlan(level, room);
+    lightNow = { level, room, far, plan, label: lab ? labOf(plan.extras) : '', labelFits: !!lab && typeWidth(labelSegs(labOf(plan.extras)), LABEL_FONT) <= arcRoom(rLab), gen: genOn ? genWords(gs, plan.genDetail) : '', genFits: genOn && far && typeWidth(genSegs(genWords(gs, plan.genDetail)), LABEL_FONT) <= arcRoom(rWords), moons: moonsOn, lines: [] };
+    ctx.globalCompositeOperation = 'source-over';
+    // the sun: "press play" on a visit that has never played (HINT_MS, then the numeral; a cut with reduced motion), else
+    // the beats until everything meets: counting down while it plays, the cycle's length stopped. 40 px weight 300 (28
+    // px weight 400 inside a phone's small inner ring), "beats" under it, lit on the last beat. In the middle of the
+    // core, inside the kick ring: no planet, comet or burst ever lands there (every ring's step 1 is at 12 o'clock).
+    const small = g.ring(0) < 56, pr = small ? g.ring(0) * 0.95 : Math.min(g.ring(0) * 0.9, 56);
+    if (hint || (al && al.cycle > 0)) ctx.drawImage(plate, g.cx - pr, g.cy - pr, pr * 2, pr * 2);
+    if (hint) {
+      const p = (now - hintT0) / HINT_MS, env = reduced ? 1 : Math.max(0, Math.min(1, p / 0.08, (1 - p) / 0.12)), s = textSprite([{ text: 'press play', color: BRIGHT }], NUMBER_FONT);
+      ctx.globalAlpha = env; ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + 5 - s.base, s.w, s.h); ctx.globalAlpha = 1;
+    } else if (al && al.cycle > 0) {
+      const n = playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat), lastBeat = playing && n === 1;
+      const s = textSprite([{ text: String(n), color: BRIGHT }], small ? SUN_SMALL_FONT : SUN_FONT), c = textSprite([{ text: 'BEATS', color: lastBeat ? BRIGHT : DIM }], CAPS_FONT, TRACK);
+      ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + (small ? 5 : 8) - s.base, s.w, s.h); ctx.drawImage(c.c, g.cx - c.w / 2, g.cy + (small ? 10 : 16), c.w, c.h);
+    }
     // V6 where you are in the full cycle (every lane, condition and locked dice repeat): a thin arc just outside the
     // outer ring fills from 12 o'clock and starts again when everything lines up (the bloom)
-    if (al && al.cycle > 0) {
+    if (playing && al && al.cycle > 0) {
       const r = g.outer + Math.min(16, g.R * 0.08), a0 = -Math.PI / 2, a1 = a0 + TAU * cyclePos(al.tick, al.cycle);
       ctx.strokeStyle = 'rgba(236,233,247,.16)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();   // the track: what is left to go
       ctx.strokeStyle = 'rgba(236,233,247,.45)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, Math.max(a0 + 0.01, a1)); ctx.stroke();
       ctx.fillStyle = 'rgba(236,233,247,.85)'; ctx.beginPath(); ctx.arc(g.cx + Math.cos(a1) * r, g.cy + Math.sin(a1) * r, 2, 0, TAU); ctx.fill();
     }
-    if (at) {
-      const lastBeat = al.cycle - (al.tick % al.cycle) <= al.beat;
-      ctx.globalCompositeOperation = 'source-over'; ctx.font = CAPTION_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const room = g.ring(0) * 2 - 10, lines = ctx.measureText(at).width + 14 <= room ? [at] : [at.replace(/ \d.*/, ''), at.replace(/^.* in /, '')];
-      const w = Math.max(...lines.map(s => ctx.measureText(s).width)) + 14, h = lines.length * 14 + 4;
-      ctx.fillStyle = 'rgba(12,8,28,.85)'; ctx.beginPath(); ctx.roundRect(g.cx - w / 2, g.cy - h / 2, w, h, 8); ctx.fill();
-      if (lastBeat) { ctx.strokeStyle = `rgba(103,232,249,${reduced ? 0.85 : 0.4 + 0.5 * Math.sin(now * 0.012) ** 2})`; ctx.lineWidth = 1.5; ctx.stroke(); }
-      ctx.fillStyle = 'rgba(236,233,247,.95)'; lines.forEach((s, k) => ctx.fillText(s, g.cx, g.cy + (k - (lines.length - 1) / 2) * 14));
-      ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic'; ctx.globalCompositeOperation = 'lighter';
+    // the generative arc (Yuki): over the top, read-only. Its words name what is on (evolve, dice, coupling, gravity; the
+    // numbers are in the caption); the crawl under them moves continuously toward the next mutation (once per beat with
+    // reduced motion) and starts again on the line. Without room over the ring (1280×720: 12 px) the crawl hugs the
+    // ring and the words stay in the caption.
+    if (genOn) {
+      const a0 = -Math.PI / 2 - (GEN_DEG / 2) * Math.PI / 180, a1 = a0 + (GEN_DEG * Math.PI) / 180;
+      if (gs.evolve) {
+        const p = genProgress(gs.bars, gs.every, gs.frac, reduced ? gs.beats : 0), ah = a0 + (a1 - a0) * p;
+        ctx.strokeStyle = 'rgba(236,233,247,.14)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, a1); ctx.stroke();
+        ctx.strokeStyle = 'rgba(236,233,247,.6)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, Math.max(a0 + 0.004, ah)); ctx.stroke(); ctx.lineCap = 'butt';
+        ctx.fillStyle = BRIGHT; ctx.beginPath(); ctx.arc(g.cx + Math.cos(ah) * rGen, g.cy + Math.sin(ah) * rGen, 2.2, 0, TAU); ctx.fill();
+      }
+      if (far) { const t = genWords(gs, plan.genDetail); if (t && typeWidth(genSegs(t), LABEL_FONT) <= arcRoom(rWords)) { const s = arcSprite(genSegs(t), rWords, true); ctx.drawImage(s.c, g.cx + s.x, g.cy + s.y, s.w, s.h); } }
     }
-
-    // jam: a red arc around everything fills up over the 256 beats, with a ticking head
-    const jp = o.jamProgress?.();
+    // the slot moons (Rio, Yuki): the 16 slots under the rings, slot 1 at the left; a saved slot a moon, an empty one a
+    // ring, the playing one bright, the queued one in a dashed ring. Numbers by the ladder: all, the playing and the
+    // queued only, or none (then the playing slot is in the caption).
+    if (moonsOn) {
+      const n = ss.filled.length;
+      for (let k = 0; k < n; k++) {
+        const a = moonAngle(k, n) - Math.PI / 2, x = g.cx + Math.cos(a) * rMoon, y = g.cy + Math.sin(a) * rMoon, cur = k === ss.current, nx = k === ss.pending;
+        if (cur) { ctx.globalCompositeOperation = 'lighter'; ctx.drawImage(white, x - 9, y - 9, 18, 18); ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = BRIGHT; ctx.beginPath(); ctx.arc(x, y, 4, 0, TAU); ctx.fill(); }
+        else if (ss.filled[k]) { ctx.fillStyle = DIM; ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fill(); }
+        else { ctx.strokeStyle = 'rgba(236,233,247,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, TAU); ctx.stroke(); }
+        if (nx) { ctx.strokeStyle = 'rgba(236,233,247,.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(x, y, 7.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+        if (plan.slotNumbers === 'all' || (plan.slotNumbers === 'some' && (cur || nx))) {
+          const big = cur || nx, s = textSprite([{ text: String(k + 1), color: big ? BRIGHT : DIM }], big ? NUMBER_FONT : LABEL_FONT), ry = rMoon + (big ? 13 : 12);
+          const tx = g.cx + Math.cos(a) * ry, ty = g.cy + Math.sin(a) * ry; ctx.drawImage(s.c, tx - s.w / 2, ty + (big ? 5.5 : 4.5) - s.base, s.w, s.h);
+        }
+      }
+    }
+    // ONE arc label, the selected lane only (DECISION "Arc labels"): "CONGA 32 × 4" at the bottom of its ring, 13 px caps
+    // weight 500, 78 % white (the name in the lane's colour), in the gap outside the ring (inside for the outer lane),
+    // its extras while the ladder keeps them; nothing when even the short form does not fit the ±35° band
+    if (lab && rLab > 0) {
+      const segs = labelSegs(labOf(plan.extras));
+      if (typeWidth(segs, LABEL_FONT) <= arcRoom(rLab)) { const s = arcSprite(segs, rLab, false); ctx.drawImage(s.c, g.cx + s.x, g.cy + s.y, s.w, s.h); }
+    }
+    // the straight caption (Yuki: numbers leave the curve): bottom right of the stage, right-aligned, 13 px: the cycle,
+    // the generative facts, the playing slot when the moons carry no number, the take's beats (the jam pill has the
+    // state, the canvas the count). Lines go from the end while the block would touch the rings (a phone's square canvas).
+    const jp = o.jamProgress?.(), jamOf = o.jamBeats || 256;
+    const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? { bars: barsToEvolve(gs.bars, gs.every) } : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
+    if (lines.length) {
+      const LH = 17, right = (cell ? cell.x + cell.w : W) - 14, bottom = (cell ? cell.y + cell.h : H) - 10, sp = lines.map(t => textSprite([{ text: t, color: WORD }], CAPTION_FONT));
+      let n = lines.length; const clear = (k) => Math.hypot(right - Math.max(...sp.slice(0, k).map(s => s.w)) - g.cx, bottom - k * LH - g.cy) >= g.outer + 6;
+      while (n > 0 && !clear(n)) n--;
+      for (let k = 0; k < n; k++) { const s = sp[k]; ctx.drawImage(s.c, right - s.w, bottom - (n - k) * LH + 13 - s.base, s.w, s.h); }
+      lightNow.lines = lines.slice(0, n);
+    }
+    ctx.globalCompositeOperation = 'lighter';
+    // jam: a red arc around everything fills up over the 256 beats, with a ticking head (just outside the outer ring, so
+    // it is whole at 1280×720 too; its count is in the caption)
     if (jp != null) {
-      const r = g.outer + 40, a0 = -Math.PI / 2, a1 = a0 + TAU * Math.max(0.002, jp), pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
+      const r = g.outer + 12, a0 = -Math.PI / 2, a1 = a0 + TAU * Math.max(0.002, jp), pulse = 0.5 + 0.5 * Math.sin(now * 0.008);
       ctx.strokeStyle = 'rgba(239,68,68,.18)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, 0, TAU); ctx.stroke();
       ctx.strokeStyle = `rgba(239,68,68,${0.7 + pulse * 0.3})`; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r, a0, a1); ctx.stroke(); ctx.lineCap = 'butt';
       ctx.drawImage(sprite('#ef4444'), g.cx + Math.cos(a1) * r - 16, g.cy + Math.sin(a1) * r - 16, 32, 32);
-      ctx.globalCompositeOperation = 'source-over'; ctx.fillStyle = '#fca5a5'; ctx.font = CAPTION_FONT; ctx.textAlign = 'center';
-      ctx.fillText(`jam ${Math.floor(jp * 256)}/256`, g.cx, g.cy - r - 12); ctx.textAlign = 'left'; ctx.globalCompositeOperation = 'lighter';
     }
     // beams between simultaneous hits
     for (let i = beams.length - 1; i >= 0; i--) {
@@ -477,5 +727,5 @@ export function createScene(cv, o) {
     const l = last[li]; if (!playing || !l) return null;
     const ms = o.stepMs(lane); return ((l.index % lane.length) + Math.min(1, (now - l.t) / ms)) % lane.length;
   }
-  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, setHand, get hand() { return hand && { ...hand }; }, ghost: setGhost, get ghosting() { return !!ghost; }, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality }) };
+  return { onStep, bloom, flash: flashHit, pick, locate, stepXY, setStage, geo, setHand, get hand() { return hand && { ...hand }; }, ghost: setGhost, get ghosting() { return !!ghost; }, get light() { return lightNow; }, start: () => frameLoop(frame), reset: () => { last.length = 0; misses.clear(); }, stats: () => ({ frameMs: avgDt, quality, sprites: texts.size }) };
 }

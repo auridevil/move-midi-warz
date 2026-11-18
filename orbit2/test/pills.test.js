@@ -43,7 +43,7 @@ test('RD-7 the words: state, never a counter that moves with the clock (A4: anno
   // RD-07 round 1 (Kai, Arjun): a running chain no longer hides the mutes waiting for the bar
   assert.equal(pillText('chain', { chain: { chain: [0, 2], pending: 2, switchAt: 'bar', mutes: 2 } }), 'chain 1 → 3 · 2 mutes · next bar');
   assert.equal(pillText('solo', { solo: ['kick', 'clap'] }), 'solo · kick, clap');
-  assert.equal(pillText('evolve', all), 'evolve · every 4 bars'); assert.equal(pillText('evolve', { evolve: { on: true, every: 1 } }), 'evolve · every 1 bar');
+  assert.equal(pillText('evolve', all), 'evolve', 'RD-8: the countdown is the arc on the canvas, the pill does not repeat it'); assert.equal(pillText('evolve', { evolve: { on: true, every: 1 } }), 'evolve');
   assert.equal(pillText('dice', all), 'dice 4127'); assert.equal(pillText('dice', { dice: { locked: true, seed: 9, repeat: 4 } }), 'dice 9 · repeat 4');
   assert.equal(pillText('clock', all), 'clock · Move');
   assert.equal(pillText('welcome', all), 'welcome back · play');
