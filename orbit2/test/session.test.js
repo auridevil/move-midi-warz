@@ -176,14 +176,19 @@ test('RD-8 the night run of the label ladder: items from what the canvas drew, a
   assert.deepEqual(nightTokens('conga 16x4, -2ms').map(t => t.t), ['CONGA', '16', '4', '-2', 'MS'], 'a typed x, a hyphen, lower case');
   assert.deepEqual(nightTokens(null), []);
   const light = { label: 'HAT 16 × 4 · 6 HITS', labelFits: true, gen: 'EVOLVE · DICE', genFits: true, sun: '5', moons: true, plan: { slotNumbers: 'all' }, lines: ['cycle · bar 2 of 10', 'dice 3738'] };
-  const items = nightItems(light, { current: 2, pending: 5, count: 16 }), by = Object.fromEntries(items.map(i => [i.item, i]));
+  // today's canvas (the defaults come from scene.js): every moon number at 15 px, the sun's word at 13, the sun's own size
+  const now = Object.fromEntries(nightItems({ ...light, sunPx: 28 }, { current: 2, pending: 5, count: 16 }).map(i => [i.item, i]));
+  assert.equal(now['moon numbers'].px, 15); assert.equal(now['moon numbers'].dim, false); assert.equal(now['sun word'].px, 13); assert.equal(now.sun.px, 28, 'a sun set smaller to fit');
+  // RD-8 run 1's canvas (the record's own sizes): the other moons' numbers 13 px at 55 %, the sun's word 11 px
+  const RUN1 = { label: 13, number: 15, sun: 40, caps: 11, caption: 13, moons: 13, dim: true };
+  const items = nightItems(light, { current: 2, pending: 5, count: 16 }, RUN1), by = Object.fromEntries(items.map(i => [i.item, i]));
   assert.deepEqual(items.map(i => i.item), ['label', 'arc', 'sun', 'sun word', 'playing moon', 'queued moon', 'moon numbers', 'caption 1', 'caption 2']);
   assert.equal(by.label.px, 13); assert.equal(by.label.curve, true); assert.equal(by.sun.px, 40); assert.equal(by['sun word'].px, 11); assert.equal(by['playing moon'].text, '3'); assert.equal(by['queued moon'].px, 15);
   assert.equal(by['moon numbers'].tokens.length, 14, 'the other 14 moons at 13 px'); assert.ok(!by['moon numbers'].tokens.some(t => t.t === '3' || t.t === '6'));
   assert.equal(by['moon numbers'].dim, true, 'set at 55 % white'); assert.equal(by['caption 1'].dim, false);
   // only what was drawn: a label or words that did not fit, the ladder's 'some' and 'none'
-  assert.deepEqual(nightItems({ ...light, labelFits: false, genFits: false, plan: { slotNumbers: 'some' } }, { current: 2, pending: -1 }).map(i => i.item), ['sun', 'sun word', 'playing moon', 'caption 1', 'caption 2']);
-  assert.deepEqual(nightItems({ ...light, plan: { slotNumbers: 'none' }, sun: '' }, { current: 2, pending: -1 }).map(i => i.item), ['label', 'arc', 'caption 1', 'caption 2']);
+  assert.deepEqual(nightItems({ ...light, labelFits: false, genFits: false, plan: { slotNumbers: 'some' } }, { current: 2, pending: -1 }, RUN1).map(i => i.item), ['sun', 'sun word', 'playing moon', 'caption 1', 'caption 2']);
+  assert.deepEqual(nightItems({ ...light, plan: { slotNumbers: 'none' }, sun: '' }, { current: 2, pending: -1 }, RUN1).map(i => i.item), ['label', 'arc', 'caption 1', 'caption 2']);
   // a perfect reading; then one that misses the label's numbers, joins the caption's lines and lists half the moons
   const all = scoreNight(items, { label: 'hat 16 x 4 - 6 hits', arc: 'evolve · dice', sun: 5, sunWord: 'beats', moons: { numbers: Array.from({ length: 16 }, (_, k) => k + 1), playing: '3', queued: 6 }, caption: ['cycle · bar 2 of 10', 'dice 3738'] });
   assert.equal(all.read, all.of); assert.equal(all.of, 5 + 2 + 1 + 1 + 1 + 1 + 14 + 5 + 2);

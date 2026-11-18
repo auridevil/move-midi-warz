@@ -83,7 +83,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   six on (PILLS gate). Find's empty list offers nothing destructive (`FIND_DEFAULTS`; Vera's mis-click run).
 - Light on the canvas (RD-8): the score speaks without opening anything, all of it read-only (`scene.js locate` never
   changed; nothing on the canvas is a target). The **sun** reads the beats until everything meets (40 px weight 300, the
-  cycle's length when stopped) over a soft dark plate, "press play" on a visit that has never played (`HINT_MS`, the play
+  cycle's length when stopped; smaller and then said short, 240k, to stay inside the kick ring: `sunFace`) over a soft dark plate, "press play" on a visit that has never played (`HINT_MS`, the play
   ring pulses slowly meanwhile), and flares while fill is held from anywhere. The **generative arc** over the top names
   what is on (EVOLVE · DICE · COUPLING NEXT · GRAVITY, words only) with a crawl that moves continuously toward the next
   mutation (`genProgress`, from the last bar line `barAt`; once per beat with reduced motion). The **slot moons** under
@@ -103,7 +103,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   caption line within 4 px of a moon or its number, with and without a jam take; FRAME A9's frame p95 and the stress
   meter on that page; REDUCED the crawl steps per beat, the pulse off; CLICK nothing on the canvas is a target, with 4
   and 6 lanes: no edit, a selection only inside a ring's tap band, which with 4 lanes reaches over the moons and the
-  arc's words; `--shots`, `--json`). `cdp.mjs open({ reducedMotion: true })` loads a page with
+  arc's words; SUN, run last, a cycle of millions of beats keeps the sun inside the kick ring; `--shots`, `--json`). `cdp.mjs open({ reducedMotion: true })` loads a page with
   `prefers-reduced-motion: reduce`, `open({ ready: '!!window.__poly' })` waits for the modules on a busy machine. The
   night run of the label ladder: `node orbit2/tools/night-ladder.mjs` (five darkened 70 cm pictures and their key from
   `scene.light`; `score` checks persona readers' readings token by token against the 13 px word / 15 px number floors).

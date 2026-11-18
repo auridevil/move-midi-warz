@@ -1,12 +1,13 @@
 // RD-8 light on the canvas, checked on the page (DECISION §2 "Read-only light on the canvas", "Arc labels", "The
 // countdown", "First visit"; acceptance A9 and Yuki's ladder). Muted headless Chrome through cdp.mjs, ports 5400/9400.
 //
-//   node orbit2/tools/light-check.mjs [--assert] [--only LIGHT,LADDER,FRAME,REDUCED,CLICK] [--shots /tmp/orbit2-impl/] [--json x.json]
+//   node orbit2/tools/light-check.mjs [--assert] [--only LIGHT,LADDER,FRAME,REDUCED,CLICK,SUN] [--shots /tmp/orbit2-impl/] [--json x.json]
 //
 // LIGHT    1512×860, a first visit: the sun reads "press play" (then the beats), the one label is the demo's kick with
 //          its extras, the caption is straight type; playing with evolve, dice, coupling and gravity on and three slots
 //          saved: the arc's words, the crawl, the moons with every number, the caption's lines; the evolve pill reads
-//          "evolve" (no countdown: the arc has it).
+//          "evolve" (no countdown: the arc has it). Stopped: the crawl empty and "evolve in 4 bars" (what Play will do);
+//          Play: the crawl starts empty. SUN (run last): a cycle of millions of beats keeps the sun inside the kick ring.
 // LADDER   6 lanes with two 32-step lanes at 1512×860 (Yuki's mock): the selected 32-step lane reads its name-plate
 //          alone, the moons keep their numbers, the arc its detail (room by measurement); 1280×720 (12 px outside the
 //          ring): no words over the ring, the moons carry no number and the playing slot is in the caption; the phone.
@@ -63,7 +64,12 @@ async function LIGHTS(b, out) {
   // the fill flare: fill held from the button, then let go
   await p.eval('__poly.setFill(true)'); await p.sleep(300); await shot(p, 'light-02-playing-fill-1512x860.png'); await p.eval('__poly.setFill(false)');
   await p.sleep(300); await shot(p, 'light-03-playing-4-lanes-1512x860.png');
-  out.LIGHT = { label: L.label, gen: L.gen, lines: L.lines, sun: L.sun, level: L.level, pill, errors: p.errors.slice() };
+  // round 1: stopped, the countdown is what Play will do (not where the last run stopped); Play never starts it full
+  await p.key(' '); await p.sleep(400); const S = await light(p);
+  check('LIGHT', S.crawl === 0 && S.lines.includes('evolve in 4 bars'), `stopped: the crawl empty and "evolve in 4 bars" (every 4): crawl ${S.crawl}, ${JSON.stringify(S.lines)}`);
+  const onPlay = await p.eval(`new Promise(r => { const out = []; document.dispatchEvent(new KeyboardEvent('keydown', { key: ' ', code: 'Space', bubbles: true })); const t0 = performance.now(); (function f() { const c = __poly.scene.light?.crawl; if (c != null) out.push(c); if (performance.now() - t0 < 600) requestAnimationFrame(f); else r(out); })(); })`);
+  check('LIGHT', onPlay.length > 5 && Math.max(...onPlay) < 0.25, `Play: the crawl starts empty and grows (no full arc first): max ${Math.max(...onPlay).toFixed(3)} over ${onPlay.length} frames`);
+  out.LIGHT = { label: L.label, gen: L.gen, lines: L.lines, sun: L.sun, level: L.level, pill, stopped: { crawl: S.crawl, lines: S.lines }, playMax: r2(Math.max(...onPlay)), errors: p.errors.slice() };
   check('LIGHT', !p.errors.length, `page errors: ${JSON.stringify(p.errors)}`);
   p.close();
 }
@@ -163,7 +169,22 @@ async function CLICK(b, out) {
   out.CLICK = { spots: res };
 }
 
-const only = new Set(String(arg('--only', 'LIGHT,LADDER,FRAME,REDUCED,CLICK')).split(',')), out = {};
+// SUN (last: it saves lanes of millions of beats): the sun set smaller or short stays inside the kick ring, 1512×860 and
+// a phone's small ring
+async function SUN(b, out) {
+  const res = {};
+  for (const [w, h, mobile] of [[1512, 860, false], [390, 844, true]]) {
+    const p = await openPage(b, { width: w, height: h, mobile }); await p.sleep(300);
+    await p.eval(`(() => { const P = __poly; P.setLaneCount(6); [32, 31, 29, 27, 25, 23].forEach((n, i) => { const l = P.m.lanes[i]; l.setLength(n); l.hits[0] = true; }); P.sync(); })()`);
+    await p.key(' '); await p.sleep(1500); const Z = await light(p), key = `${w}x${h}`;
+    check('SUN', Z.sunW > 0 && Z.sunW <= Z.sunMax && Z.sunPx >= 15, `${key}: a long cycle's sun inside the kick ring: "${Z.sun}" at ${Z.sunPx} px, ${Z.sunW} px wide in ${Z.sunMax}`);
+    res[key] = { text: Z.sun, px: Z.sunPx, w: Z.sunW, max: Z.sunMax }; await shot(p, `light-07-long-cycle-sun-${key}.png`);
+    check('SUN', !p.errors.length, `${key} page errors: ${JSON.stringify(p.errors)}`); p.close();
+  }
+  out.SUN = res;
+}
+
+const only = new Set(String(arg('--only', 'LIGHT,LADDER,FRAME,REDUCED,CLICK,SUN')).split(',')), out = {};
 const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400) });
 try {
   if (only.has('LIGHT')) await LIGHTS(b, out);
@@ -171,9 +192,11 @@ try {
   if (only.has('FRAME')) await FRAME(b, out);
   if (only.has('REDUCED')) await REDUCED(b, out);
   if (only.has('CLICK')) await CLICK(b, out);
+  if (only.has('SUN')) await SUN(b, out);
 } finally { await b.close(); }
 const L = [];
-if (out.LIGHT) L.push(`LIGHT first visit: "press play" then the beats · label "${out.LIGHT.label}" · playing: arc "${out.LIGHT.gen}", sun "${out.LIGHT.sun}", caption ${JSON.stringify(out.LIGHT.lines)}, level ${out.LIGHT.level}, pill "${out.LIGHT.pill}"`);
+if (out.LIGHT) L.push(`LIGHT first visit: "press play" then the beats · label "${out.LIGHT.label}" · playing: arc "${out.LIGHT.gen}", sun "${out.LIGHT.sun}", caption ${JSON.stringify(out.LIGHT.lines)}, level ${out.LIGHT.level}, pill "${out.LIGHT.pill}" · stopped: crawl ${out.LIGHT.stopped.crawl}, ${JSON.stringify(out.LIGHT.stopped.lines)} · Play: crawl max ${out.LIGHT.playMax}`);
+if (out.SUN) L.push(`SUN ${Object.entries(out.SUN).map(([k, v]) => `${k}: "${v.text}" ${v.px} px, ${v.w} in ${v.max} px`).join(' · ')}`);
 if (out.LADDER) for (const [k, v] of Object.entries(out.LADDER)) L.push(`LADDER ${k}: room ${v.room} px, level ${v.level}, ${JSON.stringify(v.plan)} · label "${v.label}" (fits ${v.labelFits})${v.rim ? ` · rim "${v.rim}"` : ''} · arc "${v.gen}" (drawn ${v.genFits}) · caption ${JSON.stringify(v.lines)}`);
 if (out.FRAME) L.push(`FRAME 6 lanes / 32 steps, generative on, 10 s: per frame p50 ${out.FRAME.frame.p50} p95 ${out.FRAME.frame.p95} max ${out.FRAME.frame.max} ms (${out.FRAME.frame.n} frames; RD-1 ${BASE.frameMs}, budget ${THRESH.frameMs}) · stress p95 ${out.FRAME.stress.p95} max ${out.FRAME.stress.max} (RD-1 ${BASE.stress}) · ${out.FRAME.sprites} text sprites`);
 if (out.REDUCED) L.push(`REDUCED crawl values in 2.6 s: ${out.REDUCED.stepped} with reduced motion, ${out.REDUCED.smooth} without · pulse off`);

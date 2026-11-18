@@ -130,9 +130,9 @@ const easeOut = (p) => 1 - (1 - Math.min(1, Math.max(0, p))) ** 3;
 // ONE arc label on the selected lane, "press play" on a first visit and the fill flare. Pure first: the words, the
 // countdown and Yuki's ladder are tested without a canvas. Nothing here is hit-tested (locate is untouched) ----
 const FAMILY = '"Space Grotesk", system-ui, sans-serif';
-/** Type on the canvas: 13 px caps weight 500 for a word on a curve (Yuki's floor), 15 px for a number read in a glance,
- *  40 px weight 300 for the sun (300 only at 40 px and up), 11 px for the sun's own caption; tracking .14 em on caps. */
-export const LABEL_PX = 13, NUMBER_PX = 15, SUN_PX = 40, SUN_SMALL_PX = 28, CAPS_PX = 11, TRACK = 0.14;
+/** Type on the canvas: 13 px caps weight 500 for a word (Yuki's floor), 15 px for a number (the moons' too), 40 px
+ *  weight 300 for the sun (300 only at 40 px and up), the sun's own word at the word floor; tracking .14 em on caps. */
+export const LABEL_PX = 13, NUMBER_PX = 15, SUN_PX = 40, SUN_SMALL_PX = 28, CAPS_PX = 13, TRACK = 0.14;
 export const LABEL_FONT = `500 ${LABEL_PX}px ${FAMILY}`, NUMBER_FONT = `500 ${NUMBER_PX}px ${FAMILY}`, SUN_FONT = `300 ${SUN_PX}px ${FAMILY}`, SUN_SMALL_FONT = `400 ${SUN_SMALL_PX}px ${FAMILY}`, CAPS_FONT = `500 ${CAPS_PX}px ${FAMILY}`;
 /** Type on a curve sits only where the curve runs within ±35° of horizontal: the bottom of a ring (the label) or the top
  *  (the generative arc); the moons spread ±30° round 6 o'clock (Yuki's mock ±31.5°; ±42° ran their right end into the
@@ -148,6 +148,19 @@ export const HINT_MS = 7000;
 export const beatsLeft = (tick, cycle, beat) => Math.max(1, Math.ceil((cycle - (((tick % cycle) + cycle) % cycle)) / beat));
 /** The sun, stopped: the cycle's length in beats (everything meets in N beats). */
 export const cycleBeats = (cycle, beat) => Math.max(1, Math.ceil(cycle / beat));
+/** The sun's sizes, largest first (300 only at 40 px; never under the 15 px number floor). */
+export const SUN_SIZES = [40, 32, 28, 24, 20];
+/** A count past 9999 said short: 240k, 111M (it counts down, so the floor: "240k" until 239 999). */
+export const shortCount = (n) => (n < 1e4 ? String(n) : n < 1e6 ? `${Math.floor(n / 1e3)}k` : n < 1e9 ? `${Math.floor(n / 1e6)}M` : `${Math.floor(n / 1e9)}G`);
+/**
+ * The sun's numeral set inside the kick ring: the largest of `sizes` at which the count fits `maxW` px, the count said
+ * short (shortCount) once it fits at none (odd lengths make cycles of millions of beats). w(text, px) = its width.
+ * Returns { text, px }; the smallest size and the short form when even that is too wide.
+ */
+export function sunFace(n, maxW, w, sizes = SUN_SIZES) {
+  for (const text of [String(n), shortCount(n)]) for (const px of sizes) if (w(text, px) <= maxW) return { text, px };
+  return { text: shortCount(n), px: sizes[sizes.length - 1] };
+}
 /**
  * The cycle caption (straight type, never on a curve): where you are in the full cycle, in bars; stopped, how long it is.
  * A cycle that is not whole bars is said in beats (and only once: the sun counts them down).
@@ -168,8 +181,16 @@ export function genProgress(bars, every, frac, beats = 0) {
   const e = Math.max(1, every | 0), f = beats > 0 ? Math.floor(Math.max(0, frac) * beats) / beats : frac;
   return (((((bars % e) + f) % e) + e) % e) / e;
 }
-/** Bars until the next mutation (the straight caption's "evolve in N bars"): `every` on the line it just came. */
-export const barsToEvolve = (bars, every) => { const e = Math.max(1, every | 0); return e - (((bars % e) + e) % e); };
+/** Bars until the next mutation (the straight caption's "evolve in N bars"): `every` on the line it just came. With the
+ *  heard fraction (genClock): a line the scheduler counted but the ear has not reached yet is not counted (frac < 0). */
+export const barsToEvolve = (bars, every, frac = 0) => { const e = Math.max(1, every | 0), b = bars - (frac < 0 ? 1 : 0); return e - (((b % e) + e) % e); };
+/**
+ * The generative clock the light reads, from the app's bar clock: { bars: bar lines since Play, frac: how far into the
+ * bar the heard tick is } (heard, barAt and len in ticks). Just after a scheduled line frac is a little negative (the
+ * crawl must not jump); before the first line there is no bar to be in yet, so never under 0 (Play's own latency).
+ * Stopped: { 0, 0 }, what Play will do (Play starts the count again).
+ */
+export const genClock = (playing, barN, heard, barAt, len) => (playing ? { bars: barN, frac: Math.max(barN > 0 ? -1 : 0, (heard - barAt) / len) } : { bars: 0, frac: 0 });
 /**
  * The generative arc's words (caps on the curve, names only: a number you read is in the straight caption): what is on,
  * in a fixed order. detail (Yuki's rung 4) says the coupling's shape and the gravity; without it "coupling 1 → 2" is
@@ -196,6 +217,9 @@ export function laneLabel(l, extras = true) {
   if (l.push) x.push(`${l.push < 0 ? '−' : '+'}${Math.abs(Math.round(l.push))} MS`);
   return [base, ...x].join(' · ');
 }
+/** The label's two runs: the lane's name (drawn in its colour) and the rest with its leading space ("KICK", " 4 × 4 · 1
+ *  HIT"): a run is set flush, so the space travels with the rest, or the name and its length run together ("KICK4"). */
+export const labelRuns = (label, name) => { const n = String(name).toUpperCase(); return [n, label.slice(n.length)]; };
 /** Px along a curve of radius r within `deg` degrees (the ±35° band = 70). */
 export const arcRoom = (r, deg = LABEL_DEG) => (r * deg * Math.PI) / 180;
 /** The label sits in the middle of the gap outside the selected ring (as far from both rings' planets as it can be, at
@@ -273,9 +297,12 @@ export function createScene(cv, o) {
   // frame): keyed by the words, the radius, the colours and the DPR, and by whether the font was there when it was made
   // (a sprite made before Space Grotesk loaded is made again once it has). Bounded: the oldest goes past TEXT_SPRITES.
   const TEXT_SPRITES = 32, texts = new Map(), mctx = document.createElement('canvas').getContext('2d');
-  const fontOk = (font) => { try { return document.fonts?.check(font) ?? true; } catch { return true; } };
+  // what a frame asks again and again is remembered until the fonts change: whether a font is there, a text's width
+  // (the ladder measures the same few words every frame; a measureText and a fonts.check each would cost 0.2 ms a frame)
+  const fontSeen = new Map(), widths = new Map();
+  const fontOk = (font) => { let ok = fontSeen.get(font); if (ok === undefined) { try { ok = document.fonts?.check(font) ?? true; } catch { ok = true; } fontSeen.set(font, ok); } return ok; };
   let wakeUntil = 0;   // frames after the fonts load, so the sprites are made again with them
-  try { document.fonts?.addEventListener('loadingdone', () => { wakeUntil = performance.now() + 400; }); } catch {}
+  try { document.fonts?.addEventListener('loadingdone', () => { fontSeen.clear(); widths.clear(); wakeUntil = performance.now() + 400; }); } catch {}
   function cached(key, make) {
     let s = texts.get(key); if (s) { texts.delete(key); texts.set(key, s); return s; }   // most recent last
     s = make(); texts.set(key, s); if (texts.size > TEXT_SPRITES) texts.delete(texts.keys().next().value); return s;
@@ -283,8 +310,13 @@ export function createScene(cv, o) {
   /** Glyph widths of `text` in `font` plus a tracking of `track` em (caps are tracked, the sun is not). */
   function glyphs(text, font, track) { mctx.font = font; const size = parseFloat(font.match(/(\d+(?:\.\d+)?)px/)?.[1]) || 13, t = track * size; return [...text].map(ch => ({ ch, w: mctx.measureText(ch).width, t })); }
   const spanOf = (gl) => gl.reduce((a, g) => a + g.w + g.t, 0) - (gl.length ? gl[gl.length - 1].t : 0);
-  /** Width (px) of segments [{ text, color }] in `font` with tracking, without making a sprite (the ladder measures first). */
-  function typeWidth(segs, font, track = TRACK) { return segs.reduce((a, s) => a + spanOf(glyphs(s.text, font, track)) + (s.text ? track * 13 : 0), 0); }
+  /** Width (px) of segments [{ text, color }] in `font` with tracking, without making a sprite (the ladder measures first):
+   *  measured once per font, tracking and words (colours don't change it). */
+  function typeWidth(segs, font, track = TRACK) {
+    const key = `${font}|${track}|${segs.map(s => s.text).join('\u0001')}`; let w = widths.get(key);
+    if (w === undefined) { if (widths.size > 256) widths.clear(); w = segs.reduce((a, s) => a + spanOf(glyphs(s.text, font, track)) + (s.text ? track * 13 : 0), 0); widths.set(key, w); }
+    return w;
+  }
   /**
    * Straight type as a sprite: segments [{ text, color }], tracked when `track` > 0. { c, w, h, base }: draw c with its
    * top left at (x, y − base) for the text's baseline at y (its left edge at x).
@@ -609,31 +641,35 @@ export function createScene(cv, o) {
     const al = o.align?.() || null, room = Math.max(0, (cell ? Math.min(g.cy - cell.y, cell.y + cell.h - g.cy) : Math.min(g.cy, H - g.cy)) - g.outer);
     const gs = o.gen?.() || null, genOn = !!gs && !!(gs.evolve || gs.dice || (gs.coupling && gs.coupling !== 'off'));
     const ss = o.slots?.() || null, moonsOn = !!ss && (ss.filled.some(Boolean) || ss.current >= 0 || ss.pending >= 0);
-    const far = room >= LIGHT_ROOM, rGen = g.outer + (far ? 24 : 7), rWords = g.outer + 36, rMoon = g.outer + (far ? 24 : 7);
+    const far = room >= LIGHT_ROOM, rGen = g.outer + (far ? 24 : 7), rWords = g.outer + 34, rMoon = g.outer + (far ? 24 : 7);   // words: 4 px of air under the stage's top at 1512×860
     const lane = m.lanes[sel], lab = lane && o.laneLabel?.(sel), rLab = lane ? g.ring(sel) + labelOffset(sel, m.lanes.length, g.gap * g.R) : 0;
     const labOf = (extras) => laneLabel({ name: lab.name, len: lane.length, ratio: lab.ratio, hits: lane.hits.slice(0, lane.length).filter(Boolean).length, chance: lane.prob ?? 1, push: lane.offsetMs }, extras);
-    const labelSegs = (t) => { const n = lab.name.toUpperCase(); return [{ text: n, color: lane.muted || (anySolo && !lane.solo) ? MUTED : o.laneHex[sel] }, { text: t.slice(n.length).trimStart(), color: WORD }]; };
+    const labelSegs = (t) => { const [n, rest] = labelRuns(t, lab.name); return [{ text: n, color: lane.muted || (anySolo && !lane.solo) ? MUTED : o.laneHex[sel] }, { text: rest, color: WORD }]; };   // the name in its lane's colour, the rest 78 % white
     const genSegs = (t) => [{ text: t, color: WORD }];
     const level = lightLevel({
       label: { arc: arcRoom(rLab), full: lab ? typeWidth(labelSegs(labOf(true)), LABEL_FONT) : 0 },
-      slots: { gap: moonsOn ? arcRoom(rMoon, MOON_DEG) / Math.max(1, ss.filled.length - 1) : Infinity, num: moonsOn ? typeWidth([{ text: '16', color: '' }], LABEL_FONT, 0) : 0, room: moonsOn ? room : Infinity },
+      slots: { gap: moonsOn ? arcRoom(rMoon, MOON_DEG) / Math.max(1, ss.filled.length - 1) : Infinity, num: moonsOn ? typeWidth([{ text: '16', color: '' }], NUMBER_FONT, 0) : 0, room: moonsOn ? room : Infinity },
       gen: { arc: arcRoom(rWords), full: genOn ? typeWidth(genSegs(genWords(gs, true)), LABEL_FONT) : 0, room: genOn ? room : Infinity } });
     const plan = lightPlan(level, room);
     lightNow = { level, room, far, plan, label: lab ? labOf(plan.extras) : '', labelFits: !!lab && typeWidth(labelSegs(labOf(plan.extras)), LABEL_FONT) <= arcRoom(rLab), gen: genOn ? genWords(gs, plan.genDetail) : '', genFits: genOn && far && typeWidth(genSegs(genWords(gs, plan.genDetail)), LABEL_FONT) <= arcRoom(rWords), moons: moonsOn, lines: [], hint, sun: '', crawl: null };
     ctx.globalCompositeOperation = 'source-over';
     // the sun: "press play" on a visit that has never played (HINT_MS, then the numeral; a cut with reduced motion), else
     // the beats until everything meets: counting down while it plays, the cycle's length stopped. 40 px weight 300 (28
-    // px weight 400 inside a phone's small inner ring), "beats" under it, lit on the last beat. In the middle of the
-    // core, inside the kick ring: no planet, comet or burst ever lands there (every ring's step 1 is at 12 o'clock).
-    const small = g.ring(0) < 56, pr = small ? g.ring(0) * 0.95 : Math.min(g.ring(0) * 0.9, 56);
-    if (hint || (al && al.cycle > 0)) ctx.drawImage(plate, g.cx - pr, g.cy - pr, pr * 2, pr * 2);
+    // px weight 400 inside a phone's small inner ring), smaller and then said short (240k) so it stays inside the kick
+    // ring (sunFace: odd lengths make cycles of millions of beats), "BEATS" under it at the word floor, lit on the last
+    // beat. In the middle of the core, inside the kick ring: no planet, comet or burst ever lands there.
+    const small = g.ring(0) < 56, sunFont = (px) => `${px >= SUN_PX ? 300 : 400} ${px}px ${FAMILY}`, sunW = (t, px) => typeWidth([{ text: t }], sunFont(px), 0);
+    const n = !hint && al && al.cycle > 0 ? (playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat)) : 0;
+    const face = n ? sunFace(n, 2 * (g.ring(0) - 14), sunW, small ? SUN_SIZES.filter(px => px <= SUN_SMALL_PX) : SUN_SIZES) : null;
+    const pr = Math.max(small ? g.ring(0) * 0.95 : Math.min(g.ring(0) * 0.9, 56), face ? Math.min(g.ring(0) * 0.95, sunW(face.text, face.px) / 2 + 10) : 0);
+    if (hint || face) ctx.drawImage(plate, g.cx - pr, g.cy - pr, pr * 2, pr * 2);
     if (hint) {
       const p = (now - hintT0) / HINT_MS, env = reduced ? 1 : Math.max(0, Math.min(1, p / 0.08, (1 - p) / 0.12)), s = textSprite([{ text: 'press play', color: BRIGHT }], NUMBER_FONT);
       ctx.globalAlpha = env; ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + 5 - s.base, s.w, s.h); ctx.globalAlpha = 1;
-    } else if (al && al.cycle > 0) {
-      const n = playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat), lastBeat = playing && n === 1; lightNow.sun = String(n);
-      const s = textSprite([{ text: String(n), color: BRIGHT }], small ? SUN_SMALL_FONT : SUN_FONT), c = textSprite([{ text: 'BEATS', color: lastBeat ? BRIGHT : DIM }], CAPS_FONT, TRACK);
-      ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + (small ? 5 : 8) - s.base, s.w, s.h); ctx.drawImage(c.c, g.cx - c.w / 2, g.cy + (small ? 10 : 16), c.w, c.h);
+    } else if (face) {
+      lightNow.sun = face.text; lightNow.sunPx = face.px; lightNow.sunW = Math.round(sunW(face.text, face.px)); lightNow.sunMax = Math.round(2 * (g.ring(0) - 14));
+      const s = textSprite([{ text: face.text, color: BRIGHT }], sunFont(face.px)), c = textSprite([{ text: 'BEATS', color: playing && n === 1 ? BRIGHT : WORD }], CAPS_FONT, TRACK);
+      ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + Math.round(face.px * 0.2) - s.base, s.w, s.h); ctx.drawImage(c.c, g.cx - c.w / 2, g.cy + Math.round(face.px * 0.4), c.w, c.h);
     }
     // V6 where you are in the full cycle (every lane, condition and locked dice repeat): a thin arc just outside the
     // outer ring fills from 12 o'clock and starts again when everything lines up (the bloom)
@@ -659,7 +695,9 @@ export function createScene(cv, o) {
     }
     // the slot moons (Rio, Yuki): the 16 slots under the rings, slot 1 at the left; a saved slot a moon, an empty one a
     // ring, the playing one bright, the queued one in a dashed ring. Numbers by the ladder: all, the playing and the
-    // queued only, or none (then the playing slot is in the caption). lit: their boxes (the caption keeps clear of them).
+    // queued only, or none (then the playing slot is in the caption); every number at the 15 px floor, 78 % white, the
+    // playing and the queued brighter (13 px at 55 % read 78 of 116 in the night run). lit: their boxes (the caption
+    // keeps clear of them).
     const lit = [];
     if (moonsOn) {
       const n = ss.filled.length;
@@ -671,9 +709,9 @@ export function createScene(cv, o) {
         if (nx) { ctx.strokeStyle = 'rgba(236,233,247,.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(x, y, 7.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
         const d = nx ? 8 : 5; lit.push({ x: x - d, y: y - d, w: 2 * d, h: 2 * d });
         if (plan.slotNumbers === 'all' || (plan.slotNumbers === 'some' && (cur || nx))) {
-          const big = cur || nx, px = big ? NUMBER_PX : LABEL_PX, s = textSprite([{ text: String(k + 1), color: big ? BRIGHT : DIM }], big ? NUMBER_FONT : LABEL_FONT), ry = rMoon + (big ? 13 : 12);
-          const tx = g.cx + Math.cos(a) * ry, ty = g.cy + Math.sin(a) * ry, base = ty + (big ? 5.5 : 4.5); ctx.drawImage(s.c, tx - s.w / 2, base - s.base, s.w, s.h);
-          lit.push({ x: tx - s.w / 2, y: base - 0.72 * px, w: s.w, h: 0.75 * px });   // the digits' box (cap height)
+          const s = textSprite([{ text: String(k + 1), color: cur || nx ? BRIGHT : WORD }], NUMBER_FONT), ry = rMoon + 13;
+          const tx = g.cx + Math.cos(a) * ry, ty = g.cy + Math.sin(a) * ry, base = ty + 5.5; ctx.drawImage(s.c, tx - s.w / 2, base - s.base, s.w, s.h);
+          lit.push({ x: tx - s.w / 2, y: base - 0.72 * NUMBER_PX, w: s.w, h: 0.75 * NUMBER_PX });   // the digits' box (cap height)
         }
       }
     }
@@ -689,7 +727,7 @@ export function createScene(cv, o) {
     // state, the canvas the count). Lines go from the end while one would touch the rings or the moons and their numbers
     // (captionFit: a phone's square canvas; never at 1512×860).
     const jp = o.jamProgress?.(), jamOf = o.jamBeats || 256;
-    const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? { bars: barsToEvolve(gs.bars, gs.every) } : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
+    const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? { bars: barsToEvolve(gs.bars, gs.every, gs.frac) } : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
     const rb = (b) => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
     lightNow.boxes = { moons: lit.map(rb), lines: [] };
     if (lines.length) {

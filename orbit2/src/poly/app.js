@@ -20,7 +20,7 @@ import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge, bindRow } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
-import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind } from './scene.js';
+import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind, genClock } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
 import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
@@ -2554,7 +2554,7 @@ const scene = createScene($('cv'), { held: () => { if (!pages.held.size && !hand
   // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
   // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
   // selected lane's words
-  gen: () => ({ evolve: evo.on, every: evo.every, home: evo.home > 0, bars: barN, frac: playing ? (heardTick() - barAt) / bars.len : 0, beats: Math.round(bars.len / PPQ), dice: dice.locked ? dice.seed : null, repeat: dice.repeat, coupling: m.couple?.mode || 'off', gravity: evo.gravity }),
+  gen: () => ({ evolve: evo.on, every: evo.every, home: evo.home > 0, ...genClock(playing, barN, playing ? heardTick() : 0, barAt, bars.len), beats: barBeats.num || Math.round(bars.len / PPQ), dice: dice.locked ? dice.seed : null, repeat: dice.repeat, coupling: m.couple?.mode || 'off', gravity: evo.gravity }),
   slots: () => ({ filled: bank.slots.map(Boolean), current: bank.current, pending: bank.pending }), fill: () => fill, hint: () => neverPlayed, laneLabel: (li) => ({ name: voiceLabel(m.lanes[li]), ratio: RATIO_LABEL[m.lanes[li].ratioIndex] }) });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 // ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at

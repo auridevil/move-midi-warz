@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
+import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genClock, sunFace, shortCount, SUN_SIZES, labelRuns, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
 import { pillText } from '../src/poly/pills.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -18,6 +18,36 @@ test('RD-8 the sun: beats until everything meets, 1 on the last beat; stopped, t
   assert.equal(beatsLeft(119.5, 120, 24), 1, 'the heard tick is fractional'); assert.equal(beatsLeft(120, 120, 24), 5, 'the line: the whole cycle again');
   assert.equal(beatsLeft(96 * 3 + 1, 96 * 4, 24), 4); assert.equal(beatsLeft(-5, 96, 24), 1, 'never below 1');
   assert.equal(cycleBeats(96 * 4, 24), 16); assert.equal(cycleBeats(120, 24), 5); assert.equal(cycleBeats(10, 24), 1);
+});
+
+test('RD-8 round 1: the sun stays inside the kick ring: smaller, then said short (sunFace, shortCount)', () => {
+  const w = (t, size) => t.length * size * 0.55;   // Space Grotesk digits ≈ 0.55 em
+  assert.deepEqual(sunFace(5, 157, w), { text: '5', px: 40 }, 'a short count: 40 px (weight 300)');
+  assert.deepEqual(sunFace(1234567, 157, w), { text: '1234567', px: 40 }, '7 digits fit 157 px at 40');
+  assert.deepEqual(sunFace(88394175, 157, w), { text: '88394175', px: 32 }, '8 digits: one size down');
+  assert.deepEqual(sunFace(111655795, 157, w), { text: '111655795', px: 28 }, 'the verifier\'s 9 digits (6 lanes 32/31/29/27/25/23)');
+  assert.deepEqual(sunFace(240240, 58, w, SUN_SIZES.filter(s => s <= 28)), { text: '240k', px: 24 }, 'a phone\'s kick ring (⌀ 86): said short');
+  assert.ok(SUN_SIZES.every(s => s >= 15), 'never under the 15 px number floor'); assert.equal(SUN_SIZES[0], SUN_PX);
+  assert.deepEqual([9999, 10000, 239999, 240240, 1e6, 111655795, 2e9].map(shortCount), ['9999', '10k', '239k', '240k', '1M', '111M', '2G'], 'it counts down: the floor');
+});
+
+test('RD-8 round 1: the generative clock: stopped = what Play will do, Play never starts the crawl full, the heard line', () => {
+  // stopped after a run: no bars, no fraction (Play starts the count again): the crawl empty, "evolve in <every> bars"
+  assert.deepEqual(genClock(false, 7, 5000, 4800, 96), { bars: 0, frac: 0 }); assert.equal(genProgress(0, 4, 0), 0); assert.equal(barsToEvolve(0, 4, 0), 4);
+  // Play: the heard tick is behind the clock's start by the output latency; before the first line it is never negative
+  const play = genClock(true, 0, -40, 0, 96); assert.equal(play.frac, 0); assert.equal(genProgress(play.bars, 4, play.frac), 0, 'not 0.99 (the verifier\'s 0.995 → 0 jump)');
+  assert.ok(genProgress(0, 4, genClock(true, 0, 30, 0, 96).frac) > 0);
+  // just after a scheduled line the ear is still in the bar before: a little negative, the crawl continuous through it
+  const line = genClock(true, 5, 5 * 96 - 3, 5 * 96, 96); assert.ok(line.frac < 0 && line.frac > -0.1);
+  assert.ok(Math.abs(genProgress(line.bars, 4, line.frac) - genProgress(4, 4, 1 - 3 / 96)) < 1e-9, 'the same place as the bar before\'s end');
+  // the caption counts the line once it is heard: 1 bar left until the ear reaches bar line 4's mutation, then 4 again
+  assert.equal(barsToEvolve(4, 4, -0.02), 1); assert.equal(barsToEvolve(4, 4, 0.01), 4); assert.equal(barsToEvolve(3, 4, 0.5), 1);
+});
+
+test('RD-8 round 1: the label\'s two runs keep the space between the name and its length (labelRuns)', () => {
+  assert.deepEqual(labelRuns('KICK 4 × 4 · 1 HIT', 'kick'), ['KICK', ' 4 × 4 · 1 HIT']);
+  assert.deepEqual(labelRuns('OPEN HAT 32 × 4', 'open hat'), ['OPEN HAT', ' 32 × 4']);
+  assert.ok(labelRuns(laneLabel({ name: 'wood', len: 32, ratio: '4', hits: 11, chance: 1, push: 0 }), 'wood')[1].startsWith(' '));
 });
 
 test('RD-8 the cycle caption is straight type: bars while it plays, the length stopped, beats only when not whole bars', () => {
@@ -114,10 +144,10 @@ test('RD-8 the moons: slot 1 at the left, 16 at the right, spread ±30° round 6
 });
 
 test('RD-8 the caption keeps clear of the moons and their numbers (captionFit): four lines at 1512×860, nothing overlaps', () => {
-  // 1512×860, 6 lanes, every moon numbered (13 px, 12 px past the moon: the frame's own boxes), the caption at the stage
+  // 1512×860, 6 lanes, every moon numbered (15 px, 13 px past the moon: the frame's own boxes), the caption at the stage
   // cell's bottom right with the jam recording: four long lines (13 px Space Grotesk ≈ 6.1 px a character on the page)
   const box = ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512), g = ringGeo(1512, 860, box, 6), rMoon = g.outer + 24;
-  const moons = (deg) => Array.from({ length: 16 }, (_, k) => { const a = moonAngle(k, 16, deg) - Math.PI / 2, tx = g.cx + Math.cos(a) * (rMoon + 12), ty = g.cy + Math.sin(a) * (rMoon + 12); return { x: tx - 8, y: ty + 4.5 - 0.72 * 13, w: 16, h: 0.75 * 13 }; });
+  const moons = (deg) => Array.from({ length: 16 }, (_, k) => { const a = moonAngle(k, 16, deg) - Math.PI / 2, tx = g.cx + Math.cos(a) * (rMoon + 13), ty = g.cy + Math.sin(a) * (rMoon + 13); return { x: tx - 8.5, y: ty + 5.5 - 0.72 * NUMBER_PX, w: 17, h: 0.75 * NUMBER_PX }; });
   const widths = ['cycle · bar 10 of 10', 'evolve in 16 bars', 'dice 4127 · repeat 2', 'jam · beat 128 of 256'].map(t => t.length * 6.1);
   const at = { right: 1084 - 14, bottom: 716 - 10, cx: g.cx, cy: g.cy, ring: g.outer + 6 };
   assert.equal(captionFit(widths, { ...at, boxes: moons(MOON_DEG) }), 4, 'every line, every moon numbered');
@@ -136,8 +166,8 @@ test('RD-8 static: read-only, the type rules, reduced motion, the sources, sprit
   const loc = scene.slice(scene.indexOf('function locate('), scene.indexOf('function stepXY('));
   assert.doesNotMatch(loc, /sun|moon|label|caption|gen\b/i);
   assert.doesNotMatch(scene, /addEventListener\('(pointer|click|mouse|touch)/, 'the scene listens to no pointer');
-  // the type: 13 px caps weight 500 on a curve, 15 px for a number, 300 only at 40 px, the sun's caption 11 px
-  assert.equal(LABEL_PX, 13); assert.equal(NUMBER_PX, 15); assert.equal(SUN_PX, 40); assert.equal(CAPS_PX, 11);
+  // the type: 13 px caps weight 500 for a word (the sun's own word too: Yuki's floor), 15 px for a number, 300 only at 40 px
+  assert.equal(LABEL_PX, 13); assert.equal(NUMBER_PX, 15); assert.equal(SUN_PX, 40); assert.equal(CAPS_PX, 13);
   assert.match(LABEL_FONT, /^500 13px/); assert.match(NUMBER_FONT, /^500 15px/); assert.match(SUN_FONT, /^300 40px/); assert.match(SUN_SMALL_FONT, /^400 28px/, 'under 40 px never 300');
   assert.doesNotMatch(scene, /ctx\.fillText/, 'no fillText per frame: every word is a cached sprite'); assert.match(scene, /function arcSprite\(/); assert.match(scene, /function textSprite\(/);
   assert.match(scene, /TEXT_SPRITES = 32/, 'the cache is bounded');
@@ -147,7 +177,7 @@ test('RD-8 static: read-only, the type rules, reduced motion, the sources, sprit
   assert.match(scene, /&& !ghost && !hint && !hintShown && !fillOn && now >= wakeUntil\)/); assert.match(scene, /\n    hintShown = hint;/, 'the frame after the hint ends clears it');
   assert.ok(HINT_MS >= 4000 && HINT_MS <= 10000, 'a few seconds');
   // the app's sources: the generative clock from the last bar line, the slots, fill from anywhere, the first visit
-  assert.match(app, /if \(line\) \{ barN\+\+; barAt = t; \}/); assert.match(app, /frac: playing \? \(heardTick\(\) - barAt\) \/ bars\.len : 0/);
+  assert.match(app, /if \(line\) \{ barN\+\+; barAt = t; \}/); assert.match(app, /\.\.\.genClock\(playing, barN, /, 'the generative clock through genClock (tested above)');
   assert.match(app, /slots: \(\) => \(\{ filled: bank\.slots\.map\(Boolean\), current: bank\.current, pending: bank\.pending \}\)/);
   assert.match(app, /fill: \(\) => fill, hint: \(\) => neverPlayed/); assert.match(app, /\$\('btn-play'\)\.classList\.add\('pulse'\); neverPlayed = true;/); assert.match(app, /classList\.remove\('pulse'\); neverPlayed = false;/);
   assert.match(app, /scene\.setStage\(ringBox\([^\n]*\), \{ x: c\.left, y: c\.top, w: c\.width, h: c\.height \}\)/, 'the stage cell is the light\'s room, not the rings\' box');

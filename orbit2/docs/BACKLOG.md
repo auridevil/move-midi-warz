@@ -1059,3 +1059,30 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   `renderQuest` → `questMore(false)`: the quest pill, then the next pill): let the caller place it first, or a flag;
   the quest's skip leaves the hint open with the focus on skip, so a double Enter skips two quests (no undo); after
   show me on a phone the pills stay scrolled off the top (a scroll back after the hand, RD-10).
+- **The light's open questions for Noor** (RD-08 round 1: verifier, yuki, architect): "numbers are never set on a
+  curve" vs the label's "32 × 4" and its extras ("6 HITS · 85 % · −2 MS"; Yuki's own mock and rung 2 keep them): rule
+  on one; the label's name in its lane colour (the mock) vs "78 % white"; at 1512×860 with 6 lanes / 32 steps the arc
+  keeps its detail where Yuki's 600 px mock dropped it (the ladder measures px, the floors would allow it); at 1280×720
+  the arc's words go entirely (the crawl and the caption keep the countdown); the dice seed is shown twice (its pill
+  and the caption: "each fact once"); the queued slot's number appears nowhere at 1280×720 (the moons carry none, the
+  caption says the playing slot only).
+- **The light against the ear and the eye** (RD-08 round 1: sound, ines, noor): the moons' landing and the fill flare
+  follow the scheduler, 50–100 ms before the ear (the sun, the crawl and, since round 1, "evolve in N bars" follow the
+  heard tick): Tone.Draw at the line's time; a saved moon was twice read as the queued one in the night run (a more
+  distinct dashed ring); the fill flare's white washes out the kick ring's label while held.
+- **The light's hit band and first visits** (RD-08 round 1: verifier, noor, yuki; RD-10 owns the canvas focus): with 4
+  lanes the outer ring's tap band (`laneAtRadius`, half a gap: 37 px) covers the moons and the arc's words, so a click
+  there selects lane 4 (as before RD-8; with 6 lanes they are empty canvas): a band that stops at the light; a first
+  visit through a share link gets no "press play" and no pulse (`neverPlayed` is set on the 'first' boot path only; the
+  pulse was missing there before RD-8 too); the phone's caption keeps one line (RD-10).
+- **The light's code** (RD-08 round 1: architect): the pure helpers (ladder, countdown, caption, sun) into
+  `src/poly/light.js` like `pills.js`, the drawing its own function; the static block of `light.test.js` still matches
+  source text (the idle test, the sources); `alignText` is dead in the app (only `poly.test.js` calls it) and
+  `beatsLeft` repeats it; the font-size regex three times; `typeWidth`'s `track * 13` assumes 13 px; the getter
+  `o.laneLabel` (name + ratio) beside the formatter `laneLabel`; the sun's "BEATS" count quarter notes in x/8 (as the
+  old core pill did).
+- **The light's tools** (RD-08 round 1: architect, yuki, ines): light-check FRAME compares with a hard-coded 0.8 ms on a
+  machine where p95 swings 2×: a same-run A/B against the phase start (`launch({ root })`); `sprites <= 32` cannot fail
+  (the LRU caps it): count builds per second; REDUCED's sampler starves under load; state set through `eval` is not
+  drawn on an idle canvas until something pokes it; parts share one browser profile and their tabs keep playing and
+  saving (SUN runs last for that reason).

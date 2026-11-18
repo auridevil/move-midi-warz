@@ -4,6 +4,7 @@
 // script meant to change. No browser here: unit-tested in orbit2/test/session.test.js.
 import { mulberry32 } from '../src/poly/dice.js';
 import { SOUND_KEYS } from '../src/poly/lanes.js';
+import { LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX } from '../src/poly/scene.js';
 import { PAD_FIRST, STEP_FIRST, ENCODER_FIRST_CC, WHEEL_CC, BUTTON } from 'movewire';
 
 // ---- the Move on the wire (movewire's protocol: pads 68+, steps 16+, encoders CC 71–78 relative, buttons by CC) ----
@@ -225,20 +226,21 @@ function lcsHits(a, b) {
 /**
  * What one picture's canvas says, as items to read. light = `__poly.scene.light` at the shutter (what that frame drew),
  * slots = { current, pending, count } (0-based, −1 = none). Only what was drawn: the label and the arc's words when they
- * fit their band, the moons' numbers by the ladder's plan (all: the playing and the queued at 15 px, the rest 13 px dim;
- * some: those two), the caption's lines. px as scene.js sets them; dim = set at 55 % white (the other moons' numbers),
- * not 78 % or brighter. [{ item, text, px, curve, dim, tokens }]
+ * fit their band, the moons' numbers by the ladder's plan (all: every number; some: the playing and the queued), the
+ * caption's lines. px as scene.js sets them (the sun's own size when it was set smaller to fit: light.sunPx); dim = set
+ * at 55 % white, not 78 % or brighter (RD-8 run 1 set the other moons' numbers so, at 13 px; px.moons, px.dim say how
+ * a record was drawn). [{ item, text, px, curve, dim, tokens }]
  */
-export function nightItems(light, slots, px = { label: 13, number: 15, sun: 40, caps: 11, caption: 13 }) {
+export function nightItems(light, slots, px = { label: LABEL_PX, number: NUMBER_PX, sun: SUN_PX, caps: CAPS_PX, caption: 13, moons: NUMBER_PX, dim: false }) {
   const items = [], add = (item, text, size, curve, dim = false) => { const tokens = nightTokens(text); if (tokens.length) items.push({ item, text: String(text), px: size, curve, dim, tokens }); };
   if (light.label && light.labelFits) add('label', light.label, px.label, true);
   if (light.gen && light.genFits) add('arc', light.gen, px.label, true);
-  if (light.sun) { add('sun', light.sun, px.sun, false); add('sun word', 'BEATS', px.caps, false); }
+  if (light.sun) { add('sun', light.sun, light.sunPx || px.sun, false); add('sun word', 'BEATS', px.caps, false); }
   const nums = light.moons ? light.plan?.slotNumbers : 'none', cur = slots?.current ?? -1, pend = slots?.pending ?? -1;
   if (nums === 'all' || nums === 'some') {
     if (cur >= 0) add('playing moon', cur + 1, px.number, false);
     if (pend >= 0) add('queued moon', pend + 1, px.number, false);
-    if (nums === 'all') add('moon numbers', Array.from({ length: slots?.count ?? 16 }, (_, k) => k + 1).filter(k => k !== cur + 1 && k !== pend + 1).join(' '), px.label, false, true);
+    if (nums === 'all') add('moon numbers', Array.from({ length: slots?.count ?? 16 }, (_, k) => k + 1).filter(k => k !== cur + 1 && k !== pend + 1).join(' '), px.moons ?? px.number, false, !!px.dim);
   }
   (light.lines || []).forEach((l, k) => add(`caption ${k + 1}`, l, px.caption, false));
   return items;
