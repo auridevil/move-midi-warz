@@ -1086,3 +1086,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   (the LRU caps it): count builds per second; REDUCED's sampler starves under load; state set through `eval` is not
   drawn on an idle canvas until something pokes it; parts share one browser profile and their tabs keep playing and
   saving (SUN runs last for that reason).
+- **The label on a phone and with 6 lanes** (RD-08 round 2: verifier, noor): on a phone the selected kick's label is
+  never drawn (its ±35° band is 73 px with 4 lanes, 65 with 6; "KICK 4 × 4" takes 80): a shorter form there (the name
+  alone) when RD-10 builds the phone; with 6 lanes at 1512×860 the kick's label sits tight against the triangle's base
+  (the hits' polygon inside the ring).

@@ -38,7 +38,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
     base,
     // reducedMotion: the page loads with prefers-reduced-motion: reduce (RD-8). ready: an expression polled after `wait`
     // until true, e.g. '!!window.__poly' (a machine busy with other browsers can take longer to run the modules); it
-    // throws after 30 s, so a page that never comes up fails loudly
+    // throws after 30 s (or CDP_START_MS when longer), so a page that never comes up fails loudly
     async open(path, { width = 1440, height = 900, mobile = false, wait = 3500, reducedMotion = false, ready = null } = {}) {
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(webSocketDebuggerUrl);
@@ -87,7 +87,8 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
         sleep,
         close: () => { try { ws.close(); } catch {} },
       };
-      if (ready) for (let t0 = Date.now(); !(await page.eval(`!!(${ready})`).catch(() => false)); await sleep(250)) if (Date.now() - t0 > 30000) throw new Error(`cdp: ${path} never got ready (${ready}) in 30 s`);
+      const readyMs = Math.max(30000, +process.env.CDP_START_MS || 0);   // as long as a busy machine is given to start Chrome
+      if (ready) for (let t0 = Date.now(); !(await page.eval(`!!(${ready})`).catch(() => false)); await sleep(250)) if (Date.now() - t0 > readyMs) { page.close(); throw new Error(`cdp: ${path} never got ready (${ready}) in ${readyMs / 1000} s`); }
       return page;
     },
     async close() { chrome.kill('SIGKILL'); server.kill('SIGKILL'); await sleep(300); rmSync(profile, { recursive: true, force: true }); },

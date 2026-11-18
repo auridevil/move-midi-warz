@@ -152,14 +152,18 @@ export const cycleBeats = (cycle, beat) => Math.max(1, Math.ceil(cycle / beat));
 export const SUN_SIZES = [40, 32, 28, 24, 20];
 /** A count past 9999 said short: 240k, 111M (it counts down, so the floor: "240k" until 239 999). */
 export const shortCount = (n) => (n < 1e4 ? String(n) : n < 1e6 ? `${Math.floor(n / 1e3)}k` : n < 1e9 ? `${Math.floor(n / 1e6)}M` : `${Math.floor(n / 1e9)}G`);
+/** The widest texts a count can take while a `cycle`-beat cycle runs down (digits as '0': the scene measures every digit
+ *  at the widest digit's width): its own digits under 10 000; from there four digits or three and a suffix. */
+export const sunTemplates = (cycle) => (cycle < 1e4 ? ['0'.repeat(String(Math.max(1, Math.floor(cycle))).length)] : ['0000', '000k', ...(cycle >= 1e6 ? ['000M'] : []), ...(cycle >= 1e9 ? ['000G'] : [])]);
 /**
- * The sun's numeral set inside the kick ring: the largest of `sizes` at which the count fits `maxW` px, the count said
- * short (shortCount) once it fits at none (odd lengths make cycles of millions of beats). w(text, px) = its width.
- * Returns { text, px }; the smallest size and the short form when even that is too wide.
+ * The sun's numeral for count n of a `cycle`-beat cycle, inside the kick ring: the count (said short from 10 000:
+ * shortCount, odd lengths make cycles of millions of beats) at the largest of `sizes` where every text the cycle can
+ * show fits `maxW` px (sunTemplates; w(text, px) = its width). Chosen per cycle, never per count, so the numeral keeps
+ * its size and form from one beat to the next. Returns { text, px } (the smallest size when even that is too wide).
  */
-export function sunFace(n, maxW, w, sizes = SUN_SIZES) {
-  for (const text of [String(n), shortCount(n)]) for (const px of sizes) if (w(text, px) <= maxW) return { text, px };
-  return { text: shortCount(n), px: sizes[sizes.length - 1] };
+export function sunFace(n, cycle, maxW, w, sizes = SUN_SIZES) {
+  const t = sunTemplates(Math.max(n, cycle));
+  return { text: shortCount(n), px: sizes.find(px => t.every(x => w(x, px) <= maxW)) ?? sizes[sizes.length - 1] };
 }
 /**
  * The cycle caption (straight type, never on a curve): where you are in the full cycle, in bars; stopped, how long it is.
@@ -177,8 +181,8 @@ export function cycleLine(tick, cycle, bar, beat, playing) {
  * the line before the ear reaches it, and the crawl must not jump). Continuous; `beats` > 0 (reduced motion) steps it
  * once per beat of the bar.
  */
-export function genProgress(bars, every, frac, beats = 0) {
-  const e = Math.max(1, every | 0), f = beats > 0 ? Math.floor(Math.max(0, frac) * beats) / beats : frac;
+export function genProgress(bars, every, frac, beats = 0) {   // stepped: a frac under 0 floors to the bar before's last beat
+  const e = Math.max(1, every | 0), f = beats > 0 ? Math.floor(frac * beats) / beats : frac;
   return (((((bars % e) + f) % e) + e) % e) / e;
 }
 /** Bars until the next mutation (the straight caption's "evolve in N bars"): `every` on the line it just came. With the
@@ -299,10 +303,11 @@ export function createScene(cv, o) {
   const TEXT_SPRITES = 32, texts = new Map(), mctx = document.createElement('canvas').getContext('2d');
   // what a frame asks again and again is remembered until the fonts change: whether a font is there, a text's width
   // (the ladder measures the same few words every frame; a measureText and a fonts.check each would cost 0.2 ms a frame)
-  const fontSeen = new Map(), widths = new Map();
+  const fontSeen = new Map(), widths = new Map(), wideDigits = new Map();   // wideDigits: per font, its widest digit (the sun is sized as if every digit were it)
   const fontOk = (font) => { let ok = fontSeen.get(font); if (ok === undefined) { try { ok = document.fonts?.check(font) ?? true; } catch { ok = true; } fontSeen.set(font, ok); } return ok; };
   let wakeUntil = 0;   // frames after the fonts load, so the sprites are made again with them
-  try { document.fonts?.addEventListener('loadingdone', () => { fontSeen.clear(); widths.clear(); wakeUntil = performance.now() + 400; }); } catch {}
+  try { document.fonts?.addEventListener('loadingdone', () => { fontSeen.clear(); widths.clear(); wideDigits.clear(); wakeUntil = performance.now() + 400; }); } catch {}
+  const wideDigit = (font) => { let d = wideDigits.get(font); if (!d) { mctx.font = font; d = [...'0123456789'].reduce((a, c) => (mctx.measureText(c).width > mctx.measureText(a).width ? c : a), '0'); wideDigits.set(font, d); } return d; };
   function cached(key, make) {
     let s = texts.get(key); if (s) { texts.delete(key); texts.set(key, s); return s; }   // most recent last
     s = make(); texts.set(key, s); if (texts.size > TEXT_SPRITES) texts.delete(texts.keys().next().value); return s;
@@ -658,16 +663,17 @@ export function createScene(cv, o) {
     // px weight 400 inside a phone's small inner ring), smaller and then said short (240k) so it stays inside the kick
     // ring (sunFace: odd lengths make cycles of millions of beats), "BEATS" under it at the word floor, lit on the last
     // beat. In the middle of the core, inside the kick ring: no planet, comet or burst ever lands there.
-    const small = g.ring(0) < 56, sunFont = (px) => `${px >= SUN_PX ? 300 : 400} ${px}px ${FAMILY}`, sunW = (t, px) => typeWidth([{ text: t }], sunFont(px), 0);
+    const small = g.ring(0) < 56, sunFont = (px) => `${px >= SUN_PX ? 300 : 400} ${px}px ${FAMILY}`, sunW = (t, px) => typeWidth([{ text: t.replace(/\d/g, wideDigit(sunFont(px))) }], sunFont(px), 0);   // digits at the widest's width
     const n = !hint && al && al.cycle > 0 ? (playing ? beatsLeft(al.tick, al.cycle, al.beat) : cycleBeats(al.cycle, al.beat)) : 0;
-    const face = n ? sunFace(n, 2 * (g.ring(0) - 14), sunW, small ? SUN_SIZES.filter(px => px <= SUN_SMALL_PX) : SUN_SIZES) : null;
-    const pr = Math.max(small ? g.ring(0) * 0.95 : Math.min(g.ring(0) * 0.9, 56), face ? Math.min(g.ring(0) * 0.95, sunW(face.text, face.px) / 2 + 10) : 0);
+    const cyc = n ? cycleBeats(al.cycle, al.beat) : 0, face = n ? sunFace(n, cyc, 2 * (g.ring(0) - 14), sunW, small ? SUN_SIZES.filter(px => px <= SUN_SMALL_PX) : SUN_SIZES) : null;
+    const room0 = face ? Math.max(...sunTemplates(Math.max(n, cyc)).map(t => sunW(t, face.px))) : 0;   // the widest the cycle can show: the plate holds still
+    const pr = Math.max(small ? g.ring(0) * 0.95 : Math.min(g.ring(0) * 0.9, 56), face ? Math.min(g.ring(0) * 0.95, room0 / 2 + 10) : 0);
     if (hint || face) ctx.drawImage(plate, g.cx - pr, g.cy - pr, pr * 2, pr * 2);
     if (hint) {
       const p = (now - hintT0) / HINT_MS, env = reduced ? 1 : Math.max(0, Math.min(1, p / 0.08, (1 - p) / 0.12)), s = textSprite([{ text: 'press play', color: BRIGHT }], NUMBER_FONT);
       ctx.globalAlpha = env; ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + 5 - s.base, s.w, s.h); ctx.globalAlpha = 1;
     } else if (face) {
-      lightNow.sun = face.text; lightNow.sunPx = face.px; lightNow.sunW = Math.round(sunW(face.text, face.px)); lightNow.sunMax = Math.round(2 * (g.ring(0) - 14));
+      lightNow.sun = face.text; lightNow.sunPx = face.px; lightNow.sunW = Math.round(room0); lightNow.sunMax = Math.round(2 * (g.ring(0) - 14));   // sunW: the room the cycle's widest text takes
       const s = textSprite([{ text: face.text, color: BRIGHT }], sunFont(face.px)), c = textSprite([{ text: 'BEATS', color: playing && n === 1 ? BRIGHT : WORD }], CAPS_FONT, TRACK);
       ctx.drawImage(s.c, g.cx - s.w / 2, g.cy + Math.round(face.px * 0.2) - s.base, s.w, s.h); ctx.drawImage(c.c, g.cx - c.w / 2, g.cy + Math.round(face.px * 0.4), c.w, c.h);
     }

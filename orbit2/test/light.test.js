@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genClock, sunFace, shortCount, SUN_SIZES, labelRuns, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
+import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genClock, sunFace, sunTemplates, shortCount, SUN_SIZES, labelRuns, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
 import { pillText } from '../src/poly/pills.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -20,15 +20,24 @@ test('RD-8 the sun: beats until everything meets, 1 on the last beat; stopped, t
   assert.equal(cycleBeats(96 * 4, 24), 16); assert.equal(cycleBeats(120, 24), 5); assert.equal(cycleBeats(10, 24), 1);
 });
 
-test('RD-8 round 1: the sun stays inside the kick ring: smaller, then said short (sunFace, shortCount)', () => {
-  const w = (t, size) => t.length * size * 0.55;   // Space Grotesk digits ≈ 0.55 em
-  assert.deepEqual(sunFace(5, 157, w), { text: '5', px: 40 }, 'a short count: 40 px (weight 300)');
-  assert.deepEqual(sunFace(1234567, 157, w), { text: '1234567', px: 40 }, '7 digits fit 157 px at 40');
-  assert.deepEqual(sunFace(88394175, 157, w), { text: '88394175', px: 32 }, '8 digits: one size down');
-  assert.deepEqual(sunFace(111655795, 157, w), { text: '111655795', px: 28 }, 'the verifier\'s 9 digits (6 lanes 32/31/29/27/25/23)');
-  assert.deepEqual(sunFace(240240, 58, w, SUN_SIZES.filter(s => s <= 28)), { text: '240k', px: 24 }, 'a phone\'s kick ring (⌀ 86): said short');
+test('RD-8 rounds 1–2: the sun stays inside the kick ring, one size and one form for the whole cycle (sunFace)', () => {
+  // proportional digits, as Space Grotesk's are ("1" 0.42 em, "0" 0.64 em, the rest 0.6); the scene measures every digit
+  // at the widest's width (tabular), so the size depends on the cycle's length, never on the count's own digits
+  const em = (ch) => (ch === '1' ? 0.42 : ch === '0' ? 0.64 : /\d/.test(ch) ? 0.6 : 0.55), real = (t, size) => [...t].reduce((a, ch) => a + em(ch) * size, 0);
+  const w = (t, size) => real(t.replace(/\d/g, '0'), size);
+  assert.deepEqual(sunFace(5, 5, 157, w), { text: '5', px: 40 }, 'a short count: 40 px (weight 300)');
+  assert.deepEqual(sunFace(3003, 3003, 157, w), { text: '3003', px: 40 }, 'four digits at 40 on a desktop');
+  assert.deepEqual(sunFace(111655795, 111655800, 157, w), { text: '111M', px: 40 }, 'the verifier\'s 9 digits (6 lanes 32/31/29/27/25/23): said short');
+  assert.deepEqual(sunFace(240240, 240240, 58, w, SUN_SIZES.filter(s => s <= 28)), { text: '240k', px: 20 }, 'a phone\'s kick ring (⌀ 86): short, and small enough for "9999" later in the cycle');
+  // round 2: a counting run keeps its size and form (the verifier's phone run 3003 → 2980 flipped 20 ↔ 24 px; the
+  // desktop's 7 digits 40 ↔ 32 and the 9-digit run 28 ↔ 32), though the counts' own widths differ
+  const run = (from, to, cycle, maxW, sizes) => new Set(Array.from({ length: from - to + 1 }, (_, k) => sunFace(from - k, cycle, maxW, w, sizes).px));
+  assert.equal(run(3003, 2900, 3003, 58, SUN_SIZES.filter(s => s <= 28)).size, 1); assert.equal(run(1999999, 1999000, 1999999, 157).size, 1); assert.equal(run(111655800, 111655000, 111655800).size, 1);
+  assert.ok(real('1111', 24) <= 58 && real('3003', 24) > 58 && real('3003', 20) <= 58, 'the model has the proportional widths the old per-count fit flipped on');
+  assert.equal(new Set(Array.from({ length: 300 }, (_, k) => sunFace(10150 - k, 12000, 58, w, [28, 24, 20]).px)).size, 1, 'across 10 000: "10k" then "9999", same size');
   assert.ok(SUN_SIZES.every(s => s >= 15), 'never under the 15 px number floor'); assert.equal(SUN_SIZES[0], SUN_PX);
   assert.deepEqual([9999, 10000, 239999, 240240, 1e6, 111655795, 2e9].map(shortCount), ['9999', '10k', '239k', '240k', '1M', '111M', '2G'], 'it counts down: the floor');
+  assert.deepEqual(sunTemplates(5), ['0']); assert.deepEqual(sunTemplates(3003), ['0000']); assert.deepEqual(sunTemplates(240240), ['0000', '000k']); assert.deepEqual(sunTemplates(111655800), ['0000', '000k', '000M']);
 });
 
 test('RD-8 round 1: the generative clock: stopped = what Play will do, Play never starts the crawl full, the heard line', () => {
@@ -42,6 +51,9 @@ test('RD-8 round 1: the generative clock: stopped = what Play will do, Play neve
   assert.ok(Math.abs(genProgress(line.bars, 4, line.frac) - genProgress(4, 4, 1 - 3 / 96)) < 1e-9, 'the same place as the bar before\'s end');
   // the caption counts the line once it is heard: 1 bar left until the ear reaches bar line 4's mutation, then 4 again
   assert.equal(barsToEvolve(4, 4, -0.02), 1); assert.equal(barsToEvolve(4, 4, 0.01), 4); assert.equal(barsToEvolve(3, 4, 0.5), 1);
+  // round 2 (architect, sound): reduced motion holds the bar before's last step until the line is heard, as the caption does
+  assert.equal(genProgress(4, 4, -0.02, 4), genProgress(3, 4, 0.99, 4)); assert.equal(genProgress(4, 4, -0.02, 4), 0.9375); assert.equal(genProgress(4, 4, 0.01, 4), 0);
+  assert.equal(genProgress(0, 4, genClock(true, 0, -40, 0, 96).frac, 4), 0, 'Play: the first step, never the last');
 });
 
 test('RD-8 round 1: the label\'s two runs keep the space between the name and its length (labelRuns)', () => {
@@ -65,7 +77,7 @@ test('RD-8 the crawl moves continuously toward the next mutation and starts agai
   assert.ok(Math.abs(genProgress(4, 4, -0.02) - genProgress(3, 4, 0.98)) < 1e-9, 'continuous across the line');
   assert.ok(Math.abs(genProgress(1, 1, 0.3) - 0.3) < 1e-9, 'every bar'); assert.equal(genProgress(7, 0, 0.5), 0.5, 'every 0 reads as 1');
   // reduced motion: once per beat of a 4-beat bar
-  assert.equal(genProgress(0, 4, 0.1, 4), 0); assert.equal(genProgress(0, 4, 0.26, 4), 0.0625); assert.equal(genProgress(0, 4, 0.99, 4), 0.1875); assert.equal(genProgress(1, 4, -0.02, 4), 0.25, 'never a step back');
+  assert.equal(genProgress(0, 4, 0.1, 4), 0); assert.equal(genProgress(0, 4, 0.26, 4), 0.0625); assert.equal(genProgress(0, 4, 0.99, 4), 0.1875); assert.equal(genProgress(1, 4, -0.02, 4), 0.1875, 'the scheduled line not heard yet: the bar before\'s last step held (round 2), never a step back'); assert.equal(genProgress(1, 4, 0, 4), 0.25);
   assert.deepEqual([0, 1, 3, 4, 5].map(b => barsToEvolve(b, 4)), [4, 3, 1, 4, 3]); assert.equal(barsToEvolve(2, 1), 1);
 });
 

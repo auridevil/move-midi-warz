@@ -181,6 +181,7 @@ test('ORBIT2-11 r1 wiring: cues unlike any lane colour, a clicked throw leaves S
   assert.ok(at('bank.due(') < at('evolveNow(') && at('evolveNow(') < at('barPerf()') && at('barPerf()') < at('liveQuiet('), 'slot → evolve → mutes → the lanes step');
   // r2: MIDI stop goes with the transport's own stop time (start keeps its lead on the first clock, guarded in PolyMidi);
   // the first Play waits for the look-ahead measure
-  assert.match(src, /T\.getTransport\(\)\.start\('\+0\.05'\); pmidi\.start\(performance\.now\(\) \+ 50\)/); assert.match(src, /const at = T\.now\(\); T\.getTransport\(\)\.stop\(at\); pmidi\.stop\(perfAt\(at\)\)/);
+  // (RD-8 round 2: the start is one absolute time, now() + 0.05 as '+0.05' was, shared with the clock's reference)
+  assert.match(src, /const at0 = T\.now\(\) \+ 0\.05; clockRef = \{ tick: 0, time: at0 \}; T\.getTransport\(\)\.start\(at0\); pmidi\.start\(performance\.now\(\) \+ 50\)/); assert.match(src, /const at = T\.now\(\); T\.getTransport\(\)\.stop\(at\); pmidi\.stop\(perfAt\(at\)\)/);
   assert.match(src, /buildLoops\(\); await setAutoLatency\(\); \}/);
 });
