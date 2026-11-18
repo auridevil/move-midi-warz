@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { performer, injectSlips, tagAccidents, classOf, emptied, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS, MOUSE_GAUGE, KNOB_TARGETS } from '../tools/session-core.mjs';
+import { performer, injectSlips, tagAccidents, classOf, emptied, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS, MOUSE_GAUGE, KNOB_TARGETS, nightTokens, nightItems, scoreNight } from '../tools/session-core.mjs';
 
 test('RD-1 performer: seeded, timed, persona-shaped, and every action names what it means to change', () => {
   const a = performer({ seed: 3, minutes: 10, persona: 'kai' }), b = performer({ seed: 3, minutes: 10, persona: 'kai' });
@@ -169,4 +169,32 @@ test('RD-1 Move bytes, glance trials and scoring, the Move drawing', () => {
   const svg = drawMove(leds, (i) => `#${i.toString(16).padStart(6, '0')}`);
   assert.match(svg, /^<svg[\s\S]*<\/svg>$/); assert.equal((svg.match(/<rect x="\d+" y="(150|212|274|336)" width="58"/g) || []).length, 32, '32 pads');
   assert.ok(svg.includes('fill="#000078"'), 'a lit LED takes its palette colour');
+});
+
+test('RD-8 the night run of the label ladder: items from what the canvas drew, a reading scored against the floors', () => {
+  assert.deepEqual(nightTokens('CONGA 16 × 4 · 5 HITS · 85 % · −2 MS').map(t => `${t.t}:${t.kind[0]}`), ['CONGA:w', '16:n', '4:n', '5:n', 'HITS:w', '85:n', '-2:n', 'MS:w']);
+  assert.deepEqual(nightTokens('conga 16x4, -2ms').map(t => t.t), ['CONGA', '16', '4', '-2', 'MS'], 'a typed x, a hyphen, lower case');
+  assert.deepEqual(nightTokens(null), []);
+  const light = { label: 'HAT 16 × 4 · 6 HITS', labelFits: true, gen: 'EVOLVE · DICE', genFits: true, sun: '5', moons: true, plan: { slotNumbers: 'all' }, lines: ['cycle · bar 2 of 10', 'dice 3738'] };
+  const items = nightItems(light, { current: 2, pending: 5, count: 16 }), by = Object.fromEntries(items.map(i => [i.item, i]));
+  assert.deepEqual(items.map(i => i.item), ['label', 'arc', 'sun', 'sun word', 'playing moon', 'queued moon', 'moon numbers', 'caption 1', 'caption 2']);
+  assert.equal(by.label.px, 13); assert.equal(by.label.curve, true); assert.equal(by.sun.px, 40); assert.equal(by['sun word'].px, 11); assert.equal(by['playing moon'].text, '3'); assert.equal(by['queued moon'].px, 15);
+  assert.equal(by['moon numbers'].tokens.length, 14, 'the other 14 moons at 13 px'); assert.ok(!by['moon numbers'].tokens.some(t => t.t === '3' || t.t === '6'));
+  assert.equal(by['moon numbers'].dim, true, 'set at 55 % white'); assert.equal(by['caption 1'].dim, false);
+  // only what was drawn: a label or words that did not fit, the ladder's 'some' and 'none'
+  assert.deepEqual(nightItems({ ...light, labelFits: false, genFits: false, plan: { slotNumbers: 'some' } }, { current: 2, pending: -1 }).map(i => i.item), ['sun', 'sun word', 'playing moon', 'caption 1', 'caption 2']);
+  assert.deepEqual(nightItems({ ...light, plan: { slotNumbers: 'none' }, sun: '' }, { current: 2, pending: -1 }).map(i => i.item), ['label', 'arc', 'caption 1', 'caption 2']);
+  // a perfect reading; then one that misses the label's numbers, joins the caption's lines and lists half the moons
+  const all = scoreNight(items, { label: 'hat 16 x 4 - 6 hits', arc: 'evolve · dice', sun: 5, sunWord: 'beats', moons: { numbers: Array.from({ length: 16 }, (_, k) => k + 1), playing: '3', queued: 6 }, caption: ['cycle · bar 2 of 10', 'dice 3738'] });
+  assert.equal(all.read, all.of); assert.equal(all.of, 5 + 2 + 1 + 1 + 1 + 1 + 14 + 5 + 2);
+  const part = scoreNight(items, { label: 'HAT · HITS', arc: 'EVOLVE DICE', sun: '6', sunWord: '', moons: { numbers: [1, 2, 4, 5, 7, 8, 9], playing: 3 }, caption: ['cycle bar 2 of 10 dice 3738'] });
+  const row = (item, t) => part.rows.find(r => r.item === item && r.t === t);
+  assert.equal(row('label', 'HAT').read, true); assert.equal(row('label', '16').read, false); assert.equal(row('label', 'HITS').read, true);
+  assert.equal(row('label', '16').atFloor, false, 'a 13 px number is under the 15 px floor'); assert.equal(row('label', 'HAT').atFloor, true, 'a 13 px word is at the floor');
+  assert.equal(row('sun', '5').read, false); assert.equal(row('sun', '5').atFloor, true); assert.equal(row('sun word', 'BEATS').atFloor, false, '11 px is under the 13 px word floor');
+  assert.equal(row('queued moon', '6').read, false); assert.equal(row('playing moon', '3').read, true);
+  assert.equal(part.rows.filter(r => r.item === 'moon numbers' && r.read).length, 7); assert.equal(part.rows.filter(r => /^caption/.test(r.item)).every(r => r.read), true, 'joined lines still read');
+  assert.equal(part.by['number 13 px curve'].of, 3); assert.equal(part.by['number 13 px curve'].read, 0); assert.equal(part.floor.at.of + part.floor.below.of, part.of);
+  assert.equal(part.by['number 13 px straight dim'].of, 14); assert.equal(part.by['number 13 px straight'].of, 3, 'the caption\'s numbers apart from the dim moons');
+  assert.equal(scoreNight(items, null).read, 0);
 });

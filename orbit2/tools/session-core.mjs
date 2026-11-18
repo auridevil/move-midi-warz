@@ -205,6 +205,63 @@ export function scoreGlance(key, answers, pass = 18, ask = ['page', 'lane']) {
   return { right, of: rows.length, pass: right >= Math.min(pass, rows.length) && rows.length > 0, pageRight: rows.filter(r => r.pageOk).length, laneRight: rows.filter(r => r.laneOk).length, ...(steps && { stepRight: rows.filter(r => r.stepOk === true).length }), byPage, rows };
 }
 
+// ---- the night run of the label ladder (night-ladder.mjs, RD-8) ----
+/** Yuki's floors (proposals/yuki/answers.md §1): a known word at 13 px, a number read in a glance at 15 px. */
+export const NIGHT_FLOORS = { word: 13, number: 15 };
+/** A text's words and numbers in order, upper case: "CONGA 16 × 4 · −2 MS" → CONGA 16 4 -2 MS (separators, %, × and a
+ *  typed x between numbers dropped; − read as -). [{ t, kind: 'word' | 'number' }] */
+export function nightTokens(s) {
+  const out = [];
+  for (const [t] of String(s ?? '').replace(/[−–]/g, '-').matchAll(/-?\d+|[a-z]+/gi)) if (!/^x$/i.test(t)) out.push({ t: t.toUpperCase(), kind: /\d/.test(t) ? 'number' : 'word' });
+  return out;
+}
+/** Which of a's tokens a longest common subsequence with b keeps (a reading that skips or adds a word loses only that). */
+function lcsHits(a, b) {
+  const d = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0)), hit = new Array(a.length).fill(false);
+  for (let i = a.length - 1; i >= 0; i--) for (let j = b.length - 1; j >= 0; j--) d[i][j] = a[i] === b[j] ? d[i + 1][j + 1] + 1 : Math.max(d[i + 1][j], d[i][j + 1]);
+  for (let i = 0, j = 0; i < a.length && j < b.length;) { if (a[i] === b[j]) { hit[i++] = true; j++; } else if (d[i + 1][j] >= d[i][j + 1]) i++; else j++; }
+  return hit;
+}
+/**
+ * What one picture's canvas says, as items to read. light = `__poly.scene.light` at the shutter (what that frame drew),
+ * slots = { current, pending, count } (0-based, −1 = none). Only what was drawn: the label and the arc's words when they
+ * fit their band, the moons' numbers by the ladder's plan (all: the playing and the queued at 15 px, the rest 13 px dim;
+ * some: those two), the caption's lines. px as scene.js sets them; dim = set at 55 % white (the other moons' numbers),
+ * not 78 % or brighter. [{ item, text, px, curve, dim, tokens }]
+ */
+export function nightItems(light, slots, px = { label: 13, number: 15, sun: 40, caps: 11, caption: 13 }) {
+  const items = [], add = (item, text, size, curve, dim = false) => { const tokens = nightTokens(text); if (tokens.length) items.push({ item, text: String(text), px: size, curve, dim, tokens }); };
+  if (light.label && light.labelFits) add('label', light.label, px.label, true);
+  if (light.gen && light.genFits) add('arc', light.gen, px.label, true);
+  if (light.sun) { add('sun', light.sun, px.sun, false); add('sun word', 'BEATS', px.caps, false); }
+  const nums = light.moons ? light.plan?.slotNumbers : 'none', cur = slots?.current ?? -1, pend = slots?.pending ?? -1;
+  if (nums === 'all' || nums === 'some') {
+    if (cur >= 0) add('playing moon', cur + 1, px.number, false);
+    if (pend >= 0) add('queued moon', pend + 1, px.number, false);
+    if (nums === 'all') add('moon numbers', Array.from({ length: slots?.count ?? 16 }, (_, k) => k + 1).filter(k => k !== cur + 1 && k !== pend + 1).join(' '), px.label, false, true);
+  }
+  (light.lines || []).forEach((l, k) => add(`caption ${k + 1}`, l, px.caption, false));
+  return items;
+}
+/**
+ * A reader's answer { label, arc, sun, sunWord, moons: { numbers: [..], playing, queued }, caption: [lines] } against
+ * nightItems: every token read right or not, with its size against its floor (a word ≥ 13 px, a number ≥ 15 px). The
+ * caption is read as one text (a reader may split or join its lines), the moons' numbers as a set. { read, of, floor:
+ * { at, below } ({ read, of } each), by (per kind, px and curve), rows }
+ */
+export function scoreNight(items, ans, floors = NIGHT_FLOORS) {
+  const said = { label: ans?.label, arc: ans?.arc, sun: ans?.sun, 'sun word': ans?.sunWord, 'playing moon': ans?.moons?.playing, 'queued moon': ans?.moons?.queued };
+  const caps = items.filter(i => /^caption/.test(i.item)), capHit = lcsHits(caps.flatMap(i => i.tokens.map(t => t.t)), nightTokens((ans?.caption || []).join(' · ')).map(t => t.t));
+  const moonSet = new Set((ans?.moons?.numbers || []).map(x => String(parseInt(x, 10)))), rows = []; let c = 0;
+  for (const it of items) {
+    const hit = /^caption/.test(it.item) ? it.tokens.map(() => capHit[c++]) : it.item === 'moon numbers' ? it.tokens.map(t => moonSet.has(t.t)) : lcsHits(it.tokens.map(t => t.t), nightTokens(said[it.item]).map(t => t.t));
+    it.tokens.forEach((t, k) => rows.push({ item: it.item, t: t.t, kind: t.kind, px: it.px, curve: it.curve, dim: !!it.dim, atFloor: it.px >= floors[t.kind], read: !!hit[k] }));
+  }
+  const tally = (rs) => ({ read: rs.filter(r => r.read).length, of: rs.length }), by = {};
+  for (const r of rows) { const b = (by[`${r.kind} ${r.px} px ${r.curve ? 'curve' : 'straight'}${r.dim ? ' dim' : ''}`] ||= { kind: r.kind, px: r.px, curve: r.curve, dim: r.dim, atFloor: r.atFloor, read: 0, of: 0 }); b.of++; if (r.read) b.read++; }
+  return { ...tally(rows), floor: { at: tally(rows.filter(r => r.atFloor)), below: tally(rows.filter(r => !r.atFloor)) }, by, rows };
+}
+
 // ---- the Move drawn (moveview.mjs, A10) ----
 /** ledState (movewire: key = status × 256 + id → palette index) → { pads[32] (0 = bottom-left), steps[16], buttons { name } }. */
 export function ledsOf(state) {

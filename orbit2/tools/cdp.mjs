@@ -36,7 +36,9 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
   const base = `http://localhost:${port}`;
   return {
     base,
-    async open(path, { width = 1440, height = 900, mobile = false, wait = 3500, reducedMotion = false } = {}) {   // reducedMotion: the page loads with prefers-reduced-motion: reduce (RD-8)
+    // reducedMotion: the page loads with prefers-reduced-motion: reduce (RD-8). ready: an expression polled after `wait`
+    // until true (up to 30 s), e.g. '!!window.__poly': a machine busy with other browsers can take longer to run the modules
+    async open(path, { width = 1440, height = 900, mobile = false, wait = 3500, reducedMotion = false, ready = null } = {}) {
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(webSocketDebuggerUrl);
       await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 30 s')), 30000).unref(); });
@@ -84,6 +86,7 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
         sleep,
         close: () => { try { ws.close(); } catch {} },
       };
+      if (ready) for (let t0 = Date.now(); Date.now() - t0 < 30000 && !(await page.eval(`!!(${ready})`).catch(() => false));) await sleep(250);
       return page;
     },
     async close() { chrome.kill('SIGKILL'); server.kill('SIGKILL'); await sleep(300); rmSync(profile, { recursive: true, force: true }); },

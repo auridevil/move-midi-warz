@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
+import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
 import { pillText } from '../src/poly/pills.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
@@ -87,29 +87,47 @@ test('RD-8 the 6-lane / 32-step page at 1512×860 drops in Yuki\'s order: the co
   assert.ok(Math.abs(gap - 44.5) < 0.5 && labelOffset(conga, 6, gap) === 22, `gap ${gap}`);
   const label = laneLabel(l, true), room = 716 - g.cy - g.outer, gen = genWords({ evolve: true, dice: 4127, coupling: 'next', gravity: 40 });   // room: px under the outer ring to the console
   assert.equal(label, 'CONGA 32 × 4'); assert.ok(px(label) * 1.1 <= arcRoom(r), 'the name-plate fits its band');
-  const level = lightLevel({ label: { arc: arcRoom(r), full: px(label) }, slots: { gap: arcRoom(g.outer + 24, 84) / 15, num: px('16'), room }, gen: { arc: arcRoom(g.outer + 36), full: px(gen) * 1.1, room } });
+  const level = lightLevel({ label: { arc: arcRoom(r), full: px(label) }, slots: { gap: arcRoom(g.outer + 24, MOON_DEG) / 15, num: px('16'), room }, gen: { arc: arcRoom(g.outer + 36), full: px(gen) * 1.1, room } });
   assert.ok(Math.round(room) === 43 && room >= LIGHT_ROOM, `room under the ring ${room}`);
   assert.equal(level, 1); assert.deepEqual(lightPlan(level, room), { extras: true, slotNumbers: 'all', genDetail: true });
   // the rim (lane 2 of 6, 16 steps) with the same extras: they do not fit its ring's ±35° band, the name-plate does (rung 2)
   const full16 = laneLabel({ ...l, name: 'rim', len: 16 }, true), r1 = g.ring(1) + labelOffset(1, 6, gap); assert.equal(full16, 'RIM 16 × 4 · 12 HITS · 85 % · −2 MS');
   assert.ok(px(full16) * 0.9 > arcRoom(r1) && px('RIM 16 × 4') * 1.1 <= arcRoom(r1), `${px(full16)} vs ${arcRoom(r1)}`);
-  assert.equal(lightLevel({ label: { arc: arcRoom(r1), full: px(full16) * 0.9 }, slots: { gap: arcRoom(g.outer + 24, 84) / 15, num: px('16'), room }, gen: { arc: arcRoom(g.outer + 36), full: px(gen) * 1.1, room } }), 2);
+  assert.equal(lightLevel({ label: { arc: arcRoom(r1), full: px(full16) * 0.9 }, slots: { gap: arcRoom(g.outer + 24, MOON_DEG) / 15, num: px('16'), room }, gen: { arc: arcRoom(g.outer + 36), full: px(gen) * 1.1, room } }), 2);
   // 4 lanes (the demo): the kick's extras fit mid-gap outside the inner ring ("KICK 4 × 4 · 1 HIT", Chrome: 133 px, the band 158)
   const g4 = ringGeo(1512, 860, box, 4), gap4 = g4.gap * g4.R, r0 = g4.ring(0) + labelOffset(0, 4, gap4);
   assert.equal(labelOffset(0, 4, gap4), 37); assert.ok(px('KICK 4 × 4 · 1 HIT') <= arcRoom(r0), `${px('KICK 4 × 4 · 1 HIT')} in ${arcRoom(r0)}`);
-  assert.equal(lightLevel({ label: { arc: arcRoom(r0), full: px('KICK 4 × 4 · 1 HIT') }, slots: { gap: arcRoom(g4.outer + 24, 84) / 15, num: px('16'), room }, gen: { arc: arcRoom(g4.outer + 36), full: px(gen) * 1.1, room } }), 1);
+  assert.equal(lightLevel({ label: { arc: arcRoom(r0), full: px('KICK 4 × 4 · 1 HIT') }, slots: { gap: arcRoom(g4.outer + 24, MOON_DEG) / 15, num: px('16'), room }, gen: { arc: arcRoom(g4.outer + 36), full: px(gen) * 1.1, room } }), 1);
   // 1280×720: 12 px outside the ring (DECISION: 568 px rings, 12 px clear): the words leave the curves, the moons carry no number
   const b7 = ringBox({ x: 256, y: 0, w: 644, h: 592 }, 1280), g7 = ringGeo(1280, 720, b7, 4), room7 = 592 - g7.cy - g7.outer;
   assert.ok(room7 < LIGHT_ROOM && Math.round(room7) === 12, `room ${room7}`);
   assert.deepEqual(lightPlan(lightLevel({ label: { arc: 300, full: 100 }, slots: { gap: 30, num: 15, room: room7 }, gen: { arc: 500, full: 100, room: room7 } }), room7), { extras: false, slotNumbers: 'none', genDetail: false });
 });
 
-test('RD-8 the moons: slot 1 at the left, 16 at the right, spread ±42° round 6 o\'clock; the caption\'s lines', () => {
+test('RD-8 the moons: slot 1 at the left, 16 at the right, spread ±30° round 6 o\'clock; the caption\'s lines', () => {
   const deg = (a) => (a * 180) / Math.PI;
-  assert.ok(Math.abs(deg(moonAngle(0)) - 222) < 1e-9, 'slot 1 past 6 o\'clock clockwise = the left'); assert.ok(Math.abs(deg(moonAngle(15)) - 138) < 1e-9); assert.ok(Math.abs(deg(moonAngle(7.5)) - 180) < 1e-9);
+  assert.equal(MOON_DEG, 60, 'Yuki\'s mock spreads them ±31.5°');
+  assert.ok(Math.abs(deg(moonAngle(0)) - 210) < 1e-9, 'slot 1 past 6 o\'clock clockwise = the left'); assert.ok(Math.abs(deg(moonAngle(15)) - 150) < 1e-9); assert.ok(Math.abs(deg(moonAngle(7.5)) - 180) < 1e-9);
   assert.deepEqual(captionLines({ cycle: 'cycle · bar 7 of 16', evolve: { bars: 3 }, dice: { seed: 4127, repeat: 1 }, slot: null, jam: null }), ['cycle · bar 7 of 16', 'evolve in 3 bars', 'dice 4127']);
   assert.deepEqual(captionLines({ cycle: 'cycle · one bar', evolve: { bars: 1 }, dice: { seed: 9, repeat: 2 }, slot: 3, jam: { beat: 120, of: 256 } }), ['cycle · one bar', 'evolve in 1 bar', 'dice 9 · repeat 2', 'slot 3 playing', 'jam · beat 120 of 256']);
   assert.deepEqual(captionLines({ cycle: '' }), []);
+});
+
+test('RD-8 the caption keeps clear of the moons and their numbers (captionFit): four lines at 1512×860, nothing overlaps', () => {
+  // 1512×860, 6 lanes, every moon numbered (13 px, 12 px past the moon: the frame's own boxes), the caption at the stage
+  // cell's bottom right with the jam recording: four long lines (13 px Space Grotesk ≈ 6.1 px a character on the page)
+  const box = ringBox({ x: 300, y: 0, w: 784, h: 716 }, 1512), g = ringGeo(1512, 860, box, 6), rMoon = g.outer + 24;
+  const moons = (deg) => Array.from({ length: 16 }, (_, k) => { const a = moonAngle(k, 16, deg) - Math.PI / 2, tx = g.cx + Math.cos(a) * (rMoon + 12), ty = g.cy + Math.sin(a) * (rMoon + 12); return { x: tx - 8, y: ty + 4.5 - 0.72 * 13, w: 16, h: 0.75 * 13 }; });
+  const widths = ['cycle · bar 10 of 10', 'evolve in 16 bars', 'dice 4127 · repeat 2', 'jam · beat 128 of 256'].map(t => t.length * 6.1);
+  const at = { right: 1084 - 14, bottom: 716 - 10, cx: g.cx, cy: g.cy, ring: g.outer + 6 };
+  assert.equal(captionFit(widths, { ...at, boxes: moons(MOON_DEG) }), 4, 'every line, every moon numbered');
+  assert.ok(captionFit(widths, { ...at, boxes: moons(84) }) < 4, 'the old ±42° fan ran its right end into the first lines');
+  const lines = captionBoxes(widths, at.right, at.bottom), gapOf = (a, b) => Math.max(b.x - a.x - a.w, a.x - b.x - b.w, b.y - a.y - a.h, a.y - b.y - b.h);
+  assert.ok(lines.every(l => moons(MOON_DEG).every(m => gapOf(l, m) >= 5)), 'at least 5 px between a line and a number');
+  // where it must give: rings in the way (a phone's square canvas) take lines from the end; nothing in the way, all
+  assert.equal(captionFit(widths, { ...at, ring: 1e4 }), 0); assert.equal(captionFit(widths, { ...at, boxes: [] }), 4);
+  assert.equal(captionFit(widths, { ...at, boxes: [{ x: 960, y: 640, w: 20, h: 10 }] }), 3, 'a box by the first line: the last line goes, the rest slide down past it');
+  assert.deepEqual(captionBoxes([100, 50], 1070, 706), [{ x: 970, y: 675, w: 100, h: 13 }, { x: 1020, y: 692, w: 50, h: 13 }], 'the last baseline 4 px over the bottom, 17 px lines');
 });
 
 test('RD-8 static: read-only, the type rules, reduced motion, the sources, sprites, the evolve pill without a countdown', () => {

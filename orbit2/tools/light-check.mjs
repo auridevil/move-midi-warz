@@ -10,12 +10,15 @@
 // LADDER   6 lanes with two 32-step lanes at 1512×860 (Yuki's mock): the selected 32-step lane reads its name-plate
 //          alone, the moons keep their numbers, the arc its detail (room by measurement); 1280×720 (12 px outside the
 //          ring): no words over the ring, the moons carry no number and the playing slot is in the caption; the phone.
+//          At each size, and again with a jam take recording (one more line): no caption line within 4 px of a moon or
+//          its number (scene.light.boxes); at 1512×860 the four lines and every moon's number together.
 // FRAME    A9: playing 6 lanes / 32 steps with the generative layer and slots on, 10 s: the page's rAF work per frame
 //          p95 (RD-1 0.8 ms; ≤ +1 ms) and the stress meter p95 (RD-1 0).
 // REDUCED  prefers-reduced-motion: the crawl steps once per beat (few distinct values over two beats, against many
 //          without), the play ring's pulse animation is off.
-// CLICK    nothing on the canvas became clickable: a click on the sun, a moon, the arc's words and the caption changes
-//          neither the pattern nor the transport (an empty-canvas click is one Esc, RD-4).
+// CLICK    nothing on the canvas became clickable, with 4 lanes and 6: a click on the sun, a moon, the arc's words and
+//          the caption edits nothing and leaves the transport, the playing slot and evolve (an empty-canvas click is one
+//          Esc, RD-4); inside a ring's tap band it selects that lane, as it did before RD-8, never anything else.
 import { launch } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,13 +32,17 @@ const SIX = `(() => { const P = __poly; P.setLaneCount(6); for (const li of [3, 
 const LIGHT = 'JSON.stringify(__poly.scene.light)';
 const FRAMES = `(() => { const raf = window.__lcRaf ||= window.requestAnimationFrame.bind(window), per = new Map(); window.requestAnimationFrame = (cb) => raf((t) => { const s = performance.now(); cb(t); per.set(t, (per.get(t) || 0) + performance.now() - s); }); return () => { window.requestAnimationFrame = raf; return [...per.values()]; }; })()`;
 const light = async (p) => JSON.parse(await p.eval(LIGHT));
+const openPage = (b, o) => b.open('orbit2/index.html', { ...o, ready: '!!window.__poly' });   // once its modules ran (a busy machine)
+// the caption's glyph boxes vs the moons' and their numbers' (scene.light.boxes, as the frame drew them): px apart
+const gapOf = (a, b) => Math.max(b.x - a.x - a.w, a.x - b.x - b.w, b.y - a.y - a.h, a.y - b.y - b.h);
+const nearest = (L) => Math.min(Infinity, ...(L.boxes?.lines || []).flatMap(l => (L.boxes?.moons || []).map(m => gapOf(l, m))));
 const fails = [];
 const check = (sec, ok, what) => { if (!ok) fails.push(`${sec}: ${what}`); return ok; };
 const shots = arg('--shots', null); if (shots) mkdirSync(shots, { recursive: true });
 const shot = (p, name) => (shots ? p.shot(join(shots, name)) : null);
 
 async function LIGHTS(b, out) {
-  const p = await b.open('orbit2/index.html', { width: 1512, height: 860 }); await p.sleep(500);
+  const p = await openPage(b,{ width: 1512, height: 860 }); await p.sleep(500);
   let L = await light(p);
   check('LIGHT', L.hint === true, `a first visit: the sun reads "press play" (hint ${L.hint})`);
   check('LIGHT', L.label === 'KICK 4 × 4 · 1 HIT' && L.labelFits, `the demo's kick label with its extras: ${L.label} (fits ${L.labelFits})`);
@@ -64,7 +71,7 @@ async function LIGHTS(b, out) {
 async function LADDER(b, out) {
   const res = {};
   for (const [w, h, mobile] of [[1512, 860, false], [1280, 720, false], [390, 844, true]]) {
-    const p = await b.open('orbit2/index.html', { width: w, height: h, mobile }); await p.sleep(300);
+    const p = await openPage(b,{ width: w, height: h, mobile }); await p.sleep(300);
     await p.key(' '); await p.sleep(800); await p.eval(SIX); await p.eval(GEN); await p.sleep(2600);   // the strip first: a queued slot lands on the bar and would put the saved lanes back
     const L = await light(p), key = `${w}x${h}`; res[key] = { level: L.level, room: r2(L.room), far: L.far, plan: L.plan, label: L.label, labelFits: L.labelFits, gen: L.gen, genFits: L.genFits, lines: L.lines, errors: p.errors.slice() };
     check('LADDER', L.label === 'WOOD 32 × 4' && L.labelFits, `${key}: a 32-step lane reads its name-plate alone: "${L.label}" (fits ${L.labelFits})`);
@@ -83,7 +90,14 @@ async function LADDER(b, out) {
     } else {
       check('LADDER', L.lines.length >= 1 && /^cycle/.test(L.lines[0]), `${key}: the caption keeps at least the cycle line clear of the rings: ${JSON.stringify(L.lines)}`);
     }
+    check('LADDER', nearest(L) >= 4, `${key}: a caption line ${nearest(L).toFixed(1)} px from a moon or its number`);
     await shot(p, `light-04-6-lanes-32-steps-${key}.png`);
+    // a jam take recording: one more line (its beat). At 1512×860 all four stay, clear of the numbered moons (the old
+    // ±42° fan ran its right end into the first lines there); elsewhere lines may go, never overlap
+    await p.eval('__poly.toggleJam()'); await p.sleep(3200); const J = await light(p); res[key].jam = { lines: J.lines, nearest: r2(nearest(J)) };
+    check('LADDER', nearest(J) >= 4, `${key} jam: a caption line ${nearest(J).toFixed(1)} px from a moon or its number (${JSON.stringify(J.lines)})`);
+    if (w === 1512) check('LADDER', J.lines.length === 4 && /^jam · beat \d+ of 256$/.test(J.lines[3]) && J.plan.slotNumbers === 'all', `${key} jam: the four lines and every moon's number: ${JSON.stringify(J.lines)} (${J.plan.slotNumbers})`);
+    await shot(p, `light-06-jam-${key}.png`); await p.eval('__poly.stopJam()');
     check('LADDER', !p.errors.length, `${key} page errors: ${JSON.stringify(p.errors)}`);
     p.close();
   }
@@ -91,7 +105,7 @@ async function LADDER(b, out) {
 }
 
 async function FRAME(b, out) {
-  const p = await b.open('orbit2/index.html', { width: 1512, height: 860 }); await p.sleep(300);
+  const p = await openPage(b,{ width: 1512, height: 860 }); await p.sleep(300);
   await p.key(' '); await p.sleep(800); await p.eval(SIX); await p.eval(GEN); await p.sleep(1500);
   await p.eval(`window.__lcStop = ${FRAMES}; window.__lcStress = []; window.__lcT = setInterval(() => __lcStress.push(__poly.stress.level), 300)`);
   await p.sleep(10000);
@@ -108,12 +122,12 @@ async function FRAME(b, out) {
 
 async function REDUCED(b, out) {
   const sample = async (p) => { const v = new Set(); const end = Date.now() + 2600; while (Date.now() < end) { v.add(r2((await light(p)).crawl)); await p.sleep(50); } return v.size; };
-  const p = await b.open('orbit2/index.html', { width: 1512, height: 860, reducedMotion: true }); await p.sleep(300);
+  const p = await openPage(b,{ width: 1512, height: 860, reducedMotion: true }); await p.sleep(300);
   check('REDUCED', (await p.eval(`matchMedia('(prefers-reduced-motion: reduce)').matches`)) === true, 'the page sees prefers-reduced-motion');
   check('REDUCED', (await p.eval(`getComputedStyle(document.getElementById('btn-play')).animationName`)) === 'none', 'the play ring\'s pulse is off with reduced motion');
   await p.key(' '); await p.sleep(800); await p.eval(GEN); await p.sleep(600);
   const stepped = await sample(p);   // 100 bpm: a beat is 600 ms, two beats ≈ 4 steps + the one it started in
-  const q = await b.open('orbit2/index.html', { width: 1512, height: 860 }); await q.sleep(300); await q.key(' '); await q.sleep(800); await q.eval(GEN); await q.sleep(600);
+  const q = await openPage(b,{ width: 1512, height: 860 }); await q.sleep(300); await q.key(' '); await q.sleep(800); await q.eval(GEN); await q.sleep(600);
   const smooth = await sample(q);
   check('REDUCED', stepped <= 7 && smooth >= 20, `the crawl steps once per beat with reduced motion (${stepped} values in 2.6 s) and moves continuously without (${smooth})`);
   await shot(p, 'light-05-reduced-motion-1512x860.png');
@@ -122,17 +136,31 @@ async function REDUCED(b, out) {
   p.close(); q.close();
 }
 
+// A click on the light edits nothing and starts nothing: the pattern (all but the selected lane), the transport, the
+// playing slot and evolve stay. A spot inside a ring's tap band (laneAtRadius, unchanged since I1: ± half a gap round
+// each ring; with 4 lanes it reaches 37 px past the outer ring, over the moons and the arc's words) selects that lane, as
+// a click there did before RD-8; anywhere else the selection stays too. Measured after the queued slot has landed (it
+// lands on the bar and would read as a change). 4 lanes (the demo) and 6.
 async function CLICK(b, out) {
-  const p = await b.open('orbit2/index.html', { width: 1512, height: 860 }); await p.sleep(300);
-  await p.key(' '); await p.sleep(800); await p.eval(GEN); await p.sleep(400);
-  const g = JSON.parse(await p.eval('JSON.stringify(__poly.scene.geo())')), c = JSON.parse(await p.eval(`JSON.stringify(document.getElementById('cv').getBoundingClientRect())`));
-  const state = async () => JSON.stringify({ m: await p.eval('JSON.stringify(__poly.m.toJSON())'), playing: await p.eval(`document.getElementById('btn-play').getAttribute('aria-pressed') ?? document.getElementById('btn-play').textContent`), slot: await p.eval('__poly.bank.current'), evo: await p.eval('__poly.evo.on') });
-  const before = await state();
-  const spots = { sun: [g.cx, g.cy], 'arc words': [g.cx, g.cy - g.outer - 36], 'a moon': [g.cx + Math.cos(Math.PI / 2 + 0.1) * (g.outer + 24), g.cy + Math.sin(Math.PI / 2 + 0.1) * (g.outer + 24)], caption: [g.cx + g.outer + 20, g.cy + g.outer + 30] };
-  for (const [name, [x, y]] of Object.entries(spots)) { await p.click(c.left + x, c.top + y); await p.sleep(250); check('CLICK', (await state()) === before, `a click on ${name} changed the pattern or the transport`); }
-  out.CLICK = { spots: Object.keys(spots), errors: p.errors.slice() };
-  check('CLICK', !p.errors.length, `page errors: ${JSON.stringify(p.errors)}`);
-  p.close();
+  const res = {};
+  for (const lanes of [4, 6]) {
+    const p = await openPage(b,{ width: 1512, height: 860 }); await p.sleep(300);
+    await p.key(' '); await p.sleep(800); await p.eval(`__poly.setLaneCount(${lanes}); __poly.sync()`); await p.eval(GEN);   // explicit: an earlier part saved 6 lanes
+    for (let i = 0; i < 50 && (await p.eval('__poly.bank.pending')) >= 0; i++) await p.sleep(100);
+    const g = JSON.parse(await p.eval('JSON.stringify(__poly.scene.geo())')), c = JSON.parse(await p.eval(`JSON.stringify(document.getElementById('cv').getBoundingClientRect())`));
+    const state = async () => { const m = JSON.parse(await p.eval('JSON.stringify(__poly.m.toJSON())')), sel = m.selected; delete m.selected; return { sel, rest: JSON.stringify({ m, playing: await p.eval(`document.getElementById('btn-play').getAttribute('aria-pressed') ?? document.getElementById('btn-play').textContent`), slot: await p.eval('__poly.bank.current'), evo: await p.eval('__poly.evo.on') }) }; };
+    const spots = { sun: [g.cx, g.cy], 'arc words': [g.cx, g.cy - g.outer - 36], 'a moon': [g.cx + Math.cos(Math.PI / 2 + 0.1) * (g.outer + 24), g.cy + Math.sin(Math.PI / 2 + 0.1) * (g.outer + 24)], caption: [g.cx + g.outer + 20, g.cy + g.outer + 30] };
+    const got = {};
+    for (const [name, [x, y]] of Object.entries(spots)) {
+      const band = await p.eval(`__poly.scene.locate(${c.left + x}, ${c.top + y}).lane`), a = await state();
+      await p.click(c.left + x, c.top + y); await p.sleep(250); const z = await state();
+      check('CLICK', z.rest === a.rest, `${lanes} lanes: a click on ${name} changed the pattern, the transport, the slot or evolve`);
+      check('CLICK', z.sel === a.sel || z.sel === band, `${lanes} lanes: a click on ${name} selected lane ${z.sel + 1} (its band: ${band < 0 ? 'none' : `lane ${band + 1}`})`);
+      got[name] = band < 0 ? 'empty canvas' : `lane ${band + 1}'s band`;
+    }
+    res[lanes] = got; check('CLICK', !p.errors.length, `${lanes} lanes page errors: ${JSON.stringify(p.errors)}`); p.close();
+  }
+  out.CLICK = { spots: res };
 }
 
 const only = new Set(String(arg('--only', 'LIGHT,LADDER,FRAME,REDUCED,CLICK')).split(',')), out = {};
@@ -149,7 +177,7 @@ if (out.LIGHT) L.push(`LIGHT first visit: "press play" then the beats · label "
 if (out.LADDER) for (const [k, v] of Object.entries(out.LADDER)) L.push(`LADDER ${k}: room ${v.room} px, level ${v.level}, ${JSON.stringify(v.plan)} · label "${v.label}" (fits ${v.labelFits})${v.rim ? ` · rim "${v.rim}"` : ''} · arc "${v.gen}" (drawn ${v.genFits}) · caption ${JSON.stringify(v.lines)}`);
 if (out.FRAME) L.push(`FRAME 6 lanes / 32 steps, generative on, 10 s: per frame p50 ${out.FRAME.frame.p50} p95 ${out.FRAME.frame.p95} max ${out.FRAME.frame.max} ms (${out.FRAME.frame.n} frames; RD-1 ${BASE.frameMs}, budget ${THRESH.frameMs}) · stress p95 ${out.FRAME.stress.p95} max ${out.FRAME.stress.max} (RD-1 ${BASE.stress}) · ${out.FRAME.sprites} text sprites`);
 if (out.REDUCED) L.push(`REDUCED crawl values in 2.6 s: ${out.REDUCED.stepped} with reduced motion, ${out.REDUCED.smooth} without · pulse off`);
-if (out.CLICK) L.push(`CLICK ${out.CLICK.spots.join(', ')}: nothing changed`);
+if (out.CLICK) for (const [n, s] of Object.entries(out.CLICK.spots)) L.push(`CLICK ${n} lanes: ${Object.entries(s).map(([k, v]) => `${k} (${v})`).join(', ')}: no edit, the transport, slot and evolve unchanged`);
 L.push(fails.length ? `FAIL (${fails.length}):\n  ${fails.join('\n  ')}` : 'all pass');
 console.log(L.join('\n'));
 const json = arg('--json', null); if (json) writeFileSync(json, JSON.stringify({ out, fails }, null, 2));

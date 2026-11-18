@@ -135,8 +135,9 @@ const FAMILY = '"Space Grotesk", system-ui, sans-serif';
 export const LABEL_PX = 13, NUMBER_PX = 15, SUN_PX = 40, SUN_SMALL_PX = 28, CAPS_PX = 11, TRACK = 0.14;
 export const LABEL_FONT = `500 ${LABEL_PX}px ${FAMILY}`, NUMBER_FONT = `500 ${NUMBER_PX}px ${FAMILY}`, SUN_FONT = `300 ${SUN_PX}px ${FAMILY}`, SUN_SMALL_FONT = `400 ${SUN_SMALL_PX}px ${FAMILY}`, CAPS_FONT = `500 ${CAPS_PX}px ${FAMILY}`;
 /** Type on a curve sits only where the curve runs within ±35° of horizontal: the bottom of a ring (the label) or the top
- *  (the generative arc); the moons spread ±42° round 6 o'clock; the crawl's track is ±45° round 12. Degrees. */
-export const LABEL_DEG = 70, GEN_DEG = 90, MOON_DEG = 84;
+ *  (the generative arc); the moons spread ±30° round 6 o'clock (Yuki's mock ±31.5°; ±42° ran their right end into the
+ *  straight caption's corner at 1512×860); the crawl's track is ±45° round 12. Degrees. */
+export const LABEL_DEG = 70, GEN_DEG = 90, MOON_DEG = 60;
 /** Px free outside the outer ring (to the stage's edge) before anything with words fits there: the arc's words and the
  *  moons' numbers need it (1512×860 has 43, 1280×720 has 12: there the crawl and the moons hug the ring, the words go to
  *  the straight caption). */
@@ -233,6 +234,20 @@ export function captionLines(s) {
   if (s.jam) out.push(`jam · beat ${s.jam.beat} of ${s.jam.of}`);
   return out;
 }
+/**
+ * How many of the caption's lines (from the first) the stage takes: the block is right-aligned at `right`, 17 px lines,
+ * the last baseline 4 px over `bottom`. Each line's glyphs (its width × 13 px) stay `ring` px from the rings' centre and
+ * `pad` px clear of every box the light drew there (the moons and their numbers), so nothing ever overlaps; lines go from
+ * the end (a phone's square canvas). Pure. widths: px per line.
+ */
+export function captionFit(widths, { right, bottom, cx, cy, ring, boxes = [], LH = 17, pad = 5 }) {
+  const near = (b) => Math.hypot(Math.max(b.x - cx, 0, cx - b.x - b.w), Math.max(b.y - cy, 0, cy - b.y - b.h));
+  const hit = (a, b) => a.x < b.x + b.w + pad && b.x < a.x + a.w + pad && a.y < b.y + b.h + pad && b.y < a.y + a.h + pad;
+  for (let n = widths.length; n > 0; n--) if (captionBoxes(widths.slice(0, n), right, bottom, LH).every(b => near(b) >= ring && !boxes.some(o => hit(b, o)))) return n;
+  return 0;
+}
+/** The glyph boxes of caption lines of these widths, as drawn (captionFit; the frame draws the baselines there). */
+export const captionBoxes = (widths, right, bottom, LH = 17) => widths.map((w, k) => ({ x: right - w, y: bottom - (widths.length - k) * LH + 3, w, h: 13 }));
 
 /** Soft round glow, white-hot centre fading to the colour: drawn with 'lighter' it reads as light. */
 function glowSprite(hex, size = 96) {
@@ -644,7 +659,8 @@ export function createScene(cv, o) {
     }
     // the slot moons (Rio, Yuki): the 16 slots under the rings, slot 1 at the left; a saved slot a moon, an empty one a
     // ring, the playing one bright, the queued one in a dashed ring. Numbers by the ladder: all, the playing and the
-    // queued only, or none (then the playing slot is in the caption).
+    // queued only, or none (then the playing slot is in the caption). lit: their boxes (the caption keeps clear of them).
+    const lit = [];
     if (moonsOn) {
       const n = ss.filled.length;
       for (let k = 0; k < n; k++) {
@@ -653,9 +669,11 @@ export function createScene(cv, o) {
         else if (ss.filled[k]) { ctx.fillStyle = DIM; ctx.beginPath(); ctx.arc(x, y, 3, 0, TAU); ctx.fill(); }
         else { ctx.strokeStyle = 'rgba(236,233,247,.28)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(x, y, 2.5, 0, TAU); ctx.stroke(); }
         if (nx) { ctx.strokeStyle = 'rgba(236,233,247,.85)'; ctx.lineWidth = 1; ctx.setLineDash([2, 2]); ctx.beginPath(); ctx.arc(x, y, 7.5, 0, TAU); ctx.stroke(); ctx.setLineDash([]); }
+        const d = nx ? 8 : 5; lit.push({ x: x - d, y: y - d, w: 2 * d, h: 2 * d });
         if (plan.slotNumbers === 'all' || (plan.slotNumbers === 'some' && (cur || nx))) {
-          const big = cur || nx, s = textSprite([{ text: String(k + 1), color: big ? BRIGHT : DIM }], big ? NUMBER_FONT : LABEL_FONT), ry = rMoon + (big ? 13 : 12);
-          const tx = g.cx + Math.cos(a) * ry, ty = g.cy + Math.sin(a) * ry; ctx.drawImage(s.c, tx - s.w / 2, ty + (big ? 5.5 : 4.5) - s.base, s.w, s.h);
+          const big = cur || nx, px = big ? NUMBER_PX : LABEL_PX, s = textSprite([{ text: String(k + 1), color: big ? BRIGHT : DIM }], big ? NUMBER_FONT : LABEL_FONT), ry = rMoon + (big ? 13 : 12);
+          const tx = g.cx + Math.cos(a) * ry, ty = g.cy + Math.sin(a) * ry, base = ty + (big ? 5.5 : 4.5); ctx.drawImage(s.c, tx - s.w / 2, base - s.base, s.w, s.h);
+          lit.push({ x: tx - s.w / 2, y: base - 0.72 * px, w: s.w, h: 0.75 * px });   // the digits' box (cap height)
         }
       }
     }
@@ -668,15 +686,17 @@ export function createScene(cv, o) {
     }
     // the straight caption (Yuki: numbers leave the curve): bottom right of the stage, right-aligned, 13 px: the cycle,
     // the generative facts, the playing slot when the moons carry no number, the take's beats (the jam pill has the
-    // state, the canvas the count). Lines go from the end while the block would touch the rings (a phone's square canvas).
+    // state, the canvas the count). Lines go from the end while one would touch the rings or the moons and their numbers
+    // (captionFit: a phone's square canvas; never at 1512×860).
     const jp = o.jamProgress?.(), jamOf = o.jamBeats || 256;
     const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? { bars: barsToEvolve(gs.bars, gs.every) } : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
+    const rb = (b) => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
+    lightNow.boxes = { moons: lit.map(rb), lines: [] };
     if (lines.length) {
       const LH = 17, right = (cell ? cell.x + cell.w : W) - 14, bottom = (cell ? cell.y + cell.h : H) - 10, sp = lines.map(t => textSprite([{ text: t, color: WORD }], CAPTION_FONT));
-      let n = lines.length; const clear = (k) => Math.hypot(right - Math.max(...sp.slice(0, k).map(s => s.w)) - g.cx, bottom - k * LH - g.cy) >= g.outer + 6;
-      while (n > 0 && !clear(n)) n--;
+      const n = captionFit(sp.map(s => s.w), { right, bottom, cx: g.cx, cy: g.cy, ring: g.outer + 6, boxes: lit, LH });
       for (let k = 0; k < n; k++) { const s = sp[k]; ctx.drawImage(s.c, right - s.w, bottom - (n - k) * LH + 13 - s.base, s.w, s.h); }
-      lightNow.lines = lines.slice(0, n);
+      lightNow.lines = lines.slice(0, n); lightNow.boxes.lines = captionBoxes(sp.slice(0, n).map(s => s.w), right, bottom, LH).map(rb);
     }
     ctx.globalCompositeOperation = 'lighter';
     // jam: a red arc around everything fills up over the 256 beats, with a ticking head (just outside the outer ring, so

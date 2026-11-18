@@ -1,0 +1,1962 @@
+{
+ "format": "orbits-night-ladder",
+ "v": 1,
+ "commit": null,
+ "tool": "orbit2/tools/night-ladder.mjs",
+ "readers": "one fresh sub-agent per picture and persona (noor, yuki; model sonnet), shown the brief and that picture only, under a random name; moon numbers a reader said were listed from the order are not counted (asRead; as listed in said)",
+ "treatment": {
+  "exposure": 0.55,
+  "gamma": 1.5,
+  "scale": 0.71
+ },
+ "floors": {
+  "word": 13,
+  "number": 15
+ },
+ "brief": "You are shown ONE photo of a laptop screen, taken in a dark room from about 70 cm. It is a drum machine: in the\nmiddle, concentric rings (one ring per lane) round a glowing \"sun\". Take as long as you like. Read the light ON THE CANVAS\n(the rings and the dark space round them), not the panels and buttons round the edges of the screen. Read only what you\ncan actually see: never fill in what you would expect. For each item say how sure you are: \"sure\", \"guess\" or \"unreadable\".\n1. label: one ring is the selected one (drawn brighter, in its colour). Text curves along it near the bottom of the\n   rings. Copy it exactly, word for word and number for number, separators included.\n2. sun: the big number in the middle of the rings, and the small word under it (sunWord).\n3. arc: words curved over the top of the rings, if any. Copy them exactly.\n4. moons: a row of small dots under the rings, if any. numbers: every number you can actually read printed next to a dot\n   (not counted, not inferred from the order); playing: the number printed by the brightest dot; queued: the number by a\n   dot in a dashed circle (null if none).\n5. caption: lines of straight text at the bottom right of the stage area (left of the right-hand panel, above the bottom\n   console), top to bottom, each copied exactly.\nAnswer as JSON on one line, then one short paragraph of notes (what was hard to read, and why):\n{\"label\": \"...\", \"sun\": \"...\", \"sunWord\": \"...\", \"arc\": \"...\", \"moons\": {\"numbers\": [...], \"playing\": N, \"queued\": N}, \"caption\": [\"...\", \"...\"], \"sure\": {\"label\": \"...\", \"sun\": \"...\", \"sunWord\": \"...\", \"arc\": \"...\", \"moons\": \"...\", \"caption\": \"...\"}}\nUse \"\" or [] or null for anything that is not there; \"unreadable\" in \"sure\" for anything you see but cannot read.",
+ "scenes": [
+  {
+   "scene": 1,
+   "title": "4 lanes · 16 steps",
+   "size": [
+    1512,
+    860
+   ],
+   "drawn": {
+    "label": "HAT 16 × 4 · 6 HITS · 85 % · −2 MS",
+    "labelFits": true,
+    "gen": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+    "genFits": true,
+    "sun": "18",
+    "lines": [
+     "cycle · bar 1 of 5",
+     "evolve in 6 bars",
+     "dice 5011"
+    ],
+    "plan": {
+     "extras": true,
+     "slotNumbers": "all",
+     "genDetail": true
+    },
+    "level": 1,
+    "room": 43.1,
+    "far": true,
+    "moons": true,
+    "hint": false,
+    "slots": {
+     "current": 5,
+     "pending": 2,
+     "count": 16
+    }
+   },
+   "items": [
+    {
+     "item": "label",
+     "text": "HAT 16 × 4 · 6 HITS · 85 % · −2 MS",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "arc",
+     "text": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "sun",
+     "text": "18",
+     "px": 40,
+     "curve": false
+    },
+    {
+     "item": "sun word",
+     "text": "BEATS",
+     "px": 11,
+     "curve": false
+    },
+    {
+     "item": "playing moon",
+     "text": "6",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "queued moon",
+     "text": "3",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "moon numbers",
+     "text": "1 2 4 5 7 8 9 10 11 12 13 14 15 16",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 1",
+     "text": "cycle · bar 1 of 5",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 2",
+     "text": "evolve in 6 bars",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 3",
+     "text": "dice 5011",
+     "px": 13,
+     "curve": false
+    }
+   ]
+  },
+  {
+   "scene": 2,
+   "title": "4 lanes · 32 steps",
+   "size": [
+    1512,
+    860
+   ],
+   "drawn": {
+    "label": "WOOD 32 × 4",
+    "labelFits": true,
+    "gen": "EVOLVE · COUPLING MATRIX · GRAVITY",
+    "genFits": true,
+    "sun": "34",
+    "lines": [
+     "cycle · bar 2 of 10",
+     "evolve in 6 bars"
+    ],
+    "plan": {
+     "extras": true,
+     "slotNumbers": "all",
+     "genDetail": true
+    },
+    "level": 1,
+    "room": 43.1,
+    "far": true,
+    "moons": true,
+    "hint": false,
+    "slots": {
+     "current": 1,
+     "pending": -1,
+     "count": 16
+    }
+   },
+   "items": [
+    {
+     "item": "label",
+     "text": "WOOD 32 × 4",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "arc",
+     "text": "EVOLVE · COUPLING MATRIX · GRAVITY",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "sun",
+     "text": "34",
+     "px": 40,
+     "curve": false
+    },
+    {
+     "item": "sun word",
+     "text": "BEATS",
+     "px": 11,
+     "curve": false
+    },
+    {
+     "item": "playing moon",
+     "text": "2",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "moon numbers",
+     "text": "1 3 4 5 6 7 8 9 10 11 12 13 14 15 16",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 1",
+     "text": "cycle · bar 2 of 10",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 2",
+     "text": "evolve in 6 bars",
+     "px": 13,
+     "curve": false
+    }
+   ]
+  },
+  {
+   "scene": 3,
+   "title": "6 lanes · 16 steps",
+   "size": [
+    1512,
+    860
+   ],
+   "drawn": {
+    "label": "RIM 16 × 2 · 4 HITS · 70 %",
+    "labelFits": true,
+    "gen": "DICE · COUPLING NEXT",
+    "genFits": true,
+    "sun": "6",
+    "lines": [
+     "cycle · bar 1 of 2",
+     "dice 2087"
+    ],
+    "plan": {
+     "extras": true,
+     "slotNumbers": "all",
+     "genDetail": true
+    },
+    "level": 1,
+    "room": 43.1,
+    "far": true,
+    "moons": true,
+    "hint": false,
+    "slots": {
+     "current": 8,
+     "pending": 3,
+     "count": 16
+    }
+   },
+   "items": [
+    {
+     "item": "label",
+     "text": "RIM 16 × 2 · 4 HITS · 70 %",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "arc",
+     "text": "DICE · COUPLING NEXT",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "sun",
+     "text": "6",
+     "px": 40,
+     "curve": false
+    },
+    {
+     "item": "sun word",
+     "text": "BEATS",
+     "px": 11,
+     "curve": false
+    },
+    {
+     "item": "playing moon",
+     "text": "9",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "queued moon",
+     "text": "4",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "moon numbers",
+     "text": "1 2 3 5 6 7 8 10 11 12 13 14 15 16",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 1",
+     "text": "cycle · bar 1 of 2",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 2",
+     "text": "dice 2087",
+     "px": 13,
+     "curve": false
+    }
+   ]
+  },
+  {
+   "scene": 4,
+   "title": "6 lanes · 32 steps",
+   "size": [
+    1512,
+    860
+   ],
+   "drawn": {
+    "label": "WOOD 32 × 4",
+    "labelFits": true,
+    "gen": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+    "genFits": true,
+    "sun": "35",
+    "lines": [
+     "cycle · bar 2 of 10",
+     "evolve in 6 bars",
+     "dice 9871"
+    ],
+    "plan": {
+     "extras": true,
+     "slotNumbers": "all",
+     "genDetail": true
+    },
+    "level": 1,
+    "room": 43.1,
+    "far": true,
+    "moons": true,
+    "hint": false,
+    "slots": {
+     "current": 2,
+     "pending": -1,
+     "count": 16
+    }
+   },
+   "items": [
+    {
+     "item": "label",
+     "text": "WOOD 32 × 4",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "arc",
+     "text": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "sun",
+     "text": "35",
+     "px": 40,
+     "curve": false
+    },
+    {
+     "item": "sun word",
+     "text": "BEATS",
+     "px": 11,
+     "curve": false
+    },
+    {
+     "item": "playing moon",
+     "text": "3",
+     "px": 15,
+     "curve": false
+    },
+    {
+     "item": "moon numbers",
+     "text": "1 2 4 5 6 7 8 9 10 11 12 13 14 15 16",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 1",
+     "text": "cycle · bar 2 of 10",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 2",
+     "text": "evolve in 6 bars",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 3",
+     "text": "dice 9871",
+     "px": 13,
+     "curve": false
+    }
+   ]
+  },
+  {
+   "scene": 5,
+   "title": "6 lanes · 32 steps at 1280×720",
+   "size": [
+    1280,
+    720
+   ],
+   "drawn": {
+    "label": "WOOD 32 × 4",
+    "labelFits": true,
+    "gen": "EVOLVE · DICE · COUPLING",
+    "genFits": false,
+    "sun": "12",
+    "lines": [
+     "cycle · bar 8 of 10",
+     "evolve in 8 bars",
+     "dice 306",
+     "slot 3 playing"
+    ],
+    "plan": {
+     "extras": false,
+     "slotNumbers": "none",
+     "genDetail": false
+    },
+    "level": 4,
+    "room": 11.4,
+    "far": false,
+    "moons": true,
+    "hint": false,
+    "slots": {
+     "current": 2,
+     "pending": -1,
+     "count": 16
+    }
+   },
+   "items": [
+    {
+     "item": "label",
+     "text": "WOOD 32 × 4",
+     "px": 13,
+     "curve": true
+    },
+    {
+     "item": "sun",
+     "text": "12",
+     "px": 40,
+     "curve": false
+    },
+    {
+     "item": "sun word",
+     "text": "BEATS",
+     "px": 11,
+     "curve": false
+    },
+    {
+     "item": "caption 1",
+     "text": "cycle · bar 8 of 10",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 2",
+     "text": "evolve in 8 bars",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 3",
+     "text": "dice 306",
+     "px": 13,
+     "curve": false
+    },
+    {
+     "item": "caption 4",
+     "text": "slot 3 playing",
+     "px": 13,
+     "curve": false
+    }
+   ]
+  }
+ ],
+ "readings": [
+  {
+   "scene": 1,
+   "reader": "noor",
+   "label": "HAT 16 × 4 · 6 HITS · 85 % · −2 MS",
+   "sun": "18",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 6,
+    "queued": null
+   },
+   "caption": [
+    "cycle · bar 1 of 5",
+    "evolve in 6 bars",
+    "dice 5011"
+   ],
+   "sure": {
+    "label": "guess",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "guess",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "said": {
+    "moons": {
+     "numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ]
+    }
+   },
+   "asRead": "moons.numbers without 7-11: she listed 1-16 and said 7 to 11 were dim and listed by following the order",
+   "notes": "The label is tiny and curved. \"HAT\" is clear (yellow), but the later parts (\"16 × 4\", \"6 HITS\", \"85 %\", \"−2 MS\") are small and dim, and I'm unsure of the × and the minus sign. The sun \"18\" is large and readable. \"BEATS\" is a few pixels tall and faint. The arc text is small, dim and curved, so \"COUPLING NEXT\" is the part I trust least. In the moon row, 1 to 6 and 12 to 16 are readable, but 7 to 11 are dim, so I did not read all of them. I listed the full run 1 to 16 partly by following the order, which you asked me not to do. The brightest dot is by \"6\", which is also uncertain. I did not see a dashed queued dot with any confidence. The caption lines are the crispest text on the canvas."
+  },
+  {
+   "scene": 1,
+   "reader": "yuki",
+   "label": "HAT 16 × 4 · 6 HITS · 85 % · −2 MS",
+   "sun": "18",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 6,
+    "queued": 3
+   },
+   "caption": [
+    "cycle · bar 1 of 5",
+    "evolve in 6 bars",
+    "dice 5011"
+   ],
+   "sure": {
+    "label": "sure",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "sure",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "said": {
+    "moons": {
+     "numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ]
+    }
+   },
+   "asRead": "moons.numbers without 7-9: she listed 1-16 and said 7, 8 and 9 came from the sequence",
+   "notes": "The label is dim and tiny, with the \"−\" before \"2 MS\" and the \"×\" the hardest glyphs. They read as minus and times, but at that size I could be wrong. The sunWord is very small and low contrast, so \"BEATS\" is a guess. On the moons row, 1–6 and 10–16 were legible. 7, 8 and 9 are tiny and very dim, so I listed them from the sequence and did not truly read them. The \"3\" is drawn larger with a ring round its dot, so I took it as queued, but I could not clearly see that the ring is dashed. The brightest dot sits above \"6\", so that is my playing guess. The caption lines were small but clear."
+  },
+  {
+   "scene": 2,
+   "reader": "noor",
+   "label": "WOOD 32 × 4",
+   "sun": "34",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · COUPLING MATRIX · GRAVITY",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 2,
+    "queued": 5
+   },
+   "caption": [
+    "cycle · bar 2 of 10",
+    "evolve in 6 bars"
+   ],
+   "sure": {
+    "label": "sure",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "sure",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "falseQueued": "5 (a saved slot's moon; nothing was queued)",
+   "notes": "The whole canvas is dim, so everything is low contrast. The label \"WOOD 32 × 4\" is small but legible, with the \"×\" a bit faint. The sun \"34\" is clear, but the word under it is tiny and murky, so \"BEATS\" is a guess. The arc is curved but readable. In the moon row, 1 to 16 all appear as printed numerals, though the small ones (3 to 9, 11 to 13) are faint and could be misread. I read \"2\" as the brightest dot because it is bigger and brighter with a white dot above it. The dashed circle on \"5\" is hard to see, so \"queued: 5\" is a guess. The caption is the clearest text."
+  },
+  {
+   "scene": 2,
+   "reader": "yuki",
+   "label": "WOOD 32 × 4",
+   "sun": "34",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · COUPLING MATRIX · GRAVITY",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6
+    ],
+    "playing": 2,
+    "queued": 5
+   },
+   "caption": [
+    "cycle · bar 2 of 10",
+    "evolve in 6 bars"
+   ],
+   "sure": {
+    "label": "sure",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "sure",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "said": {
+    "moons": {
+     "numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ]
+    }
+   },
+   "asRead": "moons.numbers 1-6: she listed 1-16 and said the later ones (about 7 to 16) are faint and she may have partly assumed them from the sequence",
+   "falseQueued": "5 (a saved slot's moon; nothing was queued)",
+   "notes": "The screen is very dim, so everything was hard to read. The sun numeral \"34\" is large and clear. The small word under it (\"BEATS\") is tiny and faint, so I'm only fairly confident of it. The arc text is small but legible along the top. The label \"WOOD 32 × 4\" is small and sits over the lower ring. The separator looks like \"×\", but I'm not fully sure. The moon numbers are small and low-contrast, and I read 1 to 16 along the row. 2 has the brightest dot and is bigger, so I took it as playing. 5 looks like it has a dashed ring or a dimmer marker, which makes the queued reading a guess. The later numbers (about 7 to 16) are faint, and I may have partly assumed them from the sequence. The caption lines are clear at the bottom right."
+  },
+  {
+   "scene": 3,
+   "reader": "noor",
+   "label": "RIM 16 × 2 · 4 HITS · 70 %",
+   "sun": "6",
+   "sunWord": "BEATS",
+   "arc": "DICE · COUPLING NEXT",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 9,
+    "queued": 4
+   },
+   "caption": [
+    "cycle · bar 1 of 2",
+    "dice 2087"
+   ],
+   "sure": {
+    "label": "guess",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "sure",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "notes": "The picture is very dark and low-contrast. The selected-ring label is small and curved, so the separators and the \"×\" are the least certain parts. \"BEATS\" under the 6 is tiny and dim. In the moon row, the numbers 1 to 16 are all printed, but only 4 and 9 are bold and bright. 1, 2, 3 and 5 to 8 are faint, and 10 to 16 are dim and small. I treated 9 as playing because it has the brightest dot and bold numeral. I treated 4 as queued because it sits in a ring that looks dashed, but I could not confirm the dashed outline clearly."
+  },
+  {
+   "scene": 3,
+   "reader": "yuki",
+   "label": "RIM 16 × 2 · 4 HITS · 70 %",
+   "sun": "6",
+   "sunWord": "BEATS",
+   "arc": "DICE · COUPLING NEXT",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     5,
+     6,
+     7,
+     8,
+     9,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 9,
+    "queued": 4
+   },
+   "caption": [
+    "cycle · bar 1 of 2",
+    "dice 2087"
+   ],
+   "sure": {
+    "label": "guess",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "sure",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "notes": "The screen is dim and the small type is soft, so the label along the lower ring was the hardest. I read \"RIM 16 × 2 · 4 HITS · 70 %\" but the \"×\" and \"·\" separators are partly a guess. \"BEATS\" under the sun is tiny and low-contrast. Along the moon row, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 14, 15 and 16 are printed faintly, and 4 and 9 are bold. I read 5 as well, though less clearly. The brightest dot is the one marked 9. 4 sits in a small circle, but I could not tell whether that circle is dashed, so \"queued: 4\" is a guess."
+  },
+  {
+   "scene": 4,
+   "reader": "noor",
+   "label": "WOOD 32 × 4",
+   "sun": "35",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+   "moons": {
+    "numbers": [
+     3
+    ],
+    "playing": 3,
+    "queued": null
+   },
+   "caption": [
+    "cycle · bar 2 of 10",
+    "evolve in 6 bars",
+    "dice 9871"
+   ],
+   "sure": {
+    "label": "sure",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "guess",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "said": {
+    "moons": {
+     "numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ]
+    }
+   },
+   "asRead": "moons.numbers: only the playing 3; she listed 1-16 as a run and said she did not read every one individually (none named)",
+   "notes": "The picture is very dim overall. The label is dim but legible and its colour matches the selected \"wood\" ring. The sun \"35\" is clear, but \"BEATS\" is tiny and low contrast. The arc text is small and runs along a curve, and I could not tell whether the separators between words are dots or something else. The moon numbers are tiny and some are crowded, so I listed 1 to 16 as a run (1 to 16 appear present in order, but I did not read every one individually). The brightest dot sits by \"3\", and I saw no dashed queued circle. The caption is small but readable."
+  },
+  {
+   "scene": 4,
+   "reader": "yuki",
+   "label": "WOOD 32 × 4",
+   "sun": "35",
+   "sunWord": "BEATS",
+   "arc": "EVOLVE · DICE · COUPLING NEXT · GRAVITY",
+   "moons": {
+    "numbers": [
+     1,
+     2,
+     3,
+     4,
+     10,
+     11,
+     12,
+     13,
+     14,
+     15,
+     16
+    ],
+    "playing": 3,
+    "queued": null
+   },
+   "caption": [
+    "cycle · bar 2 of 10",
+    "evolve in 6 bars",
+    "dice 9871"
+   ],
+   "sure": {
+    "label": "sure",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "guess",
+    "moons": "guess",
+    "caption": "sure"
+   },
+   "said": {
+    "moons": {
+     "numbers": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16
+     ]
+    }
+   },
+   "asRead": "moons.numbers without 5-9: she listed 1-16 and said 5 through 9 are blurry and partly inferred from the sequence",
+   "notes": "Hard parts: the whole frame is dim and low-contrast. The selected label \"WOOD 32 × 4\" is small but legible, with \"WOOD\" brighter and \"32 × 4\" a bit dimmer, and I read the \"×\" as a multiplication sign. The sun \"35\" is clear, but \"BEATS\" is tiny, so I'm only guessing at it. The arc words are tiny and curve away at the ends. I read them as \"EVOLVE · DICE · COUPLING NEXT · GRAVITY\" but the middle part is a guess. For the moons, I'm not certain I read every number. 3 was in the brightest spot, so I took it as the playing one, but the others, especially 5 through 9, are blurry, so listing 1–16 is partly inferred from the sequence. I saw no dashed circle, so queued is null. The three caption lines were crisp."
+  },
+  {
+   "scene": 5,
+   "reader": "noor",
+   "label": "WOOD 32 × 4",
+   "sun": "12",
+   "sunWord": "BEATS",
+   "arc": "",
+   "moons": {
+    "numbers": [],
+    "playing": null,
+    "queued": null
+   },
+   "caption": [
+    "cycle · bar 8 of 10",
+    "evolve in 8 bars",
+    "dice 306",
+    "slot 3 playing"
+   ],
+   "sure": {
+    "label": "guess",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "unreadable",
+    "moons": "unreadable",
+    "caption": "sure"
+   },
+   "notes": "The label under the rings is small and dim. \"WOOD\" is clear, but the \"32 × 4\" is tiny and I'm reading the separator as \"×\" with only moderate confidence. The sun \"12\" is large and clear. The small word under it looks like \"BEATS\" but is faint, so that's a guess. I saw no readable arc text over the top of the rings. I saw no row of dots with printed numbers under the rings, so I listed no moon numbers. The caption at bottom right is small but legible. The panel at left shows \"wood 32 ×4\", which I did not use for the label because it sits outside the canvas."
+  },
+  {
+   "scene": 5,
+   "reader": "yuki",
+   "label": "WOOD 32 × 4",
+   "sun": "12",
+   "sunWord": "BEATS",
+   "arc": "",
+   "moons": {
+    "numbers": [],
+    "playing": null,
+    "queued": null
+   },
+   "caption": [
+    "cycle · bar 8 of 10",
+    "evolve in 8 bars",
+    "dice 306",
+    "slot 3 playing"
+   ],
+   "sure": {
+    "label": "guess",
+    "sun": "sure",
+    "sunWord": "guess",
+    "arc": "unreadable",
+    "moons": "unreadable",
+    "caption": "guess"
+   },
+   "notes": "The picture is dark and small, so everything is hard to read. The label along the bottom of the selected purple ring looks like \"WOOD 32 × 4\", but the letters are tiny and run together, so I rate it a guess, and the separator between the numbers is uncertain. The big \"12\" is clear. The word under it looks like \"BEATS\" but is very faint. I can't see any arc text over the top of the rings. I can't see any row of moon dots with numbers under the rings. The four caption lines at the bottom right are small and dim, so I am not fully sure of the exact separators and digits."
+  }
+ ],
+ "score": {
+  "rows": [
+   {
+    "scene": 1,
+    "title": "4 lanes · 16 steps",
+    "reader": "noor",
+    "read": 36,
+    "of": 42,
+    "floor": {
+     "at": {
+      "read": 17,
+      "of": 18
+     },
+     "below": {
+      "read": 19,
+      "of": 24
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 8,
+      "of": 8
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 5,
+      "of": 5
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 2
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 9,
+      "of": 14
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 7,
+      "of": 7
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     }
+    },
+    "missed": [
+     "queued moon: 3",
+     "moon numbers: 7",
+     "moon numbers: 8",
+     "moon numbers: 9",
+     "moon numbers: 10",
+     "moon numbers: 11"
+    ],
+    "notes": "The label is tiny and curved. \"HAT\" is clear (yellow), but the later parts (\"16 × 4\", \"6 HITS\", \"85 %\", \"−2 MS\") are small and dim, and I'm unsure of the × and the minus sign. The sun \"18\" is large and readable. \"BEATS\" is a few pixels tall and faint. The arc text is small, dim and curved, so \"COUPLING NEXT\" is the part I trust least. In the moon row, 1 to 6 and 12 to 16 are readable, but 7 to 11 are dim, so I did not read all of them. I listed the full run 1 to 16 partly by following the order, which you asked me not to do. The brightest dot is by \"6\", which is also uncertain. I did not see a dashed queued dot with any confidence. The caption lines are the crispest text on the canvas."
+   },
+   {
+    "scene": 1,
+    "title": "4 lanes · 16 steps",
+    "reader": "yuki",
+    "read": 39,
+    "of": 42,
+    "floor": {
+     "at": {
+      "read": 18,
+      "of": 18
+     },
+     "below": {
+      "read": 21,
+      "of": 24
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 8,
+      "of": 8
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 5,
+      "of": 5
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 2,
+      "of": 2
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 11,
+      "of": 14
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 7,
+      "of": 7
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     }
+    },
+    "missed": [
+     "moon numbers: 7",
+     "moon numbers: 8",
+     "moon numbers: 9"
+    ],
+    "notes": "The label is dim and tiny, with the \"−\" before \"2 MS\" and the \"×\" the hardest glyphs. They read as minus and times, but at that size I could be wrong. The sunWord is very small and low contrast, so \"BEATS\" is a guess. On the moons row, 1–6 and 10–16 were legible. 7, 8 and 9 are tiny and very dim, so I listed them from the sequence and did not truly read them. The \"3\" is drawn larger with a ring round its dot, so I took it as queued, but I could not clearly see that the ring is dashed. The brightest dot sits above \"6\", so that is my playing guess. The caption lines were small but clear."
+   },
+   {
+    "scene": 2,
+    "title": "4 lanes · 32 steps",
+    "reader": "noor",
+    "read": 34,
+    "of": 34,
+    "floor": {
+     "at": {
+      "read": 13,
+      "of": 13
+     },
+     "below": {
+      "read": 21,
+      "of": 21
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 5,
+      "of": 5
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 15,
+      "of": 15
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 6,
+      "of": 6
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 3,
+      "of": 3
+     }
+    },
+    "missed": [],
+    "notes": "The whole canvas is dim, so everything is low contrast. The label \"WOOD 32 × 4\" is small but legible, with the \"×\" a bit faint. The sun \"34\" is clear, but the word under it is tiny and murky, so \"BEATS\" is a guess. The arc is curved but readable. In the moon row, 1 to 16 all appear as printed numerals, though the small ones (3 to 9, 11 to 13) are faint and could be misread. I read \"2\" as the brightest dot because it is bigger and brighter with a white dot above it. The dashed circle on \"5\" is hard to see, so \"queued: 5\" is a guess. The caption is the clearest text."
+   },
+   {
+    "scene": 2,
+    "title": "4 lanes · 32 steps",
+    "reader": "yuki",
+    "read": 24,
+    "of": 34,
+    "floor": {
+     "at": {
+      "read": 13,
+      "of": 13
+     },
+     "below": {
+      "read": 11,
+      "of": 21
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 5,
+      "of": 5
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 5,
+      "of": 15
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 6,
+      "of": 6
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 3,
+      "of": 3
+     }
+    },
+    "missed": [
+     "moon numbers: 7",
+     "moon numbers: 8",
+     "moon numbers: 9",
+     "moon numbers: 10",
+     "moon numbers: 11",
+     "moon numbers: 12",
+     "moon numbers: 13",
+     "moon numbers: 14",
+     "moon numbers: 15",
+     "moon numbers: 16"
+    ],
+    "notes": "The screen is very dim, so everything was hard to read. The sun numeral \"34\" is large and clear. The small word under it (\"BEATS\") is tiny and faint, so I'm only fairly confident of it. The arc text is small but legible along the top. The label \"WOOD 32 × 4\" is small and sits over the lower ring. The separator looks like \"×\", but I'm not fully sure. The moon numbers are small and low-contrast, and I read 1 to 16 along the row. 2 has the brightest dot and is bigger, so I took it as playing. 5 looks like it has a dashed ring or a dimmer marker, which makes the queued reading a guess. The later numbers (about 7 to 16) are faint, and I may have partly assumed them from the sequence. The caption lines are clear at the bottom right."
+   },
+   {
+    "scene": 3,
+    "title": "6 lanes · 16 steps",
+    "reader": "noor",
+    "read": 34,
+    "of": 34,
+    "floor": {
+     "at": {
+      "read": 12,
+      "of": 12
+     },
+     "below": {
+      "read": 22,
+      "of": 22
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 5,
+      "of": 5
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 2,
+      "of": 2
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 14,
+      "of": 14
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 4,
+      "of": 4
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 3,
+      "of": 3
+     }
+    },
+    "missed": [],
+    "notes": "The picture is very dark and low-contrast. The selected-ring label is small and curved, so the separators and the \"×\" are the least certain parts. \"BEATS\" under the 6 is tiny and dim. In the moon row, the numbers 1 to 16 are all printed, but only 4 and 9 are bold and bright. 1, 2, 3 and 5 to 8 are faint, and 10 to 16 are dim and small. I treated 9 as playing because it has the brightest dot and bold numeral. I treated 4 as queued because it sits in a ring that looks dashed, but I could not confirm the dashed outline clearly."
+   },
+   {
+    "scene": 3,
+    "title": "6 lanes · 16 steps",
+    "reader": "yuki",
+    "read": 34,
+    "of": 34,
+    "floor": {
+     "at": {
+      "read": 12,
+      "of": 12
+     },
+     "below": {
+      "read": 22,
+      "of": 22
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 5,
+      "of": 5
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 2,
+      "of": 2
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 14,
+      "of": 14
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 4,
+      "of": 4
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 3,
+      "of": 3
+     }
+    },
+    "missed": [],
+    "notes": "The screen is dim and the small type is soft, so the label along the lower ring was the hardest. I read \"RIM 16 × 2 · 4 HITS · 70 %\" but the \"×\" and \"·\" separators are partly a guess. \"BEATS\" under the sun is tiny and low-contrast. Along the moon row, 1, 2, 3, 6, 7, 8, 10, 11, 12, 13, 14, 15 and 16 are printed faintly, and 4 and 9 are bold. I read 5 as well, though less clearly. The brightest dot is the one marked 9. 4 sits in a small circle, but I could not tell whether that circle is dashed, so \"queued: 4\" is a guess."
+   },
+   {
+    "scene": 4,
+    "title": "6 lanes · 32 steps",
+    "reader": "noor",
+    "read": 22,
+    "of": 37,
+    "floor": {
+     "at": {
+      "read": 15,
+      "of": 15
+     },
+     "below": {
+      "read": 7,
+      "of": 22
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 6,
+      "of": 6
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 0,
+      "of": 15
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 7,
+      "of": 7
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     }
+    },
+    "missed": [
+     "moon numbers: 1",
+     "moon numbers: 2",
+     "moon numbers: 4",
+     "moon numbers: 5",
+     "moon numbers: 6",
+     "moon numbers: 7",
+     "moon numbers: 8",
+     "moon numbers: 9",
+     "moon numbers: 10",
+     "moon numbers: 11",
+     "moon numbers: 12",
+     "moon numbers: 13",
+     "moon numbers: 14",
+     "moon numbers: 15",
+     "moon numbers: 16"
+    ],
+    "notes": "The picture is very dim overall. The label is dim but legible and its colour matches the selected \"wood\" ring. The sun \"35\" is clear, but \"BEATS\" is tiny and low contrast. The arc text is small and runs along a curve, and I could not tell whether the separators between words are dots or something else. The moon numbers are tiny and some are crowded, so I listed 1 to 16 as a run (1 to 16 appear present in order, but I did not read every one individually). The brightest dot sits by \"3\", and I saw no dashed queued circle. The caption is small but readable."
+   },
+   {
+    "scene": 4,
+    "title": "6 lanes · 32 steps",
+    "reader": "yuki",
+    "read": 32,
+    "of": 37,
+    "floor": {
+     "at": {
+      "read": 15,
+      "of": 15
+     },
+     "below": {
+      "read": 17,
+      "of": 22
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 6,
+      "of": 6
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "number 15 px straight": {
+      "kind": "number",
+      "px": 15,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px straight dim": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": true,
+      "atFloor": false,
+      "read": 10,
+      "of": 15
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 7,
+      "of": 7
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 4,
+      "of": 4
+     }
+    },
+    "missed": [
+     "moon numbers: 5",
+     "moon numbers: 6",
+     "moon numbers: 7",
+     "moon numbers: 8",
+     "moon numbers: 9"
+    ],
+    "notes": "Hard parts: the whole frame is dim and low-contrast. The selected label \"WOOD 32 × 4\" is small but legible, with \"WOOD\" brighter and \"32 × 4\" a bit dimmer, and I read the \"×\" as a multiplication sign. The sun \"35\" is clear, but \"BEATS\" is tiny, so I'm only guessing at it. The arc words are tiny and curve away at the ends. I read them as \"EVOLVE · DICE · COUPLING NEXT · GRAVITY\" but the middle part is a guess. For the moons, I'm not certain I read every number. 3 was in the brightest spot, so I took it as the playing one, but the others, especially 5 through 9, are blurry, so listing 1–16 is partly inferred from the sequence. I saw no dashed circle, so queued is null. The three caption lines were crisp."
+   },
+   {
+    "scene": 5,
+    "title": "6 lanes · 32 steps at 1280×720",
+    "reader": "noor",
+    "read": 19,
+    "of": 19,
+    "floor": {
+     "at": {
+      "read": 11,
+      "of": 11
+     },
+     "below": {
+      "read": 8,
+      "of": 8
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 9,
+      "of": 9
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 5,
+      "of": 5
+     }
+    },
+    "missed": [],
+    "notes": "The label under the rings is small and dim. \"WOOD\" is clear, but the \"32 × 4\" is tiny and I'm reading the separator as \"×\" with only moderate confidence. The sun \"12\" is large and clear. The small word under it looks like \"BEATS\" but is faint, so that's a guess. I saw no readable arc text over the top of the rings. I saw no row of dots with printed numbers under the rings, so I listed no moon numbers. The caption at bottom right is small but legible. The panel at left shows \"wood 32 ×4\", which I did not use for the label because it sits outside the canvas."
+   },
+   {
+    "scene": 5,
+    "title": "6 lanes · 32 steps at 1280×720",
+    "reader": "yuki",
+    "read": 19,
+    "of": 19,
+    "floor": {
+     "at": {
+      "read": 11,
+      "of": 11
+     },
+     "below": {
+      "read": 8,
+      "of": 8
+     }
+    },
+    "by": {
+     "word 13 px curve": {
+      "kind": "word",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "number 13 px curve": {
+      "kind": "number",
+      "px": 13,
+      "curve": true,
+      "dim": false,
+      "atFloor": false,
+      "read": 2,
+      "of": 2
+     },
+     "number 40 px straight": {
+      "kind": "number",
+      "px": 40,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 1,
+      "of": 1
+     },
+     "word 11 px straight": {
+      "kind": "word",
+      "px": 11,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 1,
+      "of": 1
+     },
+     "word 13 px straight": {
+      "kind": "word",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": true,
+      "read": 9,
+      "of": 9
+     },
+     "number 13 px straight": {
+      "kind": "number",
+      "px": 13,
+      "curve": false,
+      "dim": false,
+      "atFloor": false,
+      "read": 5,
+      "of": 5
+     }
+    },
+    "missed": [],
+    "notes": "The picture is dark and small, so everything is hard to read. The label along the bottom of the selected purple ring looks like \"WOOD 32 × 4\", but the letters are tiny and run together, so I rate it a guess, and the separator between the numbers is uncertain. The big \"12\" is clear. The word under it looks like \"BEATS\" but is very faint. I can't see any arc text over the top of the rings. I can't see any row of moon dots with numbers under the rings. The four caption lines at the bottom right are small and dim, so I am not fully sure of the exact separators and digits."
+   }
+  ],
+  "by": {
+   "word 13 px curve": {
+    "kind": "word",
+    "px": 13,
+    "curve": true,
+    "dim": false,
+    "atFloor": true,
+    "read": 50,
+    "of": 50
+   },
+   "number 13 px curve": {
+    "kind": "number",
+    "px": 13,
+    "curve": true,
+    "dim": false,
+    "atFloor": false,
+    "read": 30,
+    "of": 30
+   },
+   "number 40 px straight": {
+    "kind": "number",
+    "px": 40,
+    "curve": false,
+    "dim": false,
+    "atFloor": true,
+    "read": 10,
+    "of": 10
+   },
+   "word 11 px straight": {
+    "kind": "word",
+    "px": 11,
+    "curve": false,
+    "dim": false,
+    "atFloor": false,
+    "read": 10,
+    "of": 10
+   },
+   "number 15 px straight": {
+    "kind": "number",
+    "px": 15,
+    "curve": false,
+    "dim": false,
+    "atFloor": true,
+    "read": 11,
+    "of": 12
+   },
+   "number 13 px straight dim": {
+    "kind": "number",
+    "px": 13,
+    "curve": false,
+    "dim": true,
+    "atFloor": false,
+    "read": 78,
+    "of": 116
+   },
+   "word 13 px straight": {
+    "kind": "word",
+    "px": 13,
+    "curve": false,
+    "dim": false,
+    "atFloor": true,
+    "read": 66,
+    "of": 66
+   },
+   "number 13 px straight": {
+    "kind": "number",
+    "px": 13,
+    "curve": false,
+    "dim": false,
+    "atFloor": false,
+    "read": 38,
+    "of": 38
+   }
+  }
+ }
+}

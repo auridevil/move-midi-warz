@@ -91,17 +91,22 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   lane (`laneLabel`: "CONGA 32 × 4", 13 px caps weight 500, the name in the lane's colour, mid-gap outside the ring,
   inside for the outer lane; its extras while they fit and the ring is not a full strip). The **straight caption** at the
   bottom right of the stage carries every number (`captionLines`: the cycle, "evolve in N bars", the seed, the playing
-  slot when the moons carry no number, the take's beat). **Yuki's ladder** (`lightLevel`, `lightPlan`): when space runs
+  slot when the moons carry no number, the take's beat; `captionFit`: a line goes only when it would touch the rings or a
+  moon or its number, never at 1512×860; the moons spread ±30°). **Yuki's ladder** (`lightLevel`, `lightPlan`): when space runs
   out things go in order (unselected labels, extras, slot numbers, arc detail, words off the curve), the lowest rung gone
   taking every rung above it; `LIGHT_ROOM` 40 px outside the outer ring is what words need there (1280×720 has 12: the
   crawl and the moons hug the ring, the words are in the caption). Every word is a cached sprite (`arcSprite`,
   `textSprite`, at most 32, made again once the fonts load): no `fillText` per frame. `__poly.scene.light` says what the
   last frame measured and drew. The evolve pill reads "evolve" (the countdown is the arc). Browser check: `node
   orbit2/tools/light-check.mjs --assert` (LIGHT a first visit's "press play" then the beats, the label, the arc, the
-  moons, the caption, the pill; LADDER 6 lanes / 32 steps at 1512×860, 1280×720 and 390×844 against the ladder; FRAME
-  A9's frame p95 and the stress meter on that page; REDUCED the crawl steps per beat, the pulse off; CLICK nothing on
-  the canvas is a target; `--shots`, `--json`). `cdp.mjs open({ reducedMotion: true })` loads a page with
-  `prefers-reduced-motion: reduce`.
+  moons, the caption, the pill; LADDER 6 lanes / 32 steps at 1512×860, 1280×720 and 390×844 against the ladder, no
+  caption line within 4 px of a moon or its number, with and without a jam take; FRAME A9's frame p95 and the stress
+  meter on that page; REDUCED the crawl steps per beat, the pulse off; CLICK nothing on the canvas is a target, with 4
+  and 6 lanes: no edit, a selection only inside a ring's tap band, which with 4 lanes reaches over the moons and the
+  arc's words; `--shots`, `--json`). `cdp.mjs open({ reducedMotion: true })` loads a page with
+  `prefers-reduced-motion: reduce`, `open({ ready: '!!window.__poly' })` waits for the modules on a busy machine. The
+  night run of the label ladder: `node orbit2/tools/night-ladder.mjs` (five darkened 70 cm pictures and their key from
+  `scene.light`; `score` checks persona readers' readings token by token against the 13 px word / 15 px number floors).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

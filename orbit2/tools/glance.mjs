@@ -36,8 +36,8 @@ export const briefFor = (ask) => (!ask.includes('step') ? BRIEF : BRIEF.replace(
 - step: if the page is "step", the number of the step whose own values the knobs edit (1–32); otherwise null. If you
   cannot tell, give your best guess.`);
 
-/** Darken (exposure × then gamma) and scale a PNG in the page; returns base64 PNG. */
-const DARKEN = `async (b64, exposure, gamma, scale) => {
+/** Darken (exposure × then gamma) and scale a PNG in the page; returns base64 PNG (night-ladder.mjs uses it too). */
+export const DARKEN = `async (b64, exposure, gamma, scale) => {
   const bmp = await createImageBitmap(await (await fetch('data:image/png;base64,' + b64)).blob());
   const w = Math.round(bmp.width * scale), h = Math.round(bmp.height * scale), c = new OffscreenCanvas(w, h), g = c.getContext('2d');
   g.imageSmoothingQuality = 'high'; g.drawImage(bmp, 0, 0, w, h); const im = g.getImageData(0, 0, w, h), d = im.data, lut = new Uint8ClampedArray(256);
