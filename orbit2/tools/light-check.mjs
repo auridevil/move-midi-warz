@@ -7,7 +7,8 @@
 //          its extras, the caption is straight type; playing with evolve, dice, coupling and gravity on and three slots
 //          saved: the arc's words, the crawl, the moons with every number, the caption's lines; the evolve pill reads
 //          "evolve" (no countdown: the arc has it). Stopped: the crawl empty and "evolve in 4 bars" (what Play will do);
-//          Play: the crawl starts empty. SUN (run last): a cycle of millions of beats keeps the sun inside the kick ring.
+//          Play: the crawl starts empty. A tempo doubled / halved / doubled while playing (and in REDUCED): the crawl never
+//          steps back, the sun never counts up. SUN (run last): a cycle of millions of beats keeps the sun inside the ring.
 // LADDER   6 lanes with two 32-step lanes at 1512×860 (Yuki's mock): the selected 32-step lane reads its name-plate
 //          alone, the moons keep their numbers, the arc its detail (room by measurement); 1280×720 (12 px outside the
 //          ring): no words over the ring, the moons carry no number and the playing slot is in the caption; the phone.
@@ -37,6 +38,21 @@ const openPage = (b, o) => b.open('orbit2/index.html', { ...o, ready: '!!window.
 // the caption's glyph boxes vs the moons' and their numbers' (scene.light.boxes, as the frame drew them): px apart
 const gapOf = (a, b) => Math.max(b.x - a.x - a.w, a.x - b.x - b.w, b.y - a.y - a.h, a.y - b.y - b.h);
 const nearest = (L) => Math.min(Infinity, ...(L.boxes?.lines || []).flatMap(l => (L.boxes?.moons || []).map(m => gapOf(l, m))));
+/** Round 3: the tempo doubled mid-play (and halved, and doubled), every frame for 500 ms around it: the crawl never steps
+ *  back (a mutation's wrap aside) and the sun never counts up (its own wrap at 1 aside). Returns the faults, [] = none. */
+async function tempoJumps(p) {
+  const faults = [], base = await p.eval('Math.round(Tone.getTransport().bpm.value)');
+  for (const bpm of [base * 2, base, base * 2]) {
+    const run = await p.eval(`new Promise(r => { const out = []; let k = 0; const t0 = performance.now(); (function f() { const L = __poly.scene.light; out.push([L.crawl, +L.sun]); if (++k === 4) __poly.applyTempo(${bpm}); if (performance.now() - t0 < 500) requestAnimationFrame(f); else r(out); })(); })`);
+    for (let i = 1; i < run.length; i++) {
+      const [c0, s0] = run[i - 1], [c1, s1] = run[i];
+      if (c0 != null && c1 != null && c1 < c0 - 1e-9 && c0 - c1 < 0.5) faults.push(`→ ${bpm} bpm: the crawl ${c0.toFixed(4)} → ${c1.toFixed(4)}`);
+      if (s1 > s0 && s0 !== 1) faults.push(`→ ${bpm} bpm: the sun ${s0} → ${s1}`);
+    }
+    await p.sleep(300);
+  }
+  await p.eval(`__poly.applyTempo(${base})`); return faults;
+}
 const fails = [];
 const check = (sec, ok, what) => { if (!ok) fails.push(`${sec}: ${what}`); return ok; };
 const shots = arg('--shots', null); if (shots) mkdirSync(shots, { recursive: true });
@@ -76,7 +92,9 @@ async function LIGHTS(b, out) {
     const back = c.findIndex((x, i) => i && x < c[i - 1] - 1e-9);
     check('LIGHT', c.length > 5 && c[0] <= 0.01 && back < 0, `Play ${k + 1}: the crawl starts empty and never steps back: first ${c[0]?.toFixed(4)}, ${back < 0 ? 'no step back' : `back at frame ${back}: ${c[back - 1].toFixed(4)} → ${c[back].toFixed(4)}`} (${c.length} frames)`);
   }
-  out.LIGHT = { label: L.label, gen: L.gen, lines: L.lines, sun: L.sun, level: L.level, pill, stopped: { crawl: S.crawl, lines: S.lines }, playMax: r2(Math.max(...plays.flat())), errors: p.errors.slice() };
+  const jumps = await tempoJumps(p);
+  check('LIGHT', !jumps.length, `a tempo jump while playing moves the light back: ${jumps.slice(0, 4).join('; ')}`);
+  out.LIGHT = { label: L.label, gen: L.gen, lines: L.lines, sun: L.sun, level: L.level, pill, stopped: { crawl: S.crawl, lines: S.lines }, playMax: r2(Math.max(...plays.flat())), jumpFaults: jumps.length, errors: p.errors.slice() };
   check('LIGHT', !p.errors.length, `page errors: ${JSON.stringify(p.errors)}`);
   p.close();
 }
@@ -140,6 +158,8 @@ async function REDUCED(b, out) {
   check('REDUCED', (await p.eval(`getComputedStyle(document.getElementById('btn-play')).animationName`)) === 'none', 'the play ring\'s pulse is off with reduced motion');
   await p.key(' '); await p.sleep(800); await p.eval(GEN); await p.sleep(600);
   const stepped = await sample(p);   // 100 bpm: a beat is 600 ms, two beats ≈ 4 steps + the one it started in
+  const rJumps = await tempoJumps(p);
+  check('REDUCED', !rJumps.length, `a tempo jump moves the stepped crawl or the sun back: ${rJumps.slice(0, 4).join('; ')}`);
   const q = await openPage(b,{ width: 1512, height: 860 }); await q.sleep(300); await q.key(' '); await q.sleep(800); await q.eval(GEN); await q.sleep(600);
   const smooth = await sample(q);
   check('REDUCED', stepped <= 7 && smooth >= 20, `the crawl steps once per beat with reduced motion (${stepped} values in 2.6 s) and moves continuously without (${smooth})`);
@@ -204,7 +224,7 @@ try {
   if (only.has('SUN')) await SUN(b, out);
 } finally { await b.close(); }
 const L = [];
-if (out.LIGHT) L.push(`LIGHT first visit: "press play" then the beats · label "${out.LIGHT.label}" · playing: arc "${out.LIGHT.gen}", sun "${out.LIGHT.sun}", caption ${JSON.stringify(out.LIGHT.lines)}, level ${out.LIGHT.level}, pill "${out.LIGHT.pill}" · stopped: crawl ${out.LIGHT.stopped.crawl}, ${JSON.stringify(out.LIGHT.stopped.lines)} · Play: crawl max ${out.LIGHT.playMax}`);
+if (out.LIGHT) L.push(`LIGHT first visit: "press play" then the beats · label "${out.LIGHT.label}" · playing: arc "${out.LIGHT.gen}", sun "${out.LIGHT.sun}", caption ${JSON.stringify(out.LIGHT.lines)}, level ${out.LIGHT.level}, pill "${out.LIGHT.pill}" · stopped: crawl ${out.LIGHT.stopped.crawl}, ${JSON.stringify(out.LIGHT.stopped.lines)} · Play: crawl max ${out.LIGHT.playMax} · tempo ×2 / ÷2 / ×2 while playing: ${out.LIGHT.jumpFaults} steps back`);
 if (out.SUN) L.push(`SUN ${Object.entries(out.SUN).map(([k, v]) => `${k}: "${v.text}" ${v.px} px, ${v.w} in ${v.max} px, ${v.sizes} size over ${v.counts} counts`).join(' · ')}`);
 if (out.LADDER) for (const [k, v] of Object.entries(out.LADDER)) L.push(`LADDER ${k}: room ${v.room} px, level ${v.level}, ${JSON.stringify(v.plan)} · label "${v.label}" (fits ${v.labelFits})${v.rim ? ` · rim "${v.rim}"` : ''} · arc "${v.gen}" (drawn ${v.genFits}) · caption ${JSON.stringify(v.lines)}`);
 if (out.FRAME) L.push(`FRAME 6 lanes / 32 steps, generative on, 10 s: per frame p50 ${out.FRAME.frame.p50} p95 ${out.FRAME.frame.p95} max ${out.FRAME.frame.max} ms (${out.FRAME.frame.n} frames; RD-1 ${BASE.frameMs}, budget ${THRESH.frameMs}) · stress p95 ${out.FRAME.stress.p95} max ${out.FRAME.stress.max} (RD-1 ${BASE.stress}) · ${out.FRAME.sprites} text sprites`);

@@ -11,7 +11,7 @@ import { JAM_BEATS, stemsZip, stemFiles, foldLoop, oneShot, renderLead, wholeBar
 import { zipStored } from '../punch/ablbundle.js';
 import { Library } from './library.js';
 import { phaseCorrection } from './midiio.js';
-import { onBar, trackBars, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
+import { onBar, trackBars, blockTick, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs, AUTO_CC_KEYS } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt, TUNE_SEMIS } from './voices.js';
 import { HOLD_MS, MuteQueue, FillLatch, Guard, fxFreqs, stepFilter } from './perform.js';
@@ -375,6 +375,7 @@ async function setAutoLatency() {
 // the modulo bookkeeping on every tick, the lanes only on ticks where something can happen (liveQuiet).
 const stress = { level: 0, headMs: 100 };
 let tick = 0, resetPending = false, clockRef = { tick: 0, time: 0 }; const skip = new Set();   // skip: 'lane:tick' a pad already played live
+const clockPast = [];   // RD-8: the latest blocks' { tick, time }, the newest last (= clockRef): the heard tick is read off them
 const early = [];   // per lane: the steps decided ahead of their tick, since part of them sounds before it (liveTick)
 const pending = pendingSteps();   // E6: the jam log's early parts, by their step's tick: given its real time when it comes
 /** R3 bar lines: at + k × len (trackBars, slots.js). A new time signature (the meter control, a slot, undo, a link)
@@ -388,13 +389,14 @@ const tickSec = () => 60 / tempo / PPQ;
 const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
 /** The master tick (fractional) at audio-context time `time`, from the clock's latest block. */
-const tickAt = (time) => clockRef.tick + (time - clockRef.time) / tickSec();
+const tickAt = (time) => (clockPast.length > 1 ? blockTick(clockPast, time, tickSec()) : clockRef.tick + (time - clockRef.time) / tickSec());
 /** The master tick being heard right now (fractional): the scheduler runs ahead of the speakers, which lag a little. */
 const heardTick = () => { const raw = T.getContext().rawContext; return tickAt(raw.currentTime - (raw.outputLatency || 0)); };
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
   if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); }   // all keyed on the old ticks; loops count from 0 again
-  const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time };
+  if (tick === 0) clockPast.length = 0;   // a run (or a reset) starts its own line of blocks
+  const t0 = tick, ts = tickSec(); tick += MIDI_DIV; clockRef = { tick: t0, time }; clockPast.push(clockRef); if (clockPast.length > 64) clockPast.shift();
   stress.headMs = stress.headMs * 0.9 + (time - T.getContext().rawContext.currentTime) * 1000 * 0.1;   // audio headroom: how far ahead of the speakers we schedule
   pmidi.clockAt(t0, perfAt(time));   // a block starts on the 24-PPQ grid: one clock, 24 per quarter
   let cyc = m.cycleTicks(cycleOpts());   // once per block (and again when a slot or evolve changes the pattern)
@@ -449,7 +451,7 @@ async function togglePlay() {
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes): at the time
   // the transport starts, now() + 0.05 (now() is currentTime + the lookahead; RD-8: a guess 0.1 s early ran the heard
   // tick ahead until the first block put it back, and the crawl stepped back after Play)
-  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; const at0 = T.now() + 0.05; clockRef = { tick: 0, time: at0 }; T.getTransport().start(at0); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
+  if (playing) { setAutoLatency(); tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); scene.reset(); for (const c of kit.chains) c.ramp = c.handAt = null; const at0 = T.now() + 0.05; clockRef = { tick: 0, time: at0 }; clockPast.length = 0; T.getTransport().start(at0); pmidi.start(performance.now() + 50); if (!autoRaf) autoRaf = requestAnimationFrame(autoFrame); } else { gestEnd(true); if (jam.state === 'rec' || jam.state === 'armed') stopJam(); const at = T.now(); T.getTransport().stop(at); pmidi.stop(perfAt(at)); flushPerf(); m.lanes.forEach((l, i) => { if (l.auto) applySound(i); }); if (autoParams(m.lane).length) sync(); }   // MIDI start ahead of the first clock (never before a stop on its way); stop when the transport stops, after the clocks it still schedules; A2: a curve starts with a jump on Play, stopped the knobs play
   { const b = $('btn-play'); b.textContent = playing ? '■' : '▷'; b.setAttribute('aria-label', playing ? 'stop' : 'play'); if (!playing) barBeat.textContent = '01.1'; } recLine(); paintPlayhead(); paintLeds(); readout(); giftPlay?.();
   slog?.act('transport', playing ? 'stopped' : 'playing', playing ? 'playing' : 'stopped', { absorb: true });   // a stop lands the waiting mutes
 }
@@ -1060,8 +1062,9 @@ function liveHit(li, col, velocity = 100, accent = velocity != null && velocity 
   const tune = rec.pitchPads ? Math.round(((col - 3.5) / 3.5) * 60) / 100 : null, v = velocity == null ? null : Math.max(0.25, Math.min(1, velocity / 127));
   const lock = tune != null ? { tune } : null, recd = rec.armed && playing;
   // a pad plays what its step will play (S1 its slice, S3 its start / end / direction): recording, the step the hit
-  // lands on (steps count from the pattern's bar 1); otherwise the step under the pad
-  const q = recd ? lane.quantize(heardTick() - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), ph = lane.padHit(idx, lock);
+  // lands on (steps count from the pattern's bar 1); otherwise the step under the pad. Before a run's first downbeat is
+  // heard (the heard tick under 0: Play starts the transport 150 ms out) there is no loop before it: step 1, not the last
+  const q = recd ? lane.quantize(Math.max(0, heardTick()) - m.origin, rec.quant) : null, idx = lane.stepIndex(recd ? q.index : pages.padFirst(lane, playing) + col), ph = lane.padHit(idx, lock);
   // A2: playing, a pad hit lands on the lane's curves where you hear (the hand's value on a knob it holds)
   const auto = playing && lane.auto ? Object.fromEntries(AUTO_KEYS.filter(k => lane.auto[k]).map(k => [k, handNow?.[li]?.[k] ?? playedValue(lane, k, 'curve')])) : null;
   hitSound(lane, T.immediate(), accent, ph.lock, accent ? 1 : v, kit, ph.slice, null, auto); midiHit(li, lane, accent ? 1 : v ?? hitVel(false, null), performance.now(), lock);
@@ -1501,7 +1504,7 @@ function buildMidiUI() {
       const { jump: j, trim } = phaseCorrection((clockRef.tick + (audioT - clockRef.time) / tickSec()) / MIDI_DIV - ext), jump = j * MIDI_DIV;
       // a snap renumbers the ticks still to come; the reference moves with them, or every clock tick that arrives
       // before the next scheduler batch would apply the same snap again (and the clock would swing further and further)
-      if (jump) { const to = Math.max(0, tick + jump); clockRef = { ...clockRef, tick: clockRef.tick + to - tick }; tick = to; }
+      if (jump) { const to = Math.max(0, tick + jump); clockRef = { ...clockRef, tick: clockRef.tick + to - tick }; tick = to; clockPast.length = 0; }   // the blocks before the snap count the old ticks
       T.getTransport().bpm.value = (pmidi.extBpm || tempo) * trim; stress.drift = jump ? 'snap' : `${((trim - 1) * 100).toFixed(1)}%`;
     } };
   renderMidi();

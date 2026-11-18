@@ -1090,3 +1090,9 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   never drawn (its ±35° band is 73 px with 4 lanes, 65 with 6; "KICK 4 × 4" takes 80): a shorter form there (the name
   alone) when RD-10 builds the phone; with 6 lanes at 1512×860 the kick's label sits tight against the triangle's base
   (the hits' polygon inside the ring).
+- **The sun's long counts** (RD-08 round 3: architect; for Noor): from 10 000 beats the sun is always said short
+  ("60k" for ~8 minutes of a 60 060-beat cycle at 120 bpm) even where the full digits fit at 40 px on a desktop (six
+  digits take 154 of 157 px): try the cycle's own digits first, the short templates only when they fit at no size (one
+  size a cycle either way); `sunFace` could hand back the reserved width the plate takes (`scene.js` rebuilds
+  `sunTemplates` for it). A live hit recorded on step 1 before the first block is scheduled is not in `skip` (`qTick >
+  clockRef.tick` is false at 0), so the scheduler plays it again on the downbeat (as at the phase start).

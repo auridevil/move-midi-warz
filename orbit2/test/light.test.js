@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { beatsLeft, cycleBeats, cycleLine, genProgress, barsToEvolve, genClock, sunFace, sunTemplates, shortCount, SUN_SIZES, labelRuns, genWords, laneLabel, arcRoom, labelOffset, EXTRAS_MAX_STEPS, lightLevel, lightPlan, moonAngle, captionLines, captionFit, captionBoxes, MOON_DEG, LABEL_PX, NUMBER_PX, SUN_PX, CAPS_PX, LABEL_FONT, NUMBER_FONT, SUN_FONT, SUN_SMALL_FONT, LIGHT_ROOM, HINT_MS, LABEL_DEG, ringGeo, ringBox } from '../src/poly/scene.js';
 import { pillText } from '../src/poly/pills.js';
+import { blockTick } from '../src/poly/slots.js';
 
 const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
 /** Space Grotesk 500 caps at 13 px tracked .14 em: about 8.3 px a glyph (Chrome measures "EVOLVE · DICE · COUPLING NEXT ·
@@ -54,6 +55,32 @@ test('RD-8 round 1: the generative clock: stopped = what Play will do, Play neve
   // round 2 (architect, sound): reduced motion holds the bar before's last step until the line is heard, as the caption does
   assert.equal(genProgress(4, 4, -0.02, 4), genProgress(3, 4, 0.99, 4)); assert.equal(genProgress(4, 4, -0.02, 4), 0.9375); assert.equal(genProgress(4, 4, 0.01, 4), 0);
   assert.equal(genProgress(0, 4, genClock(true, 0, -40, 0, 96).frac, 4), 0, 'Play: the first step, never the last');
+});
+
+test('RD-8 round 3: the heard tick is read off the scheduled blocks, so a tempo change never moves it back (blockTick)', () => {
+  // a scheduler 54 ms ahead of the ear, a block every 4 ticks; the tempo doubles at 1 s (the app's tick length changes at
+  // once, the blocks scheduled from then on come twice as fast); the light reads the heard tick every millisecond
+  const ahead = 0.054, ts1 = 60 / 120 / 96, ts2 = 60 / 240 / 96, change = 1, step = 4, blocks = [];
+  for (let k = 0, t = 0; t < 2; k++) { blocks.push({ tick: k * step, time: t }); t += step * (t >= change + ahead ? ts2 : ts1); }
+  const sched = (w) => blocks.filter(b => b.time <= w + ahead).slice(-64), ts = (w) => (w >= change ? ts2 : ts1);
+  let prev = -Infinity, prevOld = -Infinity, back = 0, backOld = 0;
+  for (let w = 0.5; w < 1.5; w += 0.001) {
+    const refs = sched(w), last = refs[refs.length - 1], now = blockTick(refs, w, ts(w)), old = last.tick + (w - last.time) / ts(w);
+    if (now < prev - 1e-9) back++; if (old < prevOld - 1e-9) backOld++; prev = now; prevOld = old;
+  }
+  assert.equal(back, 0, 'never back'); assert.ok(backOld > 0, 'the old reading (back from the newest block at the new tempo) went back');
+  // exact on a block, linear between two, along the first two before them, at ts past the newest; one block: from it
+  const r = [{ tick: 0, time: 0 }, { tick: 4, time: 0.02 }, { tick: 8, time: 0.03 }];
+  const near = (a, b) => assert.ok(Math.abs(a - b) < 1e-9, `${a} ≈ ${b}`);
+  near(blockTick(r, 0.02, 1), 4); near(blockTick(r, 0.025, 1), 6); near(blockTick(r, 0.01, 1), 2); near(blockTick(r, -0.01, 1), -2);
+  near(blockTick(r, 0.04, 0.005), 10); near(blockTick([{ tick: 4, time: 1 }], 0.9, 0.05), 2); assert.ok(Number.isNaN(blockTick([], 1, 1)));
+  // the app: one line of blocks per run (cleared on Play, on a reset, on a MIDI-clock snap), read through blockTick
+  const app = read('../src/poly/app.js');
+  assert.match(app, /const tickAt = \(time\) => \(clockPast\.length > 1 \? blockTick\(clockPast, time, tickSec\(\)\)/);
+  assert.match(app, /clockRef = \{ tick: 0, time: at0 \}; clockPast\.length = 0;/); assert.match(app, /if \(tick === 0\) clockPast\.length = 0;/); assert.match(app, /tick = to; clockPast\.length = 0;/);
+  // a pad hit before a run's first downbeat is heard (the honest heard tick is under 0 there) lands on step 1, not the
+  // loop's last step (round 3, verifier's SHOULD; the page: d0 / d40 / d80 / d120 ms after Play → step 1 each)
+  assert.match(app, /lane\.quantize\(Math\.max\(0, heardTick\(\)\) - m\.origin, rec\.quant\)/);
 });
 
 test('RD-8 round 1: the label\'s two runs keep the space between the name and its length (labelRuns)', () => {

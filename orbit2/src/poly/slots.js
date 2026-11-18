@@ -8,6 +8,20 @@ const BARS = { at: 0, len: BAR_TICKS };   // 4/4 from tick 0
 /** Is master tick `tick` a bar line of `bars` ({ at, len })? */
 export const onBar = (tick, { at, len }) => (((tick - at) % len) + len) % len === 0;
 /**
+ * RD-8: the tick heard at audio time `time`, read off the clock's latest blocks `refs` ([{ tick, time }], oldest first,
+ * the last the newest scheduled): between two blocks along the line they make (the rate they were scheduled at, so a
+ * tempo change ramping in never moves a heard tick back, as working back from the newest at the new tempo did), past
+ * the newest at `ts` seconds a tick, before the oldest along the oldest two's rate. One block: from it at `ts`; none:
+ * NaN. Monotonic in `time` while the blocks are.
+ */
+export function blockTick(refs, time, ts) {
+  const n = refs.length; if (!n) return NaN;
+  const last = refs[n - 1]; if (n === 1 || time >= last.time) return last.tick + (time - last.time) / ts;
+  let i = n - 2; while (i > 0 && refs[i].time > time) i--;
+  const a = refs[i], b = refs[i + 1], span = b.time - a.time;
+  return span > 0 ? a.tick + ((time - a.time) * (b.tick - a.tick)) / span : a.tick;
+}
+/**
  * R3 bar lines at master tick `t` when the pattern's bar is `len` ticks long: a new length starts on the next bar line
  * of the old one (a bar is never cut short) and waits in `next` until then; going back to the old length before that
  * cancels it. Pure, and it runs on every tick: returns `bars` itself when nothing changes, else a new { at, len, next }.
