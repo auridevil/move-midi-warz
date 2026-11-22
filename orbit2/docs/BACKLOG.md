@@ -202,7 +202,7 @@ the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10,
 - **RD-5** The console: the Move's face on screen (8 knobs, 16 cells, transport, MOVE ⇢ chip, peek, lane list), plus the switchable console-log overlay (`` ` ``). ✅
 - **RD-6** Step page and the ring answers the hand: one lock editor, Nils's state table, read-only canvas answers. ✅
 - **RD-7** Pills: one status region (max 4 + "+N more"), replaces welcome bar, quest card, jam panel; quest "show me". ✅
-- **RD-8** Light on the canvas: sun numeral, generative arc, slot moons, one arc label, fill flare.
+- **RD-8** Light on the canvas: sun numeral, generative arc, slot moons, one arc label, fill flare. ✅
 - **RD-9** The set: F mode keeps state, night brightness, "?" draws the Move, final setlog sets (A3).
 - **RD-10** Phone, access and clean-up: phone layout, canvas tab stop, Tab order, dead DOM removed (A4).
 - **RD-11** Drift (`?drift`): hold − + knobs, LED state and meter, screen-off gate (A10).
