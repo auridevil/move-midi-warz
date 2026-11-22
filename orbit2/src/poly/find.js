@@ -70,7 +70,7 @@ export const ACTIONS = {
   'btn-undo': ['undo', ''], 'btn-redo': ['redo', ''],
   'btn-tap': ['tap tempo', ''],
   'btn-share': ['share link', 'copy'],
-  'btn-help': ['help: keys and mouse', ''],
+  'btn-help': ['help: keys, mouse and the Move', 'move table'],
   'btn-focus': ['focus mode', 'hide panels'],
   'btn-init': ['init pattern', 'start from scratch'],
   'btn-random': ['randomize', 'groove family'],

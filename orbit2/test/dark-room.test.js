@@ -23,6 +23,18 @@ test('RD-2 tokens: --l is the cap, text greys â‰¥ 4.5:1, border and knob track â
   assert.ok(lum(token('rec')) <= 0.475);
 });
 
+test('RD-9 night: control luminance scaled down, state never under 4.5:1; the edges and the lane ink do not move', () => {
+  const night = css.match(/body\.night {([^}]*)}/); assert.ok(night, 'body.night re-points the tokens');
+  const nt = (k) => { const m = night[1].match(new RegExp(`--${k}: (#[0-9a-f]{6})`)); assert.ok(m, `night --${k}`); return m[1]; };
+  const v = token('v');
+  for (const k of ['l', 'd']) {
+    assert.ok(lum(nt(k)) < lum(token(k)), `night --${k} is dimmer than day`);
+    assert.ok(ratio(nt(k), v) >= 4.5, `night --${k} still reads on the void`);
+  }
+  assert.ok(lum(nt('l')) <= 0.475, 'still under the cap');
+  for (const k of ['b', 'track', 'rec', 'v', 'ink']) assert.ok(!night[1].includes(`--${k}:`), `night leaves --${k} alone (edges at their 3:1 floor, red, the void, the lane ink)`);
+});
+
 test('RD-2 lane ink: 80 % of every lane hue over the void is under the cap and reads as text', () => {
   assert.equal(LANES.length, 6);
   assert.match(css, /--ink: color-mix\(in srgb, var\(--lane, var\(--l\)\) 80%, var\(--v\)\)/);

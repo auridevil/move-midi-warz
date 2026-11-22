@@ -22,6 +22,7 @@ import { makeGauge, bindRow } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
 import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind, genClock } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
+import { drawMoveHelp } from './moveface.js';
 import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
@@ -100,9 +101,9 @@ const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(
 quests.view = startView(quests.view, firstVisit);
 let questLog = [], questTimer = 0, cheerTimer = 0;
 let welcomeOn = false;   // F3 welcome back: a returning visit's pill, until the beat plays, loads or it is dismissed (RD-7)
-const face = { log: false };   // RD-5: the console-log overlay (` or Sheet → setup), off by default, remembered
+const face = { log: false, night: false };   // RD-5: the console-log overlay (` or Sheet → setup); RD-9: night. Both off by default, remembered
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; } } catch {}
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; if (typeof o.face?.night === 'boolean') face.night = o.face.night; } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage, face })); } catch {} };
 const setLineage = (from) => { lineage = from || null; saveSettings(); };
 
@@ -532,6 +533,7 @@ const INFO = {
   solo: 'Solo: only soloed lanes play (several can be).',
   'mute next bar': 'While playing, a mute or unmute waits for the next bar line, so it lands on the one (press again before it to take it back; a slot coming in on that line gets it too). On the Move: hold Mute and press a track button or a pad of a lane\'s row.',
   'console log': 'The console log: the status line and the per-lane and sound rows as plain text over the rings (key `). Text only, nothing to press.',
+  night: 'Night: the controls\' light turned down for a dark room (values, words and labels dim; the canvas, the lane colours and the edges stay). Everything still reads at 4.5:1.',
   'live mode': 'Live mode (the Move): pads play the lane\'s sound with their velocity instead of writing steps (arm Record to write), and Capture (randomize all) and Delete (clear lane) need Shift, or a 600 ms hold, so a stray press can\'t wipe the set. Off: pads toggle steps and the buttons act at once, as in editing.',
   'fx filter': 'Performance filter on the whole mix, before the master compressor: left = low-pass (darker, down to 200 Hz), right = high-pass (thinner, up to 6 kHz), centre = off. Glides, so a fast turn doesn\'t crackle. Move: the jog wheel (it stops at the centre on the way across; push it = off; Shift + wheel = humanize). Exports leave it out unless "print FX" is on.',
   'fill latch':'Fill for the next whole bar, hands free (Move: Shift + Layout). Press again before it starts to cancel.',
@@ -679,6 +681,7 @@ function renderPage() {
   const onStep = r.row === 'step'; if ($('step-tools').hidden === onStep) { $('step-tools').hidden = !onStep; $('lh-steps').hidden = onStep; }
   if (r.cells !== cellsMode || (r.cells === 'loops' && r.step !== cellsStep)) renderSteps();
   paintPeek();
+  if (helpMoveUp()) drawHelpMove();   // RD-9: the "?" overlay's Move drawing follows the page under the hands
 }
 for (const t of ['rhythm', 'sound']) $('pg-' + t).onclick = () => { knobPage.latch = t; renderPage(); };
 // the step tab: the step a cell's long-press (right-click, Alt+click) or a planet opened; none yet, it says how
@@ -1516,6 +1519,7 @@ function buildMixUI() {
   ui.muteBar = mount('mute-bar', toggleChip({ label: 'on next bar', on: perf.muteBar, title: INFO['mute next bar'], onChange: (v) => { perf.muteBar = v; saveSettings(); if (!v) flushMutes(); } }));
   ui.live = mount('live-mode', toggleChip({ label: 'live mode', on: perf.live, title: INFO['live mode'], onChange: (v) => { perf.live = v; padHints = 3; saveSettings(); paintLeds(); movePill(); } }));
   ui.consoleLog = mount('console-log-chip', toggleChip({ label: 'console log', on: face.log, title: INFO['console log'], onChange: setLog }));
+  ui.night = mount('night-chip', toggleChip({ label: 'night', on: face.night, title: INFO.night, onChange: setNight }));
   ui.choke = mount('choke-select', segmented({ options: [[-1, 'nothing']], value: -1, chips: true, onChange: (v) => { m.lane.choke = v; sync(); } }));
 }
 
@@ -2161,7 +2165,8 @@ function keepFocus(had) {
   const drawnNow = PILL_ORDER.filter(p => { const el = $(PILL_EL[p]); return !el.hidden && !el.classList.contains('fold'); });
   const skip = ['welcome', ...(jam.state === 'rec' || jam.state === 'armed' ? ['jam'] : [])];   // their first button plays / ends the take
   const to = focusAfter(k, drawnNow, !$('sp-more').hidden, !!(k === 'hint' ? $('quest') : had.closest('.spill'))?.classList.contains('fold'), { skip, hint: !$('quest-more').hidden });
-  const el = to === 'more' ? $('sp-more') : to === 'help' ? $('btn-help') : to === 'hint' ? $('quest-show') : [...$(PILL_EL[to]).querySelectorAll('button')].find(b => !b.hidden);
+  let el = to === 'more' ? $('sp-more') : to === 'help' ? $('btn-help') : to === 'hint' ? $('quest-show') : [...$(PILL_EL[to]).querySelectorAll('button')].find(b => !b.hidden);
+  if (el && !el.getClientRects().length && focusMode) el = $('focus-exit');   // RD-9: "?" is hidden in F mode; exit focus is its stand-in
   if (el) focusAs(el, keyFocused.has(had));
 }
 function renderPills() {
@@ -2682,6 +2687,9 @@ function nerdLines() {
 // tracks: it never moves the rings (A7) ----
 function paintLog() { const lines = nerdLines(), t = [statusLine, ...lines.slice(1, m.lanes.length + 2)].join('\n'); if ($('console-log').textContent !== t) $('console-log').textContent = t; }
 function setLog(on) { face.log = !!on; $('console-log').hidden = !face.log; ui.consoleLog?.set(face.log); if (face.log) paintLog(); saveSettings(); }
+// RD-9 night (Sheet → setup): body.night re-points the control tokens (styles.css); state (text contrast, edges, the
+// lane ink, the canvas) holds 4.5:1 / 3:1, so it is a brightness, not a theme
+function setNight(on) { face.night = !!on; document.body.classList.toggle('night', face.night); ui.night?.set(face.night); saveSettings(); }
 $('nerd').addEventListener('toggle', () => { if ($('nerd').open) readout(); });
 // The readout is not a live region (5 knob clicks = 5 re-reads of every line). A small polite region says only what
 // you changed, after the knob settles: "length 5", "tempo 124 bpm", the lane you switched to, the kit you picked.
@@ -2891,7 +2899,9 @@ addEventListener('keydown', (e) => {
   if (e.target instanceof Element && e.target.closest(TEXT_SEL)) return;
   escapeOnce();
 });
-// ---- C5 focus mode: every panel hidden, the orbits fill the window (key F, the settings button; Esc or F to come back) ----
+// ---- C5 / RD-9 focus mode: the controls hidden, never state — the orbits fill the window and the pills, the peek and
+// all canvas light stay up; the console, the lane list, the Move pill, "?" and the sheet go (styles.css). Key F, the
+// settings button; Esc or F to come back ----
 // Coming back puts the focus and the page where they were. F gives the keys back to whoever owned them: a control the
 // keyboard had reached gets them, anything else (a click's leftover, the page) leaves them to the page, so F, F, Space
 // plays. Esc gives them to the page, as it does everywhere. The scroll comes back too: the page's (on a phone it shrinks
@@ -2903,7 +2913,7 @@ function setFocusMode(on, esc = false) {
   if (on) {   // before the panels go: hidden, the page is one window tall and scrollY already 0
     const a = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
     beforeFocus = { el: a, owned: !!a && keyFocused.has(a), y: scrollY, cols: columns().map(c => c.scrollTop) };
-    if (a?.closest('#topbar, .hud, #col-left')) a.blur();   // focus must not stay in a hidden panel
+    if (a?.closest('#topbar, #legend, .hud-top, #sheet')) a.blur();   // focus must not stay in a hidden panel (RD-9: the pills and the peek stay up)
   }
   focusMode = on; document.body.classList.toggle('focus-mode', on); $('focus-exit').hidden = !on;
   poke();   // the rings stay where the stage cell puts them (A7: F on or off); a phone's canvas resize redraws itself
@@ -2915,10 +2925,24 @@ function setFocusMode(on, esc = false) {
   }
 }
 $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () => setFocusMode(false);
-// ---- C3 help: the keys and the mouse tricks, in one overlay (button "?" or the ? key) ----
-function openHelp() { const d = $('help'); if (!d.open) d.showModal(); }
+// ---- C3 / RD-9 help: two tabs in one overlay (button "?" or the ? key) — the keys and mouse tricks, and the Move
+// drawn with the current page's meanings on its controls (moveface.js) over its full table. The drawing follows the
+// hands while the overlay is up (renderPage), so a Move touch relabels the knobs in place ----
+const HELP_TABS = ['keys', 'move'];
+function drawHelpMove() { const r = knobPage.r || pageNow(); $('move-draw').innerHTML = drawMoveHelp({ row: r.row, row8: r.row8, cells: r.cells, word: r.word, live: perf.live }); }
+function helpMoveUp() { return $('help').open && !$('hpane-move').hidden; }   // a declaration: renderPage asks before this line runs
+function helpTab(t) {
+  for (const k of HELP_TABS) { const on = k === t, b = $('htab-' + k); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('hpane-' + k).hidden = !on; }
+  if (t === 'move') drawHelpMove();
+}
+for (const k of HELP_TABS) $('htab-' + k).onclick = () => helpTab(k);
+$('help').querySelector('.help-tabs').addEventListener('keydown', (e) => {
+  const f = HELP_TABS.indexOf(document.activeElement?.id?.slice(5)), j = tabMove(e.key, f >= 0 ? f : 0, HELP_TABS.length);
+  if (j < 0) return; e.preventDefault(); helpTab(HELP_TABS[j]); focusAs($('htab-' + HELP_TABS[j]), true);
+});
+function openHelp() { const d = $('help'); if (!$('hpane-move').hidden) drawHelpMove(); if (!d.open) d.showModal(); }
 $('btn-help').onclick = openHelp;
-// (RD-3: the Move table is a drawer in Sheet → setup now, not a popup, so a click elsewhere no longer folds it shut)
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, openHelp, quests, setView, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, setNight, get night() { return face.night; }, openHelp, helpTab, quests, setView, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 $('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)
+document.body.classList.toggle('night', face.night);   // RD-9: night as it was left
 readout(); layoutStage(); scene.start();

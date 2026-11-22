@@ -21,15 +21,15 @@ test('RD-3 six tabs in order, each a tab with its own pane (only the first shown
   assert.deepEqual(ps.map(t => [t.a.id, t.a['data-sheet'], t.a['aria-labelledby'], !!t.a.hidden]), TABS.map((t, i) => [`pane-${t}`, t, `tab-${t}`, i > 0]));
 });
 
-test('RD-3 the 13 drawers all live in the sheet, in the tab Greta\'s table gives them', () => {
+test('RD-3 the 12 drawers all live in the sheet, in the tab Greta\'s table gives them (RD-9: the Move table left for the help overlay)', () => {
   const where = {
     lane: ['lane-drawer'], pattern: ['patterns-drawer', 'lib-drawer'], groove: ['Humanize', 'evolve-drawer', 'evo-sub', 'dice-drawer'],
-    perform: ['Record'], export: ['export-drawer'], setup: ['settings-drawer', 'midi-drawer', 'keys-pop', 'nerd'],
+    perform: ['Record'], export: ['export-drawer'], setup: ['settings-drawer', 'midi-drawer', 'nerd'],
   };
   // a drawer by its id, else the evolve sub-drawer by its class, else by its summary's words
   const drawers = (s) => tags(s, 'details').map(t => t.a.id || (String(t.a.class).includes('evo-sub') ? 'evo-sub' : s.slice(t.end).match(/^\s*<summary\b[^>]*>([^<]*)/)?.[1].trim()));
-  assert.equal(tags(html, 'details').length, 13, '13 drawers on the page');
-  assert.equal(drawers(sheet).length, 13, 'all of them in the sheet');
+  assert.equal(tags(html, 'details').length, 12, '12 drawers on the page');
+  assert.equal(drawers(sheet).length, 12, 'all of them in the sheet');
   for (const t of TABS) assert.deepEqual(drawers(panes[t]), where[t], `tab ${t}`);
 });
 

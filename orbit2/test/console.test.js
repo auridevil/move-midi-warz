@@ -75,7 +75,7 @@ test('RD-5 the console log: read-only text over the stage, off by default, never
   const tag = /<pre id="console-log"[^>]*>/.exec(html)?.[0];
   assert.ok(tag, 'the overlay is a <pre>, not a control'); assert.match(tag, /\bhidden\b/, 'off on a first visit'); assert.doesNotMatch(tag, /aria-live|role=/, 'never a live region');
   assert.match(html, /id="console-log-chip"/, 'its switch in Sheet → setup');
-  assert.match(app, /const face = \{ log: false \}/, 'off by default');
+  assert.match(app, /const face = \{ log: false, night: false \}/, 'off by default (RD-9: night too)');
   assert.match(app, /typeof o\.face\?\.log === 'boolean'\) face\.log = o\.face\.log/, 'read back from the settings (only a boolean)');
   assert.match(app, /JSON\.stringify\(\{[^}]*\bface \}\)/, 'saved with the settings');
   // the key: after controlOwnsKey (a field, a focused control keep their keys), no modifiers

@@ -27,6 +27,10 @@
      over the canvas must not light the button above the cap */
   --plate: rgba(12, 9, 25, 0.9);
 }
+/* RD-9 night (the chip in Sheet → setup): control luminance scaled down for a dark room — the values and words (--l
+   0.470 → 0.313) and the labels (--d 0.257 → 0.226). State never under 4.5:1 (the face audit measures the page with
+   night on), so the edges (--b, --track, at their 3:1 floor), the lane ink, record red and the canvas do not move. */
+body.night { --l: #9a95ab; --d: #858095; }
 /* --ink: a lane's own colour where it marks a control (an outline, a knob arc, type): 80 % over the void stays under the
    cap for every lane hue (yellow 0.464) and over 4.5:1 for every one (purple 4.8:1). Declared where --lane is set, so it
    resolves there (a custom property computes where it is declared) */
@@ -480,7 +484,6 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
 .pane { display: flex; flex-direction: column; gap: 10px; }
 .pane .drawer { width: 100%; }
 .pane .hud-row, .pane .lane-tabs, .pane .grooves-row .chips { justify-content: flex-start; }
-.pane .keys-pop[open] { width: auto; max-height: none; overflow: visible; box-shadow: none; z-index: auto; }   /* a drawer here, not a popup over a column */
 @media not all and (max-width: 1100px) {
   .hud { overflow: hidden; }
   .hud > :not(.sheet) { margin-right: 24px; max-width: calc(100% - 24px); }   /* a full-width one (the jam take) fits beside its margin, not 24 px past the column's edge */
@@ -693,13 +696,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
 .lockpanel { border: 1px solid var(--b); border-radius: 10px; padding: 6px 8px; margin: 4px 0 8px; background: transparent; }
 .lock-head { display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: var(--l); gap: 8px; }
 .pane .stress-meter { position: static; margin: 8px 0 0; }
-/* Move controls: a capped popup that grows upward; its header stays visible so it can always be closed */
-.keys-pop[open] { position: relative; z-index: 6; width: min(560px, calc(100vw - 48px)); max-height: calc(100vh - 140px); overflow-y: auto; background: rgb(18, 12, 40); box-shadow: 0 -12px 40px rgba(0,0,0,.55); padding-top: 0; }
-.keys-pop[open] > summary { position: sticky; top: 0; z-index: 1; background: rgb(18, 12, 40); padding: 8px 0; }
-.keys-pop .pop-x { display: none; float: right; font-size: 11px; color: var(--muted); letter-spacing: .1em; }
-.keys-pop[open] .pop-x { display: inline; }
 .gtable.keys th { width: 38%; white-space: nowrap; vertical-align: top; } .gtable.keys td, .gtable.keys th { padding: 4px 8px 4px 0; }
-@media (max-width: 1100px) { .keys-pop[open] { width: auto; max-height: none; } }
 /* Orbits on narrow windows: header, the square canvas, the legend and what is on stack in one scrolling page; the sheet
    is the bottom sheet (above). .hud makes no layer here, so the sheet's own z-index sits over the page */
 @media (max-width: 1100px) {
@@ -837,9 +834,6 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
 @media (pointer: coarse) and (max-width: 440px) { body:has(#sheet) .stepsui { grid-template-columns: repeat(4, 1fr); } }
 /* touch: 16 in a row is too small a target; a long lane is four rows of 8 (each pair of rows a bar) */
 @media (max-width: 1100px) { @media (pointer: coarse) { body:has(#sheet) .stepsui { grid-template-columns: repeat(8, 1fr); } } }
-/* the Move-controls popup floats over the panels and the readout: solid, or their text shows through
-   (beats `body:has(#cv) .drawer`, which made every drawer, this one too, 86% opaque) */
-body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { background: rgb(18, 12, 40); }
 /* ---- ORBIT2-04 calmer screen ---- */
 /* C4: the stress meter is a diagnostic (?debug only) */
 .stress-meter[hidden] { display: none; }
@@ -850,6 +844,21 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
 .help-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 4px; }
 .help-head h2 { margin: 0; font-size: 13px; }
 .help .gtable.keys th { width: 30%; white-space: normal; }
+/* RD-9: the "?" overlay's two tabs (the keys, the Move drawn with the current page's meanings over its table). Wider
+   while the Move tab is up, so the drawing's 13 px words render at size; a window too small scrolls it sideways
+   instead of shrinking the words. */
+.help-tabs { display: flex; margin: 2px 0 10px; }
+.help:has(#hpane-move:not([hidden])) { width: min(1016px, calc(100vw - 32px)); }
+.move-draw { overflow-x: auto; margin: 4px 0 10px; }
+.move-draw svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--font-body); }
+.mf-body { fill: rgba(12, 9, 25, 0.6); stroke: var(--b); stroke-width: 1.5; }
+.mf-box { fill: none; stroke: var(--b); stroke-width: 1.5; }
+.mf-pad { fill: none; stroke: var(--b); stroke-width: 1; opacity: .4; }
+.mf-plate { fill: var(--plate); stroke: var(--b); stroke-width: 1; }
+.mf-word { fill: var(--l); font-size: var(--t-m); }
+.mf-small { fill: var(--l); font-size: var(--t-s); letter-spacing: var(--tr-12); }
+.mf-dim { fill: var(--d); font-size: var(--t-s); letter-spacing: var(--tr-12); }
+.mf-big { fill: var(--l); font-size: var(--t-l); font-weight: 500; }
 /* RD-5 the lane list (was C5's legend): a row per lane, inner ring first: dot, voice, length · ×speed, a tap selects it;
    the selected row in its lane's 2 px ink; a muted lane's name in the label grey and its dot hollow; the M lamp beside
    it ("on" = the 2 px outline, dashed while a mute waits for the bar line, "S" while soloed). 40 px rows */
@@ -866,8 +875,12 @@ body:has(#cv) .keys-pop[open], body:has(#cv) .keys-pop[open] > summary { backgro
    and nothing under it moves, until RD-10 turns it into a row of colour dots */
 /* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps
    its floating play (no Space bar there to stop the music) */
+/* RD-9 F mode hides controls, never state (DECISION "F mode and pills"): the pills, the peek and all canvas light stay;
+   the console (by visibility: the grid keeps its cell, A7), the lane list, the Move pill, "?" and the sheet go. Mutes
+   stay visible as rings (scene.js draws a muted lane's ring grey whatever hides). */
 body.focus-mode #topbar { visibility: hidden; }
-body.focus-mode .hud, body.focus-mode #col-left, body.focus-mode #legend { display: none !important; }
+body.focus-mode #legend, body.focus-mode .hud-top, body.focus-mode #sheet { display: none !important; }
+@media (max-width: 1100px) { body.focus-mode #pills { position: fixed; top: 10px; left: 10px; right: 64px; z-index: 8; } }   /* narrow: the pills over the fixed canvas, clear of "exit focus" */
 @media (max-width: 760px) { body.focus-mode:has(#sheet) #btn-play { visibility: visible; } }
 body.focus-mode:has(#sheet) { overflow: hidden; padding-bottom: 0; }
 body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }

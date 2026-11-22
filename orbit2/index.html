@@ -91,12 +91,19 @@
     </div>
   </dialog>
   <button id="focus-exit" class="small focus-exit" type="button" hidden title="Show the panels again (F or Esc)">exit focus</button>
-  <!-- C3: every key and mouse trick in one place (button "?" or the ? key); the Move's buttons are in Sheet → setup → Move -->
+  <!-- C3 / RD-9: every key and mouse trick, and the Move, in one overlay (button "?" or the ? key). Two tabs: the keys,
+       and the Move drawn with the current page's meanings (moveface.js) over its full table (moved here from Sheet →
+       setup, byte for byte) -->
   <dialog id="help" class="help" aria-labelledby="help-title">
-    <form method="dialog" class="help-head"><h2 id="help-title">keys &amp; mouse</h2><button class="small" aria-label="close help">close</button></form>
+    <form method="dialog" class="help-head"><h2 id="help-title">help</h2><button class="small" aria-label="close help">close</button></form>
+    <div class="sheet-tabs help-tabs" role="tablist" aria-label="help">
+      <button type="button" role="tab" id="htab-keys" aria-controls="hpane-keys" aria-selected="true">keys &amp; mouse</button>
+      <button type="button" role="tab" id="htab-move" aria-controls="hpane-move" aria-selected="false" tabindex="-1">Move</button>
+    </div>
+    <div role="tabpanel" id="hpane-keys" aria-labelledby="htab-keys">
     <table class="gtable keys">
       <tr><th>Space</th><td>play / stop</td></tr>
-      <tr><th>F</th><td>focus mode: only the orbits (F or Esc to come back; while record is armed F plays its pad)</td></tr>
+      <tr><th>F</th><td>focus mode: the controls go, the orbits, the pills and the peek stay (F or Esc to come back; while record is armed F plays its pad)</td></tr>
       <tr><th>?</th><td>this help</td></tr>
       <tr><th>`</th><td>the console log: the status and every lane's numbers as text over the rings (also Sheet → setup)</td></tr>
       <tr><th>⇧ held</th><td>the console shows the sound page (the Move's Shift + knobs)</td></tr>
@@ -115,6 +122,49 @@
     </table>
     <p class="hint">At speed ×1 a step is a beat, so 4 steps = one bar; ×2 = eighths, ×4 = sixteenths, ½ = half notes. Lengths 3 · 4 · 5 · 7 at the same speed = polymeter; ratios ⅔ · 3/2 · 3 = true polyrhythm; 5/4 · 7/4 = fives and sevens over four beats, 4/3 = hemiola, ×6 = sixteenth triplets. Euclid spreads k hits evenly; rotation shifts them.</p>
     <p class="hint">On the orbits: each planet is a hit you set, as solid as its chance of playing (a faint one seldom plays). A ring that flashes round a planet: it came round and stayed silent (solid ring: its chance said no · dotted: the locked dice said no · dashed: its condition). Arcs round a planet: a 1:3-style condition, one arc per loop from the top; the solid arc is the loop it plays on, the white one the loop you are in now. The thin arc outside the rings: how far you are through the whole cycle, until everything lines up again.</p>
+    </div>
+    <div role="tabpanel" id="hpane-move" aria-labelledby="htab-move" hidden>
+    <!-- RD-9: the drawing (filled by app.js from moveface.js, re-drawn while the page changes); the table under it is
+         the source of truth and is read instead of the picture -->
+    <div id="move-draw" class="move-draw" aria-hidden="true"></div>
+    <table class="gtable keys">
+      <tr><th>Live mode</th><td>on by default (the chip by Connect Move): pads play, Capture and Delete need Shift or a hold. Off = editing: pads toggle steps, every button acts at once</td></tr>
+      <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
+      <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
+      <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
+      <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
+      <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
+      <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
+      <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
+      <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
+      <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
+      <tr><th>Hold Layout</th><td>fill</td></tr>
+      <tr><th>Shift + Layout</th><td>fill for the next whole bar, hands free (Layout lights cyan while it waits) · again before it starts = cancel</td></tr>
+      <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
+      <tr><th>Delete</th><td>clear the lane · live mode: Shift + Delete, or hold it 0.6 s (it blinks red first; a shorter tap does nothing)</td></tr>
+      <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
+      <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
+      <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
+      <tr><th>Play</th><td>start / stop</td></tr>
+      <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
+      <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
+      <tr><th>Knob 8</th><td>master tempo</td></tr>
+      <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
+      <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
+      <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (blue until then; a slot coming in on that line gets it too) · mutes are never undo steps</td></tr>
+      <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
+      <tr><th>−</th><td>evolve on/off</td></tr>
+      <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
+      <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
+      <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · in touch mode a touch writes even while the knob holds still (rest a finger on it only to record its value) · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
+      <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
+      <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
+      <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
+      <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
+      <tr><th>Hold +</th><td>delay throw: the whole mix into a dotted-eighth delay, feedback up, while held; let go and the echoes ring out</td></tr>
+      <tr><th>Volume</th><td>volume</td></tr>
+    </table>
+    </div>
   </dialog>
   <!-- RD-3: the left column of the grid (on narrow windows its children join the page's own stack) -->
   <div class="col-left" id="col-left">
@@ -379,9 +429,9 @@
       <p id="engine-note" class="hint tight"></p>
       <div class="row-ctl">
         <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
-        <button id="btn-focus" class="small" title="Hide every panel: only the orbits (key F, Esc to come back)">focus mode</button>
+        <button id="btn-focus" class="small" title="Hide the controls: the orbits, the pills and the peek stay (key F, Esc to come back)">focus mode</button>
       </div>
-      <div class="row-ctl"><span id="live-mode"></span><span id="console-log-chip"></span></div>
+      <div class="row-ctl"><span id="live-mode"></span><span id="console-log-chip"></span><span id="night-chip"></span></div>
     </details>
     <details class="drawer adv" id="midi-drawer">
       <summary>MIDI</summary>
@@ -400,46 +450,7 @@
       <div id="midi-cc" class="gauges midi-gauges"></div>
       <p id="midi-status" class="hint tight"></p>
     </details>
-    <details class="drawer keys-pop" id="keys-pop">
-      <summary>Move <span class="pop-x" aria-hidden="true">esc ×</span></summary>
-      <table class="gtable keys">
-        <tr><th>Live mode</th><td>on by default (the chip by Connect Move): pads play, Capture and Delete need Shift or a hold. Off = editing: pads toggle steps, every button acts at once</td></tr>
-        <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
-        <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
-        <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
-        <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
-        <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
-        <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
-        <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
-        <tr><th>Hold step + jog wheel</th><td>nudge the step early / late (5 % of a step per click, up to half a step)</td></tr>
-        <tr><th>Hold step + push jog wheel</th><td>stroke: conga / bongo open → mute → slap, djembe bass → tone → slap, hat closed → open, agogo low → high, shekere shake → slap, then back to the lane sound</td></tr>
-        <tr><th>Hold Layout</th><td>fill</td></tr>
-        <tr><th>Shift + Layout</th><td>fill for the next whole bar, hands free (Layout lights cyan while it waits) · again before it starts = cancel</td></tr>
-        <tr><th>Sampling</th><td>jam: record a track per lane (up to 256 beats) · again = stop</td></tr>
-        <tr><th>Delete</th><td>clear the lane · live mode: Shift + Delete, or hold it 0.6 s (it blinks red first; a shorter tap does nothing)</td></tr>
-        <tr><th>Hold Loop + steps</th><td>load a slot (several steps = chain)</td></tr>
-        <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
-        <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
-        <tr><th>Play</th><td>start / stop</td></tr>
-        <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
-        <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
-        <tr><th>Knob 8</th><td>master tempo</td></tr>
-        <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
-        <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo</td></tr>
-        <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (blue until then; a slot coming in on that line gets it too) · mutes are never undo steps</td></tr>
-        <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
-        <tr><th>−</th><td>evolve on/off</td></tr>
-        <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
-        <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
-        <tr><th>Record armed + touch a knob</th><td>playing, with knobs on touch or latch (Record drawer): the knob's moves are recorded into the selected lane · knob 6 · 7 (chance · tune) and Shift + knob 1 · 4 · 5 (decay · snap · color) as step locks on the steps that play · Shift + knob 2 · 3 · 6 · 7 · 8 (tone · drive · send · pan · level) as a smooth curve · in touch mode a touch writes even while the knob holds still (rest a finger on it only to record its value) · let go and it plays back (latch: it goes on until the loop is back where you started) · one touch = one undo</td></tr>
-        <tr><th>Touch a knob + Delete</th><td>clear that knob's automation on the selected lane (Delete without a touch keeps its meaning)</td></tr>
-        <tr><th>◀ ▶</th><td>previous / next voice for the lane</td></tr>
-        <tr><th>Shift + ◀ ▶</th><td>previous / next kit (all lanes)</td></tr>
-        <tr><th>Wheel</th><td>performance filter on the whole mix: left = low-pass, right = high-pass; it stops at "off" on the way across · push = off · Shift + wheel = humanize</td></tr>
-        <tr><th>Hold +</th><td>delay throw: the whole mix into a dotted-eighth delay, feedback up, while held; let go and the echoes ring out</td></tr>
-        <tr><th>Volume</th><td>volume</td></tr>
-      </table>
-    </details>
+    <!-- RD-9: the Move table lives in the "?" overlay's Move tab now, under the drawing -->
     <details class="drawer nerd" id="nerd">
       <summary>Nerd stats</summary>
       <pre id="nerd-stats" class="nerd-stats"></pre>
