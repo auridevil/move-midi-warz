@@ -1132,6 +1132,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   help is open (only a tool can) redraws the drawing on the next Move event, not at once.
 - **The slots page in F** (RD-09 round 2: ines): F hides the console, so holding Loop in F shows no slots on the cells;
   the canvas's slot moons (RD-8) still say which slot plays and which waits. Noor: is the cells' slot view state?
+- **One "Loop holds the cells" rule** (RD-09 round 3: architect, ines): the stepped-back tab keys on
+  `#stepsui[data-cells="slots"]` (also true on a step page with Loop), the chip and the header on `loop && row !==
+  'step'` (`pages.js`), so on a step page with Loop the step tab steps back while the chip and header keep the step
+  page's names; drive both from one flag (a `data-slots` from `resolvePage`) or check it in LOOP, and cover a
+  mouse-latched step page there. At 1280×720 the page tabs move ~21 px right while Loop is held (the longer chip):
+  let the chip grow leftward. "SLOTS" could weigh a little more on the chip than the grey part after it.
 - **Ticks inside a block after a tempo step** (RD-09 round 1: sound; from before the phase): `tickSec()` reads `tempo`
   at the call while the transport's step lands at `now()` (104–135 ms later), so blocks already due keep the old spacing
   but their inner ticks use the new one (≈ 0.3 ms off for ±2 bpm, up to ~10 ms early for ×2 and ~20 ms late for ÷2 on
