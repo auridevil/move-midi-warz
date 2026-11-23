@@ -408,7 +408,7 @@ body.chaos::before { display: none; }
 .big-btn { font-size: 15px; padding: 10px 20px; }
 /* first visit: the play button breathes until it is pressed once (a steady glow when motion is reduced) */
 /* play: an outlined ring (2 px --l, no fill), found by size and place, not by glare. It keeps the strip's slot until
-   the console (RD-5) gives it its 64 px; the phone's floating play is the 64 px ring now */
+   the console (RD-5) gives it its 64 px; on a phone it sits in the console too (RD-10), floating only in focus mode */
 #btn-play { border-color: var(--l); box-shadow: inset 0 0 0 1px var(--l); }
 #btn-play.pulse { animation: play-pulse 2.6s ease-in-out infinite;   /* RD-8: a slow outline pulse on a visit that has never played */ box-shadow: inset 0 0 0 1px var(--l), 0 0 0 3px rgba(184,180,199,.45); }
 @keyframes play-pulse { 50% { box-shadow: inset 0 0 0 1px var(--l), 0 0 0 7px rgba(184,180,199,.1); } }
@@ -506,7 +506,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
   .hud > .sheet:not(.open) { display: none; }   /* RD-5: closed, nothing of it on the face ("all ⌘K", ⌘K, / and the A on a knob open it) */
 }
 /* narrow windows: a bottom sheet. Closed, its tab row docks along the bottom edge; open, it takes the full height and
-   scrolls inside (the floating play stays over it on a phone, so the body keeps room under its last row) */
+   scrolls inside */
 :root { --dock: 46px; } @media (pointer: coarse) { :root { --dock: 58px; } }
 @media (max-width: 1100px) {
   body:has(#sheet) .sheet { position: fixed; left: 0; right: 0; bottom: 0; z-index: 7; background: rgb(12, 9, 25); border-top: 1px solid var(--b); padding-bottom: env(safe-area-inset-bottom); }
@@ -515,7 +515,7 @@ body:has(#cv) .drawer, body:has(#cv) .bar { backdrop-filter: none; background: r
   .sheet-head { padding: 6px 8px; } .find { padding: 8px 8px 0; } .find-list { left: 8px; right: 8px; }
   .sheet-tabs { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
   .sheet-tabs [role=tab] { padding: 6px 2px; min-width: 0; }
-  .sheet-body { padding: 4px 12px calc(var(--dock) + 96px); }   /* the phone's floating play reaches --dock + 86 px up: the last row scrolls clear of it */
+  .sheet-body { padding: 4px 12px calc(var(--dock) + 24px); }   /* RD-10: play left the thumb zone for the console, so the last row only clears the dock */
 }
 
 /* arc gauges: small arc, value and label stacked underneath */
@@ -719,7 +719,7 @@ button.small { padding: 3px 10px; font-size: 11px; }
   body:has(#sheet) .chaos-bar { order: 2; } body:has(#sheet) .hud { order: 2; }   /* RD-5: the console under the rings and the lane list */
   body:has(#sheet) .hud { position: static; width: auto; margin: 0 16px 12px; overflow: visible; align-items: stretch; z-index: auto; }
   body:has(#sheet) .hud-row { justify-content: flex-start; }
-  body.sheet-open:has(#sheet) .chaos-bar { z-index: auto; }   /* open full height: the sheet covers the header, the phone's play (z 8) still floats over it */
+  body.sheet-open:has(#sheet) .chaos-bar { z-index: auto; }   /* open full height: the sheet covers the header and the console */
   /* the orbits get their own square stage right under the header, so the rings are visible and tappable instead of
      sitting behind the panels; the scene measures the canvas box, not the viewport */
   body:has(#sheet) #cv { position: relative; inset: auto; width: 100%; height: min(100vw, 62vh); order: 1; }
@@ -733,14 +733,11 @@ button.small { padding: 3px 10px; font-size: 11px; }
 /* phone */
 @media (max-width: 760px) {
   body:has(#sheet) .hud { margin-left: 12px; margin-right: 12px; }
-  /* C1 on a phone: play floats in the thumb zone, over the bottom of the screen; the page scrolls clear of it */
-  /* the 64 px ring, centred where the 76 px disc was (right / bottom + 6 px), on the void so what it floats over stays behind it */
-  body:has(#sheet) #btn-play { position: fixed; right: 22px; bottom: calc(var(--dock) + max(22px, calc(env(safe-area-inset-bottom) + 6px))); z-index: 8; width: 64px; height: 64px; min-width: 0; padding: 0; border-radius: 50%; font-size: var(--t-m); line-height: 1; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: var(--v); box-shadow: inset 0 0 0 2px var(--l), 0 0 0 4px rgba(12,9,25,.85); }
-  body:has(#sheet) { padding-bottom: calc(104px + var(--dock)); }   /* RD-3: play floats over the docked tab row */
-  /* RD-5: the button lives in the console, which scrolls under the docked tab row: the console makes no layer (z auto),
-     so the fixed button's own z 8 sits in the page's layer, over the panels and the dock, and the dock over the console */
+  /* RD-10: play sits in the console beside bar·beat (DECISION "the console becomes play + bar·beat…"). C1's floating
+     thumb-zone ring lives on only in focus mode (below), where the console is hidden */
+  /* RD-5: the console scrolls under the docked tab row: the console makes no layer (z auto) */
   body:has(#sheet) .chaos-bar { z-index: auto; position: static; }
-  body:has(#sheet) .toast { bottom: calc(108px + var(--dock)); }
+  body:has(#sheet) .toast { bottom: calc(var(--dock) + 12px); }
   body:has(#sheet) .lane-tabs .lane-tab { flex: 1 1 calc(50% - 6px); }
   body:has(#sheet) .lane-tabs:has(> .lane-tab:nth-child(5):not([hidden])) .lane-tab { flex-basis: calc(33.333% - 6px); }   /* L2: six lanes = two rows of three */
   body:has(#sheet) .stepsui { column-gap: 3px; }   /* the rows keep their gap: a step's condition label sits under it */
@@ -752,7 +749,9 @@ button.small { padding: 3px 10px; font-size: 11px; }
   body:has(#sheet) .spill { flex: none; }
   body:has(#sheet) .spill button, body:has(#sheet) .sp-more, body:has(#sheet) .grooves-row .chips > button, body:has(#sheet) .row-ctl:has(#exp-roll) > button, body:has(#sheet) #btn-solo { min-height: 44px; }
   body:has(#sheet) .spill .sp-x { min-width: 44px; }
-  body:has(#sheet) .quest-more { left: 0; right: auto; width: 100%; }
+  /* RD-10: the drop-down opens UP on a phone: the pills sit near the page's end (play left the thumb zone, so the body
+     keeps no spare room below), and a drop-down below them would fall past the last scroll line, unreachable */
+  body:has(#sheet) .quest-more { left: 0; right: auto; width: 100%; top: auto; bottom: calc(100% + 6px); }
   /* RD-10 phone: the console is play + bar·beat, the 2×4 knobs and the 2×8 cells (DECISION). Fill, fill next, throw,
      the filter and the action words leave the face: find still runs the actions (undo, randomize, share…) unseen, and
      the Move keeps every hold. Play stays the floating thumb-zone ring above the sheet's dock (C1) */
@@ -896,13 +895,14 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
 @media (max-width: 760px) {
   body:has(#sheet) #legend { flex-wrap: nowrap; gap: 8px; overflow-x: auto; overscroll-behavior-x: contain; }
   body:has(#sheet) #legend li { flex: none; }
-  body:has(#sheet) .lane-list .lane-tab { width: 44px; min-width: 44px; min-height: 44px; flex: none; padding: 0; justify-content: center; gap: 0; font-size: 0; letter-spacing: 0; }
+  body:has(#sheet) .lane-list .lane-tab { width: 44px; min-width: 44px; min-height: 44px; flex: none; padding: 0; justify-content: center; gap: 0; }
+  body:has(#sheet) .lane-list .lane-tab .lt-name { display: none; }   /* the dot alone; the aria-label keeps the name */
   body:has(#sheet) .lane-list .lane-tab::before { width: 16px; height: 16px; }
   body:has(#sheet) .lane-list .lane-m { display: none; }
 }
 /* RD-2 held the in-flow legend's measure; RD-10 turned it into a row of colour dots on a phone (above, ≤ 760 px) */
-/* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, so a phone keeps
-   its floating play (no Space bar there to stop the music) */
+/* C5: focus mode: every panel hidden, the canvas fills the window. The header only turns invisible, and a phone gets
+   a floating play back (no Space bar there to stop the music; RD-10 moved it into the console everywhere else) */
 /* RD-9 F mode hides controls, never state (DECISION "F mode and pills"): the pills, the peek and all canvas light stay;
    the console (by visibility: the grid keeps its cell, A7), the lane list, the Move pill, "?" and the sheet go. Mutes
    stay visible as rings (scene.js draws a muted lane's ring grey whatever hides). */
@@ -910,7 +910,9 @@ body.focus-mode #topbar { visibility: hidden; }
 body.focus-mode #legend, body.focus-mode .hud-top, body.focus-mode #sheet { display: none !important; }
 @media not all and (max-width: 1100px) { body.focus-mode #pills { margin-right: 90px; } }   /* wide: room for "exit focus" in the corner */
 @media (max-width: 1100px) { body.focus-mode #pills { position: fixed; top: 10px; left: 10px; right: 112px; z-index: 8; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; } }   /* narrow: the pills in one scrolling line over the fixed canvas, clear of "exit focus" */
-@media (max-width: 760px) { body.focus-mode:has(#sheet) #btn-play { visibility: visible; } }
+/* RD-10: focus mode hides the console (and play now lives there), and the fixed canvas covers the in-flow page, so play
+   opts back in as C1's floating thumb-zone ring: a phone has no Space bar to stop the music */
+@media (max-width: 760px) { body.focus-mode:has(#sheet) #btn-play { visibility: visible; position: fixed; right: 22px; bottom: max(22px, calc(env(safe-area-inset-bottom) + 6px)); z-index: 8; width: 64px; height: 64px; min-width: 0; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--v); box-shadow: inset 0 0 0 2px var(--l), 0 0 0 4px rgba(12,9,25,.85); } }
 body.focus-mode:has(#sheet) { overflow: hidden; padding-bottom: 0; }
 body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }
 .focus-exit { position: fixed; top: 12px; right: 12px; z-index: 9; opacity: .55; }

@@ -579,7 +579,8 @@ function buildSliders() {
   // Shift+click or a long press solos it (Shift + Mute on the Move)
   for (let i = 0; i < MAX_LANES; i++) {
     const li = document.createElement('li'); li.style.setProperty('--lane', LANE_HEX[i]);
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.onclick = () => { m.select(i); lockStep = -1; sync(); };
+    // the name in a span of its own: the phone's dot row (RD-10) hides it with display, not a 0 px font (the aria-label carries the name)
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'lane-tab'; b.appendChild(Object.assign(document.createElement('span'), { className: 'lt-name' })); b.onclick = () => { m.select(i); lockStep = -1; sync(); };
     const mb = document.createElement('button'); mb.type = 'button'; mb.className = 'lane-m'; mb.textContent = 'M';
     mb.onclick = (e) => { if (e.shiftKey) toggleSolo(i); else toggleMute(i); }; longPress(mb, () => toggleSolo(i));
     li.append(b, mb); $('legend').appendChild(li); laneTabs.push(b); laneMs.push(mb);
@@ -614,7 +615,7 @@ function sync() {
 function renderLanes() {
   laneTabs.forEach((b, i) => {
     const li = b.parentElement, l = m.lanes[i]; li.hidden = !l; if (!l) return;
-    const t = `${voiceLabel(l)} ${l.length}·×${RATIO_LABEL[l.ratioIndex]}`; if (b.textContent !== t) b.textContent = t;
+    const t = `${voiceLabel(l)} ${l.length}·×${RATIO_LABEL[l.ratioIndex]}`, nm = b.firstElementChild; if (nm.textContent !== t) nm.textContent = t;
     const q = muteQ.has(i);
     li.classList.toggle('sel', i === m.selected); li.classList.toggle('muted', !!l.muted); b.setAttribute('aria-pressed', i === m.selected);
     b.title = `select lane ${i + 1} (Alt+${i + 1})`; b.setAttribute('aria-label', `lane ${i + 1} ${voiceLabel(l)}`);

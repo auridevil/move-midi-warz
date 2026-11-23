@@ -75,7 +75,9 @@ const r2 = (x) => (x == null ? null : Math.round(x * 100) / 100);
 
 // ---- in-page code (one string, installed once per page) ----
 const PAGE = String.raw`(() => {
-  const SEL = 'button, a[href], input:not([type=hidden]), select, textarea, summary, [role=slider], [role=button], [role=tab], [role=switch], [role=checkbox], [tabindex]:not([tabindex="-1"])';
+  // RD-10 gave the canvas (#cv) a tab stop, but it is the stage the gates compare the controls AGAINST (A1's "the
+  // brightest canvas pixel above every control", A5's face budget, NIGHT's dimming): read-only light, not a control
+  const SEL = 'button, a[href], input:not([type=hidden]), select, textarea, summary, [role=slider], [role=button], [role=tab], [role=switch], [role=checkbox], [tabindex]:not([tabindex="-1"]):not(#cv)';
   const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
   const lum = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
   const ratio = (a, b) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
@@ -300,7 +302,10 @@ const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
 export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'orbit2/index.html', shots = null, playSec = 6, root, ids = null } = {}) {
   const [, w, h, m] = /^(\d+)x(\d+)(m?)$/.exec(size), mobile = !!m, b = await launch({ port, debugPort, ...(root ? { root } : {}) });
   try {
-    const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)'); await settle(p, 400);
+    const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)');
+    // the first-visit toast (the demo's words) is transient text with pointer-events none, up for a few seconds over
+    // whatever is under it (the phone's cells, RD-10): A1 measures the face, so it is dismissed before any screenshot
+    await p.eval(`document.getElementById('toast')?.classList.remove('show')`); await settle(p, 400);
     const out = { size, errors: p.errors };
     out.controls = await p.eval('__fa.controls()'); const type0 = await p.eval('__fa.types()'), hue0 = await p.eval('__fa.hues()'); out.hits = await p.eval('__fa.hits()');
     // text: the background with every text transparent, then the page as it is
@@ -509,7 +514,11 @@ export function verdicts(report, t = THRESHOLDS) {
   }
   for (const s of report.sizes) if (s.type?.fails.length) fails.push({ test: 'TYPE', size: s.size, what: `${s.type.fails.length} text kinds off the type rules: ${s.type.fails.slice(0, 4).map(f => f.what).join('; ')}` });
   for (const s of report.sizes) { const bad = (s.hits || []).filter(h => !h.ok); if (bad.length) fails.push({ test: 'HIT', size: s.size, what: `${bad.length} action words without a 40 px hit area: ${bad.map(h => `${h.el} ${h.w}×${h.h}`).join(', ')}` }); }
-  for (const s of report.sizes) { const bad = (s.reach || []).filter(r => !r.exists || !r.drawn); if (bad.length) fails.push({ test: 'IDS', size: s.size, what: `${bad.length} RD-1 control ids ${bad.some(r => !r.exists) ? 'gone or ' : ''}not drawn with their tab open: ${bad.map(r => `${r.id}${r.exists ? ` (tab ${r.tab})` : ' (gone)'}`).join(', ')}` }); }
+  // RD-10: on a phone the console is play + bar·beat, the knobs and the cells (DECISION "How it degrades"), so the
+  // stripped console controls are off that face by design: still on every wider window, still run by find (ACTIONS)
+  // and by the Move's own holds
+  const PHONE_OFF = new Set(['btn-fill', 'btn-latch', 'btn-throw', 'btn-undo', 'btn-random', 'btn-jam', 'btn-share', 'btn-share-more', 'btn-all']);
+  for (const s of report.sizes) { const phone = parseInt(s.size) <= 760; const bad = (s.reach || []).filter(r => (!r.exists || !r.drawn) && !(phone && r.exists && PHONE_OFF.has(r.id))); if (bad.length) fails.push({ test: 'IDS', size: s.size, what: `${bad.length} RD-1 control ids ${bad.some(r => !r.exists) ? 'gone or ' : ''}not drawn with their tab open: ${bad.map(r => `${r.id}${r.exists ? ` (tab ${r.tab})` : ' (gone)'}`).join(', ')}` }); }
   // RD-7: on the wide windows (A6's sizes), six pills keep the sheet ≥ 340 px and draw at most 4 (the rest "+N more")
   for (const k of t.a6Sizes) { const pl = by[k]?.pills; if (!pl?.wide) continue;
     if (pl.sheet < t.pillSheet) fails.push({ test: 'PILLS', size: k, what: `${pl.on} pills: the sheet is ${pl.sheet} px (< ${t.pillSheet})` });
