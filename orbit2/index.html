@@ -18,7 +18,6 @@
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body class="chaos">
-  <canvas id="cv"></canvas>
   <!-- RD-3: the stage cell of the grid (styles.css); the rings are measured from it alone (app.js layoutStage) -->
   <div id="stage" aria-hidden="true"></div>
   <!-- RD-5 the console log (` or Sheet → setup → settings): the old readout as read-only text over the stage, off by
@@ -74,6 +73,11 @@
       <button id="btn-all" class="aword" type="button" title="Every control: the sheet with find (Cmd/Ctrl+K or /)">all ⌘K</button>
     </div>
   </section>
+  <!-- RD-10 the canvas as one tab stop, after the console in the Tab order (play is the page's first stop; the console
+       in Move order). Its label is written per bar by app.js; ↑↓ pick a lane, ←→ its steps, Enter the planet-tap cycle,
+       all synced with the cells. It is still fixed behind the grid (z 0): moving it here changes no pixel -->
+  <canvas id="cv" tabindex="0" role="application" aria-roledescription="orbit" aria-label="rings" aria-describedby="cv-keys"></canvas>
+  <span id="cv-keys" class="sr-only">Up and down arrows pick a lane, left and right its steps. Enter cycles the step: off, on, accent. The step cells show the same steps.</span>
   <div id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <!-- I2: a shared beat opens as a gift (filled by app.js showGift) -->
@@ -115,6 +119,7 @@
       <tr><th>Esc</th><td>one thing at a time: a popup, then the step locks, then the sheet, then focus mode, then gives the keys back to the page · a click on empty canvas does the same</td></tr>
       <tr><th>knobs</th><td>drag up / down (Shift = fine), scroll, or arrow keys · double-click = back to the start value</td></tr>
       <tr><th>rings</th><td>touch a ring to select its lane · tap a step tick = add a hit (stopped, you hear it at once; playing, on its turn) · tap a planet = on → accent → off · drag along a ring = rotate it · drag across it (or pinch) = its length · long-press or right-click a planet = its locks · each is one undo step · drop an audio file on a ring to load it as a sample</td></tr>
+      <tr><th>rings focused (Tab)</th><td>↑ ↓ pick a lane · ← → walk its steps · Enter = off → on → accent · the step cells follow</td></tr>
       <tr><th>steps</th><td>tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only</td></tr>
       <tr><th>slots</th><td>tap = load · long-press or right-click = save, chain, erase · Shift+click = save here · Cmd/Ctrl+click = add to the chain · Alt+click = erase</td></tr>
       <tr><th>randomize</th><td>Shift+click, long-press or right-click = wild</td></tr>
@@ -132,7 +137,7 @@
       <tr><th>Pads row</th><td>live mode: play the lane's sound with velocity (the step under the pad), no step written · record armed: play + record · live mode off: 8 of the lane's steps (toggle), Shift+pad = accent</td></tr>
       <tr><th>Steps</th><td>selected lane, 16 at a time · tap = toggle (held longer, it's a look: nothing changes)</td></tr>
       <tr><th>Pages</th><td>pads and steps follow each lane's playhead (a held step keeps its page) · Back + ◀ ▶ (or Back + step) = stay on one page, a shorter lane on its last · Back alone = follow again</td></tr>
-      <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · <span data-word="prob">prob</span> · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
+      <tr><th>Hold step + knobs 1–7</th><td>step locks: tune · prob · velocity · decay · tone · snap · color (on a slice set, knob 7 = which slice)</td></tr>
       <tr><th>Hold step + Delete</th><td>clear that step's locks</td></tr>
       <tr><th>Hold step + knob 8</th><td>condition (1:2 · 3:4 · fill · first…) · + Shift = repeats ×1–4</td></tr>
       <tr><th>Hold a step</th><td>after half a second (or a knob turned) the step buttons turn into 16 loops, 1–16 or the 16 holding the loop playing now (17–32…), and light on the loops it plays (lane colour; blue = it depends on fill or on the step before; white = the loop playing now) · letting go changes nothing</td></tr>
@@ -146,8 +151,8 @@
       <tr><th>Hold Duplicate + step</th><td>save into that slot</td></tr>
       <tr><th>Track 1–4</th><td>select lane 1–4 · Shift + Track 4 / 3 = lane 5 / 6 (the pads then show lanes 3–6, until lane 1 or 2 is selected)</td></tr>
       <tr><th>Play</th><td>start / stop</td></tr>
-      <tr><th>Knobs 1–4</th><td>length · <span data-word="euclid">euclid hits</span> · <span data-word="rotation">rotation</span> · <span data-word="ratio">speed ratio</span></td></tr>
-      <tr><th>Knobs 5–7</th><td>swing · <span data-word="prob">probability</span> · tune</td></tr>
+      <tr><th>Knobs 1–4</th><td>length · euclid hits · rotation · speed ratio</td></tr>
+      <tr><th>Knobs 5–7</th><td>swing · probability · tune</td></tr>
       <tr><th>Knob 8</th><td>master tempo</td></tr>
       <tr><th>Shift + knobs</th><td>sound of the selected lane: decay · tone · drive · snap · color · send · pan · level</td></tr>
       <tr><th>Mute</th><td>tap = mute the selected lane · Shift = solo · a press that would mute a lane less than 0.2 s after a press unmuted it is a bounce and does nothing, so the lane keeps playing (Mute + pad and the M lamps too)</td></tr>
@@ -201,7 +206,7 @@
       <span id="sp-clock" class="spill seg" data-pill="clock" hidden><button id="sp-clock-go" type="button" title="Following a MIDI clock: the MIDI settings in the sheet"></button><button id="sp-clock-x" class="sp-x" type="button" aria-label="stop following the clock" title="stop following the clock">×</button></span>
       <span id="welcome" class="spill seg" data-pill="welcome" hidden><button id="wb-keep" type="button" title="Your beat is here: play the beat you left">welcome back · play</button><button id="wb-fresh" type="button" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="sp-x" type="button" aria-label="dismiss" title="dismiss">×</button></span>
       <!-- I6: the quest you are on; its first button opens the hint, show me and skip (a drop-down, not announced) -->
-      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (switch to simple to see them again)">×</button></span>
+      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (progress is kept)">×</button></span>
       <span id="jam-panel" class="spill seg sp-rec jam-panel" data-pill="jam" hidden><button id="jam-go" type="button" title="The take ends on a bar line (stop it with jam)"><span id="jam-text"></span></button><button id="jam-dl" type="button" hidden>⤓ download</button><button id="jam-discard" type="button" hidden>discard</button></span>
       <button id="sp-more" class="sp-more" type="button" aria-expanded="false" aria-live="off" hidden></button>
       <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button></span></div>
@@ -245,7 +250,7 @@
           <button id="auto-clear-lane" class="small" type="button" title="Clear every curve and every recorded lock on this lane (slices, strokes, conditions, repeats and ghost notes stay)">clear lane automation</button>
         </div>
       </div>
-      <div id="lockpanel" class="lockpanel adv" hidden>
+      <div id="lockpanel" class="lockpanel" hidden>
         <!-- RD-6: the step page on the console is the lock editor (its knobs, clear and done); "more…" opens this, the
              rest of a step's locks. The page's 8 knobs (tune … color, the condition / repeats) live in the page only:
              off the row they wait in a hidden holder, never here -->
@@ -288,7 +293,6 @@
       <p class="hint tight">sample: <span id="sample-name"></span></p>
       <div id="sample-trim" class="row-ctl" hidden><div id="sample-trim-gauges" class="gauges"></div><div id="sample-rev"></div></div>
       <div id="sound-sliders" class="gauges"></div>
-      <div id="gen-block" class="adv">
       <h3 class="subh">generative</h3>
       <div class="row-ctl"><div class="ctl" title="How the euclid hits combine with the steps you set"><span class="ctl-lbl">euclid</span><div id="gen-euclid"></div></div></div>
       <div class="row-ctl"><div class="ctl" title="A slow wave on one sound knob of this lane"><span class="ctl-lbl">modulate</span><div id="gen-mod"></div></div></div>
@@ -297,7 +301,6 @@
       <div id="gen-tdice" class="gauges three"></div>
       <div class="row-ctl"><div class="ctl" title="Snap this lane's tune to a scale"><span class="ctl-lbl">scale</span><div id="gen-scale"></div></div></div>
       <p id="gen-scale-note" class="hint tight"></p>
-      </div>
     </details>
         </div>
         <div role="tabpanel" id="pane-pattern" class="pane" data-sheet="pattern" aria-labelledby="tab-pattern" hidden>
@@ -358,14 +361,14 @@
       </div>
       <div id="evo-gauges" class="gauges three"></div>
       <div id="evo-more" class="gauges two"></div>
-      <details class="evo-sub adv"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
+      <details class="evo-sub"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
       <div id="evo-lanes" class="evo-lanes"></div>
       <p class="hint tight">Every N bars some lanes get nudged. Untick a lane to keep it steady. Gravity pulls them back home.</p>
       <div class="row-ctl"><div class="ctl" title="A hit on one lane makes another lane more likely to play its next step"><span class="ctl-lbl">coupling</span><div id="couple-mode"></div></div></div>
       <div id="couple-gauges" class="gauges two"></div>
       <div id="couple-matrix" class="couple-matrix" hidden></div>
     </details>
-    <details class="drawer adv" id="dice-drawer">
+    <details class="drawer" id="dice-drawer">
       <summary>Dice</summary>
       <div class="row-ctl">
         <button id="btn-dice" class="rec-btn">○ dice free</button>
@@ -421,8 +424,6 @@
         <div role="tabpanel" id="pane-setup" class="pane" data-sheet="setup" aria-labelledby="tab-setup" hidden>
     <!-- the wordmark is not on the face (DECISION): it heads the setup tab, the home link with it -->
     <h1 class="wordmark"><a href="../index.html" class="home">MIDI Warz</a> <span class="sub" title="a testing copy of orbits">orbits 2 · lab</span></h1>
-    <!-- I7: simple = plain words, the advanced drawers tucked away (.adv); everything = all of it (remembered) -->
-    <div class="view-row" title="Simple: plain words and the basics. Everything: every drawer and knob (dice, MIDI, evolve weights, step locks, generative)."><div id="view-mode"></div></div>
     <details class="drawer" id="settings-drawer">
       <summary>Settings</summary>
       <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
@@ -433,7 +434,7 @@
       </div>
       <div class="row-ctl"><span id="live-mode"></span><span id="console-log-chip"></span><span id="night-chip"></span></div>
     </details>
-    <details class="drawer adv" id="midi-drawer">
+    <details class="drawer" id="midi-drawer">
       <summary>MIDI</summary>
       <button id="btn-midi-enable">enable MIDI ports</button>
       <div id="midi-body" hidden>
@@ -442,7 +443,7 @@
         <span class="ctl-lbl">note · channel per lane, gate, out offset</span>
         <div id="midi-lanes" class="gauges midi-gauges"></div>
         <div class="row-ctl"><span id="midi-lat-auto"></span></div>
-        <p class="hint tight" id="midi-artic-note">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
+        <p class="hint tight">Strokes (step locks) play neighbouring notes: the lane's note for the first stroke, then the next notes up that no other lane or stroke uses on the same channel, so a slap never plays another lane's drum. With the default notes a conga on lane 1 plays open 36, mute 37, slap 40 (38 and 39 are lanes 2 and 4). Live out and the MIDI export alike. <span id="midi-artic-map"></span></p>
         <div class="ctl-col"><span class="ctl-lbl">follow the clock from</span><div id="midi-in"></div></div>
         <div class="ctl-col"><span class="ctl-lbl">follow</span><div id="midi-follow"></div></div>
       </div>

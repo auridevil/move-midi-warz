@@ -226,10 +226,10 @@ const PAGE = String.raw`(() => {
   const TABS = [...document.querySelectorAll('[role=tabpanel][data-sheet]')].map(p => p.dataset.sheet);
   function allPanes(on) { if (!window.__poly?.setSheet) return; if (on) { document.getElementById('sheet-body').hidden = false; document.querySelectorAll('[role=tabpanel][data-sheet]').forEach(p => { p.hidden = false; }); } else { const s = __poly.sheet; __poly.setSheet(s.tab, s.open); } }
   // RD-3 every control id of the RD-1 baseline: still in the page, and drawn once its sheet tab and drawers are open
-  // (__poly.reveal: what the app itself does to show a control). The view, the sheet and the drawers come back after
+  // (__poly.reveal: what the app itself does to show a control). The sheet and the drawers come back after
+  // (RD-10: the simple / everything switch is gone, so there is no view to set or restore)
   function reach(ids) {
-    const s = window.__poly.sheet, view = __poly.quests.view, open = [...document.querySelectorAll('details')].map(d => d.open), out = [];
-    __poly.setView('all');
+    const s = window.__poly.sheet, open = [...document.querySelectorAll('details')].map(d => d.open), out = [];
     for (const id of ids) {
       const e = document.getElementById(id); if (!e) { out.push({ id, exists: false, drawn: false }); continue; }
       // RD-5: a control folded into another on some windows (data-folded-into: "…" into share's long press on the wide
@@ -237,7 +237,7 @@ const PAGE = String.raw`(() => {
       __poly.reveal?.(e); const via = !shown(e) && e.dataset.foldedInto ? document.getElementById(e.dataset.foldedInto) : null;
       out.push({ id, exists: true, tab: e.closest('[role=tabpanel]')?.dataset.sheet || null, drawn: shown(e) || (!!via && shown(via)), ...(via ? { via: via.id } : {}) });
     }
-    if (s) __poly.setSheet(s.tab, s.open); __poly.setView(view); document.querySelectorAll('details').forEach((d, i) => { d.open = open[i]; });
+    if (s) __poly.setSheet(s.tab, s.open); document.querySelectorAll('details').forEach((d, i) => { d.open = open[i]; });
     return out;
   }
   window.__fa = {
@@ -367,15 +367,14 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     await p.eval('__poly.setFocusMode(false)'); if (pillsOn) await p.eval('__poly.showPills(null)');
     // RD-6 the step page (a cell's long-press on the first hit): A6 / A7 as a state, and A1 measured as the first load is
     // (the ring knobs, the loop dots and its words on their real background); then closed again
-    // (a first visit is the simple view, where the step locks are tucked: the state shows it in "everything", then goes back)
-    const stepAt = await p.eval(`(() => { const l = __poly.m.lane; let i = 0; while (i < l.length && !l.hitAt(i)) i++; if (i >= l.length || !__poly.editLocks) return -1; window.__faView = __poly.quests.view; __poly.setView('everything'); __poly.editLocks(i); return __poly.page.row === 'step' ? i : -2; })()`);
+    const stepAt = await p.eval(`(() => { const l = __poly.m.lane; let i = 0; while (i < l.length && !l.hitAt(i)) i++; if (i >= l.length || !__poly.editLocks) return -1; __poly.editLocks(i); return __poly.page.row === 'step' ? i : -2; })()`);
     if (stepAt === -2) throw new Error('the step page did not open (RD-6 state)');
     if (stepAt >= 0) {
       await state('step page'); await p.eval('__fa.hideText(true)'); await settle(p); const sbg = await shot64(p); await p.eval('__fa.hideText(false)'); await settle(p); const sfull = await shot64(p);
       if (shots) writeFileSync(join(shots, `${size}-step-page.png`), Buffer.from(sfull, 'base64'));
       const sm = await p.eval(`__fa.measure(${JSON.stringify(sbg)}, ${JSON.stringify(sfull)})`);
       out.stepPage = { step: stepAt + 1, text: { n: sm.text.length, min: sm.text.length ? Math.min(...sm.text.map(t => t.contrast)) : null, fails: sm.text.filter(t => t.contrast < THRESHOLDS.text) }, edges: { n: sm.edges.length, min: sm.edges.length ? Math.min(...sm.edges.map(e => e.edge)) : null, fails: sm.edges.filter(e => e.edge < THRESHOLDS.edge) }, controlMax: sm.ctlMax, controlMaxAt: sm.ctlMaxAt };
-      await p.eval(`(() => { __poly.editLocks(${stepAt}); __poly.setView(window.__faView); })()`); await settle(p);
+      await p.eval(`(() => { __poly.editLocks(${stepAt}); })()`); await settle(p);
     }
     // playing: rings, frame time, light while the planets flash
     await play(p); await p.sleep(800); await state('playing');
@@ -386,17 +385,16 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     const ms2 = await p.eval(`__fa.measure(${JSON.stringify(full2)}, ${JSON.stringify(full2)})`);
     out.light.playing = { controlMax: ms2.ctlMax, controlMaxAt: ms2.ctlMaxAt, canvasMax: Math.max(canvasMax, ms2.canvasMax) };
     await play(p); await settle(p);
-    // everything shown (the "everything" view, every drawer open): its drawn controls, so the diff also sees a control
-    // that left (or came into) a drawer; then back as it was
+    // everything shown (every drawer open; RD-10 removed the view switch): its drawn controls, so the diff also sees a
+    // control that left (or came into) a drawer; then back as it was
     // (RD-3: every sheet pane shown at once, so a control in another tab counts too)
-    await p.eval(`(() => { window.__faSimple = document.body.classList.contains('simple'); __poly.setView('all'); window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); __fa.allPanes(true); })()`); await settle(p, 250);
+    await p.eval(`(() => { window.__faOpen = [...document.querySelectorAll('details')].map(d => d.open); document.querySelectorAll('details').forEach(d => { d.open = true; }); __fa.allPanes(true); })()`); await settle(p, 250);
     out.controls.all = (await p.eval('__fa.controls()')).drawn;
-    await p.eval(`(() => { __fa.allPanes(false); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); if (window.__faSimple) __poly.setView('simple'); })()`); await settle(p);
+    await p.eval(`(() => { __fa.allPanes(false); document.querySelectorAll('details').forEach((d, i) => { d.open = window.__faOpen[i]; }); })()`); await settle(p);
     // A5 worst case today: 6 lanes
     await p.eval('__poly.setLaneCount(6)'); await settle(p, 250); out.controls6 = { visible: (await p.eval('__fa.controls()')).visible, scroll: await p.eval('__fa.scroll()') };
-    // RD-2 type and hue: the first load and everything there is (the "everything" view, every drawer open, a step's lock
-    // panel, the help dialog)
-    await p.eval(`(() => { __poly.setView('all'); document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __fa.allPanes(true); __poly.openHelp(); })()`); await settle(p, 250);
+    // RD-2 type and hue: the first load and everything there is (every drawer open, a step's lock panel, the help dialog)
+    await p.eval(`(() => { document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __fa.allPanes(true); __poly.openHelp(); })()`); await settle(p, 250);
     out.type = typeCheck([...type0, ...await p.eval('__fa.types()')]);
     const hues = new Map(); for (const h of [...hue0, ...await p.eval('__fa.hues()')]) hues.set(`${h.el} ${h.prop} ${h.rgb}`, h); out.hues = [...hues.values()];
     // RD-3: every control id of the RD-1 baseline still there and drawn once its tab is open

@@ -11,18 +11,18 @@ const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
 const app = readFileSync(new URL('../src/poly/app.js', import.meta.url), 'utf8');
 const src = ['../src/ui.js', '../src/gauge.js', '../src/poly/app.js'].map(f => readFileSync(new URL(f, import.meta.url), 'utf8')).join('\n') + html;
 
-// the names the page gives these controls (read off orbit2/index.html at 1512×860 with __poly.findIndex()), in both views
-// (I7: simple says hits / shift / speed / chance on the lane knobs, everything the technical words; app.js gives each
-// lane knob its everything word as an alias, so "rotation" is the shift knob in both)
+// the names the page gives these controls (read off orbit2/index.html at 1512×860 with __poly.findIndex()); RD-10
+// removed the simple / everything switch, so the lane knobs always wear the full words and the plain words (hits,
+// shift, speed, chance) reach them as synonyms
 const lane = 'lane · Lane 1 · kick', weights = 'groove · how often each change', touches = 'groove · Evolve · touches';
-const KNOBS = ['length', 'euclid hits', 'rotation', 'speed ×', 'probability', 'tune', 'push / pull', 'vel humanize', 'swing'], PLAIN = { 1: 'hits', 2: 'shift', 3: 'speed', 4: 'chance' };
-const page = (simple) => [
-  ...KNOBS.map((all, i) => ({ key: `knob-${i}`, name: (simple && PLAIN[i]) || all, alias: all, where: lane })),
+const KNOBS = ['length', 'euclid hits', 'rotation', 'speed ×', 'probability', 'tune', 'push / pull', 'vel humanize', 'swing'];
+const page = () => [
+  ...KNOBS.map((all, i) => ({ key: `knob-${i}`, name: all, where: lane })),
   { key: 'snd-level', name: 'level', where: `${lane} · sound` },
   ...Array.from({ length: 16 }, (_, i) => ({ key: `step-${i}`, name: `step ${i + 1}`, where: `${lane} · steps` })),
   ...['AND', 'XOR'].map(name => ({ key: `mask-${name}`, name, where: `${lane} · euclid mask` })),
   ...['hits', 'rotation', 'speed', 'chance'].map(n => ({ key: `w-${n}`, name: `${n} weight`, where: weights })),
-  ...[['+ hits', '+h'], [simple ? 'shift' : 'rotation', 'tr']].map(([name, k]) => ({ key: `t-${k}`, name, where: touches })),
+  ...[['+ hits', '+h'], ['rotation', 'tr']].map(([name, k]) => ({ key: `t-${k}`, name, where: touches })),
   ...['4/4', '3/4', '5/4', '6/8', '7/8', '12/8'].map(name => ({ key: `meter-${name}`, name, where: 'pattern · Patterns · meter' })),
   { key: 'tempo', name: 'tempo', where: 'transport' },
   { key: 'exp-dry', name: 'dry stems', where: 'export · Export' },
@@ -30,27 +30,26 @@ const page = (simple) => [
   ...Object.entries(ACTIONS).map(([key, [name, extra]]) => ({ key, name, where: key.startsWith('exp-') ? 'export · Export' : '', action: true, extra })),
 ].map(entry);
 
-test('RD-4 the synonyms test: euclid, rotation, ratio, probability, stems, 7/8 each find their control, in both views', () => {
-  for (const simple of [true, false]) {
-    const idx = page(simple), top = (q, n = 1) => search(idx, q).slice(0, n).map(e => e.key);
+test('RD-4 the synonyms test: euclid, rotation, ratio, probability, stems, 7/8 each find their control', () => {
+  {
+    const idx = page(), top = (q, n = 1) => search(idx, q).slice(0, n).map(e => e.key);
     assert.deepEqual(top('euclid'), ['knob-1'], 'euclid → the hits knob');
     assert.deepEqual(top('ratio'), ['knob-3'], 'ratio → the speed knob');
     assert.deepEqual(top('probability'), ['knob-4'], 'probability → the chance knob');
     assert.deepEqual(top('stems'), ['exp-stems'], 'stems → export stems (the action before the dry stems switch)');
     assert.deepEqual(top('7/8'), ['meter-7/8'], '7/8 → the meter');
-    // simple view: an evolve weight is named "rotation weight", and the knob named "shift" still comes first (its alias
-    // is its whole name)
-    assert.deepEqual(top('rotation'), ['knob-2'], `rotation → the shift knob (${simple ? 'simple' : 'everything'})`);
+    // an evolve weight is named "rotation weight"; the rotation knob itself still comes first
+    assert.deepEqual(top('rotation'), ['knob-2'], 'rotation → the rotation knob');
   }
 });
 
 test('RD-4 a beginner\'s plain words: louder, slower, faster, start over', () => {
-  for (const simple of [true, false]) {
-    const idx = page(simple), top = (q) => search(idx, q)[0]?.key;
+  {
+    const idx = page(), top = (q) => search(idx, q)[0]?.key;
     assert.equal(top('louder'), 'snd-level'); assert.equal(top('quiet'), 'snd-level');
     assert.equal(top('slower'), 'tempo'); assert.equal(top('faster'), 'tempo');
     assert.equal(top('start over'), 'btn-init');
-    assert.equal(top('shift'), 'knob-2', 'the plain word finds the knob in everything too');
+    assert.equal(top('shift'), 'knob-2', 'the plain word finds the knob');
   }
   // an alias is found as the name but never shown: the list says what the page says
   const e = entry({ key: 'k', name: 'shift', alias: 'rotation' });

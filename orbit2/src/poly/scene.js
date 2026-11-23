@@ -617,11 +617,12 @@ export function createScene(cv, o) {
         tick(a, 6, 0.4 + 0.55 * e); ctx.strokeStyle = rgba(hex, 0.8 * e); ctx.lineWidth = 1.5; ctx.beginPath(); ctx.arc(x, y, 4 + (reduced ? 6 : gwP * 14), 0, TAU); ctx.stroke();
       }
       if (pushS) { ctx.strokeStyle = rgba(hex, 0.85); ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, r + 9, Math.min(ang(0), ang(pushS)), Math.max(ang(0), ang(pushS))); ctx.stroke(); ctx.lineCap = 'butt'; }
-      // RD-6 a held step (a Move step button down, or the step a knob of the step page edits): a halo round it
+      // RD-6 a held step (a Move step button down, or the step a knob of the step page edits): a halo round it.
+      // RD-10: the canvas focus ({ focus: true }) is the same ring in white (Yuki: a 2 px circle round the focused tick)
       for (const h of held) if (h.li === li && h.i < len) {
         const a = ang(h.i + pushS + swingOf(h.i) + (lane.hitAt(h.i) ? planetNudge(lane, h.i) + slideOff : 0)), x = g.cx + Math.cos(a) * r, y = g.cy + Math.sin(a) * r;
         // a ring only: a glow would read as a planet on an empty step
-        ctx.strokeStyle = rgba(hex, 0.95); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 17, 0, TAU); ctx.stroke();
+        ctx.strokeStyle = h.focus ? 'rgba(236, 233, 247, 0.95)' : rgba(hex, 0.95); ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(x, y, 17, 0, TAU); ctx.stroke();
       }
       // comet playhead: smooth between steps, with a fading tail along the orbit
       if (playing && ph != null) {

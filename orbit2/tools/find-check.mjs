@@ -4,8 +4,8 @@
 //   (--root: check another checkout, a `git archive` of a commit with node_modules linked in)
 //
 // COVER  every labelled control is in the index: Chrome's accessibility tree is the judge (every node with an
-//        interactive role and a name, with every tab, drawer and the everything view shown), not app.js's own selector;
-//        the synonyms test top 1 by element in both views; every action of find.js ACTIONS findable on a fresh page
+//        interactive role and a name, with every tab and drawer shown; RD-10: one view), not app.js's own selector;
+//        the synonyms test top 1 by element; every action of find.js ACTIONS findable on a fresh page
 //        (the closed share menu's too: "postcard", "share audio"; Enter on "share audio" runs it)
 // KEYS   "stems" by search in under 5 keys (A4): / s t Enter lands on export stems, its tab open, the focus on it, and
 //        Space then plays (the keys are the page's after an action); ↑↓ then Enter on play outside the sheet leaves the
@@ -37,12 +37,13 @@ try {
   const p = await b.open('orbit2/index.html', { width: W, height: H, mobile: W < 700 }); await p.captureDownloads();
   const st = async () => JSON.parse(await p.eval(STATE));
 
-  // ---- COVER, in each view: the index as find builds it (the sheet open, app.js openFind), then everything shown
-  // (every pane, every drawer) and Chrome's accessibility tree read: each named interactive node must be an index entry ----
+  // ---- COVER (one view since RD-10): the index as find builds it (the sheet open, app.js openFind), then everything
+  // shown (every pane, every drawer) and Chrome's accessibility tree read: each named interactive node must be an index
+  // entry ----
   const ROLES = new Set(['button', 'checkbox', 'combobox', 'link', 'menuitem', 'radio', 'slider', 'spinbutton', 'switch', 'tab', 'textbox', 'searchbox', 'DisclosureTriangle', 'PopUpButton', 'ListBox']);
   out.cover = {};
-  for (const view of ['simple', 'all']) {
-    await p.eval(`(() => { __poly.setView(${JSON.stringify(view)}); __poly.setSheet('lane', true); window.__fx = new Set(__poly.findIndex().map(e => e.el)); document.querySelectorAll('[role=tabpanel]').forEach(x => { x.hidden = false; }); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`);
+  for (const view of ['all']) {
+    await p.eval(`(() => { __poly.setSheet('lane', true); window.__fx = new Set(__poly.findIndex().map(e => e.el)); document.querySelectorAll('[role=tabpanel]').forEach(x => { x.hidden = false; }); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`);
     await p.sleep(300);
     const { nodes } = (await p.send('Accessibility.getFullAXTree')).result;
     const named = nodes.filter(n => !n.ignored && ROLES.has(n.role?.value) && String(n.name?.value ?? '').trim() && n.backendDOMNodeId);
@@ -57,10 +58,10 @@ try {
     await p.eval(`(() => { const s = __poly.sheet; __poly.setSheet(s.tab, false); document.querySelectorAll('details').forEach(d => { d.open = false; }); })()`);
   }
   // the synonyms test, top 1, judged by the element (a lane knob: in the sheet's #sliders, or RD-5's console row #knobs;
-  // the stems button, the meter's 7/8), in both views
+  // the stems button, the meter's 7/8)
   const SYN = [['euclid', `!!e.el.closest('#sliders, #knobs') && /hits/.test(e.name)`], ['rotation', `!!e.el.closest('#sliders, #knobs') && /shift|rotation/.test(e.name)`], ['ratio', `!!e.el.closest('#sliders, #knobs') && /speed/.test(e.name)`], ['probability', `!!e.el.closest('#sliders, #knobs') && /chance|probability/.test(e.name)`], ['stems', `e.el.id === 'exp-stems'`], ['7/8', `e.name === '7/8' && !!e.el.closest('#meter')`]];
-  for (const view of ['simple', 'all']) for (const [q, ok] of SYN) {
-    const r = await p.eval(`(async () => { __poly.setView(${JSON.stringify(view)}); const { search } = await import('./src/poly/find.js'); const e = search(__poly.findIndex(), ${JSON.stringify(q)})[0]; return e ? { name: e.name, where: e.where, ok: ${ok} } : null; })()`);
+  for (const view of ['all']) for (const [q, ok] of SYN) {
+    const r = await p.eval(`(async () => { const { search } = await import('./src/poly/find.js'); const e = search(__poly.findIndex(), ${JSON.stringify(q)})[0]; return e ? { name: e.name, where: e.where, ok: ${ok} } : null; })()`);
     ((out.synonyms ??= {})[view] ??= {})[q] = r && `${r.name} · ${r.where}`; if (!r?.ok) fail('COVER', `${view}: "${q}" → ${r ? `${r.name} · ${r.where}` : 'nothing'}`);
   }
 

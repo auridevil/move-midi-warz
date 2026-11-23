@@ -22,12 +22,12 @@ const SETTLE = 350;   // the setlog diffs a save on the next task; a knob turn f
 
 /** The Move as if connected: the page paints its LEDs (movewire caches them in move.ledState), the bytes go nowhere. */
 export const SIM_MOVE = '__poly.move.transport = { send: () => {} }; __poly.move.inControl = true;';
-/** Open the page as a set starts: ?setlog, everything view, the Move simulated as connected (LEDs painted), a groove. */
+/** Open the page as a set starts: ?setlog, the Move simulated as connected (LEDs painted), a groove. */
 export async function openSet(b, { path = 'orbit2/index.html', groove = 'techno', width = 1512, height = 860 } = {}) {
   const p = await b.open(`${path}?setlog`, { width, height });
   // a busy machine (six sets at once) can take longer than open()'s 3.5 s to run the page's modules
   for (let i = 0; i < 80 && !(await p.eval('!!window.__poly')); i++) await sleep(250);
-  await p.eval(`(async () => { await __poly.wake(); __poly.setView('everything'); ${SIM_MOVE} __poly.loadGroove(${JSON.stringify(groove)}); __poly.sync(); })()`);
+  await p.eval(`(async () => { await __poly.wake(); ${SIM_MOVE} __poly.loadGroove(${JSON.stringify(groove)}); __poly.sync(); })()`);
   await sleep(1200);   // past the welcome bar's click guard
   return p;
 }

@@ -26,7 +26,7 @@ import { drawMoveHelp } from './moveface.js';
 import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
-import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, startView, hintDrawer, paramLabel } from './quests.js';
+import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, hintDrawer } from './quests.js';
 import { attachSetlog, patternWords } from './setlog.js';
 import { PILL_ORDER, pillsOn, pillLayout, pillOff, focusAfter } from './pills.js';
 
@@ -94,11 +94,9 @@ let closeShareMenu = () => {};   // RD-4: set where the share menu is built (the
 let giftPlay = null;
 // I5: the postcard waits here for the clock's next bar line (onTick hands over its audio time)
 let barWait = null;
-// I6 / I7: quest progress + the view (simple / everything), one key of their own. A first visit starts simple; a page
-// that already has a beat saved starts with everything (nothing it had disappears). questLog: what you did since the
-// current quest came up (quests.js events), in memory only
+// I6: quest progress, one key of its own (RD-10 removed I7's simple / everything switch: every drawer and the full knob
+// words for everyone). questLog: what you did since the current quest came up (quests.js events), in memory only
 const quests = (() => { try { return questsFrom(JSON.parse(localStorage.getItem(QUESTS_KEY) || 'null')); } catch { return questsFrom(null); } })();
-quests.view = startView(quests.view, firstVisit);
 let questLog = [], questTimer = 0, cheerTimer = 0;
 let welcomeOn = false;   // F3 welcome back: a returning visit's pill, until the beat plays, loads or it is dismissed (RD-7)
 const face = { log: false, night: false };   // RD-5: the console-log overlay (` or Sheet → setup); RD-9: night. Both off by default, remembered
@@ -864,7 +862,7 @@ const lockValue = (lane, i, k) => lane.lockAt(i)?.[k] ?? LOCK_UI[k].base(lane);
 // opens it, another cell or planet switches it; done, Esc or the same Alt+click closes it. It no longer opens the sheet:
 // "more…" does, for the locks the 8 knobs don't hold (nudge, stroke, slice, start / end, direction, the condition's
 // loop and the repeats' shape), the old lock panel in Sheet → lane
-function openStep(i) { if (i < 0 || i >= m.lane.length || (lockStep !== i && locksTucked())) return; lockStep = i; renderSteps(); renderLocks(); latchStep(i); }
+function openStep(i) { if (i < 0 || i >= m.lane.length) return; lockStep = i; renderSteps(); renderLocks(); latchStep(i); }
 function editLocks(i) { if (lockStep === i) { if (knobPage.forced) knobPage.forced.prev = -1; lockStep = -1; renderSteps(); renderLocks(); latchStep(-1); } else openStep(i); }   // closed under a Move hold: its release gives back nothing either
 /** After a lock / condition / repeat edit: redraw the steps, record it, and refresh the readout (a condition or a
  *  prob lock can change the cycle). A Move knob turned on a held step is a look (RD-5: the step page). */
@@ -1459,7 +1457,7 @@ function renderCouple() {
     }
   }
 }
-/** The evolve scope's choices in the view's words (I7: "shift" in simple; "all", so it isn't a second "everything"). */
+/** The evolve scope's choices in the knobs' own words. */
 function evoScopeOptions() { const rot = knobWord('rotation'); return [['rotate', rot], ['hits', '+ hits'], ['all', 'all', `${rot}, hits, length, speed, chance and tune (whatever has a weight)`]]; }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = 'home set'; readout(); };
@@ -2094,7 +2092,7 @@ function toast(txt, ms = 2400) {
   const t = $('toast'); t.textContent = txt; t.classList.add('show'); clearTimeout(toastTimer);
   toastTimer = setTimeout(() => { t.classList.remove('show'); toastTimer = setTimeout(() => { t.textContent = ''; }, 300); }, ms);
 }
-// ---- I6 quests, I7 simple mode (quests.js: the quests, their checks, the plain words) ----
+// ---- I6 quests (quests.js: the quests and their checks) ----
 const saveQuests = () => { try { localStorage.setItem(QUESTS_KEY, JSON.stringify(quests)); } catch {} };
 /** Something you did (quests.js events). Called from the clock too (a bar line), so the check waits for the page; only a
  *  move that can finish the current quest (its `on`) runs it, right after that move. */
@@ -2113,11 +2111,11 @@ function celebrate(q) {
   clearTimeout(cheerTimer); cheerTimer = setTimeout(() => c.classList.remove('cheer'), 1500);   // the steady glow goes too
   toast(`quest done: ${q.title} ✓${next ? ` · next: ${next.title}` : ' · that was the last one'}`, 4000);
 }
-/** A lane knob's word in the view on screen (I7: plain in simple), wherever the page names it. */
-function knobWord(k, simple = quests.view === 'simple') { return paramLabel(k, PARAMS.find(p => p.k === k)?.label ?? k, simple); }
-/** The quest pill: the current quest, in simple and everything alike, until you hide it (× ; simple brings it back) or
- *  finish. sync() redraws it: the hint (in the drop-down, written while it is open) is for the beat on screen (the
- *  backbeat quest names your snare and what it lacks); the pill's words change only when the quest does. */
+/** A lane knob's word wherever the page names it (one view since RD-10: the full label). */
+function knobWord(k) { return PARAMS.find(p => p.k === k)?.label ?? k; }
+/** The quest pill: the current quest, until you hide it (×) or finish. sync() redraws it: the hint (in the drop-down,
+ *  written while it is open) is for the beat on screen (the backbeat quest names your snare and what it lacks); the
+ *  pill's words change only when the quest does. */
 function renderQuest() {
   const q = currentQuest(quests.done), on = !!q && !quests.hidden;
   if (on) {
@@ -2133,24 +2131,6 @@ function renderQuest() {
   // RD-3: and the sheet tab that holds it, so a quest in a closed tab still points the way
   const pane = d && $(d).closest('[role=tabpanel]'); if (pane) $(pane.getAttribute('aria-labelledby')).classList.add('quest-lit');
 }
-/** I7: simple = plain words on the lane knobs and the advanced drawers tucked away (.adv); all = everything. */
-function setView(v) {
-  const simple = v === 'simple'; if (simple && quests.view !== v) quests.hidden = false;   // switching to simple brings hidden quests back
-  quests.view = v; saveQuests();
-  document.body.classList.toggle('simple', simple); ui.view?.set(v);
-  // the knobs' words wherever the page names them: the lane gauges, the evolve scope, the Move table ([data-word])
-  for (const p of PARAMS) sliders[p.k]?.setLabel(knobWord(p.k, simple));
-  ui.evoScope?.setOptions(evoScopeOptions());
-  for (const el of document.querySelectorAll('[data-word]')) { el.dataset.full ??= el.textContent; el.textContent = paramLabel(el.dataset.word, el.dataset.full, simple); }
-  if (helpMoveUp()) drawHelpMove();   // RD-9 round 1: the "?" Move drawing wears the knobs' new words too
-  if (spoken) spoken = speakable();   // the words changed, no value did: the next knob turn is still announced
-  if (simple && lockStep >= 0) editLocks(lockStep);   // an open lock panel closes with the drawers
-  renderQuest();
-}
-/** Simple mode and a reach for the step locks: say where they are instead (nothing opens). */
-function locksTucked() { if (quests.view !== 'simple') return false; toast('step locks are in "everything" (the simple · everything switch)', 3500); return true; }
-ui.view = mount('view-mode', segmented({ options: [['simple', 'simple', 'plain words and the basics'], ['all', 'everything', 'every drawer and knob: dice, MIDI, evolve weights, step locks, generative']], value: quests.view, onChange: (v) => setView(v) }));
-ui.view.el.setAttribute('aria-label', 'view: simple or everything');
 $('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { quests.skipped.push(q.id); finishQuest(q); toast(`skipped: ${q.title}`); } };
 $('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
 // ---- RD-7 the pills (pills.js): what is on, in one status region, in a fixed order. Each pill's node stays where the
@@ -2210,13 +2190,12 @@ function questMore(on) {
   setHidden(d, !on); if (go.getAttribute('aria-expanded') !== ex) go.setAttribute('aria-expanded', ex); keepFocus(had);
   if (on) { pillsOpen = false; renderQuest(); }
 }
-/** A pill's first button: the mode's control shown in the sheet (its tab and drawer; simple gives way to everything for
- *  an advanced one) with the focus on it, as find does. The keys go with it only when the keyboard pressed the pill: after
- *  a click, Space still plays and stops (Kai: click "rec armed", Space disarmed record mid-set) */
+/** A pill's first button: the mode's control shown in the sheet (its tab and drawer) with the focus on it, as find
+ *  does. The keys go with it only when the keyboard pressed the pill: after a click, Space still plays and stops (Kai:
+ *  click "rec armed", Space disarmed record mid-set) */
 function pillGo(el) {
   el = typeof el === 'string' ? $(el) : el; if (!el) return; setPillsOpen(false);
   if (!el.matches('button, select, input, summary')) el = el.querySelector('button, select, input') || el;   // a group: its first control
-  if (el.closest('.adv') && quests.view === 'simple') setView('all');
   if (focusMode) setFocusMode(false); reveal(el); el.scrollIntoView({ block: 'nearest' }); focusAs(el, lastInput !== 'pointer');
 }
 /** Quest "show me" (Rio): the gesture drawn once on the rings as a ghost hand (scene.js, read-only; any key or click
@@ -2242,7 +2221,7 @@ $('sp-clock-go').onclick = () => pillGo($('midi-follow').querySelector('button')
 $('sp-clock-x').onclick = () => { setPillsOpen(false); pmidi.setFollow('off'); ui.follow?.set('off'); retime(); saveSettings(); renderMidi(); };
 $('quest-go').onclick = () => questMore($('quest-more').hidden); $('quest-show').onclick = showMe;
 $('sp-more').onclick = () => setPillsOpen(!pillsOpen);
-buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildAutoUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); setView(quests.view);
+buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildAutoUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); renderQuest();
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
 // hidden pattern behind it); a returning visit keeps the pattern it left and offers "start fresh" (init, undoable)
 const boot = bootMode({ saved: !firstVisit, hash: location.hash });
@@ -2576,7 +2555,7 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // RD-6 the halos: the Move's held steps once looked at (a tap draws nothing), and the step a step-page knob edits while a
 // hand is on it. Asked every frame: nothing allocated while nothing is held
 const NO_HELD = [];
-const scene = createScene($('cv'), { held: () => { if (!pages.held.size && !handOn.size) return NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
+const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!pages.held.size && !handOn.size) return f ? [f] : NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); if (f) out.push(f); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
   // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
   // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
   // selected lane's words
@@ -2666,6 +2645,35 @@ cv.addEventListener('contextmenu', (e) => {   // right-click, or a touch browser
  *  console: the one lock editor (the radial menu it replaces put five lock buttons over the rings). Focus mode hides the
  *  console the page lives on, so opening it leaves focus mode. */
 function planetStep(li, i) { if (focusMode) setFocusMode(false); if (m.selected !== li) { m.select(li); lockStep = -1; sync(); } openStep(i); }
+// ---- RD-10 the canvas as one tab stop (DECISION; Yuki's "smallest canvas focus"): role=application on #cv, after the
+// console in the Tab order. ↑ ↓ pick a lane (they follow the selected lane), ← → walk its steps, Enter is the cycle a
+// planet tap does (I1: off → on → accent → off), synced with the cells: focusing step 20 turns them to the page 17–32,
+// as Back + a step pins it on the Move. Spoken through #announce; drawn as a white ring round the focused tick (the
+// held halo with focus: true), only while the keyboard holds the focus (:focus-visible: a click or a tap draws
+// nothing). No locks here: the cells' step page and the knobs are the accessible route (Alt+Enter on a cell opens it).
+// Every page key (Space, F, the pad rows, Alt+1–6) still works with the canvas focused: controlOwnsKey says no for #cv.
+let cvStep = 0;
+const cvKeyFocus = () => document.activeElement === cv && cv.matches(':focus-visible');
+/** The focused tick for the scene's halos (null when the canvas isn't keyboard-focused). Clamped: a shorter loop. */
+function cvHalo() { if (!cvKeyFocus()) return null; if (cvStep >= m.lane.length) cvStep = m.lane.length - 1; return { li: m.selected, i: cvStep, focus: true }; }
+const tierWord = { off: 'off', normal: 'on', accent: 'accent', ghost: 'ghost' };
+function cvSay() {
+  const lane = m.lane; if (cvStep >= lane.length) cvStep = lane.length - 1;
+  speak(`lane ${m.selected + 1} ${voiceLabel(lane)}, step ${cvStep + 1} of ${lane.length}, ${tierWord[lane.tierAt(lane.stepIndex(cvStep))]}`);
+}
+/** The cells follow the canvas focus (reveal does the same for a cell of the other 16). */
+function cvShow() { if (cvStep >= m.lane.length) cvStep = m.lane.length - 1; pages.pin(Math.floor(cvStep / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); poke(); }
+cv.addEventListener('keydown', (e) => {
+  if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault(); const n = m.lanes.length, li = (m.selected + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
+    m.select(li); lockStep = -1; sync(); cvShow(); cvSay();
+  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault(); const len = m.lane.length; cvStep = (Math.min(cvStep, len - 1) + (e.key === 'ArrowRight' ? 1 : len - 1)) % len; cvShow(); cvSay();
+  } else if (e.key === 'Enter' && !e.repeat) { e.preventDefault(); canvasTap(m.selected, Math.min(cvStep, m.lane.length - 1)); cvSay(); }
+});
+cv.addEventListener('focus', () => { if (cvKeyFocus()) { cvShow(); cvSay(); } });
+cv.addEventListener('blur', poke);   // the white ring goes with the focus
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
 // C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
 const DEBUG = new URLSearchParams(location.search).has('debug'); $('stress-meter').hidden = !DEBUG;
@@ -2688,6 +2696,9 @@ function readout() {
     ...(fill ? ['FILL'] : latch.state === 'armed' ? ['fill next bar'] : []), ...(pfx.filter ? [filterSay(Math.round(pfx.filter * 100))] : []), ...(pfx.throw ? ['THROW'] : []), ...(muteQ.size ? [`${muteQ.size} mute${muteQ.size > 1 ? 's' : ''} at the bar`] : []), ...(jam.state === 'rec' ? [`jam ${Math.floor(jam.beats)}/${JAM_BEATS}`] : [])].join(' · ');
   if ($('nerd').open) $('nerd-stats').textContent = nerdLines().join('\n');   // written only while someone reads it (opening the drawer fills it)
   if (face.log) paintLog();
+  // RD-10: the canvas tab stop is named per bar (Yuki: "6 lanes, aligns in 6 beats")
+  const cvName = `rings: ${m.lanes.length} lanes, aligns in ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(0)} beats`;
+  if ($('cv').getAttribute('aria-label') !== cvName) $('cv').setAttribute('aria-label', cvName);
   renderLanes(); renderPills(); announceChanges();
 }
 /** "Nerd stats": the engine line, a row per lane, the selected lane's sound row, what is queued or locked. */
@@ -2724,6 +2735,9 @@ function announceChanges() {
   if (!changed.length || changed.length > 3) return;   // a whole new pattern (undo, slot) is not one value: stay quiet
   clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = changed.join(', '); }, 300);
 }
+/** RD-10: one line said now (the canvas focus). It takes the shared timer, so it wins over a pending announceChanges
+ *  ("lane 3 conga" alone) and the fuller line is read once, not twice. */
+function speak(t) { clearTimeout(announceTimer); announceTimer = setTimeout(() => { $('announce').textContent = t; }, 120); }
 // ---- RD-3 layout: a CSS grid (left column, stage, right column, console row; styles.css) places everything, and the
 // rings take their box from the stage cell alone (ringBox), so no drawer, sheet tab, wrap or focus mode moves them
 // (A7). Only the window size does: the cell observer and resize. Narrow windows stack under a square canvas instead ----
@@ -2804,13 +2818,14 @@ function accName(el) {
   return squash(String(n).split(',')[0]);
 }
 /** Hidden for a reason the sheet can't undo (no Web MIDI, a closed popup, the lock panel without a step, steps 17–32 of a
- *  16-step lane: display none on the control itself): out of the index. A closed tab's pane, the closed sheet, a closed
- *  drawer and simple view's tucked drawers (.adv) are not reasons: find opens them. Nor is the closed share menu for
- *  the actions in it (4 bars of audio, the postcard): Enter presses them without opening it. */
+ *  16-step lane: display none on the control itself): out of the index. A closed tab's pane, the closed sheet and a closed
+ *  drawer are not reasons: find opens them. Nor is the closed share menu for the actions in it (4 bars of audio, the
+ *  postcard): Enter presses them without opening it. */
 const findHidden = (el) => {
-  // (RD-5: a cell of the lane off the console's 16 is no reason either: reveal turns the cells' page)
-  if (!el.matches('.adv, #stepsui .st.out:not(:disabled)') && getComputedStyle(el).display === 'none') return true;
   const runs = !!ACTIONS[el.id];
+  // (RD-5: a cell of the lane off the console's 16 is no reason either: reveal turns the cells' page. RD-10: an action
+  // the phone's console hides, undo say, still runs from find: Enter presses it unseen)
+  if (!runs && !el.matches('#stepsui .st.out:not(:disabled)') && getComputedStyle(el).display === 'none') return true;
   for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body') && !(runs && n.id === 'share-menu')) return true;
   return false;
 };
@@ -2823,11 +2838,10 @@ function findWhere(el) {
 }
 /** Every labelled control on the page now, as index entries (`el` kept for running it). */
 function buildFindIndex() {
-  const everything = new Map(PARAMS.map(p => [sliders[p.k]?.el, p.label]));   // I7: in simple view the shift knob is "rotation" too
   return [...document.querySelectorAll(FIND_SEL)].filter(el => !el.closest(FIND_OUT) && !findHidden(el) && !(el.matches('input') && el.type === 'hidden')).flatMap(el => {
     const name = accName(el); if (!name) return [];
     const act = ACTIONS[el.id], where = findWhere(el);
-    const e = entry({ key: el.id || `${where}|${name}`, name: act ? act[0] : name, where, action: !!act || el.matches('[role=tab]'), alias: everything.get(el), extra: [act?.[1], act && name, el.tagName === 'SELECT' && [...el.options].map(o => o.text).join(' ')].filter(Boolean).join(' ') });
+    const e = entry({ key: el.id || `${where}|${name}`, name: act ? act[0] : name, where, action: !!act || el.matches('[role=tab]'), extra: [act?.[1], act && name, el.tagName === 'SELECT' && [...el.options].map(o => o.text).join(' ')].filter(Boolean).join(' ') });
     return [Object.assign(e, { el })];
   });
 }
@@ -2855,11 +2869,10 @@ function openFind() {
 }
 /** Run a result: an action is pressed (the sheet goes back as it was when it lies outside the sheet), and the keys stay
  *  the page's (Space after "export stems" plays, it doesn't export again); a tab is shown; a control is shown (its tab,
- *  its drawers; simple view gives way to everything for an advanced one) and focused, the keys its own. */
+ *  its drawers) and focused, the keys its own. */
 function findRun(h) {
   const el = h.el, inp = $('find'); findRecents = pushRecent(findRecents, h.key); try { localStorage.setItem(FIND_KEY, JSON.stringify(findRecents)); } catch {}
   inp.value = ''; findList(false); if (!el?.isConnected) return;
-  if (el.closest('.adv') && quests.view === 'simple') setView('all');
   const inSheet = $('sheet').contains(el), back = findOpened; findOpened = false;   // a result decides the sheet: shut again, or the player's
   if (el.matches('[role=tab]')) { setSheet(el.id.slice(4), true, true); focusAs(el, true); return; }   // shown, never toggled shut (a phone's tab click would)
   if (h.action) {
@@ -2945,8 +2958,8 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 // drawn with the current page's meanings on its controls (moveface.js) over its full table. The drawing follows the
 // hands while the overlay is up (renderPage), so a Move touch relabels the knobs in place ----
 const HELP_TABS = ['keys', 'move'];
-// RD-9 round 1: the knobs wear the words of the gauges the console's row shows for that page (simple or full view, a
-// slice set's knob 7…), never a copy; the picture is written only when it changed (renderPage runs on every Move event)
+// RD-9 round 1: the knobs wear the words of the gauges the console's row shows for that page (a slice set's knob 7…),
+// never a copy; the picture is written only when it changed (renderPage runs on every Move event)
 let helpSvg = '';
 function drawHelpMove() {
   const r = knobPage.r || pageNow(), words = pageGauges(r.row, r.row8).map(g => g?.el.querySelector('.g-label')?.textContent ?? '');
@@ -2967,7 +2980,7 @@ $('help').querySelector('.help-tabs').addEventListener('keydown', (e) => {
 // one arrow away. A tool may ask for a tab: openHelp('move').
 function openHelp(tab = 'keys') { const d = $('help'); helpTab(HELP_TABS.includes(tab) ? tab : 'keys'); if (!d.open) d.showModal(); }
 $('btn-help').onclick = () => openHelp();
-window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, setNight, get night() { return face.night; }, openHelp, helpTab, quests, setView, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
+window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, setNight, get night() { return face.night; }, openHelp, helpTab, quests, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 $('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)
 document.body.classList.toggle('night', face.night);   // RD-9: night as it was left
 readout(); layoutStage(); scene.start();

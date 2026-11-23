@@ -1,22 +1,22 @@
-// ORBIT2-16 learning and simple mode (I6, I7): every quest's check says yes only to your own move AND the result, and no
-// otherwise; saved progress tolerates junk; a first visit starts simple; the plain words on the lane knobs.
+// ORBIT2-16 learning (I6): every quest's check says yes only to your own move AND the result, and no otherwise; saved
+// progress tolerates junk (RD-10 removed I7's simple / everything switch: one view, the full knob words).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Machine, ratioIndexOf } from '../src/poly/lanes.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey } from '../src/poly/grooves.js';
-import { QUESTS, QUESTS_KEY, PLAIN, paramLabel, questsFrom, currentQuest, startView, hintDrawer, threeAgainstFour, snareLanes, onTwoAndFour, sounding, loopQuarters, backbeatSetup, backbeatLane } from '../src/poly/quests.js';
+import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, hintDrawer, threeAgainstFour, snareLanes, onTwoAndFour, sounding, loopQuarters, backbeatSetup, backbeatLane } from '../src/poly/quests.js';
 
 const quest = (id) => QUESTS.find(q => q.id === id);
 const edit = (k, lane = 0) => ({ type: 'edit', lane, k });
-// the card's words: the knob labels as the app shows them (simple / everything) and a lane as the screen names it
+// the card's words: the knob labels as the app shows them and a lane as the screen names it
 const FULL = { euclid: 'euclid hits', rotation: 'rotation', ratio: 'speed ×', prob: 'probability' };
-const sayIn = (simple, m) => ({ word: (k) => paramLabel(k, FULL[k] ?? k, simple), lane: (i) => `lane ${i + 1} · ${m.lanes[i].voice}` });
+const sayIn = (m) => ({ word: (k) => FULL[k] ?? k, lane: (i) => `lane ${i + 1} · ${m.lanes[i].voice}` });
 
 test('I6 the five quests, in order, each with a title, a hint, a drawer, the moves that finish it and a check', () => {
   assert.deepEqual(QUESTS.map(q => q.id), ['three-four', 'backbeat', 'evolve', 'slot', 'export']);
   assert.deepEqual(QUESTS.map(q => q.title), ['make 3 against 4', 'rotate the snare onto 2 and 4', 'let it evolve 8 bars', 'save your first slot', 'export a loop']);
   const m = new Machine();
-  for (const q of QUESTS) { assert.ok(q.hint(m, sayIn(true, m)).length > 20, q.id); assert.ok(q.drawer.endsWith('-drawer'), q.id); assert.equal(typeof q.check, 'function'); }
+  for (const q of QUESTS) { assert.ok(q.hint(m, sayIn(m)).length > 20, q.id); assert.ok(q.drawer.endsWith('-drawer'), q.id); assert.equal(typeof q.check, 'function'); }
   // the app checks right after one of these: a bar line can't finish a knob quest (a later evolve isn't your move)
   assert.deepEqual(QUESTS.map(q => q.on), [['edit'], ['edit'], ['bar'], ['slot-save'], ['export']]);
   assert.equal(QUESTS_KEY, 'midi-warz.orbit2.quests');
@@ -83,8 +83,7 @@ test('I6 the backbeat hint names your snare and what it lacks; doing what it say
   assert.equal(li, 1); assert.equal(m.lanes[1].voice, 'rim');
   assert.deepEqual(Array.from({ length: 5 }, (_, r) => onTwoAndFour(m, 1, r)), [false, false, false, false, false], 'no shift of the demo rim lands on 2 and 4');
   assert.deepEqual(backbeatSetup(m, 1), [{ k: 'length', v: 4 }, { k: 'ratio', v: 1 }, { k: 'euclid', v: 2 }]);
-  assert.equal(q.hint(m, sayIn(true, m)), 'Your snare is lane 2 · rim. Pick it, set "length" to 4, "speed" to 1 and "hits" to 2; then turn "shift" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
-  assert.match(q.hint(m, sayIn(false, m)), /"speed ×" to 1 and "euclid hits" to 2; then turn "rotation"/, 'everything: the knobs as they read there');
+  assert.equal(q.hint(m, sayIn(m)), 'Your snare is lane 2 · rim. Pick it, set "length" to 4, "speed ×" to 1 and "euclid hits" to 2; then turn "rotation" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
   assert.ok(followHint(m, 1) >= 0, 'the demo, as a first visit gets it');
   const e = demo(); assert.ok(followHint(e, 1, ['euclid', 'ratio', 'length']) >= 0, 'any order of the knobs');
   const after = demo(); after.lanes[1].resize(3); assert.equal(threeAgainstFour(after), true, 'quest 1 done the obvious way (rim 5 → 3)');
@@ -92,9 +91,9 @@ test('I6 the backbeat hint names your snare and what it lacks; doing what it say
   for (const g of GROOVES) { const gm = Machine.from(g.m), gl = backbeatLane(gm); assert.ok(gl >= 0 && followHint(gm, gl) >= 0, g.key); }
   // a lane a shift away is told just that; an empty one, the hits it lacks; a muted one, to unmute; 3/4, the meter
   const f = new Machine(); f.lanes[1].setEuclid(2); f.lanes[1].voice = 'snare';
-  assert.deepEqual(backbeatSetup(f, 1), []); assert.equal(q.hint(f, sayIn(true, f)), 'Your snare is lane 2 · snare: pick it and turn "shift" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
+  assert.deepEqual(backbeatSetup(f, 1), []); assert.equal(q.hint(f, sayIn(f)), 'Your snare is lane 2 · snare: pick it and turn "rotation" (or drag along its ring) until it hits on beats 2 and 4, not 1 and 3.');
   const z = new Machine(); z.lanes[1].setLength(4); z.lanes[1].setRatio(ratioIndexOf(1)); assert.deepEqual(backbeatSetup(z, 1), [{ k: 'euclid', v: 2 }]); assert.ok(followHint(z, 1) >= 0);
-  f.lanes[1].muted = true; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'mute', v: false }]); assert.match(q.hint(f, sayIn(true, f)), /Pick it, unmute it; then turn "shift"/);
+  f.lanes[1].muted = true; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'mute', v: false }]); assert.match(q.hint(f, sayIn(f)), /Pick it, unmute it; then turn "rotation"/);
   f.lanes[1].muted = false; f.meter = '3/4'; assert.deepEqual(backbeatSetup(f, 1), [{ k: 'meter', v: '4/4' }]); assert.ok(followHint(f, 1) >= 0);
 });
 
@@ -106,7 +105,7 @@ test('I6 the backbeat hint: AND / XOR lanes, hand-set hits, a snare already ther
   for (const mode of ['and', 'xor']) {
     const m = demo(); m.lanes[1].setEuclidMode(mode);
     assert.deepEqual(backbeatSetup(m, 1), [{ k: 'length', v: 4 }, { k: 'ratio', v: 1 }, { k: 'mode', v: 'replace' }, { k: 'euclid', v: 2 }], mode);
-    assert.match(q.hint(m, sayIn(true, m)), /Pick it, set its "euclid" to "replace" \(under "generative", in "everything"\) and set "length" to 4, "speed" to 1 and "hits" to 2; then/);
+    assert.match(q.hint(m, sayIn(m)), /Pick it, set its "euclid" to "replace" \(under "generative"\) and set "length" to 4, "speed ×" to 1 and "euclid hits" to 2; then/);
     assert.ok(followHint(m, 1) >= 0, mode);
   }
   const h = new Machine(), l = h.lanes[1]; l.setLength(4); l.setRatio(ratioIndexOf(1)); l.setEuclid(2); l.hits[1] = true; l.hits[2] = false;   // x x . .
@@ -115,7 +114,7 @@ test('I6 the backbeat hint: AND / XOR lanes, hand-set hits, a snare already ther
   assert.deepEqual(backbeatSetup(e, 1), [{ k: 'ratio', v: 1 }], '2 hits in 4 already: only the speed'); assert.ok(followHint(e, 1) >= 0);
   const a = new Machine(); a.lanes[1].voice = 'snare'; a.lanes[1].setLength(4); a.lanes[1].setRatio(ratioIndexOf(1)); a.lanes[1].setEuclid(2); a.lanes[1].rotation = 1;
   assert.equal(onTwoAndFour(a, 1), true);
-  assert.equal(q.hint(a, sayIn(true, a)), 'Your snare (lane 2 · snare) already plays on 2 and 4: pick it and turn "shift" away and back (or drag along its ring) to land it there yourself.');
+  assert.equal(q.hint(a, sayIn(a)), 'Your snare (lane 2 · snare) already plays on 2 and 4: pick it and turn "rotation" away and back (or drag along its ring) to land it there yourself.');
   assert.equal(q.check(a, [edit('euclid', 1)]), false, 'there without a turn: not yet'); assert.equal(q.check(a, [edit('rotation', 1)]), true);
 });
 
@@ -134,10 +133,10 @@ test('I6 "save your first slot" and "export a loop": the save / the export, noth
   assert.equal(quest('export').check(m, [{ type: 'slot-save', slot: 1 }]), false);
 });
 
-test('I6 progress: junk dropped, quests in order, the next quest\'s drawer lit', () => {
-  assert.deepEqual(questsFrom(null), { done: [], skipped: [], view: null, hidden: false });
-  assert.deepEqual(questsFrom({ done: ['slot', 'nope', 'slot', 3], view: 'weird', hidden: 'yes' }), { done: ['slot'], skipped: [], view: null, hidden: false });
-  assert.deepEqual(questsFrom({ done: 'x', view: 'all', hidden: true }), { done: [], skipped: [], view: 'all', hidden: true });
+test('I6 progress: junk dropped (an RD-9 save\'s view too), quests in order, the next quest\'s drawer lit', () => {
+  assert.deepEqual(questsFrom(null), { done: [], skipped: [], hidden: false });
+  assert.deepEqual(questsFrom({ done: ['slot', 'nope', 'slot', 3], view: 'weird', hidden: 'yes' }), { done: ['slot'], skipped: [], hidden: false });
+  assert.deepEqual(questsFrom({ done: 'x', view: 'all', hidden: true }), { done: [], skipped: [], hidden: true }, 'an old save\'s view (the removed switch) is dropped, the rest loads');
   assert.deepEqual(questsFrom({ done: ['three-four', 'backbeat'], skipped: ['backbeat', 'export', 'backbeat', 'nope'] }).skipped, ['backbeat'], 'skipped ones are done ones (the order walks done)');
   assert.equal(currentQuest([]).id, 'three-four');
   assert.equal(currentQuest(['three-four']).id, 'backbeat');
@@ -146,15 +145,5 @@ test('I6 progress: junk dropped, quests in order, the next quest\'s drawer lit',
   assert.equal(hintDrawer([]), 'lane-drawer'); assert.equal(hintDrawer(['three-four', 'backbeat']), 'evolve-drawer'); assert.equal(hintDrawer(QUESTS.map(q => q.id)), null);
 });
 
-test('I7 a first visit starts simple, a page with a beat saved starts with everything, a choice is kept', () => {
-  assert.equal(startView(null, true), 'simple'); assert.equal(startView(null, false), 'all');
-  assert.equal(startView('all', true), 'all'); assert.equal(startView('simple', false), 'simple');
-});
-
-test('I7 plain words on the lane knobs in simple, the full names in everything', () => {
-  assert.deepEqual(PLAIN, { euclid: 'hits', rotation: 'shift', ratio: 'speed', prob: 'chance' });
-  assert.equal(paramLabel('euclid', 'euclid hits', true), 'hits'); assert.equal(paramLabel('euclid', 'euclid hits', false), 'euclid hits');
-  assert.equal(paramLabel('rotation', 'rotation', true), 'shift'); assert.equal(paramLabel('ratio', 'speed ×', true), 'speed');
-  assert.equal(paramLabel('prob', 'probability', true), 'chance'); assert.equal(paramLabel('prob', 'probability', false), 'probability');
-  assert.equal(paramLabel('length', 'length', true), 'length', 'an unlisted knob keeps its name');
-});
+// (RD-10: I7's startView and the PLAIN word table left with the simple / everything switch; the plain words live on as
+// find synonyms, test/find.test.js)

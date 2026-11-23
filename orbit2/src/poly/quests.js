@@ -1,4 +1,4 @@
-// I6 quests and I7 simple mode: pure data and checks, no DOM (the app draws the card and keeps the event log).
+// I6 quests: pure data and checks, no DOM (the app draws the card and keeps the event log).
 // A quest is { id, title, on, drawer, hint(machine, say), check(machine, events) }. machine = a lanes.js Machine (or
 // anything with its shape: lanes[] with length / ratio / rotation / muted / voice / name / euclidK / euclidMode,
 // played(), hitAt(), and meter); events = what you did since the quest became the current one, oldest first:
@@ -8,18 +8,13 @@
 // A check needs your own move as well as the result, so a beat that already happens to be "3 against 4" does not tick
 // the quest by itself. on: the event types that can finish it; the app checks right after one of them, so a result
 // that evolve, a slot or an undo brings later is not credited to an older move. hint(m, say): the card's words for the
-// beat on screen; say = { word(k): a lane knob's label as shown (plain in simple), lane(i): a lane as the screen names
+// beat on screen; say = { word(k): a lane knob's label as the screen shows it, lane(i): a lane as the screen names
 // it }. drawer: the panel the quest is played in (its hint lights there). show(m) (RD-7 "show me"): the gesture the
 // scene draws once as a ghost hand, { kind: 'pull' | 'turn', li } on lane li's ring, or { id } of the control a quest
 // played in the sheet is done with (the app shows it instead).
 import { RATIOS } from './lanes.js';
 
 export const QUESTS_KEY = 'midi-warz.orbit2.quests';
-export const VIEWS = ['simple', 'all'];
-
-/** I7 plain words: the lane knobs a beginner sees, by PARAMS key (app.js). Unlisted keys keep their label. */
-export const PLAIN = { euclid: 'hits', rotation: 'shift', ratio: 'speed', prob: 'chance' };
-export const paramLabel = (k, label, simple) => (simple && PLAIN[k]) || label;
 
 const EPS = 1e-9;
 const ratioOf = (l) => (Number.isFinite(l.ratio) ? l.ratio : RATIOS[l.ratioIndex] ?? 1);
@@ -86,7 +81,7 @@ const and = (a) => (a.length > 1 ? `${a.slice(0, -1).join(', ')} and ${a.at(-1)}
 function setupWords(need, say) {
   const knobs = need.filter(n => n.k === 'length' || n.k === 'ratio' || n.k === 'euclid').map(n => `"${say.word(n.k)}" to ${n.v}`);
   return and([need.some(n => n.k === 'meter') ? 'set the meter to 4/4 (in "Patterns")' : '', need.some(n => n.k === 'mute') ? 'unmute it' : '',
-    need.some(n => n.k === 'mode') ? 'set its "euclid" to "replace" (under "generative", in "everything")' : '', knobs.length ? `set ${and(knobs)}` : ''].filter(Boolean));
+    need.some(n => n.k === 'mode') ? 'set its "euclid" to "replace" (under "generative")' : '', knobs.length ? `set ${and(knobs)}` : ''].filter(Boolean));
 }
 /** Your latest knob or gesture move: the app checks right after an edit, so it is the move that just happened. */
 const lastEdit = (events) => events.findLast(e => e.type === 'edit');
@@ -120,15 +115,14 @@ export const QUESTS = [
     check: (m, ev) => ev.some(e => e.type === 'export') },
 ];
 
-/** Saved progress: { done: [ids], skipped: [ids], view: 'simple' | 'all' | null, hidden }. done = finished or skipped
- *  (the order walks it); skipped = the ones you passed over (a badge is done but not skipped). Junk is dropped. */
+/** Saved progress: { done: [ids], skipped: [ids], hidden }. done = finished or skipped (the order walks it); skipped =
+ *  the ones you passed over (a badge is done but not skipped). Junk is dropped, and an RD-9 save's `view` (the removed
+ *  simple / everything switch) is ignored, so old saves keep loading. */
 export function questsFrom(o) {
   const ids = new Set(QUESTS.map(q => q.id)), done = Array.isArray(o?.done) ? [...new Set(o.done.filter(id => ids.has(id)))] : [];
-  return { done, skipped: Array.isArray(o?.skipped) ? [...new Set(o.skipped.filter(id => done.includes(id)))] : [], view: VIEWS.includes(o?.view) ? o.view : null, hidden: o?.hidden === true };
+  return { done, skipped: Array.isArray(o?.skipped) ? [...new Set(o.skipped.filter(id => done.includes(id)))] : [], hidden: o?.hidden === true };
 }
 /** The quest to play now: the first one not done, in order (null when all are). */
 export const currentQuest = (done) => QUESTS.find(q => !done.includes(q.id)) || null;
-/** A first visit starts simple; someone who already has a beat saved here starts with everything they had. */
-export const startView = (saved, firstVisit) => saved || (firstVisit ? 'simple' : 'all');
 /** The drawer whose hint is lit: the current quest's, so finishing one quest lights the next one's drawer. */
 export const hintDrawer = (done) => currentQuest(done)?.drawer || null;

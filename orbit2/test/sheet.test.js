@@ -40,7 +40,10 @@ test('RD-3 the old right column\'s controls: init … clear and the grooves in p
   for (const id of ['btn-play', 'btn-fill', 'btn-latch', 'fx-gauge', 'btn-throw', 'voice-select', 'knobs', 'stepsui', 'btn-undo', 'btn-random', 'btn-jam', 'btn-share', 'btn-all']) assert.match(face, new RegExp(`id="${id}"`), `${id} on the console`);
   for (const id of ['btn-init', 'btn-save', 'btn-load', 'btn-redo', 'btn-tap', 'tempo-gauge', 'btn-wild', 'btn-clear', 'grooves']) assert.match(panes.pattern, new RegExp(`id="${id}"`), id);
   assert.match(panes.setup, /id="live-mode"/); assert.match(panes.setup, /class="wordmark"/);
-  for (const id of ['view-mode', 'stress-meter']) assert.match(panes.setup, new RegExp(`id="${id}"`), id);
+  assert.match(panes.setup, /id="stress-meter"/, 'stress-meter');
+  // RD-10: the simple / everything switch is gone (one view), and with it the advanced-drawer class
+  assert.doesNotMatch(html, /id="view-mode"/, 'the view switch left the page');
+  assert.doesNotMatch(html, /class="[^"]*\badv\b[^"]*"/, 'no drawer is tucked away any more');
   const hud = html.slice(html.indexOf('<div class="hud">'), html.indexOf('<section id="sheet"'));
   for (const id of ['welcome', 'quest', 'jam-panel']) assert.match(hud, new RegExp(`id="${id}"`), `${id} above the sheet`);
   assert.doesNotMatch(html, /id="hud-left"|id="hud-bl"/, 'the old columns are gone');

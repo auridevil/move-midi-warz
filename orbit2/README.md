@@ -125,6 +125,18 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   BOUNCE, `step-check.mjs` LOOP (header, chip, numbers). The final sets (A3) and the full glance run
   (A2): `docs/reviews/RD-09.md`, records `docs/redesign/setlog/final-*.json`, `glance-rd09-*.json`; `session.mjs` notes
   the action page errors came with.
+- Phone, access and clean-up (RD-10): one interface everywhere. On a phone (≤ 760 px) the lanes are a row of 44 px
+  colour dots (the name stays the aria-label, a muted dot hollow; the M lamps leave the face), the console is play +
+  bar·beat with the 2×4 knobs and 2×8 cells (fill, fill next, throw, the filter and the action words leave it: find
+  still runs the actions unseen, the Move keeps every hold, play stays the floating thumb-zone ring), the rings are
+  square and full width, the pills one line, the sheet the full-height bottom sheet; the peek sits over the canvas, top
+  left, on narrow windows. The canvas is one tab stop after the console (`role="application"`,
+  `aria-roledescription="orbit"`, named per bar): ↑↓ pick a lane, ←→ walk its steps (the cells turn to that page),
+  Enter is the planet-tap cycle (off → on → accent), spoken through `#announce`, drawn as a white ring round the
+  focused tick (only for the keyboard, `:focus-visible`); locks stay on the cells' step page (Alt+Enter on a cell).
+  Tab order: play is the page's first stop, then the console in Move order. The simple / everything switch (I7) is
+  gone — one view, the full knob words, every drawer; the plain words (hits, shift, speed, chance) live on as find
+  synonyms, and an old save's `view` key is ignored. Zero orphan ids in `index.html` (`test/access.test.js` scans).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;
