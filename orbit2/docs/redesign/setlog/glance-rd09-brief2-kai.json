@@ -1,0 +1,409 @@
+{
+ "format": "orbits-glance",
+ "v": 1,
+ "player": "kai",
+ "page": "orbit2/index.html",
+ "commit": "505c7e0 + this phase's final-sets fixes (orbit2: rd-09 final sets)",
+ "tool": "orbit2/tools/glance.mjs",
+ "judges": "one fresh sub-agent per image (model sonnet), shown the brief below (the page defined by DECISION's page table) and that image only; 14 control judges saw take 1's slots pictures (all said rhythm, not recorded here)",
+ "run": {
+  "seed": 2,
+  "groove": "techno",
+  "pages": [
+   "rhythm",
+   "sound",
+   "step",
+   "slots"
+  ],
+  "ask": [
+   "page",
+   "lane",
+   "step"
+  ],
+  "exposure": 0.55,
+  "gamma": 1.5,
+  "scale": 0.71,
+  "errors": []
+ },
+ "brief": "You are shown ONE photo of a laptop screen, taken in a dark room from about 70 cm, 300 ms after the player\ntouched or held something on a hardware controller (an Ableton Move) connected to this drum-machine web app. Look at\nthe image only. Answer three things, as JSON on one line: {\"page\": \"...\", \"lane\": N, \"step\": N}\n- page: which page of the controller the screen shows right now: \"rhythm\" (the knobs edit the lane's pattern: length,\n  hits, shift, speed, chance…), \"sound\" (the knobs edit the lane's sound: tune, decay, tone, drive…), \"step\" (the\n  knobs edit one held step's own values) or \"slots\" (the 16 cells show the pattern slots instead of the steps; the\n  knobs keep their meaning). If you cannot tell, give your best guess.\n- lane: the number (1–6) of the lane the controls belong to. If you cannot tell, give your best guess.\n- step: if the page is \"step\", the number of the step whose own values the knobs edit (1–32); otherwise null. If you\n  cannot tell, give your best guess.",
+ "score": {
+  "right": 14,
+  "of": 20,
+  "pass": false,
+  "pageRight": 15,
+  "laneRight": 20,
+  "stepRight": 3,
+  "byPage": {
+   "sound": {
+    "right": 7,
+    "of": 7
+   },
+   "slots": {
+    "right": 0,
+    "of": 5
+   },
+   "step": {
+    "right": 3,
+    "of": 4
+   },
+   "rhythm": {
+    "right": 4,
+    "of": 4
+   }
+  }
+ },
+ "trials": [
+  {
+   "trial": 1,
+   "page": "sound",
+   "lane": 4,
+   "said": {
+    "page": "sound",
+    "lane": 4,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 4,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 2,
+   "page": "slots",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2,
+    "step": null
+   },
+   "ok": false,
+   "drawn": {
+    "page": "rhythm",
+    "word": "slots · held on Move",
+    "lane": 2,
+    "cells": "slots"
+   }
+  },
+  {
+   "trial": 3,
+   "page": "sound",
+   "lane": 2,
+   "said": {
+    "page": "sound",
+    "lane": 2,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 2,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 4,
+   "page": "slots",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4,
+    "step": null
+   },
+   "ok": false,
+   "drawn": {
+    "page": "rhythm",
+    "word": "slots · held on Move",
+    "lane": 4,
+    "cells": "slots"
+   }
+  },
+  {
+   "trial": 5,
+   "page": "step",
+   "lane": 1,
+   "step": 1,
+   "turn": true,
+   "said": {
+    "page": "step",
+    "lane": 1,
+    "step": 6
+   },
+   "ok": false,
+   "drawn": {
+    "page": "step",
+    "word": "step 1 · held on Move",
+    "lane": 1,
+    "cells": "loops"
+   },
+   "restored": true
+  },
+  {
+   "trial": 6,
+   "page": "sound",
+   "lane": 1,
+   "said": {
+    "page": "sound",
+    "lane": 1,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 1,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 7,
+   "page": "slots",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1,
+    "step": null
+   },
+   "ok": false,
+   "drawn": {
+    "page": "rhythm",
+    "word": "slots · held on Move",
+    "lane": 1,
+    "cells": "slots"
+   }
+  },
+  {
+   "trial": 8,
+   "page": "sound",
+   "lane": 1,
+   "said": {
+    "page": "sound",
+    "lane": 1,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 1,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 9,
+   "page": "step",
+   "lane": 2,
+   "step": 8,
+   "turn": false,
+   "said": {
+    "page": "step",
+    "lane": 2,
+    "step": 8
+   },
+   "ok": true,
+   "drawn": {
+    "page": "step",
+    "word": "step 8 · held on Move",
+    "lane": 2,
+    "cells": "loops"
+   },
+   "restored": true
+  },
+  {
+   "trial": 10,
+   "page": "step",
+   "lane": 4,
+   "step": 2,
+   "turn": true,
+   "said": {
+    "page": "step",
+    "lane": 4,
+    "step": 2
+   },
+   "ok": true,
+   "drawn": {
+    "page": "step",
+    "word": "step 2 · held on Move",
+    "lane": 4,
+    "cells": "loops"
+   },
+   "restored": true
+  },
+  {
+   "trial": 11,
+   "page": "rhythm",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "rhythm",
+    "word": "rhythm",
+    "lane": 1,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 12,
+   "page": "sound",
+   "lane": 3,
+   "said": {
+    "page": "sound",
+    "lane": 3,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 3,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 13,
+   "page": "rhythm",
+   "lane": 4,
+   "said": {
+    "page": "rhythm",
+    "lane": 4,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "rhythm",
+    "word": "rhythm",
+    "lane": 4,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 14,
+   "page": "sound",
+   "lane": 2,
+   "said": {
+    "page": "sound",
+    "lane": 2,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 2,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 15,
+   "page": "slots",
+   "lane": 3,
+   "said": {
+    "page": "rhythm",
+    "lane": 3,
+    "step": null
+   },
+   "ok": false,
+   "drawn": {
+    "page": "rhythm",
+    "word": "slots · held on Move",
+    "lane": 3,
+    "cells": "slots"
+   }
+  },
+  {
+   "trial": 16,
+   "page": "slots",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2,
+    "step": null
+   },
+   "ok": false,
+   "drawn": {
+    "page": "rhythm",
+    "word": "slots · held on Move",
+    "lane": 2,
+    "cells": "slots"
+   }
+  },
+  {
+   "trial": 17,
+   "page": "step",
+   "lane": 3,
+   "step": 1,
+   "turn": false,
+   "said": {
+    "page": "step",
+    "lane": 3,
+    "step": 1
+   },
+   "ok": true,
+   "drawn": {
+    "page": "step",
+    "word": "step 1 · held on Move",
+    "lane": 3,
+    "cells": "loops"
+   },
+   "restored": true
+  },
+  {
+   "trial": 18,
+   "page": "rhythm",
+   "lane": 2,
+   "said": {
+    "page": "rhythm",
+    "lane": 2,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "rhythm",
+    "word": "rhythm",
+    "lane": 2,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 19,
+   "page": "rhythm",
+   "lane": 1,
+   "said": {
+    "page": "rhythm",
+    "lane": 1,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "rhythm",
+    "word": "rhythm",
+    "lane": 1,
+    "cells": "steps"
+   }
+  },
+  {
+   "trial": 20,
+   "page": "sound",
+   "lane": 4,
+   "said": {
+    "page": "sound",
+    "lane": 4,
+    "step": null
+   },
+   "ok": true,
+   "drawn": {
+    "page": "sound",
+    "word": "sound ⇧",
+    "lane": 4,
+    "cells": "steps"
+   }
+  }
+ ]
+}

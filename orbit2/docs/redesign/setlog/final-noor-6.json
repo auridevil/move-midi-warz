@@ -1,0 +1,3316 @@
+{
+ "format": "orbits-setlog",
+ "v": 1,
+ "started": "2026-11-23T02:12:19.884Z",
+ "dropped": 0,
+ "entries": [
+  {
+   "id": 0,
+   "t": 5403.8,
+   "source": "key",
+   "target": "transport",
+   "before": "stopped",
+   "after": "playing",
+   "reversed": false
+  },
+  {
+   "id": 1,
+   "t": 50698.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 2,
+   "t": 72638.3,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 3,
+   "t": 85176,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 4,
+   "t": 96663.8,
+   "source": "pointer",
+   "target": "lane1.rotation",
+   "before": 1,
+   "after": 0,
+   "reversed": false
+  },
+  {
+   "id": 5,
+   "t": 135245.5,
+   "source": "pointer",
+   "target": "lane1.length",
+   "before": 16,
+   "after": 10,
+   "reversed": false,
+   "end": 135478.2
+  },
+  {
+   "id": 6,
+   "t": 187592.3,
+   "source": "pointer",
+   "target": "lane1.prob",
+   "before": 1,
+   "after": 0.84,
+   "reversed": false,
+   "end": 187826.8
+  },
+  {
+   "id": 7,
+   "t": 217841.3,
+   "source": "pointer",
+   "target": "lane1.rotation",
+   "before": 0,
+   "after": 6,
+   "reversed": false,
+   "end": 218008.5
+  },
+  {
+   "id": 8,
+   "t": 218475.5,
+   "source": "pointer",
+   "target": "lane1.swing",
+   "before": 0,
+   "after": 0.11,
+   "reversed": false,
+   "end": 218708.4
+  },
+  {
+   "id": 9,
+   "t": 234890,
+   "source": "pointer",
+   "target": "lane1.euclidK",
+   "before": 0,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 10,
+   "t": 261611.7,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 11,
+   "t": 305615.3,
+   "source": "pointer",
+   "target": "lane1.hits.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 12,
+   "t": 306422.4,
+   "source": "pointer",
+   "target": "lane1.hits.5",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 13,
+   "t": 307106.4,
+   "source": "pointer",
+   "target": "lane1.hits.9",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 14,
+   "t": 344791.3,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 15,
+   "t": 381423,
+   "source": "pointer",
+   "target": "select",
+   "before": 1,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 16,
+   "t": 382439.2,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare808",
+   "queued": false
+  },
+  {
+   "id": 17,
+   "t": 391026.8,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 18,
+   "t": 412366,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 140,
+   "after": 148,
+   "reversed": false,
+   "end": 412629.5
+  },
+  {
+   "id": 19,
+   "t": 425799.2,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 148,
+   "after": 156,
+   "reversed": false,
+   "end": 426129
+  },
+  {
+   "id": 20,
+   "t": 444248.3,
+   "source": "pointer",
+   "target": "lane2.euclidK",
+   "before": 0,
+   "after": 4,
+   "reversed": false,
+   "end": 444569
+  },
+  {
+   "id": 21,
+   "t": 471297.3,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 156,
+   "after": 148,
+   "reversed": false,
+   "end": 471547.3
+  },
+  {
+   "id": 22,
+   "t": 491110.8,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 23,
+   "t": 491663.6,
+   "source": "pointer",
+   "target": "lane2.ratio",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 24,
+   "t": 513249.8,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "snare808",
+   "queued": false
+  },
+  {
+   "id": 25,
+   "t": 606103.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 26,
+   "t": 626642.5,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 16,
+   "after": 9,
+   "reversed": false,
+   "end": 626925.7
+  },
+  {
+   "id": 27,
+   "t": 646607.7,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 148,
+   "after": 140,
+   "reversed": false,
+   "end": 646841.2
+  },
+  {
+   "id": 28,
+   "t": 656924.4,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 29,
+   "t": 691805,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 9,
+   "after": 13,
+   "reversed": false,
+   "end": 692022.3
+  },
+  {
+   "id": 30,
+   "t": 770785.4,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 1,
+   "after": 0.88,
+   "reversed": false,
+   "end": 771019.7
+  },
+  {
+   "id": 31,
+   "t": 818050.5,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 0.88,
+   "after": 1,
+   "reversed": false,
+   "end": 818268.1
+  },
+  {
+   "id": 32,
+   "t": 818828.8,
+   "source": "pointer",
+   "target": "lane2.ratio",
+   "before": 3,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 33,
+   "t": 914765.2,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 1,
+   "after": 0.96,
+   "reversed": false,
+   "end": 914963.6
+  },
+  {
+   "id": 34,
+   "t": 932937.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 35,
+   "t": 969145.4,
+   "source": "pointer",
+   "target": "lane2.euclidK",
+   "before": 4,
+   "after": 0,
+   "reversed": false,
+   "end": 969345.3
+  },
+  {
+   "id": 36,
+   "t": 999505.4,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 37,
+   "t": 1028091.8,
+   "source": "pointer",
+   "target": "lane2.prob",
+   "before": 0.96,
+   "after": 1,
+   "reversed": false,
+   "end": 1028125
+  },
+  {
+   "id": 38,
+   "t": 1064707.4,
+   "source": "pointer",
+   "target": "lane2.swing",
+   "before": 0,
+   "after": 0.16,
+   "reversed": false,
+   "end": 1064941.1
+  },
+  {
+   "id": 39,
+   "t": 1091423.7,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 140,
+   "after": 148,
+   "reversed": false,
+   "end": 1091656.9
+  },
+  {
+   "id": 40,
+   "t": 1101764,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 41,
+   "t": 1124554.5,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 13,
+   "after": 20,
+   "reversed": false,
+   "end": 1124754.4
+  },
+  {
+   "id": 42,
+   "t": 1175438.7,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare808",
+   "queued": false
+  },
+  {
+   "id": 43,
+   "t": 1201137.6,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 44,
+   "t": 1201866.2,
+   "source": "pointer",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snap2",
+   "queued": false
+  },
+  {
+   "id": 45,
+   "t": 1202386.1,
+   "source": "pointer",
+   "target": "lane4.ratio",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 46,
+   "t": 1282457.8,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 47,
+   "t": 1298965.1,
+   "source": "pointer",
+   "target": "lane4.prob",
+   "before": 1,
+   "after": 0.96,
+   "reversed": false,
+   "end": 1299164.9
+  },
+  {
+   "id": 48,
+   "t": 1316394.7,
+   "source": "pointer",
+   "target": "select",
+   "before": 4,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 49,
+   "t": 1317322.9,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "hat",
+   "queued": false
+  },
+  {
+   "id": 50,
+   "t": 1339762.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 51,
+   "t": 1360463.5,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 52,
+   "t": 1433876.9,
+   "source": "pointer",
+   "target": "lane3.length",
+   "before": 16,
+   "after": 10,
+   "reversed": false,
+   "end": 1434110.2
+  },
+  {
+   "id": 53,
+   "t": 1452893,
+   "source": "pointer",
+   "target": "lane3.rotation",
+   "before": 11,
+   "after": 3,
+   "reversed": false,
+   "end": 1452991.3
+  },
+  {
+   "id": 54,
+   "t": 1463496.3,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 55,
+   "t": 1485956.6,
+   "source": "pointer",
+   "target": "lane3.rotation",
+   "before": 3,
+   "after": 0,
+   "reversed": false,
+   "end": 1486091.2
+  },
+  {
+   "id": 56,
+   "t": 1498819.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 57,
+   "t": 1529289.7,
+   "source": "pointer",
+   "target": "lane3.length",
+   "before": 10,
+   "after": 14,
+   "reversed": false,
+   "end": 1529489.5
+  },
+  {
+   "id": 58,
+   "t": 1549555.6,
+   "source": "pointer",
+   "target": "lane3.prob",
+   "before": 1,
+   "after": 0.96,
+   "reversed": false,
+   "end": 1549755.6
+  },
+  {
+   "id": 59,
+   "t": 1575819.2,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 148,
+   "after": 140,
+   "reversed": false,
+   "end": 1576053.1
+  },
+  {
+   "id": 60,
+   "t": 1586937.5,
+   "source": "pointer",
+   "target": "lane3.prob",
+   "before": 0.96,
+   "after": 0.8,
+   "reversed": false,
+   "end": 1587170.2
+  },
+  {
+   "id": 61,
+   "t": 1612635.1,
+   "source": "pointer",
+   "target": "lane3.swing",
+   "before": 0,
+   "after": 0.24,
+   "reversed": false,
+   "end": 1612868.4
+  },
+  {
+   "id": 62,
+   "t": 1662700.9,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "hat",
+   "queued": false
+  },
+  {
+   "id": 63,
+   "t": 1692416.2,
+   "source": "pointer",
+   "target": "lane3.length",
+   "before": 14,
+   "after": 8,
+   "reversed": false,
+   "end": 1692732.2
+  },
+  {
+   "id": 64,
+   "t": 1716296.7,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 65,
+   "t": 1717268.4,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "snare808",
+   "queued": false
+  },
+  {
+   "id": 66,
+   "t": 1737654.8,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 67,
+   "t": 1849226.4,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 20,
+   "after": 15,
+   "reversed": false,
+   "end": 1849460.1
+  },
+  {
+   "id": 68,
+   "t": 1884138,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 69,
+   "t": 1898674.8,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 140,
+   "after": 148,
+   "reversed": false,
+   "end": 1898908.1
+  },
+  {
+   "id": 70,
+   "t": 1942939.7,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 4,
+   "after": 11,
+   "reversed": false,
+   "end": 1943138.8
+  },
+  {
+   "id": 71,
+   "t": 1988487.5,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 148,
+   "after": 156,
+   "reversed": false,
+   "end": 1988720.9
+  },
+  {
+   "id": 72,
+   "t": 1989137.7,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 10,
+   "after": 7,
+   "reversed": false,
+   "end": 1989304.3
+  },
+  {
+   "id": 73,
+   "t": 2018568.5,
+   "source": "pointer",
+   "target": "lane2.rotation",
+   "before": 6,
+   "after": 13,
+   "reversed": false,
+   "end": 2018768.5
+  },
+  {
+   "id": 74,
+   "t": 2040804.8,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 156,
+   "after": 164,
+   "reversed": false,
+   "end": 2041035.1
+  },
+  {
+   "id": 75,
+   "t": 2071067.4,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 164,
+   "after": 156,
+   "reversed": false,
+   "end": 2071300.8
+  },
+  {
+   "id": 76,
+   "t": 2071716.4,
+   "source": "pointer",
+   "target": "lane2.swing",
+   "before": 0.16,
+   "after": 0.07,
+   "reversed": false,
+   "end": 2071949.8
+  },
+  {
+   "id": 77,
+   "t": 2095865.8,
+   "source": "pointer",
+   "target": "tempo",
+   "before": 156,
+   "after": 148,
+   "reversed": false,
+   "end": 2096099
+  },
+  {
+   "id": 78,
+   "t": 2096550.3,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 15,
+   "after": 17,
+   "reversed": false,
+   "end": 2096717
+  },
+  {
+   "id": 79,
+   "t": 2128165.9,
+   "source": "pointer",
+   "target": "lane2.length",
+   "before": 17,
+   "after": 22,
+   "reversed": false,
+   "end": 2128399.2
+  },
+  {
+   "id": 80,
+   "t": 2136899.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 81,
+   "t": 2178024.3,
+   "source": "pointer",
+   "target": "select",
+   "before": 2,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 82,
+   "t": 2179076.3,
+   "source": "pointer",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "hat",
+   "queued": false
+  },
+  {
+   "id": 83,
+   "t": 2190312.2,
+   "source": "pointer",
+   "target": "lane3.swing",
+   "before": 0.24,
+   "after": 0.08,
+   "reversed": false,
+   "end": 2190545.4
+  },
+  {
+   "id": 84,
+   "t": 2253979.6,
+   "source": "pointer",
+   "target": "select",
+   "before": 3,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 85,
+   "t": 2254597.9,
+   "source": "pointer",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "snare808",
+   "queued": false
+  },
+  {
+   "id": 86,
+   "t": 2271822,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 87,
+   "t": 2308104,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 88,
+   "t": 2344539.1,
+   "source": "pointer",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 89,
+   "t": 2376537.6,
+   "source": "pointer",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 90,
+   "t": 2414046.3,
+   "source": "pointer",
+   "target": "transport",
+   "before": "playing",
+   "after": "stopped",
+   "reversed": false
+  }
+ ],
+ "session": {
+  "tool": "orbit2/tools/session.mjs",
+  "persona": "noor",
+  "seed": 66,
+  "minutes": 40,
+  "mouse": true,
+  "slips": 0.08,
+  "speed": 1,
+  "groove": "trap",
+  "intents": {
+   "knobs": 5,
+   "evolve": 3,
+   "build": 1,
+   "mute": 1,
+   "tempo": 1,
+   "listen": 6
+  },
+  "errors": [],
+  "script": [
+   {
+    "id": 0,
+    "at": 1000,
+    "g": 0,
+    "intent": "start",
+    "kind": "key",
+    "sel": "#btn-play",
+    "key": " ",
+    "expect": [
+     "transport"
+    ]
+   },
+   {
+    "id": 1,
+    "at": 46289,
+    "g": 3,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 2,
+    "at": 68233,
+    "g": 4,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 3,
+    "at": 80769,
+    "g": 5,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 4,
+    "at": 92246,
+    "g": 6,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane1.rotation"
+    ]
+   },
+   {
+    "id": 5,
+    "at": 130822,
+    "g": 8,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": 30,
+    "expect": [
+     "lane1.length",
+     "lane1.euclidK"
+    ]
+   },
+   {
+    "id": 6,
+    "at": 183180,
+    "g": 11,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane1.prob"
+    ]
+   },
+   {
+    "id": 7,
+    "at": 213420,
+    "g": 12,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": -36,
+    "expect": [
+     "lane1.rotation"
+    ]
+   },
+   {
+    "id": 89,
+    "at": 213720,
+    "g": 12,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(5) .gauge",
+    "dy": -16,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 7
+    }
+   },
+   {
+    "id": 8,
+    "at": 230336,
+    "g": 13,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": -6,
+    "expect": [
+     "lane1.euclidK",
+     "lane1.hits*"
+    ]
+   },
+   {
+    "id": 9,
+    "at": 257208,
+    "g": 14,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 10,
+    "at": 301210,
+    "g": 16,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(1)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 11,
+    "at": 302018,
+    "g": 16,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(3)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 12,
+    "at": 302702,
+    "g": 16,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ]
+   },
+   {
+    "id": 13,
+    "at": 303284,
+    "g": 16,
+    "intent": "build",
+    "kind": "click",
+    "sel": "#stepsui button:nth-child(7)",
+    "expect": [
+     "lane1.hits.*",
+     "lane1.accents.*",
+     "lane1.locks.*"
+    ],
+    "slip": {
+     "kind": "offset",
+     "dx": 5,
+     "dy": -21
+    }
+   },
+   {
+    "id": 14,
+    "at": 340333,
+    "g": 18,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 15,
+    "at": 377019,
+    "g": 20,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(2) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 16,
+    "at": 378014,
+    "g": 20,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 17,
+    "at": 386602,
+    "g": 21,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 18,
+    "at": 407951,
+    "g": 22,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 19,
+    "at": 421392,
+    "g": 23,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 20,
+    "at": 439810,
+    "g": 24,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": -18,
+    "expect": [
+     "lane2.euclidK",
+     "lane2.hits*"
+    ]
+   },
+   {
+    "id": 21,
+    "at": 466878,
+    "g": 25,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 22,
+    "at": 486706,
+    "g": 26,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 90,
+    "at": 487006,
+    "g": 26,
+    "intent": "evolve",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(4) .gauge",
+    "dy": 11,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 22
+    }
+   },
+   {
+    "id": 23,
+    "at": 508843,
+    "g": 27,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 24,
+    "at": 601700,
+    "g": 32,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 25,
+    "at": 622227,
+    "g": 33,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": 36,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 26,
+    "at": 642152,
+    "g": 34,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 27,
+    "at": 652522,
+    "g": 35,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 28,
+    "at": 687364,
+    "g": 37,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": -18,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 29,
+    "at": 766372,
+    "g": 40,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 18,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 30,
+    "at": 813638,
+    "g": 42,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": -24,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 91,
+    "at": 813938,
+    "g": 42,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(4) .gauge",
+    "dy": -16,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 30
+    }
+   },
+   {
+    "id": 31,
+    "at": 910326,
+    "g": 47,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 6,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 32,
+    "at": 928533,
+    "g": 48,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 33,
+    "at": 964739,
+    "g": 50,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": 30,
+    "expect": [
+     "lane2.euclidK",
+     "lane2.hits*"
+    ]
+   },
+   {
+    "id": 34,
+    "at": 995102,
+    "g": 51,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 35,
+    "at": 1023682,
+    "g": 52,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": -30,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 36,
+    "at": 1060288,
+    "g": 54,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(5) .gauge",
+    "dy": -24,
+    "expect": [
+     "lane2.swing"
+    ]
+   },
+   {
+    "id": 37,
+    "at": 1086933,
+    "g": 56,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 38,
+    "at": 1097363,
+    "g": 57,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 39,
+    "at": 1120138,
+    "g": 58,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": -36,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 40,
+    "at": 1171030,
+    "g": 60,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 41,
+    "at": 1196562,
+    "g": 61,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(4) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 42,
+    "at": 1197463,
+    "g": 61,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 92,
+    "at": 1197763,
+    "g": 61,
+    "intent": "mute",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(4) .gauge",
+    "dy": 16,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 42
+    }
+   },
+   {
+    "id": 43,
+    "at": 1250451,
+    "g": 63,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": 6,
+    "expect": [
+     "lane4.euclidK",
+     "lane4.hits*"
+    ]
+   },
+   {
+    "id": 44,
+    "at": 1278049,
+    "g": 64,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 45,
+    "at": 1294528,
+    "g": 65,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 6,
+    "expect": [
+     "lane4.prob"
+    ]
+   },
+   {
+    "id": 46,
+    "at": 1311993,
+    "g": 66,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(3) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 47,
+    "at": 1312917,
+    "g": 66,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 48,
+    "at": 1335358,
+    "g": 67,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 49,
+    "at": 1356061,
+    "g": 68,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 50,
+    "at": 1429472,
+    "g": 71,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": 30,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 51,
+    "at": 1448443,
+    "g": 72,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": -12,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 52,
+    "at": 1459098,
+    "g": 73,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 53,
+    "at": 1481551,
+    "g": 74,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 54,
+    "at": 1494419,
+    "g": 75,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 55,
+    "at": 1524837,
+    "g": 76,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": -18,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 56,
+    "at": 1545108,
+    "g": 77,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 6,
+    "expect": [
+     "lane3.prob"
+    ]
+   },
+   {
+    "id": 57,
+    "at": 1556210,
+    "g": 78,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": 30,
+    "expect": [
+     "lane3.euclidK",
+     "lane3.hits*"
+    ]
+   },
+   {
+    "id": 58,
+    "at": 1571418,
+    "g": 79,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 59,
+    "at": 1582522,
+    "g": 80,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane3.prob"
+    ]
+   },
+   {
+    "id": 60,
+    "at": 1608195,
+    "g": 81,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(5) .gauge",
+    "dy": -36,
+    "expect": [
+     "lane3.swing"
+    ]
+   },
+   {
+    "id": 61,
+    "at": 1658297,
+    "g": 83,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=false"
+    ]
+   },
+   {
+    "id": 62,
+    "at": 1687999,
+    "g": 84,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": 30,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 63,
+    "at": 1711897,
+    "g": 85,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(2) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 64,
+    "at": 1712865,
+    "g": 85,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 65,
+    "at": 1733253,
+    "g": 86,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 66,
+    "at": 1844813,
+    "g": 92,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 67,
+    "at": 1879739,
+    "g": 94,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 68,
+    "at": 1894267,
+    "g": 95,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 69,
+    "at": 1938528,
+    "g": 97,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": -36,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 70,
+    "at": 1984084,
+    "g": 99,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 93,
+    "at": 1984384,
+    "g": 99,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": 16,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 70
+    }
+   },
+   {
+    "id": 71,
+    "at": 2014166,
+    "g": 100,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(3) .gauge",
+    "dy": -36,
+    "expect": [
+     "lane2.rotation"
+    ]
+   },
+   {
+    "id": 72,
+    "at": 2036350,
+    "g": 101,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": -6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 73,
+    "at": 2066656,
+    "g": 102,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 94,
+    "at": 2066956,
+    "g": 102,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(5) .gauge",
+    "dy": 13,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 73
+    }
+   },
+   {
+    "id": 74,
+    "at": 2091463,
+    "g": 103,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(8) .gauge",
+    "dy": 6,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 95,
+    "at": 2091763,
+    "g": 103,
+    "intent": "tempo",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": -8,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 74
+    }
+   },
+   {
+    "id": 75,
+    "at": 2113213,
+    "g": 104,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": 12,
+    "expect": [
+     "lane2.euclidK",
+     "lane2.hits*"
+    ]
+   },
+   {
+    "id": 96,
+    "at": 2113513,
+    "g": 104,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(2) .gauge",
+    "dy": 7,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 75
+    }
+   },
+   {
+    "id": 76,
+    "at": 2123751,
+    "g": 105,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(1) .gauge",
+    "dy": -24,
+    "expect": [
+     "lane2.length",
+     "lane2.euclidK"
+    ]
+   },
+   {
+    "id": 77,
+    "at": 2132484,
+    "g": 106,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 78,
+    "at": 2173618,
+    "g": 108,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(3) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 79,
+    "at": 2174561,
+    "g": 108,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 80,
+    "at": 2185910,
+    "g": 109,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(5) .gauge",
+    "dy": 24,
+    "expect": [
+     "lane3.swing"
+    ]
+   },
+   {
+    "id": 81,
+    "at": 2249576,
+    "g": 112,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#legend li:nth-child(2) .lane-tab",
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 82,
+    "at": 2250204,
+    "g": 112,
+    "intent": "mute",
+    "kind": "click",
+    "sel": "#btn-mute",
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 83,
+    "at": 2267425,
+    "g": 113,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 84,
+    "at": 2280488,
+    "g": 114,
+    "intent": "knobs",
+    "kind": "drag",
+    "sel": "#knobs > :nth-child(6) .gauge",
+    "dy": -24,
+    "expect": [
+     "lane2.prob"
+    ]
+   },
+   {
+    "id": 85,
+    "at": 2303708,
+    "g": 115,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 86,
+    "at": 2340145,
+    "g": 117,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 87,
+    "at": 2372145,
+    "g": 119,
+    "intent": "evolve",
+    "kind": "click",
+    "sel": "#btn-evolve",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 88,
+    "at": 2409652,
+    "g": 122,
+    "intent": "end",
+    "kind": "click",
+    "sel": "#btn-play",
+    "key": " ",
+    "expect": [
+     "transport"
+    ]
+   }
+  ],
+  "runs": [
+   {
+    "id": 0,
+    "t0": 5402,
+    "t1": 5848.7
+   },
+   {
+    "id": 1,
+    "t0": 50691.7,
+    "t1": 51141.3
+   },
+   {
+    "id": 2,
+    "t0": 72636.6,
+    "t1": 73083.3
+   },
+   {
+    "id": 3,
+    "t0": 85172.3,
+    "t1": 85624.1
+   },
+   {
+    "id": 4,
+    "t0": 96649,
+    "t1": 97276.7
+   },
+   {
+    "id": 5,
+    "t0": 135223.3,
+    "t1": 135857.4
+   },
+   {
+    "id": 6,
+    "t0": 187582.7,
+    "t1": 188209.2
+   },
+   {
+    "id": 7,
+    "t0": 217824.3,
+    "t1": 218454.6
+   },
+   {
+    "id": 89,
+    "t0": 218455.4,
+    "t1": 219089
+   },
+   {
+    "id": 8,
+    "t0": 234738.2,
+    "t1": 235454.8
+   },
+   {
+    "id": 9,
+    "t0": 261608.7,
+    "t1": 262057.3
+   },
+   {
+    "id": 10,
+    "t0": 305612.1,
+    "t1": 306060.4
+   },
+   {
+    "id": 11,
+    "t0": 306419.4,
+    "t1": 306868.9
+   },
+   {
+    "id": 12,
+    "t0": 307102.9,
+    "t1": 307551.4
+   },
+   {
+    "id": 13,
+    "t0": 307685.3,
+    "t1": 308134.1
+   },
+   {
+    "id": 14,
+    "t0": 344788.1,
+    "t1": 345235.5
+   },
+   {
+    "id": 15,
+    "t0": 381419.9,
+    "t1": 381869.5
+   },
+   {
+    "id": 16,
+    "t0": 382429.9,
+    "t1": 382883.6
+   },
+   {
+    "id": 17,
+    "t0": 391022.2,
+    "t1": 391471.2
+   },
+   {
+    "id": 18,
+    "t0": 412352.5,
+    "t1": 413098.9
+   },
+   {
+    "id": 19,
+    "t0": 425792.7,
+    "t1": 426509.4
+   },
+   {
+    "id": 20,
+    "t0": 444210.4,
+    "t1": 444949.4
+   },
+   {
+    "id": 21,
+    "t0": 471279,
+    "t1": 471935.6
+   },
+   {
+    "id": 22,
+    "t0": 491105.3,
+    "t1": 491557.1
+   },
+   {
+    "id": 90,
+    "t0": 491557.6,
+    "t1": 492293.6
+   },
+   {
+    "id": 23,
+    "t0": 513243.4,
+    "t1": 513695.3
+   },
+   {
+    "id": 24,
+    "t0": 606098.8,
+    "t1": 606552
+   },
+   {
+    "id": 25,
+    "t0": 626626.6,
+    "t1": 627338.5
+   },
+   {
+    "id": 26,
+    "t0": 646599.9,
+    "t1": 647220.1
+   },
+   {
+    "id": 27,
+    "t0": 656922.1,
+    "t1": 657462.9
+   },
+   {
+    "id": 28,
+    "t0": 691763.8,
+    "t1": 692401.7
+   },
+   {
+    "id": 29,
+    "t0": 770770.8,
+    "t1": 771403.1
+   },
+   {
+    "id": 30,
+    "t0": 818038.7,
+    "t1": 818717.7
+   },
+   {
+    "id": 91,
+    "t0": 818718.2,
+    "t1": 819442.7
+   },
+   {
+    "id": 31,
+    "t0": 914724.8,
+    "t1": 915350
+   },
+   {
+    "id": 32,
+    "t0": 932933.6,
+    "t1": 933383.2
+   },
+   {
+    "id": 33,
+    "t0": 969138.7,
+    "t1": 969829.3
+   },
+   {
+    "id": 34,
+    "t0": 999502.5,
+    "t1": 999951.8
+   },
+   {
+    "id": 35,
+    "t0": 1028081.4,
+    "t1": 1028861.1
+   },
+   {
+    "id": 36,
+    "t0": 1064688.4,
+    "t1": 1065322.4
+   },
+   {
+    "id": 37,
+    "t0": 1091411.5,
+    "t1": 1092037.7
+   },
+   {
+    "id": 38,
+    "t0": 1101762,
+    "t1": 1102209.8
+   },
+   {
+    "id": 39,
+    "t0": 1124537.7,
+    "t1": 1125189.2
+   },
+   {
+    "id": 40,
+    "t0": 1175429.3,
+    "t1": 1175884.1
+   },
+   {
+    "id": 41,
+    "t0": 1201133,
+    "t1": 1201584.6
+   },
+   {
+    "id": 42,
+    "t0": 1201862.5,
+    "t1": 1202313.1
+   },
+   {
+    "id": 92,
+    "t0": 1202313.6,
+    "t1": 1202936.1
+   },
+   {
+    "id": 43,
+    "t0": 1254850.5,
+    "t1": 1255479.5
+   },
+   {
+    "id": 44,
+    "t0": 1282447.7,
+    "t1": 1282903.9
+   },
+   {
+    "id": 45,
+    "t0": 1298926.9,
+    "t1": 1299546.2
+   },
+   {
+    "id": 46,
+    "t0": 1316391.9,
+    "t1": 1316872.1
+   },
+   {
+    "id": 47,
+    "t0": 1317316,
+    "t1": 1317766.2
+   },
+   {
+    "id": 48,
+    "t0": 1339757.2,
+    "t1": 1340303.1
+   },
+   {
+    "id": 49,
+    "t0": 1360460.2,
+    "t1": 1360907.6
+   },
+   {
+    "id": 50,
+    "t0": 1433869.4,
+    "t1": 1434490
+   },
+   {
+    "id": 51,
+    "t0": 1452840.8,
+    "t1": 1453471.7
+   },
+   {
+    "id": 52,
+    "t0": 1463494.4,
+    "t1": 1463940.7
+   },
+   {
+    "id": 53,
+    "t0": 1485946.2,
+    "t1": 1486604.8
+   },
+   {
+    "id": 54,
+    "t0": 1498816.1,
+    "t1": 1499359.4
+   },
+   {
+    "id": 55,
+    "t0": 1529235.8,
+    "t1": 1529868.1
+   },
+   {
+    "id": 56,
+    "t0": 1549506.7,
+    "t1": 1550137.8
+   },
+   {
+    "id": 57,
+    "t0": 1560605.5,
+    "t1": 1561234.6
+   },
+   {
+    "id": 58,
+    "t0": 1575815.3,
+    "t1": 1576437.3
+   },
+   {
+    "id": 59,
+    "t0": 1586918.9,
+    "t1": 1587553.5
+   },
+   {
+    "id": 60,
+    "t0": 1612599.2,
+    "t1": 1613248.7
+   },
+   {
+    "id": 61,
+    "t0": 1662693.4,
+    "t1": 1663146.3
+   },
+   {
+    "id": 62,
+    "t0": 1692396.9,
+    "t1": 1693112.4
+   },
+   {
+    "id": 63,
+    "t0": 1716293.1,
+    "t1": 1716745.6
+   },
+   {
+    "id": 64,
+    "t0": 1717262.2,
+    "t1": 1717763.3
+   },
+   {
+    "id": 65,
+    "t0": 1737650.1,
+    "t1": 1738101
+   },
+   {
+    "id": 66,
+    "t0": 1849209.3,
+    "t1": 1849841.8
+   },
+   {
+    "id": 67,
+    "t0": 1884135.1,
+    "t1": 1884585.6
+   },
+   {
+    "id": 68,
+    "t0": 1898662.1,
+    "t1": 1899287.2
+   },
+   {
+    "id": 69,
+    "t0": 1942924.1,
+    "t1": 1943550.3
+   },
+   {
+    "id": 70,
+    "t0": 1988480.2,
+    "t1": 1989101.1
+   },
+   {
+    "id": 93,
+    "t0": 1989101.5,
+    "t1": 1989795
+   },
+   {
+    "id": 71,
+    "t0": 2018563,
+    "t1": 2019258.4
+   },
+   {
+    "id": 72,
+    "t0": 2040771,
+    "t1": 2041526.3
+   },
+   {
+    "id": 73,
+    "t0": 2071050,
+    "t1": 2071685.9
+   },
+   {
+    "id": 94,
+    "t0": 2071688,
+    "t1": 2072328.2
+   },
+   {
+    "id": 74,
+    "t0": 2095858.3,
+    "t1": 2096476.8
+   },
+   {
+    "id": 95,
+    "t0": 2096477.6,
+    "t1": 2097155.6
+   },
+   {
+    "id": 75,
+    "t0": 2117607.8,
+    "t1": 2118227.1
+   },
+   {
+    "id": 96,
+    "t0": 2118227.7,
+    "t1": 2118861.1
+   },
+   {
+    "id": 76,
+    "t0": 2128146.1,
+    "t1": 2128790.1
+   },
+   {
+    "id": 77,
+    "t0": 2136884.1,
+    "t1": 2137345.5
+   },
+   {
+    "id": 78,
+    "t0": 2178019.8,
+    "t1": 2178470.9
+   },
+   {
+    "id": 79,
+    "t0": 2178956.2,
+    "t1": 2179522.3
+   },
+   {
+    "id": 80,
+    "t0": 2190305.6,
+    "t1": 2190926.3
+   },
+   {
+    "id": 81,
+    "t0": 2253971.7,
+    "t1": 2254428.6
+   },
+   {
+    "id": 82,
+    "t0": 2254594.5,
+    "t1": 2255044.8
+   },
+   {
+    "id": 83,
+    "t0": 2271815.8,
+    "t1": 2272267.7
+   },
+   {
+    "id": 84,
+    "t0": 2284880.2,
+    "t1": 2285506
+   },
+   {
+    "id": 85,
+    "t0": 2308100.8,
+    "t1": 2308549.2
+   },
+   {
+    "id": 86,
+    "t0": 2344537.2,
+    "t1": 2344985.6
+   },
+   {
+    "id": 87,
+    "t0": 2376535.9,
+    "t1": 2376983.7
+   },
+   {
+    "id": 88,
+    "t0": 2414043.5,
+    "t1": 2414489.8
+   }
+  ]
+ },
+ "tags": [
+  {
+   "id": 0,
+   "action": 0,
+   "intent": "start",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 1,
+   "action": 1,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 2,
+   "action": 2,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 3,
+   "action": 3,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 4,
+   "action": 4,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 5,
+   "action": 5,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 6,
+   "action": 6,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 7,
+   "action": 7,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 8,
+   "action": 89,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 9,
+   "action": 8,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 10,
+   "action": 9,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 11,
+   "action": 10,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 12,
+   "action": 11,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 13,
+   "action": 12,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 14,
+   "action": 14,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 15,
+   "action": 15,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 16,
+   "action": 16,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 17,
+   "action": 17,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 18,
+   "action": 18,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 19,
+   "action": 19,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 20,
+   "action": 20,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 21,
+   "action": 21,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 22,
+   "action": 22,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 23,
+   "action": 90,
+   "intent": "evolve",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 24,
+   "action": 23,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 25,
+   "action": 24,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 26,
+   "action": 25,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 27,
+   "action": 26,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 28,
+   "action": 27,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 29,
+   "action": 28,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 30,
+   "action": 29,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 31,
+   "action": 30,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 32,
+   "action": 91,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 33,
+   "action": 31,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 34,
+   "action": 32,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 35,
+   "action": 33,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
+  },
+  {
+   "id": 36,
+   "action": 34,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 37,
+   "action": 35,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 38,
+   "action": 36,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 39,
+   "action": 37,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 40,
+   "action": 38,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 41,
+   "action": 39,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 42,
+   "action": 40,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 43,
+   "action": 41,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 44,
+   "action": 42,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 45,
+   "action": 92,
+   "intent": "mute",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 46,
+   "action": 44,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 47,
+   "action": 45,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 48,
+   "action": 46,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 49,
+   "action": 47,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 50,
+   "action": 48,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 51,
+   "action": 49,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 52,
+   "action": 50,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 53,
+   "action": 51,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 54,
+   "action": 52,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 55,
+   "action": 53,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 56,
+   "action": 54,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 57,
+   "action": 55,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 58,
+   "action": 56,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 59,
+   "action": 58,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 60,
+   "action": 59,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 61,
+   "action": 60,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 62,
+   "action": 61,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 63,
+   "action": 62,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 64,
+   "action": 63,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 65,
+   "action": 64,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 66,
+   "action": 65,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 67,
+   "action": 66,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 68,
+   "action": 67,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 69,
+   "action": 68,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 70,
+   "action": 69,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 71,
+   "action": 70,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 72,
+   "action": 93,
+   "intent": "tempo",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 73,
+   "action": 71,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 74,
+   "action": 72,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 75,
+   "action": 73,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 76,
+   "action": 94,
+   "intent": "tempo",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 77,
+   "action": 74,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 78,
+   "action": 95,
+   "intent": "tempo",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 79,
+   "action": 76,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 80,
+   "action": 77,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 81,
+   "action": 78,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 82,
+   "action": 79,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 83,
+   "action": 80,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 84,
+   "action": 81,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 85,
+   "action": 82,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 86,
+   "action": 83,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 87,
+   "action": 85,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 88,
+   "action": 86,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 89,
+   "action": 87,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 90,
+   "action": 88,
+   "intent": "end",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  }
+ ],
+ "accidents": {
+  "destructive": 0,
+  "harmless": 7,
+  "silent": 0,
+  "byCause": {
+   "stray-knob": {
+    "destructive": 0,
+    "harmless": 7,
+    "silent": 0
+   }
+  },
+  "emptied": {
+   "accident": 0,
+   "meant": 1
+  }
+ }
+}

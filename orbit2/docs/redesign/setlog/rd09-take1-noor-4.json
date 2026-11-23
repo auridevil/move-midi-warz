@@ -1,0 +1,3713 @@
+{
+ "format": "orbits-setlog",
+ "v": 1,
+ "started": "2026-11-23T00:37:47.514Z",
+ "dropped": 0,
+ "entries": [
+  {
+   "id": 0,
+   "t": 5331.4,
+   "source": "move",
+   "target": "transport",
+   "before": "stopped",
+   "after": "playing",
+   "reversed": false
+  },
+  {
+   "id": 1,
+   "t": 5969.6,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 2,
+   "t": 6651.7,
+   "source": "move",
+   "target": "lane1.sound.drive",
+   "before": 0,
+   "after": 0.06,
+   "reversed": false,
+   "end": 6747.2
+  },
+  {
+   "id": 3,
+   "t": 23099.9,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 4,
+   "t": 25383.2,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 5,
+   "t": 38012.8,
+   "source": "move",
+   "target": "tempo",
+   "before": 124,
+   "after": 126,
+   "reversed": false,
+   "end": 38060
+  },
+  {
+   "id": 6,
+   "t": 81295.3,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 2,
+   "reversed": false
+  },
+  {
+   "id": 7,
+   "t": 130877.9,
+   "source": "move",
+   "target": "lane3.sound.tone",
+   "before": 0.95,
+   "after": 0.83,
+   "reversed": false,
+   "end": 131119
+  },
+  {
+   "id": 8,
+   "t": 156459.6,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 9,
+   "t": 166757.9,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 10,
+   "t": 190031.1,
+   "source": "move",
+   "target": "lane3.sound.color",
+   "before": 0.5,
+   "after": 0.52,
+   "reversed": false
+  },
+  {
+   "id": 11,
+   "t": 202941.3,
+   "source": "move",
+   "target": "slot",
+   "before": 2,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 12,
+   "t": 215199.1,
+   "source": "move",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "ride",
+   "queued": false
+  },
+  {
+   "id": 13,
+   "t": 275062.9,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 14,
+   "t": 297656.5,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 15,
+   "t": 335681.7,
+   "source": "move",
+   "target": "lane4.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "ride",
+   "queued": false
+  },
+  {
+   "id": 16,
+   "t": 360765.3,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 17,
+   "t": 377005.5,
+   "source": "move",
+   "target": "lane3.sound.snap",
+   "before": 0.5,
+   "after": 0.56,
+   "reversed": false,
+   "end": 377100.5
+  },
+  {
+   "id": 18,
+   "t": 411896.5,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 19,
+   "t": 441343.2,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 20,
+   "t": 470234.2,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 21,
+   "t": 490544.2,
+   "source": "move",
+   "target": "lane3.hits",
+   "before": "xx..............................",
+   "after": "................................",
+   "reversed": false
+  },
+  {
+   "id": 22,
+   "t": 514218.6,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 23,
+   "t": 531304.2,
+   "source": "move",
+   "target": "select",
+   "before": 3,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 24,
+   "t": 532712.8,
+   "source": "move",
+   "target": "lane1.hits.4",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 25,
+   "t": 534190.2,
+   "source": "move",
+   "target": "lane1.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 26,
+   "t": 552226.6,
+   "source": "move",
+   "target": "tempo",
+   "before": 126,
+   "after": 124,
+   "reversed": false,
+   "end": 552273.8
+  },
+  {
+   "id": 27,
+   "t": 599610.8,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 28,
+   "t": 599776.7,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": true,
+   "reverses": 27
+  },
+  {
+   "id": 29,
+   "t": 624177,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 30,
+   "t": 668980.3,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 31,
+   "t": 678060.4,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 32,
+   "t": 708594.4,
+   "source": "move",
+   "target": "slot",
+   "before": 4,
+   "after": 4,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 33,
+   "t": 726983.5,
+   "source": "move",
+   "target": "lane1.sound.send",
+   "before": 0.15,
+   "after": 0.05,
+   "reversed": false,
+   "end": 727188.8
+  },
+  {
+   "id": 34,
+   "t": 749055.7,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 35,
+   "t": 764911.5,
+   "source": "move",
+   "target": "lane1.sound.pan",
+   "before": 0.5,
+   "after": 0.42,
+   "reversed": false,
+   "end": 765055.8
+  },
+  {
+   "id": 36,
+   "t": 791687.3,
+   "source": "move",
+   "target": "slot",
+   "before": 4,
+   "after": 2,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 37,
+   "t": 809466.1,
+   "source": "move",
+   "target": "lane1.length",
+   "before": 4,
+   "after": 2,
+   "reversed": false,
+   "end": 809513.7
+  },
+  {
+   "id": 38,
+   "t": 826414.3,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 4,
+   "reversed": false
+  },
+  {
+   "id": 39,
+   "t": 851006.1,
+   "source": "move",
+   "target": "select",
+   "before": 1,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 40,
+   "t": 851611.4,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 41,
+   "t": 853205.9,
+   "source": "move",
+   "target": "lane3.hits.1",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 40
+  },
+  {
+   "id": 42,
+   "t": 912872.8,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 43,
+   "t": 934488,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 44,
+   "t": 1002215.9,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 45,
+   "t": 1016472.2,
+   "source": "move",
+   "target": "lane3.sound.color",
+   "before": 0.5,
+   "after": 0.48,
+   "reversed": false
+  },
+  {
+   "id": 46,
+   "t": 1035407.2,
+   "source": "move",
+   "target": "lane3.sound.send",
+   "before": 0.15,
+   "after": 0.27,
+   "reversed": false,
+   "end": 1035645.4
+  },
+  {
+   "id": 47,
+   "t": 1036257.4,
+   "source": "move",
+   "target": "lane3.sound.pan",
+   "before": 0.42,
+   "after": 0.38,
+   "reversed": false,
+   "end": 1036306.1
+  },
+  {
+   "id": 48,
+   "t": 1051822.4,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 49,
+   "t": 1076351.8,
+   "source": "move",
+   "target": "tempo",
+   "before": 124,
+   "after": 126,
+   "reversed": false,
+   "end": 1076400.5
+  },
+  {
+   "id": 50,
+   "t": 1102888.1,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 51,
+   "t": 1123116,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 52,
+   "t": 1199153.5,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 53,
+   "t": 1212731.2,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 54,
+   "t": 1229092.6,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 55,
+   "t": 1273124.9,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "clap",
+   "queued": false
+  },
+  {
+   "id": 56,
+   "t": 1310077.1,
+   "source": "move",
+   "target": "lane3.rotation",
+   "before": 0,
+   "after": 0,
+   "reversed": false,
+   "end": 1310222
+  },
+  {
+   "id": 57,
+   "t": 1331026.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 58,
+   "t": 1356982,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 59,
+   "t": 1367607.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 60,
+   "t": 1416702.3,
+   "source": "move",
+   "target": "lane4.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "ride",
+   "queued": false
+  },
+  {
+   "id": 61,
+   "t": 1442635.8,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 62,
+   "t": 1459321.4,
+   "source": "move",
+   "target": "lane3.length",
+   "before": 2,
+   "after": 5,
+   "reversed": false,
+   "end": 1459427.3
+  },
+  {
+   "id": 63,
+   "t": 1480513.2,
+   "source": "move",
+   "target": "tempo",
+   "before": 126,
+   "after": 128,
+   "reversed": false,
+   "end": 1480561.5
+  },
+  {
+   "id": 64,
+   "t": 1493029.3,
+   "source": "move",
+   "target": "lane3.length",
+   "before": 5,
+   "after": 10,
+   "reversed": false,
+   "end": 1493221.6
+  },
+  {
+   "id": 65,
+   "t": 1528834.5,
+   "source": "move",
+   "target": "lane3.sound.snap",
+   "before": 0.5,
+   "after": 0.62,
+   "reversed": false,
+   "end": 1529079.2
+  },
+  {
+   "id": 66,
+   "t": 1539519.6,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 67,
+   "t": 1556747.2,
+   "source": "move",
+   "target": "lane3.sound.tone",
+   "before": 0.95,
+   "after": 0.99,
+   "reversed": false,
+   "end": 1556794.1
+  },
+  {
+   "id": 68,
+   "t": 1566693,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 69,
+   "t": 1576090.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 70,
+   "t": 1576256.5,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": true,
+   "reverses": 69
+  },
+  {
+   "id": 71,
+   "t": 1602049.9,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": true,
+   "after": false,
+   "reversed": false,
+   "voice": "clap",
+   "queued": false
+  },
+  {
+   "id": 72,
+   "t": 1629229.1,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 73,
+   "t": 1682918,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 74,
+   "t": 1721065.9,
+   "source": "move",
+   "target": "lane3.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "ophat",
+   "queued": false
+  },
+  {
+   "id": 75,
+   "t": 1750409.4,
+   "source": "move",
+   "target": "lane3.sound.color",
+   "before": 0.48,
+   "after": 0.5,
+   "reversed": false
+  },
+  {
+   "id": 76,
+   "t": 1800596.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 77,
+   "t": 1853172.9,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 78,
+   "t": 1872674.8,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 79,
+   "t": 1888404.2,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 80,
+   "t": 1917686.5,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 81,
+   "t": 1935020.9,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 82,
+   "t": 1974287.5,
+   "source": "move",
+   "target": "lane3.sound.snap",
+   "before": 0.62,
+   "after": 0.6,
+   "reversed": false
+  },
+  {
+   "id": 83,
+   "t": 2001934.2,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 84,
+   "t": 2014101.2,
+   "source": "move",
+   "target": "slot",
+   "before": 3,
+   "after": 3,
+   "reversed": false,
+   "queued": true
+  },
+  {
+   "id": 85,
+   "t": 2074142.7,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 86,
+   "t": 2104626.5,
+   "source": "move",
+   "target": "tempo",
+   "before": 128,
+   "after": 130,
+   "reversed": false,
+   "end": 2104674.7
+  },
+  {
+   "id": 87,
+   "t": 2105282.8,
+   "source": "move",
+   "target": "lane3.rotation",
+   "before": 0,
+   "after": 3,
+   "reversed": false,
+   "end": 2105434.7
+  },
+  {
+   "id": 88,
+   "t": 2120600.3,
+   "source": "move",
+   "target": "lane3.sound.pan",
+   "before": 0.38,
+   "after": 0.42,
+   "reversed": false,
+   "end": 2120649
+  },
+  {
+   "id": 89,
+   "t": 2140931,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 90,
+   "t": 2157085.5,
+   "source": "move",
+   "target": "lane3.hits.10",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 91,
+   "t": 2157613.2,
+   "source": "move",
+   "target": "lane3.sound.decay",
+   "before": 0.5,
+   "after": 0.52,
+   "reversed": false
+  },
+  {
+   "id": 92,
+   "t": 2158212.2,
+   "source": "move",
+   "target": "lane3.hits.3",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 93,
+   "t": 2176249.1,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 94,
+   "t": 2213587.8,
+   "source": "move",
+   "target": "slot.save",
+   "before": null,
+   "after": 3,
+   "reversed": false
+  },
+  {
+   "id": 95,
+   "t": 2226047.9,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 96,
+   "t": 2250004.1,
+   "source": "move",
+   "target": "lane3.rotation",
+   "before": 3,
+   "after": 9,
+   "reversed": false,
+   "end": 2250242.1
+  },
+  {
+   "id": 97,
+   "t": 2261808.2,
+   "source": "move",
+   "target": "lane2.mute",
+   "before": false,
+   "after": true,
+   "reversed": false,
+   "voice": "clap",
+   "queued": false
+  },
+  {
+   "id": 98,
+   "t": 2291852.2,
+   "source": "move",
+   "target": "lane3.sound.tone",
+   "before": 0.99,
+   "after": 1,
+   "reversed": false
+  },
+  {
+   "id": 99,
+   "t": 2308611.6,
+   "source": "move",
+   "target": "evolve",
+   "before": true,
+   "after": false,
+   "reversed": false
+  },
+  {
+   "id": 100,
+   "t": 2338644.5,
+   "source": "move",
+   "target": "lane3.sound.color",
+   "before": 0.5,
+   "after": 0.62,
+   "reversed": false,
+   "end": 2338885.5
+  },
+  {
+   "id": 101,
+   "t": 2383954.1,
+   "source": "move",
+   "target": "evolve",
+   "before": false,
+   "after": true,
+   "reversed": false
+  },
+  {
+   "id": 102,
+   "t": 2405036.9,
+   "source": "move",
+   "target": "transport",
+   "before": "playing",
+   "after": "stopped",
+   "reversed": false
+  }
+ ],
+ "session": {
+  "tool": "orbit2/tools/session.mjs",
+  "persona": "noor",
+  "seed": 44,
+  "minutes": 40,
+  "mouse": false,
+  "slips": 0.08,
+  "speed": 1,
+  "groove": "house",
+  "intents": {
+   "listen": 6,
+   "evolve": 5,
+   "knobs": 4,
+   "build": 1,
+   "slots": 2,
+   "mute": 1,
+   "tempo": 1
+  },
+  "errors": [],
+  "script": [
+   {
+    "id": 0,
+    "at": 1000,
+    "g": 0,
+    "intent": "start",
+    "kind": "move.play",
+    "expect": [
+     "transport"
+    ]
+   },
+   {
+    "id": 1,
+    "at": 1556,
+    "g": 1,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 3,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 105,
+    "at": 1856,
+    "g": 1,
+    "intent": "slots",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": true,
+    "turns": 3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 1
+    }
+   },
+   {
+    "id": 2,
+    "at": 18767,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 2,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 3,
+    "at": 19411,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 4,
+    "at": 20209,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 6,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 5,
+    "at": 20979,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 6,
+    "at": 21503,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 4,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 7,
+    "at": 22485,
+    "g": 2,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 3,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 8,
+    "at": 33600,
+    "g": 3,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 9,
+    "at": 76882,
+    "g": 5,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 1,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 10,
+    "at": 126459,
+    "g": 9,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": true,
+    "turns": -6,
+    "expect": [
+     "lane3.sound.tone"
+    ]
+   },
+   {
+    "id": 11,
+    "at": 152129,
+    "g": 10,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 12,
+    "at": 162427,
+    "g": 11,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 13,
+    "at": 185616,
+    "g": 12,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": 1,
+    "expect": [
+     "lane3.sound.color"
+    ]
+   },
+   {
+    "id": 14,
+    "at": 198284,
+    "g": 13,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 15,
+    "at": 210805,
+    "g": 14,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 3,
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 16,
+    "at": 270730,
+    "g": 17,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 17,
+    "at": 293325,
+    "g": 18,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 18,
+    "at": 331287,
+    "g": 20,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 3,
+    "expect": [
+     "lane4.mute=false"
+    ]
+   },
+   {
+    "id": 19,
+    "at": 356433,
+    "g": 21,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 20,
+    "at": 372587,
+    "g": 22,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 3,
+    "shift": true,
+    "turns": 3,
+    "expect": [
+     "lane3.sound.snap"
+    ]
+   },
+   {
+    "id": 21,
+    "at": 407565,
+    "g": 24,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 22,
+    "at": 437011,
+    "g": 25,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 23,
+    "at": 465902,
+    "g": 26,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 24,
+    "at": 486129,
+    "g": 27,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": false,
+    "turns": -6,
+    "expect": [
+     "lane3.euclidK",
+     "lane3.hits*"
+    ]
+   },
+   {
+    "id": 25,
+    "at": 509891,
+    "g": 28,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 26,
+    "at": 526976,
+    "g": 29,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 0,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 27,
+    "at": 527401,
+    "g": 29,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane1.hits.*"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 28,
+    "at": 528315,
+    "g": 29,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 29,
+    "at": 528912,
+    "g": 29,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 7,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 30,
+    "at": 529791,
+    "g": 29,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 1,
+    "expect": [
+     "lane1.hits.*"
+    ]
+   },
+   {
+    "id": 31,
+    "at": 547818,
+    "g": 30,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 32,
+    "at": 595248,
+    "g": 32,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 33,
+    "at": 619851,
+    "g": 33,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 34,
+    "at": 664653,
+    "g": 35,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 35,
+    "at": 673735,
+    "g": 36,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 36,
+    "at": 703942,
+    "g": 37,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 3,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 37,
+    "at": 722572,
+    "g": 38,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": -5,
+    "expect": [
+     "lane1.sound.send"
+    ]
+   },
+   {
+    "id": 38,
+    "at": 744728,
+    "g": 39,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 39,
+    "at": 760500,
+    "g": 40,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 6,
+    "shift": true,
+    "turns": -4,
+    "expect": [
+     "lane1.sound.pan"
+    ]
+   },
+   {
+    "id": 40,
+    "at": 787029,
+    "g": 41,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 1,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 41,
+    "at": 805059,
+    "g": 42,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": false,
+    "turns": -2,
+    "expect": [
+     "lane1.length",
+     "lane1.euclidK"
+    ]
+   },
+   {
+    "id": 42,
+    "at": 822000,
+    "g": 43,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 3,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 43,
+    "at": 846680,
+    "g": 44,
+    "intent": "build",
+    "kind": "move.select",
+    "lane": 2,
+    "expect": [
+     "select"
+    ]
+   },
+   {
+    "id": 44,
+    "at": 847212,
+    "g": 44,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 45,
+    "at": 847835,
+    "g": 44,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 46,
+    "at": 848807,
+    "g": 44,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 0,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 47,
+    "at": 908546,
+    "g": 47,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 48,
+    "at": 930163,
+    "g": 48,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 49,
+    "at": 997890,
+    "g": 51,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 50,
+    "at": 1012060,
+    "g": 52,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": -1,
+    "expect": [
+     "lane3.sound.color"
+    ]
+   },
+   {
+    "id": 51,
+    "at": 1030996,
+    "g": 53,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane3.sound.send"
+    ]
+   },
+   {
+    "id": 106,
+    "at": 1031296,
+    "g": 53,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 6,
+    "shift": true,
+    "turns": -2,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 51
+    }
+   },
+   {
+    "id": 52,
+    "at": 1047496,
+    "g": 54,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 53,
+    "at": 1071943,
+    "g": 55,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 54,
+    "at": 1098562,
+    "g": 56,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 55,
+    "at": 1118791,
+    "g": 57,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 56,
+    "at": 1194827,
+    "g": 62,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 57,
+    "at": 1208404,
+    "g": 63,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 58,
+    "at": 1224768,
+    "g": 64,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 107,
+    "at": 1225068,
+    "g": 64,
+    "intent": "evolve",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": 3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 58
+    }
+   },
+   {
+    "id": 59,
+    "at": 1268734,
+    "g": 66,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 60,
+    "at": 1297052,
+    "g": 67,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 5,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "lane3.prob"
+    ]
+   },
+   {
+    "id": 61,
+    "at": 1305652,
+    "g": 68,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": -4,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 62,
+    "at": 1326702,
+    "g": 69,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 63,
+    "at": 1352657,
+    "g": 70,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 64,
+    "at": 1363283,
+    "g": 71,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 65,
+    "at": 1412312,
+    "g": 73,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 3,
+    "expect": [
+     "lane4.mute=true"
+    ]
+   },
+   {
+    "id": 108,
+    "at": 1412612,
+    "g": 73,
+    "intent": "mute",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": false,
+    "turns": -3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 65
+    }
+   },
+   {
+    "id": 66,
+    "at": 1438310,
+    "g": 74,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 67,
+    "at": 1454902,
+    "g": 75,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": false,
+    "turns": 3,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 68,
+    "at": 1476105,
+    "g": 76,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 69,
+    "at": 1488622,
+    "g": 77,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": false,
+    "turns": 5,
+    "expect": [
+     "lane3.length",
+     "lane3.euclidK"
+    ]
+   },
+   {
+    "id": 70,
+    "at": 1524426,
+    "g": 79,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 3,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane3.sound.snap"
+    ]
+   },
+   {
+    "id": 71,
+    "at": 1535195,
+    "g": 80,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 72,
+    "at": 1552340,
+    "g": 81,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": true,
+    "turns": 2,
+    "expect": [
+     "lane3.sound.tone"
+    ]
+   },
+   {
+    "id": 73,
+    "at": 1562363,
+    "g": 82,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 74,
+    "at": 1571767,
+    "g": 83,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ],
+    "slip": {
+     "kind": "double"
+    }
+   },
+   {
+    "id": 75,
+    "at": 1597662,
+    "g": 84,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=false"
+    ]
+   },
+   {
+    "id": 76,
+    "at": 1624903,
+    "g": 85,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 77,
+    "at": 1678592,
+    "g": 88,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 78,
+    "at": 1716675,
+    "g": 90,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 2,
+    "expect": [
+     "lane3.mute=true"
+    ]
+   },
+   {
+    "id": 79,
+    "at": 1746001,
+    "g": 91,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": 1,
+    "expect": [
+     "lane3.sound.color"
+    ]
+   },
+   {
+    "id": 80,
+    "at": 1796264,
+    "g": 93,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 81,
+    "at": 1848848,
+    "g": 96,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 82,
+    "at": 1868349,
+    "g": 97,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 83,
+    "at": 1884080,
+    "g": 98,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 84,
+    "at": 1913362,
+    "g": 99,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 85,
+    "at": 1930611,
+    "g": 100,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 0,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 86,
+    "at": 1969878,
+    "g": 102,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 3,
+    "shift": true,
+    "turns": -1,
+    "expect": [
+     "lane3.sound.snap"
+    ]
+   },
+   {
+    "id": 87,
+    "at": 1997528,
+    "g": 104,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 88,
+    "at": 2009453,
+    "g": 105,
+    "intent": "slots",
+    "kind": "move.slotRecall",
+    "slot": 2,
+    "expect": [
+     "slot"
+    ]
+   },
+   {
+    "id": 89,
+    "at": 2069823,
+    "g": 108,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 90,
+    "at": 2100224,
+    "g": 109,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 7,
+    "shift": false,
+    "turns": 2,
+    "expect": [
+     "tempo"
+    ]
+   },
+   {
+    "id": 109,
+    "at": 2100524,
+    "g": 109,
+    "intent": "tempo",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": 3,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 90
+    }
+   },
+   {
+    "id": 91,
+    "at": 2116196,
+    "g": 110,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 6,
+    "shift": true,
+    "turns": 2,
+    "expect": [
+     "lane3.sound.pan"
+    ]
+   },
+   {
+    "id": 92,
+    "at": 2136613,
+    "g": 111,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 93,
+    "at": 2152694,
+    "g": 112,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 2,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 110,
+    "at": 2152994,
+    "g": 112,
+    "intent": "build",
+    "kind": "move.knob",
+    "knob": 0,
+    "shift": true,
+    "turns": 1,
+    "expect": [],
+    "slip": {
+     "kind": "stray-knob",
+     "of": 93
+    }
+   },
+   {
+    "id": 94,
+    "at": 2153352,
+    "g": 112,
+    "intent": "build",
+    "kind": "move.step",
+    "step": 5,
+    "expect": [
+     "lane3.hits.*"
+    ]
+   },
+   {
+    "id": 95,
+    "at": 2171930,
+    "g": 113,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 96,
+    "at": 2209188,
+    "g": 115,
+    "intent": "slots",
+    "kind": "move.slotSave",
+    "slot": 2,
+    "expect": [
+     "slot.save"
+    ]
+   },
+   {
+    "id": 97,
+    "at": 2221730,
+    "g": 116,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 98,
+    "at": 2245603,
+    "g": 117,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 2,
+    "shift": false,
+    "turns": 6,
+    "expect": [
+     "lane3.rotation"
+    ]
+   },
+   {
+    "id": 99,
+    "at": 2257427,
+    "g": 118,
+    "intent": "mute",
+    "kind": "move.mute",
+    "lane": 1,
+    "expect": [
+     "lane2.mute=true"
+    ]
+   },
+   {
+    "id": 100,
+    "at": 2287450,
+    "g": 119,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 1,
+    "shift": true,
+    "turns": 3,
+    "expect": [
+     "lane3.sound.tone"
+    ]
+   },
+   {
+    "id": 101,
+    "at": 2304295,
+    "g": 120,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 102,
+    "at": 2334243,
+    "g": 121,
+    "intent": "knobs",
+    "kind": "move.knob",
+    "knob": 4,
+    "shift": true,
+    "turns": 6,
+    "expect": [
+     "lane3.sound.color"
+    ]
+   },
+   {
+    "id": 103,
+    "at": 2379637,
+    "g": 123,
+    "intent": "evolve",
+    "kind": "move.button",
+    "button": "minus",
+    "expect": [
+     "evolve"
+    ]
+   },
+   {
+    "id": 104,
+    "at": 2400720,
+    "g": 124,
+    "intent": "end",
+    "kind": "move.play",
+    "expect": [
+     "transport"
+    ]
+   }
+  ],
+  "runs": [
+   {
+    "id": 0,
+    "t0": 5329.8,
+    "t1": 5846.3
+   },
+   {
+    "id": 1,
+    "t0": 5887.1,
+    "t1": 6566.8
+   },
+   {
+    "id": 105,
+    "t0": 6567.5,
+    "t1": 7270.4
+   },
+   {
+    "id": 2,
+    "t0": 23098.3,
+    "t1": 23613.7
+   },
+   {
+    "id": 3,
+    "t0": 23744.1,
+    "t1": 24263.2
+   },
+   {
+    "id": 4,
+    "t0": 24539.8,
+    "t1": 25055.3
+   },
+   {
+    "id": 5,
+    "t0": 25310.4,
+    "t1": 25825.2
+   },
+   {
+    "id": 6,
+    "t0": 25833.9,
+    "t1": 26349
+   },
+   {
+    "id": 7,
+    "t0": 26815.8,
+    "t1": 27329.7
+   },
+   {
+    "id": 8,
+    "t0": 37930.8,
+    "t1": 38580.4
+   },
+   {
+    "id": 9,
+    "t0": 81212.6,
+    "t1": 81892.1
+   },
+   {
+    "id": 10,
+    "t0": 130792.1,
+    "t1": 131640.7
+   },
+   {
+    "id": 11,
+    "t0": 156459,
+    "t1": 156975
+   },
+   {
+    "id": 12,
+    "t0": 166757.4,
+    "t1": 167272.3
+   },
+   {
+    "id": 13,
+    "t0": 189946.9,
+    "t1": 190553.1
+   },
+   {
+    "id": 14,
+    "t0": 202615.1,
+    "t1": 203293.2
+   },
+   {
+    "id": 15,
+    "t0": 215135.7,
+    "t1": 215714.4
+   },
+   {
+    "id": 16,
+    "t0": 275062,
+    "t1": 275577.8
+   },
+   {
+    "id": 17,
+    "t0": 297655.3,
+    "t1": 298170.6
+   },
+   {
+    "id": 18,
+    "t0": 335617.6,
+    "t1": 336198.3
+   },
+   {
+    "id": 19,
+    "t0": 360764.7,
+    "t1": 361279.5
+   },
+   {
+    "id": 20,
+    "t0": 376917.9,
+    "t1": 377622.9
+   },
+   {
+    "id": 21,
+    "t0": 411894.5,
+    "t1": 412411.7
+   },
+   {
+    "id": 22,
+    "t0": 441342.4,
+    "t1": 441858.3
+   },
+   {
+    "id": 23,
+    "t0": 470233,
+    "t1": 470748.6
+   },
+   {
+    "id": 24,
+    "t0": 490460.2,
+    "t1": 491302.1
+   },
+   {
+    "id": 25,
+    "t0": 514218,
+    "t1": 514732
+   },
+   {
+    "id": 26,
+    "t0": 531302.8,
+    "t1": 531819.2
+   },
+   {
+    "id": 27,
+    "t0": 531819.8,
+    "t1": 532498.4
+   },
+   {
+    "id": 28,
+    "t0": 532640,
+    "t1": 533155.9
+   },
+   {
+    "id": 29,
+    "t0": 533237.7,
+    "t1": 533753.8
+   },
+   {
+    "id": 30,
+    "t0": 534115.8,
+    "t1": 534635.4
+   },
+   {
+    "id": 31,
+    "t0": 552143.4,
+    "t1": 552792.7
+   },
+   {
+    "id": 32,
+    "t0": 599587.7,
+    "t1": 600291.7
+   },
+   {
+    "id": 33,
+    "t0": 624176.4,
+    "t1": 624692.2
+   },
+   {
+    "id": 34,
+    "t0": 668978.8,
+    "t1": 669495.2
+   },
+   {
+    "id": 35,
+    "t0": 678060,
+    "t1": 678574.9
+   },
+   {
+    "id": 36,
+    "t0": 708266.2,
+    "t1": 708946
+   },
+   {
+    "id": 37,
+    "t0": 726897.1,
+    "t1": 727713.2
+   },
+   {
+    "id": 38,
+    "t0": 749054.3,
+    "t1": 749570.2
+   },
+   {
+    "id": 39,
+    "t0": 764825.9,
+    "t1": 765581
+   },
+   {
+    "id": 40,
+    "t0": 791355.6,
+    "t1": 792040.3
+   },
+   {
+    "id": 41,
+    "t0": 809383.4,
+    "t1": 810036.6
+   },
+   {
+    "id": 42,
+    "t0": 826325.8,
+    "t1": 827011.7
+   },
+   {
+    "id": 43,
+    "t0": 851005.1,
+    "t1": 851524.1
+   },
+   {
+    "id": 44,
+    "t0": 851537.7,
+    "t1": 852055.6
+   },
+   {
+    "id": 45,
+    "t0": 852159.3,
+    "t1": 852680.7
+   },
+   {
+    "id": 46,
+    "t0": 853132.9,
+    "t1": 853651.3
+   },
+   {
+    "id": 47,
+    "t0": 912871.9,
+    "t1": 913393.2
+   },
+   {
+    "id": 48,
+    "t0": 934487.5,
+    "t1": 935004.6
+   },
+   {
+    "id": 49,
+    "t0": 1002215.2,
+    "t1": 1002733.5
+   },
+   {
+    "id": 50,
+    "t0": 1016386.4,
+    "t1": 1016996.9
+   },
+   {
+    "id": 51,
+    "t0": 1035321.9,
+    "t1": 1036171.6
+   },
+   {
+    "id": 106,
+    "t0": 1036172,
+    "t1": 1036829.8
+   },
+   {
+    "id": 52,
+    "t0": 1051821.7,
+    "t1": 1052340.1
+   },
+   {
+    "id": 53,
+    "t0": 1076268,
+    "t1": 1076920.3
+   },
+   {
+    "id": 54,
+    "t0": 1102887.7,
+    "t1": 1103403.8
+   },
+   {
+    "id": 55,
+    "t0": 1123115.5,
+    "t1": 1123629.8
+   },
+   {
+    "id": 56,
+    "t0": 1199152.4,
+    "t1": 1199669.9
+   },
+   {
+    "id": 57,
+    "t0": 1212729.4,
+    "t1": 1213248.8
+   },
+   {
+    "id": 58,
+    "t0": 1229092.1,
+    "t1": 1229608.6
+   },
+   {
+    "id": 107,
+    "t0": 1229609.4,
+    "t1": 1230313.4
+   },
+   {
+    "id": 59,
+    "t0": 1273059.8,
+    "t1": 1273659.8
+   },
+   {
+    "id": 60,
+    "t0": 1301377.1,
+    "t1": 1302030.5
+   },
+   {
+    "id": 61,
+    "t0": 1309976.7,
+    "t1": 1310744
+   },
+   {
+    "id": 62,
+    "t0": 1331026.2,
+    "t1": 1331543.7
+   },
+   {
+    "id": 63,
+    "t0": 1356981.5,
+    "t1": 1357499.4
+   },
+   {
+    "id": 64,
+    "t0": 1367607.2,
+    "t1": 1368123
+   },
+   {
+    "id": 65,
+    "t0": 1416637.1,
+    "t1": 1417220.7
+   },
+   {
+    "id": 108,
+    "t0": 1417221.5,
+    "t1": 1417919.5
+   },
+   {
+    "id": 66,
+    "t0": 1442635.2,
+    "t1": 1443151.8
+   },
+   {
+    "id": 67,
+    "t0": 1459226.4,
+    "t1": 1459949.9
+   },
+   {
+    "id": 68,
+    "t0": 1480429.5,
+    "t1": 1481081.9
+   },
+   {
+    "id": 69,
+    "t0": 1492945.6,
+    "t1": 1493744.5
+   },
+   {
+    "id": 70,
+    "t0": 1528749,
+    "t1": 1529606.2
+   },
+   {
+    "id": 71,
+    "t0": 1539519,
+    "t1": 1540036.4
+   },
+   {
+    "id": 72,
+    "t0": 1556663.2,
+    "t1": 1557318.8
+   },
+   {
+    "id": 73,
+    "t0": 1566691.3,
+    "t1": 1567211
+   },
+   {
+    "id": 74,
+    "t0": 1576090.1,
+    "t1": 1576773
+   },
+   {
+    "id": 75,
+    "t0": 1601985.3,
+    "t1": 1602568.5
+   },
+   {
+    "id": 76,
+    "t0": 1629228.2,
+    "t1": 1629749.6
+   },
+   {
+    "id": 77,
+    "t0": 1682917,
+    "t1": 1683433.2
+   },
+   {
+    "id": 78,
+    "t0": 1720998.7,
+    "t1": 1721581.9
+   },
+   {
+    "id": 79,
+    "t0": 1750324.4,
+    "t1": 1750932.9
+   },
+   {
+    "id": 80,
+    "t0": 1800590.6,
+    "t1": 1801114.8
+   },
+   {
+    "id": 81,
+    "t0": 1853171.4,
+    "t1": 1853691.9
+   },
+   {
+    "id": 82,
+    "t0": 1872672.8,
+    "t1": 1873192.4
+   },
+   {
+    "id": 83,
+    "t0": 1888403.6,
+    "t1": 1888921.5
+   },
+   {
+    "id": 84,
+    "t0": 1917685,
+    "t1": 1918205.6
+   },
+   {
+    "id": 85,
+    "t0": 1934935.6,
+    "t1": 1935619.4
+   },
+   {
+    "id": 86,
+    "t0": 1974201.1,
+    "t1": 1974812.6
+   },
+   {
+    "id": 87,
+    "t0": 2001851.8,
+    "t1": 2002532.3
+   },
+   {
+    "id": 88,
+    "t0": 2013772.2,
+    "t1": 2014452.3
+   },
+   {
+    "id": 89,
+    "t0": 2074141.2,
+    "t1": 2074659.3
+   },
+   {
+    "id": 90,
+    "t0": 2104542.9,
+    "t1": 2105197.4
+   },
+   {
+    "id": 109,
+    "t0": 2105198.1,
+    "t1": 2105959
+   },
+   {
+    "id": 91,
+    "t0": 2120514.6,
+    "t1": 2121177.3
+   },
+   {
+    "id": 92,
+    "t0": 2140930.4,
+    "t1": 2141447
+   },
+   {
+    "id": 93,
+    "t0": 2157011,
+    "t1": 2157529.5
+   },
+   {
+    "id": 110,
+    "t0": 2157529.9,
+    "t1": 2158138
+   },
+   {
+    "id": 94,
+    "t0": 2158138.4,
+    "t1": 2158660.1
+   },
+   {
+    "id": 95,
+    "t0": 2176248,
+    "t1": 2176764.4
+   },
+   {
+    "id": 96,
+    "t0": 2213505.1,
+    "t1": 2214189.5
+   },
+   {
+    "id": 97,
+    "t0": 2226047.3,
+    "t1": 2226563.6
+   },
+   {
+    "id": 98,
+    "t0": 2249920.6,
+    "t1": 2250765.3
+   },
+   {
+    "id": 99,
+    "t0": 2261744.6,
+    "t1": 2262326.6
+   },
+   {
+    "id": 100,
+    "t0": 2291766.4,
+    "t1": 2292523.9
+   },
+   {
+    "id": 101,
+    "t0": 2308610.6,
+    "t1": 2309128.8
+   },
+   {
+    "id": 102,
+    "t0": 2338559.4,
+    "t1": 2339408.6
+   },
+   {
+    "id": 103,
+    "t0": 2383953.4,
+    "t1": 2384469.6
+   },
+   {
+    "id": 104,
+    "t0": 2405035.9,
+    "t1": 2405551.9
+   }
+  ]
+ },
+ "tags": [
+  {
+   "id": 0,
+   "action": 0,
+   "intent": "start",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 1,
+   "action": 1,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 2,
+   "action": 105,
+   "intent": "slots",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 3,
+   "action": 2,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 4,
+   "action": 5,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 5,
+   "action": 8,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 6,
+   "action": 9,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 7,
+   "action": 10,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 8,
+   "action": 11,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 9,
+   "action": 12,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 10,
+   "action": 13,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 11,
+   "action": 14,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 12,
+   "action": 15,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 13,
+   "action": 16,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 14,
+   "action": 17,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 15,
+   "action": 18,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 16,
+   "action": 19,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 17,
+   "action": 20,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 18,
+   "action": 21,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 19,
+   "action": 22,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 20,
+   "action": 23,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 21,
+   "action": 24,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null,
+   "emptied": true
+  },
+  {
+   "id": 22,
+   "action": 25,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 23,
+   "action": 26,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 24,
+   "action": 28,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 25,
+   "action": 30,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 26,
+   "action": 31,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 27,
+   "action": 32,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 28,
+   "action": 32,
+   "intent": "evolve",
+   "intended": false,
+   "class": "harmless",
+   "cause": "double"
+  },
+  {
+   "id": 29,
+   "action": 33,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 30,
+   "action": 34,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 31,
+   "action": 35,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 32,
+   "action": 36,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 33,
+   "action": 37,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 34,
+   "action": 38,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 35,
+   "action": 39,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 36,
+   "action": 40,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 37,
+   "action": 41,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 38,
+   "action": 42,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 39,
+   "action": 43,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 40,
+   "action": 44,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 41,
+   "action": 46,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 42,
+   "action": 47,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 43,
+   "action": 48,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 44,
+   "action": 49,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 45,
+   "action": 50,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 46,
+   "action": 51,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 47,
+   "action": 106,
+   "intent": "knobs",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 48,
+   "action": 52,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 49,
+   "action": 53,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 50,
+   "action": 54,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 51,
+   "action": 55,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 52,
+   "action": 56,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 53,
+   "action": 57,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 54,
+   "action": 58,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 55,
+   "action": 59,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 56,
+   "action": 61,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 57,
+   "action": 62,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 58,
+   "action": 63,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 59,
+   "action": 64,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 60,
+   "action": 65,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 61,
+   "action": 66,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 62,
+   "action": 67,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 63,
+   "action": 68,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 64,
+   "action": 69,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 65,
+   "action": 70,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 66,
+   "action": 71,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 67,
+   "action": 72,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 68,
+   "action": 73,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 69,
+   "action": 74,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 70,
+   "action": 74,
+   "intent": "evolve",
+   "intended": false,
+   "class": "harmless",
+   "cause": "double"
+  },
+  {
+   "id": 71,
+   "action": 75,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 72,
+   "action": 76,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 73,
+   "action": 77,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 74,
+   "action": 78,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 75,
+   "action": 79,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 76,
+   "action": 80,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 77,
+   "action": 81,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 78,
+   "action": 82,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 79,
+   "action": 83,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 80,
+   "action": 84,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 81,
+   "action": 85,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 82,
+   "action": 86,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 83,
+   "action": 87,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 84,
+   "action": 88,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 85,
+   "action": 89,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 86,
+   "action": 90,
+   "intent": "tempo",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 87,
+   "action": 109,
+   "intent": "tempo",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 88,
+   "action": 91,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 89,
+   "action": 92,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 90,
+   "action": 93,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 91,
+   "action": 110,
+   "intent": "build",
+   "intended": false,
+   "class": "harmless",
+   "cause": "stray-knob"
+  },
+  {
+   "id": 92,
+   "action": 94,
+   "intent": "build",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 93,
+   "action": 95,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 94,
+   "action": 96,
+   "intent": "slots",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 95,
+   "action": 97,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 96,
+   "action": 98,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 97,
+   "action": 99,
+   "intent": "mute",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 98,
+   "action": 100,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 99,
+   "action": 101,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 100,
+   "action": 102,
+   "intent": "knobs",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 101,
+   "action": 103,
+   "intent": "evolve",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  },
+  {
+   "id": 102,
+   "action": 104,
+   "intent": "end",
+   "intended": true,
+   "class": "intended",
+   "cause": null
+  }
+ ],
+ "accidents": {
+  "destructive": 0,
+  "harmless": 6,
+  "silent": 0,
+  "byCause": {
+   "stray-knob": {
+    "destructive": 0,
+    "harmless": 4,
+    "silent": 0
+   },
+   "double": {
+    "destructive": 0,
+    "harmless": 2,
+    "silent": 0
+   }
+  },
+  "emptied": {
+   "accident": 0,
+   "meant": 1
+  }
+ }
+}

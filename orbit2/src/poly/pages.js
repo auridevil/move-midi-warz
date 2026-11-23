@@ -106,7 +106,9 @@ export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm',
   // T1a / the quick tap: until the step is looked at, the chip says what it said before it went down
   const label = holds ? `STEP ${held.step + 1}${shift ? ' ⇧' : ''}` : seen === 'sound' ? 'SOUND ⇧' : 'RHYTHM';
   const own = owns || (row === seen && seen !== 'step');
-  const word = row === 'step' ? `step ${step + 1}${owns ? ` · held on Move${shift ? ' ⇧' : ''}` : ''}` : row === 'sound' && shift && owns ? 'sound ⇧' : row;
+  // RD-9 (A2): Loop held repaints the header line too (Nils §Q3: a page repaints the 16 cells and the header), else the
+  // slots read as empty steps under "rhythm" (the final glance run: slots 0 / 14); a step page keeps its own word and tools
+  const word = loop && row !== 'step' ? 'slots · held on Move' : row === 'step' ? `step ${step + 1}${owns ? ` · held on Move${shift ? ' ⇧' : ''}` : ''}` : row === 'sound' && shift && owns ? 'sound ⇧' : row;
   // RD-6 the row's knob 8: on a step page its condition, or its repeats while the Move holds it with Shift (T2: only slot
   // 8 repaints); a mouse step page shows the condition (the repeats are one knob turn away in "more…")
   const row8 = row === 'step' ? (owns && shift ? 'repeats' : 'condition') : row === 'sound' ? 'level' : 'tempo';

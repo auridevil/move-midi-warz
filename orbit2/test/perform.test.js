@@ -1,6 +1,22 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MuteQueue, FillLatch, Guard, HOLD_MS } from '../src/poly/perform.js';
+import { MuteQueue, MuteBounce, BOUNCE_MS, FillLatch, Guard, HOLD_MS } from '../src/poly/perform.js';
+
+test('RD-9 a mute press that bounces: a mute within BOUNCE_MS of an unmute is dropped, never the other way round', () => {
+  const b = new MuteBounce();
+  assert.equal(BOUNCE_MS, 200);
+  assert.equal(b.bounce(0, 1000), false, 'no unmute yet: a mute is a mute');
+  b.unmuted(0, 1000);   // the drop's "bring the kick back"
+  // the final sets: the double press came 96–174 ms after the unmute (mouse, Move) and muted the kick again
+  for (const dt of [0, 96, 165, 174, 199]) assert.equal(b.bounce(0, 1000 + dt), true, `${dt} ms after the unmute`);
+  for (const dt of [200, 260, 7283]) assert.equal(b.bounce(0, 1000 + dt), false, `${dt} ms: a press, not a bounce`);
+  assert.equal(b.bounce(1, 1050), false, 'only the lane that was unmuted');
+  assert.equal(b.bounce(0, 900), false, 'a clock that went back is no bounce');
+  // the guard is asked only by a press that would mute: a quick mute → unmute (a stutter) never asks, so it still works
+  b.unmuted(0, 5000); b.unmuted(0, 5100); assert.equal(b.bounce(0, 5250), true, 'the latest unmute counts');
+  b.clear(); assert.equal(b.bounce(0, 5150), false, 'cleared');
+  assert.equal(new MuteBounce(50).bounce(0, 0), false); const s = new MuteBounce(50); s.unmuted(2, 0); assert.equal(s.bounce(2, 60), false, 'its own window');
+});
 
 test('P2 mute queue: lanes wait for the bar line with the mute asked, a second press takes one back', () => {
   const q = new MuteQueue(), lanes = [{ muted: false }, { muted: true }, { muted: false }];

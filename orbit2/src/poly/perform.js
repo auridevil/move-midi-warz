@@ -63,6 +63,23 @@ export class MuteQueue {
 }
 
 /**
+ * RD-9 (the final sets, A3): a mute press that bounces. A press that would mute lane li less than BOUNCE_MS after a
+ * press that unmuted it (or asked the bar line to) is a finger's bounce, and is dropped: in the sets a double press on a
+ * drop's "bring the kick back" muted the kick again 96–174 ms later and it stayed out until the next drop. Only that
+ * way round: a quick mute → unmute (a stutter) still works, and a dropped press always leaves the lane sounding
+ * (principle 3: nothing destructive within a careless gesture). t = performance.now() ms.
+ */
+export const BOUNCE_MS = 200;
+export class MuteBounce {
+  constructor(ms = BOUNCE_MS) { this.ms = ms; this.at = new Map(); }   // lane index → when a press last unmuted it
+  /** A press unmuted lane li at t. */
+  unmuted(li, t) { this.at.set(li, t); }
+  /** A press that would mute lane li at t: true = a bounce, drop it. */
+  bounce(li, t) { const u = this.at.get(li); return u !== undefined && t - u >= 0 && t - u < this.ms; }
+  clear() { this.at.clear(); }
+}
+
+/**
  * P3 fill latch (Shift + Layout): fill for the next whole bar, hands free. 'off' → arm() → 'armed' → the next bar line
  * → 'on' for one bar → the bar line after → 'off'. arm() while armed cancels; while on it does nothing (the bar is
  * already filling). bar() returns true when the latch changed.

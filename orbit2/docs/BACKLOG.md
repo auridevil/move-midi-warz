@@ -1110,3 +1110,18 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   `barBeats.num` at once while the bar keeps its old length until its line (RD-5's bar·beat counter does the same,
   12/8 → 4/4: 25.5 → 25.3). Measure the fraction and the steps against the bar the ear is in (the old line and length
   until the new line is heard).
+
+- **Memory grows while a dense groove plays** (RD-09 final sets, implementer; from before the redesign: the same on
+  RD-1's `07c2ba4`, RD-7's `52a7b92`, RD-8's `4e43ed9` and RD-9): with the synth engine, finished per-hit oscillators
+  stay reachable while the transport runs: on the techno groove ~6,500 native `OscillatorNode`s a minute after a forced
+  GC, with their `AudioParam`s and standardized-audio-context's bookkeeping (`Set`s, `WeakMap`s, wrapped `stop` /
+  `linearRampToValueAtTime` closures); the renderer grows ~100 MB a minute (JS heap ~15 MB a minute), a forced GC
+  gives nothing back, Stop releases them. Not idle-callback starvation (`requestIdleCallback` fires in 2–3 ms, a 1 s
+  timeout changes nothing) and not unstopped voices (2,136 of 2,165 oscillators stopped in 20 s; the rest are the
+  synths' long-lived ones); heap retainer walks end in Blink's audio graph (oscillator → oscillator links, each one's
+  wrapped `stop`). With twelve 40-minute sets at once the dense ones ran the Mac into memory pressure and stopped
+  answering (renderer 2.35 GB at 128 % CPU, no pausable JS): noor-5 in every try, kai-4 once. The audio path (voices,
+  Tone use) is outside the redesign (DECISION §3). The dsp engine (one worklet node per lane) stays flat: the whole
+  heap +0.3 MB in the same 150 s of techno, so it is the long-set answer until the synth voices are fixed. Find what
+  keeps finished oscillators connected while playing (FM modulators into a carrier's frequency, Tone's oscillator
+  restart), and give long-set tools a memory watch.

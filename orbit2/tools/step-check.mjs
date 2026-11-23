@@ -14,7 +14,8 @@
 //        the page and toggles nothing.
 // MOUSE  the mouse latch: a cell's long-press opens its step page (the sheet stays closed); a click on another cell (a
 //        loop dot now) or on a planet switches the step; nothing is edited by those clicks; done and Esc close it.
-// LOOP   Loop held on the Move: the cells are the 16 slots, the knobs keep their page; let go: the steps again.
+// LOOP   Loop held on the Move: the cells are the 16 slots, the knobs keep their page, the header says "slots · held on
+//        Move" (RD-9); let go: the steps again.
 // HAND   the ring answers the hand: a Move touch on shift = the scene's hand (rotation) and the plate on knob 3; HAND_MS
 //        after the release both are gone; a drag on the console's length knob = the hand (length).
 // A2     the scripted glance for the step page (the DOM oracle; glance.mjs has the player agents judge pictures): select
@@ -181,12 +182,17 @@ async function mouseLatch(p) {
 }
 
 async function loopHold(p) {
+  const steps = () => p.eval(`!document.getElementById('lh-steps').hidden`);
   await pickLane(p); const before = await p.eval(STATE);
-  await send(p, bytes.btn('loop', true)); await sleep(60); const on = await p.eval(STATE);
+  await send(p, bytes.btn('loop', true)); await sleep(60); const on = await p.eval(STATE), stepsOn = await steps();
   const n = await p.eval(`[...document.querySelectorAll('#stepsui .st:not(.out)')].filter(b => /^slot \\d+/.test(b.getAttribute('aria-label'))).length`);
-  await send(p, bytes.btn('loop', false)); await sleep(60); const off = await p.eval(STATE);
+  await send(p, bytes.btn('loop', false)); await sleep(60); const off = await p.eval(STATE), stepsOff = await steps();
   const fails = []; if (on.cells !== 'slots' || n !== 16) fails.push(`Loop held: cells ${on.cells}, ${n} slots`); if (on.row !== before.row) fails.push(`Loop moved the knobs: ${before.row} → ${on.row}`); if (off.cells !== 'steps') fails.push(`let go: cells ${off.cells}`);
-  return { on: on.cells, slots: n, off: off.cells, fails };
+  // RD-9 (A2: slots 0 / 14 read under "rhythm"): the header line names the page while Loop holds the cells, and gives the
+  // steps' line back on release
+  if (on.word !== 'slots · held on Move' || stepsOn) fails.push(`Loop held: the header says "${on.word}"${stepsOn ? ' beside the steps line' : ''}`);
+  if (off.word !== before.word || !stepsOff) fails.push(`let go: the header says "${off.word}"${stepsOff ? '' : ', no steps line'}`);
+  return { on: on.cells, slots: n, off: off.cells, word: [before.word, on.word, off.word], fails };
 }
 
 async function handCheck(p) {
@@ -264,7 +270,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (out.MOVE) L.push(`MOVE  step ${out.MOVE.step}: outlined in the press's task ${out.MOVE.outlined} · T1a ${out.MOVE.T1a.row} → touched ${out.MOVE.touched.row} → turned ${out.MOVE.turned.row} (${out.MOVE.turned.rings} rings, cells ${out.MOVE.turned.cells}) · 1:2 lights ${out.MOVE.cond.lit}/16 · T2 knob 8 ${out.MOVE.T2.k8} · saved ${JSON.stringify(out.MOVE.locks)} · lock panel after: ${out.MOVE.panel.hidden ? 'hidden' : 'SHOWN'}`);
   if (out.TAP) L.push(`TAP   ${out.TAP.taps.length} taps ${out.TAP.taps.map(t => t.ms).join('/')} ms: toggled ${out.TAP.taps.filter(t => t.toggled).length}, flashes ${out.TAP.taps.reduce((a, t) => a + t.flashes, 0)} · ${out.TAP.rest.length} with a knob touched: toggled ${out.TAP.rest.filter(t => t.toggled).length}, flashes ${out.TAP.rest.reduce((a, t) => a + t.flashes + (t.mid === 'step'), 0)} · a 520 ms look: ${out.TAP.look}, toggled ${out.TAP.lookToggled}`);
   if (out.MOUSE) L.push(`MOUSE long-press → ${out.MOUSE.opened} · a loop dot → ${out.MOUSE.switched} · a planet → ${out.MOUSE.planet} · edited ${out.MOUSE.edited} · done → ${out.MOUSE.done} · Esc → ${out.MOUSE.esc} · more… ${JSON.stringify(out.MOUSE.more)}, a Move touch: focus ${out.MOUSE.focus.join(' → ')}, the rhythm tab: ${JSON.stringify(out.MOUSE.left)}, Esc (sheet closed) → ${JSON.stringify(out.MOUSE.forgot)} · Move look ${out.MOUSE.moveLook} → ${out.MOUSE.back}, Esc → ${JSON.stringify(out.MOUSE.closed)}`);
-  if (out.LOOP) L.push(`LOOP  held: ${out.LOOP.on} (${out.LOOP.slots}) · let go: ${out.LOOP.off}`);
+  if (out.LOOP) L.push(`LOOP  held: ${out.LOOP.on} (${out.LOOP.slots}), header "${out.LOOP.word[1]}" · let go: ${out.LOOP.off}, "${out.LOOP.word[2]}"`);
   if (out.HAND) L.push(`HAND  touch shift ${JSON.stringify(out.HAND.on)} · +150 ms ${JSON.stringify(out.HAND.tail)} · +550 ms ${JSON.stringify(out.HAND.off)} · drag length ${JSON.stringify(out.HAND.drag)}`);
   if (out.A2) L.push(`A2    scripted glance (step page): ${out.A2.map(g => `seed ${g.seed} ${g.right}/${g.of}`).join(', ')}`);
   if (out.FRAME) L.push(`FRAME playing, per frame: no hands p50 ${out.FRAME.idle.p50?.toFixed(2)} p95 ${out.FRAME.idle.p95?.toFixed(2)} ms (${out.FRAME.idle.n}) · hands on knobs p50 ${out.FRAME.hands.p50?.toFixed(2)} p95 ${out.FRAME.hands.p95?.toFixed(2)} ms (${out.FRAME.hands.n}) · RD-1 ${out.FRAME.baseline.join('/')} ms`);

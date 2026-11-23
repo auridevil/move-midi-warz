@@ -74,11 +74,13 @@ export async function perform(p, a) {
 
 /** Run a script on an open set page. speed > 1 compresses the time between actions (the rests), never a hold. */
 export async function runScript(p, script, { speed = 1, onAction = null } = {}) {
-  const runs = [], start = Date.now(), t00 = await p.eval('__poly.setlog.now()');
+  const runs = [], start = Date.now(), t00 = await p.eval('__poly.setlog.now()'); let errs = p.errors.length;
   for (const a of script) {
     const wait = start + a.at / speed - Date.now(); if (wait > 0) await sleep(wait);
     const t0 = await p.eval('__poly.setlog.now()'), skipped = await perform(p, a); await sleep(SETTLE);
-    const t1 = await p.eval('__poly.setlog.now()'); runs.push({ id: a.id, t0, t1, ...(skipped && { skipped }) }); onAction?.(a, runs.at(-1));
+    // RD-9: a run that page errors came during says how many there are by then (take 1 needed a replay to find them)
+    const t1 = await p.eval('__poly.setlog.now()'), e = p.errors.length > errs ? (errs = p.errors.length) : 0;
+    runs.push({ id: a.id, t0, t1, ...(skipped && { skipped }), ...(e && { errors: e }) }); onAction?.(a, runs.at(-1));
   }
   await sleep(800);
   const log = JSON.parse(await p.eval('__poly.setlog.file().text'));
@@ -121,6 +123,8 @@ export function summarize(set) {
   if (a.emptied && (a.emptied.accident || a.emptied.meant)) L.push(`  lanes emptied (beside A3's classes): ${a.emptied.accident} by accident, ${a.emptied.meant} by a turn the hand meant`);
   const skipped = {}; for (const r of s.runs) if (r.skipped) skipped[r.skipped] = (skipped[r.skipped] || 0) + 1;
   for (const [why, n] of Object.entries(skipped)) L.push(`  ${n} actions not played: ${why === 'already so' ? 'the lane already was as the hand wanted (an earlier accident)' : why}`);
+  const by = new Map(s.script.map(x => [x.id, x]));
+  for (const r of s.runs.filter(r => r.errors)) { const x = by.get(r.id); L.push(`  page errors (${r.errors} by now) at ${(r.t0 / 1000).toFixed(1)} s, during ${x.intent} · ${x.kind}${x.sel ? ` ${x.sel}` : ''}${x.slip ? ` (slip: ${x.slip.kind})` : ''}`); }
   for (const t of set.tags.filter(t => !t.intended && t.class === 'destructive')) { const e = set.entries.find(x => x.id === t.id); L.push(`  DESTRUCTIVE at ${(e.t / 1000).toFixed(1)} s: ${e.target} ${JSON.stringify(e.before)} → ${JSON.stringify(e.after)} (${t.cause}, intent ${t.intent})`); }
   return L.join('\n');
 }

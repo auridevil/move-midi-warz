@@ -3,7 +3,7 @@
 //
 //   node orbit2/tools/console-check.mjs                     # everything at 1512×860, a report on stdout
 //   node orbit2/tools/console-check.mjs --assert --json /tmp/x.json --clicks 600 --shots /tmp/orbit2-impl/
-//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE   --root /tmp/x (a `git archive`)
+//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE,CLOCK,BOUNCE   --root /tmp/x (a `git archive`)
 //
 // MOVE      Noor's sequence and the touch / turn rows through __poly.move.receive (touch notes 0–8, encoder CCs, Shift,
 //           steps): what the row draws, the chip, the header word, the held cell, the step untouched by a look.
@@ -21,6 +21,10 @@
 //           step, + Shift, Loop) and follows the hands while open; the keys tab keeps the keyboard help; Esc closes it.
 // FMODE     (RD-9) F mode with the Move: the peek answers an encoder touch, a pill's × stays pressable, the rings never
 //           move (A7), Esc comes back. What is drawn / hidden in F is the face audit's FMODE gate.
+// CLOCK     (RD-9, the final sets) speed × and tempo dragged with the mouse and turned on the Move while playing: no page
+//           error, the page answers, the transport's ticks never go back (Tone's bpm ramps broke its clock).
+// BOUNCE    (RD-9, the final sets) a double press bringing the kick back (Move, mouse, "on next bar") leaves it playing; a
+//           quick mute → unmute still does both; a press 0.3 s after an unmute mutes (perform.js MuteBounce).
 // MISCLICK  Vera's run: random pointer clicks over the whole face while playing (a click a second for ten minutes,
 //           compressed). A click that lands ON a destructive control (randomize, play while playing, a kick's M, init /
 //           load / clear / a slot / a groove in the sheet…) is a hit, counted apart; every other click must leave 0
@@ -202,9 +206,66 @@ async function fmode(p) {
   return { peek, fails };
 }
 
+// RD-9 (the final sets, A3): speed × and tempo turned while playing never break the transport's clock. Before, every
+// step of a drag ramped Tone's bpm (retime → bpm.rampTo, the ratio's too), and overlapping ramps sent the clock's next
+// tick before 0 (a TypeError in Clock._loop: kai's mouse sets) or held it in place (a page that stopped answering:
+// noor-5, three times). Mouse drags as session.mjs makes them (8 moves 25 ms apart), on knob 4 and knob 8, then Move
+// turns of the same knobs (45 ms a click); the page must answer, throw nothing, and its ticks only go forward.
+async function clockDrags(p, { bursts = 30 } = {}) {
+  const fails = [], at = (n) => p.eval(`(() => { const r = document.querySelector('#knobs > :nth-child(${n}) .gauge').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const bpm = () => p.eval('Math.round(Tone.getTransport().bpm.value)'), ticks = () => p.eval('Tone.getTransport().ticks', { timeout: 15000 }), e0 = p.errors.length, tempo0 = await bpm();
+  await p.eval(`document.getElementById('btn-play').click()`); await sleep(800);
+  let last = await ticks(), back = 0, done = 0;
+  try {
+    for (let k = 0; k < bursts; k++) {
+      const knob = k % 3 === 2 ? 8 : 4, c = await at(knob), dy = (k % 2 ? 1 : -1) * (knob === 8 ? 6 : 12);   // tempo: ±2 bpm, back and forth
+      await mouse(p, 'mousePressed', c.x, c.y);
+      for (let i = 1; i <= 8; i++) { await mouse(p, 'mouseMoved', c.x, c.y + dy * i / 8); await sleep(25); }
+      await mouse(p, 'mouseReleased', c.x, c.y + dy); await sleep(100);
+      const t = await ticks(); if (t < last) back++; last = t; done++;
+    }
+    for (let k = 0; k < bursts; k++) {   // the Move: touch, turn 3 clicks, let go (the ratio's knob, then the tempo's)
+      const knob = k % 3 === 2 ? 7 : 3, d = k % 2 ? 1 : -1; await send(p, bytes.touch(knob, true));
+      for (let i = 0; i < 3; i++) { await send(p, bytes.enc(knob, d)); await sleep(45); }
+      await send(p, bytes.touch(knob, false)); await sleep(100);
+      const t = await ticks(); if (t < last) back++; last = t; done++;
+    }
+    await sleep(500); const t = await ticks(); if (!(t > last)) fails.push('the transport stopped moving'); last = t;
+  } catch (e) { fails.push(`the page stopped answering after ${done} bursts (${e.message.split('\n')[0]})`); }
+  const errors = p.errors.slice(e0);
+  if (errors.length) fails.push(`${errors.length} page errors: ${errors[0].split('\n')[0]}`);
+  if (back) fails.push(`the transport's ticks went back ${back} times`);
+  return { bursts: done, errors: errors.length, back, tempo: [tempo0, await bpm().catch(() => null)], fails };
+}
+
+// RD-9 (the final sets, A3): a mute press that bounces. The drop's "bring the kick back" pressed twice (the Move: Mute
+// held, the kick's pad tapped twice 160 ms apart, as session.mjs's double; the mouse: its M lamp clicked twice) leaves
+// the kick playing, at once and with "on next bar"; a quick mute → unmute (a stutter) still does both; a press 0.3 s
+// after an unmute mutes.
+async function bounce(p) {
+  const fails = [], out = {}, kick = () => p.eval(`(() => { const q = __poly.muteQ; return q.has(0) ? q.target(0) : !!__poly.m.lanes[0].muted; })()`);
+  const logged = () => p.eval(`(__poly.setlog.file(), __poly.setlog.log.entries().filter(e => e.target === 'lane1.mute').length)`);
+  const set = async (v) => { await p.eval(`(() => { __poly.m.lanes[0].muted = ${v}; __poly.sync(); })()`); await sleep(400); };
+  const tap = async (n) => { await send(p, bytes.btn('mute', true)); await sleep(60); for (let k = 0; k < n; k++) { await send(p, bytes.pad(0, 0, true)); await sleep(70); await send(p, bytes.pad(0, 0, false)); await sleep(90); } await send(p, bytes.btn('mute', false)); await sleep(60); };
+  await p.eval(`document.getElementById('btn-play').click()`); await sleep(500);
+  await set(true); await tap(2); out.moveDouble = await kick();
+  if (out.moveDouble !== false) fails.push('the Move: a double press bringing the kick back left it muted');
+  await set(false); let n = await logged(); await tap(2); out.stutter = { muted: await kick(), presses: await logged() - n };
+  if (out.stutter.muted !== false || out.stutter.presses !== 2) fails.push(`a quick mute → unmute: ${JSON.stringify(out.stutter)}`);
+  await set(true); const c = await p.eval(`(() => { const r = document.querySelectorAll('.lane-m')[0].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await p.click(c.x, c.y); await sleep(90); await p.click(c.x, c.y); await sleep(150); out.lampDouble = await kick();
+  if (out.lampDouble !== false) fails.push('the mouse: a double click on the kick\'s M lamp left it muted');
+  await set(true); await tap(1); await sleep(300); await tap(1); out.late = await kick();
+  if (out.late !== true) fails.push('a press 0.3 s after an unmute did not mute');
+  await p.eval('(__poly.perf.muteBar = true)'); await set(true); n = await logged(); await tap(2); out.nextBar = { muted: await kick(), presses: await logged() - n };
+  if (out.nextBar.muted !== false) fails.push('"on next bar": a double press took the waiting unmute back');
+  await p.eval('(__poly.perf.muteBar = false, __poly.muteQ.clear(), __poly.sync())');
+  return { ...out, fails };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
-  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE')).split(',')), shots = arg('--shots', null), out = {}, root = arg('--root', null);
+  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE,CLOCK,BOUNCE')).split(',')), shots = arg('--shots', null), out = {}, root = arg('--root', null);
   if (shots) mkdirSync(shots, { recursive: true });
   const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), ...(root ? { root } : {}) });
   try {
@@ -219,6 +280,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (only.has('SHIFT')) out.SHIFT = await shiftFocus(await fresh());
     if (only.has('HELP')) out.HELP = await helpOverlay(await fresh());
     if (only.has('FMODE')) out.FMODE = await fmode(await fresh());
+    if (only.has('CLOCK')) out.CLOCK = await clockDrags(await fresh());
+    if (only.has('BOUNCE')) out.BOUNCE = await bounce(await fresh());
   } finally { await b.close(); }
   const fails = Object.entries(out).flatMap(([k, v]) => (Array.isArray(v) ? v.flatMap(x => x.fails) : v.fails).map(f => `${k}: ${f}`));
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(out, null, 1));
@@ -232,6 +295,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (out.SHIFT) { const s = out.SHIFT; L.push(`SHIFT ⇧ on the focused swing knob: ${s.shift.page}, focus ${s.shift.focus}; Shift+↑ ${s.up.swing} → ${s.fine.swing}; the Move's Shift ${s.moveShift.page} → focus back on ${s.moveBack.focus}; Shift+Tab from cell 1 → ${s.tab.focus} (${s.tab.page}), after ⇧ ${s.tabAfter.focus}`); }
   if (out.HELP) L.push(`HELP  the "?" Move drawing per page (rhythm / sound tab / held step / +Shift / Loop), the keys tab, Esc: ${out.HELP.fails.length ? out.HELP.fails.join('; ') : 'all as the decision'}`);
   if (out.FMODE) L.push(`FMODE peek on a touch "${out.FMODE.peek}" · ${out.FMODE.fails.length ? out.FMODE.fails.join('; ') : 'pill pressable, rings fixed, Esc comes back'}`);
+  if (out.BOUNCE) { const o = out.BOUNCE; L.push(`BOUNCE kick muted after: a double bring-back on the Move ${o.moveDouble} · a stutter ${o.stutter?.muted} (${o.stutter?.presses} presses) · a double click on its M ${o.lampDouble} · a press 0.3 s on ${o.late} · "on next bar" double ${o.nextBar?.muted}${o.fails.length ? ` · ${o.fails.join('; ')}` : ''}`); }
+  if (out.CLOCK) L.push(`CLOCK ${out.CLOCK.bursts} drags / turns of speed × and tempo while playing (tempo ${out.CLOCK.tempo.join(' → ')}): page errors ${out.CLOCK.errors}, ticks back ${out.CLOCK.back}${out.CLOCK.fails.length ? ` · ${out.CLOCK.fails.join('; ')}` : ''}`);
   console.log(L.join('\n')); if (fails.length) console.log(`FAIL\n  ${fails.join('\n  ')}`);
   if (has('--assert') && fails.length) process.exit(1);
 }

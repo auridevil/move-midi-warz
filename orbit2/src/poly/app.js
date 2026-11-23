@@ -14,7 +14,7 @@ import { phaseCorrection } from './midiio.js';
 import { onBar, trackBars, blockTick, SlotBank, SLOT_COUNT, SWITCH_MODES } from './slots.js';
 import { PolyMidi, FOLLOW_MODES, strokeNotes, LATENCY_MAX, autoLatencyMs, AUTO_CC_KEYS } from './midiio.js';
 import { VOICES, VOICE_KEYS, velShape, ARTICS, articAt, TUNE_SEMIS } from './voices.js';
-import { HOLD_MS, MuteQueue, FillLatch, Guard, fxFreqs, stepFilter } from './perform.js';
+import { HOLD_MS, MuteQueue, MuteBounce, FillLatch, Guard, fxFreqs, stepFilter } from './perform.js';
 import { DSP_VOICES } from './dsp-voices.js';
 import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
@@ -63,7 +63,7 @@ const perfKey = () => JSON.stringify(m, (k, v) => (k === 'muted' || k === 'solo'
 // A3: a gesture that records is one undo step: nothing is committed while it writes (its end saves, with ownNext)
 const save = () => { if (knobGest?.rec && !restoring) { knobGest.dirty = true; return; } const full = JSON.stringify(m); if (restoring) hist.refresh(full); else hist.commit(full, { key: perfKey(), load: !!loadNext, own: ownNext, ...(loadNext?.tempo != null ? loadNext : {}) }); loadNext = false; ownNext = false; try { localStorage.setItem(SAVE, full); } catch {} slog?.dirty(hush); };   // hush: the clock changed it (evolve, a slot, a waiting mute)
 const dice = new Dice(); let fill = false, fillHold = false;   // fill = held (Layout, the fill button, key 0) or latched for a bar (P3)
-const latch = new FillLatch(), muteQ = new MuteQueue();   // P3 fill for the next bar; P2 mutes waiting for the next bar line
+const latch = new FillLatch(), muteQ = new MuteQueue(), muteBounce = new MuteBounce();   // P3 fill for the next bar; P2 mutes waiting for the next bar line; RD-9 a mute press that bounces
 const lib = new Library(localStorage); let libCurrent = null;   // named setups; id of the one on screen (loaded or saved, until a fresh start or a link: leaveSetup)
 // page settings (not part of a pattern): live record, evolve, MIDI I/O
 const SETTINGS = 'midi-warz.orbit2.settings.v1';
@@ -446,7 +446,12 @@ function onTick(t, time, cyc, ts) {
   return cyc;
 }
 // the delays glide to the new dotted eighth (a jump in delay time clicks on the echoes still ringing)
-function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.rampTo(tempo, 0.1); const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
+// RD-9: the transport's tempo moves as a step (`bpm.value`: cancel + setValueAtTime at now(), as the MIDI clock paths
+// do), never a ramp: Tone's bpm.rampTo (setRampPoint → cancelAndHoldAtTime) leaves its TickParam an event with no
+// ticks, and a ramp between near-equal values solves to the wrong root, so overlapping ramps (a knob dragged, a step
+// every 25 ms) sent the clock's next tick before 0 (a TypeError in Clock._loop, the block dropped) or held it in place
+// (the page hung) in the final sets. The delays are plain params: they still glide.
+function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.value = tempo; const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
   slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); neverPlayed = false; hideWelcome();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes): at the time
@@ -550,7 +555,7 @@ const PARAMS = [
   { k: 'length', label: 'length', min: 1, max: MAX_STEPS, get: l => l.length, set: (l, v) => l.resize(v), fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
   { k: 'euclid', label: 'euclid hits', min: 0, max: MAX_STEPS, get: l => l.euclidK, set: (l, v) => l.setEuclid(v), fmt: v => v, say: v => `${v} hit${v === 1 ? '' : 's'}` },
   { k: 'rotation', label: 'rotation', min: 0, max: MAX_STEPS - 1, get: l => l.rotation, set: (l, v) => { l.rotation = ((Math.round(v) % l.length) + l.length) % l.length; }, fmt: v => v, say: v => `${v} step${v === 1 ? '' : 's'}` },
-  { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); retime(); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
+  { k: 'ratio', label: 'speed ×', min: 0, max: RATIOS.length - 1, get: l => l.ratioIndex, set: (l, v) => { l.setRatio(v); }, fmt: v => RATIO_LABEL[v], say: v => `times ${RATIO_LABEL[v]}` },
   { k: 'prob', label: 'probability', min: 0, max: 100, get: l => Math.round(l.prob * 100), set: (l, v) => { l.prob = Math.max(0, Math.min(1, v / 100)); }, fmt: v => v + '%' },
   { k: 'tune', label: 'tune', min: -100, max: 100, get: l => Math.round(l.tune * 100), set: (l, v) => { l.tune = Math.max(-1, Math.min(1, v / 100)); }, fmt: v => (v > 0 ? '+' : '') + v, say: tuneSay },
   { k: 'offset', label: 'push / pull', min: -OFFSET_MS, max: OFFSET_MS, get: l => l.offsetMs, set: (l, v) => l.setOffset(v), fmt: v => (v > 0 ? '+' : '') + v + ' ms', say: v => v ? `${Math.abs(v)} ms ${v > 0 ? 'late' : 'early'}` : 'on time' },
@@ -678,7 +683,9 @@ function renderPage() {
   const chip = $('move-chip'); chip.textContent = move.inControl ? r.chip : ''; chip.classList.toggle('own', r.own);   // only with a Move to name
   // RD-6: the step page's words (clear / more… / done) in the header, where "steps 1–16 of 16" was; the cells follow
   // what the hands make of them (steps, the step's 16 loops, or the slots while Loop is held)
-  const onStep = r.row === 'step'; if ($('step-tools').hidden === onStep) { $('step-tools').hidden = !onStep; $('lh-steps').hidden = onStep; }
+  const onStep = r.row === 'step', noSteps = onStep || r.cells === 'slots';   // RD-9: the slots are not "steps 1–16 of 16"
+  if ($('step-tools').hidden === onStep) $('step-tools').hidden = !onStep;
+  if ($('lh-steps').hidden !== noSteps) $('lh-steps').hidden = noSteps;
   if (r.cells !== cellsMode || (r.cells === 'loops' && r.step !== cellsStep)) renderSteps();
   paintPeek();
   if (helpMoveUp()) drawHelpMove();   // RD-9: the "?" overlay's Move drawing follows the page under the hands
@@ -1378,8 +1385,13 @@ function renderFill() {
  *  performance move: never an undo step (perfKey). */
 function toggleMute(li) {
   if (li < 0 || li >= m.lanes.length) return;
-  const muteNow = () => (muteQ.has(li) ? muteQ.target(li) : !!m.lanes[li].muted), was = slog && (slog.begin(), muteNow());
+  const muteNow = () => (muteQ.has(li) ? muteQ.target(li) : !!m.lanes[li].muted), t = performance.now();
+  // RD-9: every press flips what the lane is (or waits) to be; one that would mute it right after a press unmuted it is
+  // a bounce (perform.js MuteBounce): dropped, so the lane keeps sounding
+  if (!muteNow() && muteBounce.bounce(li, t)) return;
+  const was = slog && (slog.begin(), muteNow());
   if (perf.muteBar && playing) muteQ.toggle(li, !m.lanes[li].muted); else m.lanes[li].muted = !m.lanes[li].muted;
+  if (!muteNow()) muteBounce.unmuted(li, t);
   sync(); slog?.act(`lane${li + 1}.mute`, was, muteNow(), { voice: m.lanes[li].voice, queued: muteQ.has(li), absorb: true });
 }
 /** What a waiting mute does to lane li, in words ("mutes" / "unmutes"). */

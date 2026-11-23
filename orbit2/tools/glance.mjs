@@ -13,6 +13,7 @@
 //   --port 5400 --debug-port 9400   --groove techno   --exposure 0.55 --gamma 1.5 --scale 0.71
 //   --pages rhythm,sound   the pages in play (RD-5's A2; RD-6's: step; default all four). The brief still names all four.
 //   score … --record setlog/glance-x.json --player kai --commit abc1234   also writes the run's record (RD-1's format)
+//   score … --brief-file my-brief.txt   the judges saw another brief (RD-9: the page by the decision's page table): recorded as such
 //
 // Give each judge brief.txt and one image, nothing else (not the key, not the other images).
 import { launch } from './cdp.mjs';
@@ -97,7 +98,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const rec = arg('--record', null), trialOf = (k) => (key.trials || key).find(x => x.trial === k);
     if (rec) writeFileSync(rec, JSON.stringify({ format: 'orbits-glance', v: 1, player: arg('--player', null), page: key.path || 'orbit2/index.html', commit: arg('--commit', null), tool: 'orbit2/tools/glance.mjs',
       judges: arg('--judges', 'one fresh sub-agent per image (model sonnet), shown brief.txt and that image only'), run: { seed: key.seed, groove: key.groove, pages: key.pages || GLANCE_PAGES, ask, exposure: key.exposure, gamma: key.gamma, scale: key.scale, errors: key.errors },
-      brief: briefFor(ask), score: { right: s.right, of: s.of, pass: s.pass, pageRight: s.pageRight, laneRight: s.laneRight, ...(s.stepRight != null && { stepRight: s.stepRight }), byPage: s.byPage },
+      brief: arg('--brief-file', null) ? readFileSync(arg('--brief-file'), 'utf8').trimEnd() : briefFor(ask), score: { right: s.right, of: s.of, pass: s.pass, pageRight: s.pageRight, laneRight: s.laneRight, ...(s.stepRight != null && { stepRight: s.stepRight }), byPage: s.byPage },
       trials: s.rows.map(r => { const k = trialOf(r.trial); return { trial: r.trial, page: r.page, lane: r.lane, ...(r.step != null && { step: r.step, turn: r.turn }), said: r.said, ok: r.ok, ...(k?.drawn && { drawn: k.drawn }), ...(k?.restored != null && { restored: k.restored }) }; }) }, null, 1) + '\n');
   } else {
     const pages = String(arg('--pages', GLANCE_PAGES.join(','))).split(',').filter(Boolean);
