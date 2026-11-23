@@ -1172,3 +1172,12 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **Ids only tools and tests use** (RD-10 round 1: architect): `dice-drawer`, `settings-drawer`, `midi-drawer`,
   `col-left` are referenced only by the tools and tests (a real use for the orphan scan); naming them in the test as the
   `pg-*` family is would make a future change to them visible.
+- **The phone's moved controls** (RD-10 round 2: verifier, architect, maya): `placePhone` drops the keyboard focus when
+  a window narrows past 760 px with a moved control focused (fill, say: it lands in the closed sheet's hidden pane, so
+  the `a.focus()` can't take; at `e768c09` it stayed on the console) — hand the focus to its pane's tab, as `setSheet`
+  does; the phone step page's words "clear" / "done" 33 px and "more…" 41 px wide (44 tall; a 44 px min-width as the
+  pills' ×); with six pills on a phone "+2 more ▾" starts off-screen in the line's sideways scroll (at rest rec, chain
+  and part of solo show); the phone console's sizes are written twice (`.tgroup` left / top / height and `.lane-head`
+  padding-left 112 px, ~60 px of room today): one shared variable; the tests that pin `cvPinned`, `PHONE_HOSTS` and the
+  quests' onclick as source text (the cells' take and give back could be a pure `MovePages` method with a unit test).
+  Under heavy load (≈ 9, ten Chromes) the page sometimes never comes up, at `e768c09` too: re-run alone.
