@@ -880,7 +880,8 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
    stay visible as rings (scene.js draws a muted lane's ring grey whatever hides). */
 body.focus-mode #topbar { visibility: hidden; }
 body.focus-mode #legend, body.focus-mode .hud-top, body.focus-mode #sheet { display: none !important; }
-@media (max-width: 1100px) { body.focus-mode #pills { position: fixed; top: 10px; left: 10px; right: 64px; z-index: 8; } }   /* narrow: the pills over the fixed canvas, clear of "exit focus" */
+@media not all and (max-width: 1100px) { body.focus-mode #pills { margin-right: 90px; } }   /* wide: room for "exit focus" in the corner */
+@media (max-width: 1100px) { body.focus-mode #pills { position: fixed; top: 10px; left: 10px; right: 112px; z-index: 8; flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain; } }   /* narrow: the pills in one scrolling line over the fixed canvas, clear of "exit focus" */
 @media (max-width: 760px) { body.focus-mode:has(#sheet) #btn-play { visibility: visible; } }
 body.focus-mode:has(#sheet) { overflow: hidden; padding-bottom: 0; }
 body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; height: 100vh; }

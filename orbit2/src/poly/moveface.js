@@ -47,7 +47,7 @@ export function drawMoveHelp({ row = 'rhythm', row8 = 'tempo', cells = 'steps', 
     const cx = 340 + k * 70; o.push(`<circle cx="${cx}" cy="72" r="24" class="mf-box"/>`);
     text(cx, 76, k + 1, 'mf-dim'); text(cx, k % 2 ? 126 : 30, w, 'mf-word');
   });
-  o.push('<circle cx="910" cy="72" r="28" class="mf-box"/>'); text(910, 126, 'filter · push = off', 'mf-word');
+  o.push('<circle cx="910" cy="72" r="28" class="mf-box"/>'); text(910, 30, 'filter · push = off', 'mf-word');   // above: knob 8's word sits below
   // track buttons select lanes; the pads play or edit them
   for (let r = 0; r < 4; r++) { box(40, 150 + r * 62, 56, 50); text(68, 180 + r * 62, `lane ${4 - r}`, 'mf-small'); }
   for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) box(120 + c * 70, 150 + r * 62, 58, 50, 'mf-pad');

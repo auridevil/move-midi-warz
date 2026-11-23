@@ -3,7 +3,7 @@
 //
 //   node orbit2/tools/console-check.mjs                     # everything at 1512×860, a report on stdout
 //   node orbit2/tools/console-check.mjs --assert --json /tmp/x.json --clicks 600 --shots /tmp/orbit2-impl/
-//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT   --root /tmp/x (a `git archive`)
+//   --port 5400 --debug-port 9400   --only MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE   --root /tmp/x (a `git archive`)
 //
 // MOVE      Noor's sequence and the touch / turn rows through __poly.move.receive (touch notes 0–8, encoder CCs, Shift,
 //           steps): what the row draws, the chip, the header word, the held cell, the step untouched by a look.
@@ -17,6 +17,10 @@
 // SHIFT     (round 1) a focused console knob keeps its keys: keyboard ⇧ does not flip the row under it (Shift + ↑ is its
 //           fine step), the Move's Shift gives the focus back on release, Shift+Tab from the cells lands on the row it left.
 // LOG       the console log on and off: the visible controls (the face audit's selector) and the rings must not change.
+// HELP      (RD-9) the "?" overlay's Move tab: the drawing wears the current page's words (rhythm, the sound tab, a held
+//           step, + Shift, Loop) and follows the hands while open; the keys tab keeps the keyboard help; Esc closes it.
+// FMODE     (RD-9) F mode with the Move: the peek answers an encoder touch, a pill's × stays pressable, the rings never
+//           move (A7), Esc comes back. What is drawn / hidden in F is the face audit's FMODE gate.
 // MISCLICK  Vera's run: random pointer clicks over the whole face while playing (a click a second for ten minutes,
 //           compressed). A click that lands ON a destructive control (randomize, play while playing, a kick's M, init /
 //           load / clear / a slot / a groove in the sheet…) is a hit, counted apart; every other click must leave 0
@@ -147,9 +151,60 @@ async function misclick(p, { clicks = 600, seed = 11, w = 1512, h = 860 }) {
   return { clicks, tally, hits, accidents, fails: accidents.length > THRESH.destructive ? [`${accidents.length} destructive changes from mis-clicks`] : [] };
 }
 
+// RD-9 the "?" overlay: the Move drawn with the current page's meanings on its controls, following the hands while it
+// is open; the keys tab still the keyboard help; Esc (the modal's own) closes it
+async function helpOverlay(p) {
+  const fails = [], draw = () => p.eval(`document.getElementById('move-draw').innerHTML`);
+  const want = async (words, why) => { const svg = await draw(); for (const w of words) if (!svg.includes(`>${w}</text>`)) fails.push(`${why}: "${w}" missing from the drawing`); return svg; };
+  await p.eval('(__poly.openHelp(), __poly.helpTab("move"))'); await sleep(80);
+  await want(['length', 'euclid hits', 'probability', 'tempo'], 'rhythm (the default)');
+  await p.eval(`document.getElementById('pg-sound').click()`); await sleep(80);
+  await want(['decay', 'drive', 'pan', 'level'], 'the sound tab latched');
+  await p.eval(`document.getElementById('pg-rhythm').click()`); await sleep(80);
+  // a Move step held past the look: its locks on the knobs, the condition on knob 8, the cells its loops; + Shift = repeats
+  await send(p, bytes.step(0, true)); await sleep(550);
+  const held = await want(['velocity', 'condition'], 'a held Move step');
+  if (!held.includes('loops')) fails.push('a held step: the cells line does not say loops');
+  await send(p, bytes.btn('shift', true)); await sleep(80);
+  await want(['repeats'], 'a held step with Shift');
+  await send(p, bytes.btn('shift', false)); await send(p, bytes.step(0, false)); await sleep(550);
+  // Loop held: the slots on the cells, the knobs unchanged
+  await send(p, bytes.btn('loop', true)); await sleep(80);
+  const slots = await want(['length', 'tempo'], 'Loop held (the knobs unchanged)');
+  if (!slots.includes('slots')) fails.push('Loop held: the cells line does not say slots');
+  await send(p, bytes.btn('loop', false)); await sleep(80);
+  // the keys tab is still the keyboard help ("must not regress"), and the dialog's own Esc closes it
+  await p.eval('__poly.helpTab("keys")');
+  const keys = await p.eval(`document.getElementById('hpane-keys').textContent`);
+  for (const w of ['play / stop', 'focus mode', 'find any control']) if (!keys.includes(w)) fails.push(`the keys tab lost "${w}"`);
+  await p.key('Escape'); await sleep(120);
+  if (await p.eval(`document.getElementById('help').open`)) fails.push('Esc did not close the overlay');
+  return { fails };
+}
+
+// RD-9 F mode with the Move under the hands: the peek answers an encoder touch while the controls are hidden, a pill
+// stays pressable, and Esc comes back (face-audit gates what is drawn and the rings)
+async function fmode(p) {
+  const fails = [], geo = () => p.eval('JSON.stringify(__poly.scene.geo())');
+  await p.eval(`__poly.showPills(['evolve'])`);
+  const g0 = await geo(); await p.eval('__poly.setFocusMode(true)'); await sleep(120);
+  await send(p, bytes.touch(1, true)); await send(p, bytes.enc(1, 1)); await sleep(200);
+  const peek = await p.eval(`(() => { const e = document.getElementById('peek'); return !e.hidden && !!e.getClientRects().length ? document.getElementById('peek-name').textContent : null; })()`);
+  if (!peek) fails.push('no peek on an encoder touch in F mode');
+  await send(p, bytes.enc(1, -1)); await send(p, bytes.touch(1, false)); await sleep(500);
+  if (await geo() !== g0) fails.push('the rings moved in F mode (A7)');
+  const pill = await p.eval(`(() => { const b = document.getElementById('sp-evolve-x'); return !!b && !!b.getClientRects().length; })()`);
+  if (!pill) fails.push('the evolve pill (its ×) is not pressable in F mode');
+  await p.key('Escape'); await sleep(120);
+  if (await p.eval('__poly.focusMode')) fails.push('Esc did not leave F mode');
+  if (await geo() !== g0) fails.push('the rings moved leaving F mode');
+  await p.eval('__poly.showPills(null)');
+  return { peek, fails };
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   const arg = (k, d) => { const i = process.argv.indexOf(k); return i < 0 ? d : process.argv[i + 1]; }, has = (k) => process.argv.includes(k);
-  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT')).split(',')), shots = arg('--shots', null), out = {}, root = arg('--root', null);
+  const only = new Set(String(arg('--only', 'MOVE,A8,A2,LOG,MISCLICK,FILTER,SHIFT,HELP,FMODE')).split(',')), shots = arg('--shots', null), out = {}, root = arg('--root', null);
   if (shots) mkdirSync(shots, { recursive: true });
   const b = await launch({ port: +arg('--port', 5400), debugPort: +arg('--debug-port', 9400), ...(root ? { root } : {}) });
   try {
@@ -162,6 +217,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     if (only.has('MISCLICK')) { const p = await fresh(); out.MISCLICK = await misclick(p, { clicks: +arg('--clicks', 600) }); out.MISCLICK.errors = p.errors.length; }
     if (only.has('FILTER')) out.FILTER = await filterDetent(await fresh());
     if (only.has('SHIFT')) out.SHIFT = await shiftFocus(await fresh());
+    if (only.has('HELP')) out.HELP = await helpOverlay(await fresh());
+    if (only.has('FMODE')) out.FMODE = await fmode(await fresh());
   } finally { await b.close(); }
   const fails = Object.entries(out).flatMap(([k, v]) => (Array.isArray(v) ? v.flatMap(x => x.fails) : v.fails).map(f => `${k}: ${f}`));
   if (arg('--json', null)) writeFileSync(arg('--json'), JSON.stringify(out, null, 1));
@@ -173,6 +230,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (out.MISCLICK) L.push(`MISCLICK ${out.MISCLICK.clicks} clicks: ${Object.entries(out.MISCLICK.tally).map(([k, v]) => `${k} ${v}`).join(', ')} · direct hits on destructive controls ${out.MISCLICK.hits.length} (${out.MISCLICK.hits.map(h => `${h.on}→${h.target}`).join(', ') || '—'}) · mis-click accidents ${out.MISCLICK.accidents.length}${out.MISCLICK.accidents.length ? ` (${out.MISCLICK.accidents.map(a => `#${a.click} ${a.on}→${a.target}`).join(', ')})` : ''} · page errors ${out.MISCLICK.errors}`);
   if (out.FILTER) L.push(`FILTER slips from off ${out.FILTER.slips.join(' ')} · across from LP 10, 1 px a step: off for ${out.FILTER.held} px (${out.FILTER.walk}) · a key across off: ${out.FILTER.keys.join(' / ')}`);
   if (out.SHIFT) { const s = out.SHIFT; L.push(`SHIFT ⇧ on the focused swing knob: ${s.shift.page}, focus ${s.shift.focus}; Shift+↑ ${s.up.swing} → ${s.fine.swing}; the Move's Shift ${s.moveShift.page} → focus back on ${s.moveBack.focus}; Shift+Tab from cell 1 → ${s.tab.focus} (${s.tab.page}), after ⇧ ${s.tabAfter.focus}`); }
+  if (out.HELP) L.push(`HELP  the "?" Move drawing per page (rhythm / sound tab / held step / +Shift / Loop), the keys tab, Esc: ${out.HELP.fails.length ? out.HELP.fails.join('; ') : 'all as the decision'}`);
+  if (out.FMODE) L.push(`FMODE peek on a touch "${out.FMODE.peek}" · ${out.FMODE.fails.length ? out.FMODE.fails.join('; ') : 'pill pressable, rings fixed, Esc comes back'}`);
   console.log(L.join('\n')); if (fails.length) console.log(`FAIL\n  ${fails.join('\n  ')}`);
   if (has('--assert') && fails.length) process.exit(1);
 }

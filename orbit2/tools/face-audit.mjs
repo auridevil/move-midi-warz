@@ -311,6 +311,18 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     out.text = { n: ms.text.length, min: ms.text.length ? Math.min(...ms.text.map(t => t.contrast)) : null, fails: ms.text.filter(t => t.contrast < THRESHOLDS.text).sort((a, b) => a.contrast - b.contrast), all: ms.text };
     out.edges = { n: ms.edges.length, min: ms.edges.length ? Math.min(...ms.edges.map(e => e.edge)) : null, fails: ms.edges.filter(e => e.edge < THRESHOLDS.edge).sort((a, b) => a.edge - b.edge) };
     out.light = { stopped: { controlMax: ms.ctlMax, controlMaxAt: ms.ctlMaxAt, canvasMax: ms.canvasMax, over: ms.light.filter(l => l.lum > THRESHOLDS.controlLum).sort((a, b) => b.lum - a.lum) } };
+    // RD-9 night (Sheet → setup): the first-load A1 measure again with night on — text still ≥ 4.5:1, edges ≥ 3:1,
+    // every control under the cap AND dimmer than the day's brightest (control luminance scaled down, never state under 4.5)
+    if (await p.eval('!!window.__poly.setNight')) {
+      await p.eval('__poly.setNight(true)'); await p.eval('__fa.hideText(true)'); await settle(p); const nbg = await shot64(p);
+      await p.eval('__fa.hideText(false)'); await settle(p); const nfull = await shot64(p);
+      if (shots) writeFileSync(join(shots, `${size}-night.png`), Buffer.from(nfull, 'base64'));
+      const nm = await p.eval(`__fa.measure(${JSON.stringify(nbg)}, ${JSON.stringify(nfull)})`);
+      out.night = { day: ms.ctlMax, controlMax: nm.ctlMax, controlMaxAt: nm.ctlMaxAt,
+        text: { n: nm.text.length, min: nm.text.length ? Math.min(...nm.text.map(t => t.contrast)) : null, fails: nm.text.filter(t => t.contrast < THRESHOLDS.text).sort((a, b) => a.contrast - b.contrast) },
+        edges: { n: nm.edges.length, min: nm.edges.length ? Math.min(...nm.edges.map(e => e.edge)) : null, fails: nm.edges.filter(e => e.edge < THRESHOLDS.edge).sort((a, b) => a.edge - b.edge) } };
+      await p.eval('__poly.setNight(false)'); await settle(p);
+    }
     // states: A6 scroll and A7 rings
     out.states = {}; const state = async (k) => { await settle(p, 250); out.states[k] = { scroll: await p.eval('__fa.scroll()'), rings: await p.eval('__fa.rings()') }; };
     await state('default');
@@ -339,7 +351,20 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
         await p.eval(`['welcome', 'quest', 'jam-panel'].forEach((id, i) => { document.getElementById(id).hidden = window.__faPills[i]; })`);
       }
     }
-    await p.eval('__poly.setFocusMode(true)'); await state('focus'); await p.eval('__poly.setFocusMode(false)');
+    // RD-9 F mode hides controls, never state: three pills forced on, then F — the pills and the peek stay, the
+    // console, lane list, Move pill, "?" and the sheet go, "exit focus" is drawn (A7's rings are the state above)
+    const pillsOn = await p.eval('!!window.__poly.showPills'); if (pillsOn) await p.eval(`__poly.showPills(${JSON.stringify(PILLS6.slice(0, 3))})`);
+    await p.eval('__poly.setFocusMode(true)'); await state('focus');
+    out.fmode = await p.eval(`(() => { const seen = (id) => { const e = document.getElementById(id); return !!e && !!e.getClientRects().length && getComputedStyle(e).visibility === 'visible'; };
+      const pills = [...document.querySelectorAll('#pills > .spill:not([hidden]):not(.fold)')].filter(e => e.getClientRects().length);
+      const x = document.getElementById('focus-exit').getBoundingClientRect(), pb = document.getElementById('pills');
+      // a scrolling pills line (narrow) clips its children: what the user sees is the rect cut to the box
+      const box = /auto|scroll|hidden/.test(getComputedStyle(pb).overflowX) ? pb.getBoundingClientRect() : { left: -1e9, right: 1e9, top: -1e9, bottom: 1e9 };
+      const overlap = pills.filter(e => { const q = e.getBoundingClientRect(), r = { left: Math.max(q.left, box.left), right: Math.min(q.right, box.right), top: Math.max(q.top, box.top), bottom: Math.min(q.bottom, box.bottom) };
+        return r.left < r.right && r.top < r.bottom && r.left < x.right && r.right > x.left && r.top < x.bottom && r.bottom > x.top; }).map(e => e.id || e.dataset.pill);
+      return { pills: pills.length, overlap, legend: seen('legend'), console: seen('topbar'), movePill: seen('move-status'), help: seen('btn-help'), sheet: seen('sheet'), peek: !!document.getElementById('peek'), exit: seen('focus-exit') }; })()`);
+    if (shots) await p.shot(join(shots, `${size}-focus.png`));
+    await p.eval('__poly.setFocusMode(false)'); if (pillsOn) await p.eval('__poly.showPills(null)');
     // RD-6 the step page (a cell's long-press on the first hit): A6 / A7 as a state, and A1 measured as the first load is
     // (the ring knobs, the loop dots and its words on their real background); then closed again
     // (a first visit is the simple view, where the step locks are tucked: the state shows it in "everything", then goes back)
@@ -493,6 +518,26 @@ export function verdicts(report, t = THRESHOLDS) {
     if (pl.drawn > t.pillsMax || (pl.on > t.pillsMax && !pl.more)) fails.push({ test: 'PILLS', size: k, what: `${pl.on} pills: ${pl.drawn} drawn, "${pl.more}"` });
     if (pl.sheetTop < pl.pillsBottom) fails.push({ test: 'PILLS', size: k, what: `the sheet (top ${pl.sheetTop}) is not under the last pill (${pl.pillsBottom})` }); }
   for (const s of report.sizes) if (s.hues?.length) fails.push({ test: 'HUE', size: s.size, what: `${s.hues.length} colours that are no lane's, or red off a recording: ${s.hues.slice(0, 5).map(h => `${h.el} ${h.prop} rgb(${h.rgb}) ${h.kind}`).join('; ')}` });
+  // RD-9 night: A1 holds with night on, and the brightest control really dimmed
+  for (const s of report.sizes) { const n = s.night; if (!n) continue;
+    if (n.text.fails.length) fails.push({ test: 'NIGHT', size: s.size, what: `night: ${n.text.fails.length} text runs under ${t.text}:1 (min ${n.text.min}: ${n.text.fails.slice(0, 3).map(f => `${f.contrast} "${f.text}"`).join(', ')})` });
+    if (n.edges.fails.length) fails.push({ test: 'NIGHT', size: s.size, what: `night: ${n.edges.fails.length} control edges under ${t.edge}:1 (min ${n.edges.min})` });
+    if (n.controlMax > t.controlLum) fails.push({ test: 'NIGHT', size: s.size, what: `night: a control pixel at luminance ${n.controlMax}: ${n.controlMaxAt}` });
+    // the brightest pixel may be lane ink (state: night leaves it), so per size night may only not be brighter …
+    if (n.controlMax > n.day + 0.001) fails.push({ test: 'NIGHT', size: s.size, what: `night's brightest control ${n.controlMax} is brighter than the day's ${n.day}` });
+  }
+  // … and somewhere the grey chrome must really have dimmed, or the setting does nothing
+  { const ns = report.sizes.filter(s => s.night);
+    if (ns.length && !ns.some(s => s.night.controlMax <= s.night.day - 0.03)) fails.push({ test: 'NIGHT', size: 'all', what: `no size shows the brightest control dimmed by ≥ 0.03 (${ns.map(s => `${s.size} ${s.night.day}→${s.night.controlMax}`).join(', ')})` });
+  }
+  // RD-9 F mode: the pills and the peek stay, the controls go
+  for (const s of report.sizes) { const f = s.fmode; if (!f) continue;
+    if (f.pills < 3) fails.push({ test: 'FMODE', size: s.size, what: `${f.pills} of 3 forced pills drawn in F mode` });
+    for (const k of ['legend', 'console', 'movePill', 'help', 'sheet']) if (f[k]) fails.push({ test: 'FMODE', size: s.size, what: `the ${k} is visible in F mode` });
+    if (!f.peek) fails.push({ test: 'FMODE', size: s.size, what: 'the peek is gone in F mode' });
+    if (!f.exit) fails.push({ test: 'FMODE', size: s.size, what: '"exit focus" is not drawn in F mode' });
+    if (f.overlap?.length) fails.push({ test: 'FMODE', size: s.size, what: `"exit focus" covers a pill: ${f.overlap.join(', ')}` });
+  }
   return fails;
 }
 
@@ -505,6 +550,8 @@ export function summary(report) {
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     if (s.stepPage) { const sp = s.stepPage; L.push(`step page (step ${sp.step}): text ${sp.text.n} runs min ${sp.text.min}:1 (${sp.text.fails.length} under) · edges ${sp.edges.n} min ${sp.edges.min}:1 (${sp.edges.fails.length} under) · brightest control ${sp.controlMax}`); }
     if (s.pills) L.push(`pills: ${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
+    if (s.night) L.push(`night: text ${s.night.text.n} runs min ${s.night.text.min}:1 (${s.night.text.fails.length} under) · edges min ${s.night.edges.min}:1 (${s.night.edges.fails.length} under) · brightest control ${s.night.controlMax} (day ${s.night.day})`);
+    if (s.fmode) L.push(`F mode: ${s.fmode.pills} pills drawn · hidden: legend ${!s.fmode.legend}, console ${!s.fmode.console}, Move pill ${!s.fmode.movePill}, "?" ${!s.fmode.help}, sheet ${!s.fmode.sheet} · peek ${s.fmode.peek ? 'kept' : 'GONE'} · exit ${s.fmode.exit ? 'drawn' : 'GONE'}`);
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);
     if (s.hits) L.push(`hit areas: ${s.hits.filter(h => h.ok).length} of ${s.hits.length} action words in view take 40 px${s.hits.some(h => !h.ok) ? ` (not: ${s.hits.filter(h => !h.ok).map(h => h.el).join(', ')})` : ''}`);
     if (s.reach) { const by = {}; for (const r of s.reach) by[r.tab || 'face'] = (by[r.tab || 'face'] || 0) + 1; L.push(`RD-1 control ids: ${s.reach.filter(r => r.exists && r.drawn).length} of ${s.reach.length} drawn with their tab open (${Object.entries(by).map(([k, n]) => `${k} ${n}`).join(', ')})`); }
