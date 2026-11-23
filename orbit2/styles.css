@@ -286,6 +286,11 @@ body.chaos::before { display: none; }
 @media not all and (max-width: 1100px) { @media (max-width: 1400px) { .console .lane-face { padding: 6px 12px; gap: 3px; } .console .tgroup, .console .acts { padding-top: 2px; padding-bottom: 2px; } } }   /* three 41 px rows: the action words' 40 px hit areas don't overlap */
 .console.bar { display: grid; grid-template-columns: var(--col-l) minmax(0, 1fr) var(--col-r); grid-template-rows: minmax(0, 1fr); align-items: stretch; align-content: stretch; gap: 0; padding: 0; background: var(--v); border-top: 1px solid var(--ink); }   /* the void itself (the body's purple haze under a 90 % plate lifted the knob tracks' surround to 2.95:1) */
 .console.rec-live { border-top: 2px solid var(--rec); }
+/* RD-9: F hides the console, never its record line (state that never repaints, DECISION §2): the line opts back in
+   over the hidden border (wide windows; the phone's F is RD-10's) */
+@media not all and (max-width: 1100px) {
+  body.focus-mode .console.rec-live::before { content: ''; position: absolute; left: 0; right: 0; top: -2px; height: 2px; background: var(--rec); visibility: visible; pointer-events: none; }
+}
 /* the vignette (body::after) stops at the console: in the bottom-left corner it dimmed the filter knob's track to 2.94:1 */
 @media not all and (max-width: 1100px) { body.chaos:has(#stage)::after { -webkit-mask: linear-gradient(#000 0 0) top / 100% calc(100% - var(--console-h)) no-repeat; mask: linear-gradient(#000 0 0) top / 100% calc(100% - var(--console-h)) no-repeat; } }   /* DECISION: armed and playing, a 2 px red line along the top edge */
 .tgroup { display: grid; grid-template-columns: var(--play) auto minmax(0, 1fr); grid-template-rows: repeat(3, minmax(0, 1fr)); align-items: center; gap: 0 14px; padding: 8px 12px 8px 24px; min-width: 0; }
@@ -356,6 +361,11 @@ body.chaos::before { display: none; }
 .stepsui .st.dot.lp-cue::before { border-style: dashed; border-color: var(--l); }
 .stepsui .st.dot.lp-now::before { box-shadow: 0 0 0 3px var(--v), 0 0 0 5px var(--l); }
 .stepsui .st.dot.lp-pick { outline: 2px solid var(--l); outline-offset: 1px; }
+/* RD-9 round 1 (A2): Loop held, each cell is a slot wearing its number in a larger ring (the slots read as empty steps
+   at a glance, 0 of 28); a saved slot is filled and its number set dark on it */
+.stepsui[data-cells="slots"] .st.dot::before { width: 24px; height: 24px; margin: -14px 0 0 -14px; }
+.stepsui[data-cells="slots"] .st.dot[data-n]::after { content: attr(data-n); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--t-s); font-weight: 500; line-height: 1; color: var(--l); pointer-events: none; }
+.stepsui[data-cells="slots"] .st.dot.lp-on[data-n]::after { color: var(--v); }
 /* RD-6 the touched knob's plate: the lane's colour under it while a hand is on it (+ 400 ms); the number is in the peek */
 .knobs > i { border-radius: 8px; } .knobs > i.plate { background: color-mix(in srgb, var(--lane, var(--l)) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane, var(--l)) 55%, var(--v)); }
 /* its three words (clear · more… · done) where "steps 1–16 of 16" was, the size of the page tabs */

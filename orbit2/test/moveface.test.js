@@ -38,6 +38,31 @@ test('RD-9 drawMoveHelp: every meaning on its control, by page', () => {
   for (let s = 1; s <= 16; s++) assert.ok(svg.includes(`>${s}</text>`), `step number ${s}`);
   assert.ok(svg.includes(PAD_WORDS.live), 'pads in live mode');
   assert.ok(drawMoveHelp({ live: false }).includes(PAD_WORDS.edit), 'pads in editing mode');
+  // the plate under the pad words is 360 px of 13 px type (~6.7 px a glyph): a line longer than ~50 runs off it
+  for (const [k, w] of Object.entries(PAD_WORDS)) assert.ok(w.length <= 50, `pad words (${k}) fit their plate: ${w.length} glyphs`);
+});
+
+test('RD-9 round 1: the knobs wear the words the console gives (its own gauges), the table\'s only as a fallback', () => {
+  const knobs = (svg) => [...svg.matchAll(/data-knob="(\d)">([^<]*)</g)].map(m => [+m[1], m[2]]);
+  // the simple view (a first visit) says hits / shift / speed / chance on the console: the drawing says the same
+  const simple = ['length', 'hits', 'shift', 'speed', 'swing', 'chance', 'tune', 'tempo'];
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'rhythm', words: simple })), simple.map((w, k) => [k + 1, w]));
+  const full = ['length', 'euclid hits', 'rotation', 'speed ×', 'swing', 'probability', 'tune', 'tempo'];
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'rhythm', words: full })).map(x => x[1]), full);
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'step', row8: 'repeats', words: [...KNOB_WORDS.step.slice(0, 6), 'slice', 'repeats'] })).map(x => x[1])[6], 'slice', 'a slice set: knob 7 as the console says it');
+  // no words (or not eight): the Move table's
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'sound' })).map(x => x[1]), KNOB_WORDS.sound);
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'sound', words: ['a', 'b'] })).map(x => x[1]), KNOB_WORDS.sound);
+  assert.ok(drawMoveHelp({ words: ['<b>', '', '', '', '', '', '', ''] }).includes('>&lt;b&gt;</text>'), 'a word is escaped');
+});
+
+test('RD-9 round 1: Capture and Delete say what a tap does by live mode; Duplicate as the table names it', () => {
+  const live = drawMoveHelp({ live: true }), edit = drawMoveHelp({ live: false });
+  assert.ok(live.includes('>hold: randomize</text>') && live.includes('>hold: clear lane</text>'), 'live mode: a tap does nothing (P1), a hold or ⇧ acts');
+  assert.ok(!live.includes('>randomize</text>') && !live.includes('>clear lane</text>'));
+  assert.ok(edit.includes('>randomize</text>') && edit.includes('>clear lane</text>'), 'editing: at once');
+  assert.ok(live.includes('>Duplicate</text>') && !live.includes('>Copy</text>'), 'the Move table says "Hold Duplicate + step"');
+  assert.ok(html.includes('<th>Hold Duplicate + step</th>'), 'that row is in the table');
 });
 
 test('RD-9 the drawing wears only the mf- classes (tokens in styles.css): no colour or size of its own', () => {

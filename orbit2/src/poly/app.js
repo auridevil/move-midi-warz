@@ -819,6 +819,7 @@ function renderSteps() {
     b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${hs.has(i) ? ' held' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`; b.title = STEP_TITLE;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
+    delete b.dataset.n;   // a slot's number (renderDots) goes with the slots
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
     b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : mk ? 'off (silenced by the euclid mask)' : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
@@ -841,6 +842,8 @@ function renderDots(mode, lane, first, hs) {
     else if (L) { const p = L.loops[k]; cls += p === true ? ' lp-on' : p === null ? ' lp-cue' : ''; if (k === L.now) cls += ' lp-now'; label = `loop ${L.from + k + 1} of step ${st + 1}: ${p === true ? 'plays' : p === null ? 'depends on fill or the step before' : 'rests'}${k === L.now ? ', playing now' : ''}`; }
     else { const f = bank.filled(k), cur = bank.current === k, nx = bank.pending === k, pk = chainPick.includes(k); cls += `${f ? ' lp-on' : ''}${cur ? ' lp-now' : ''}${nx ? ' lp-cue' : ''}${pk ? ' lp-pick' : ''}`; label = `slot ${k + 1}: ${cur ? 'playing' : nx ? 'queued' : f ? 'saved' : 'empty'}${pk ? ', picked for a chain' : ''}`; }
     if (hs.has(i)) cls += ' held';
+    // RD-9 round 1 (A2): a slot wears its number (styles.css), so 16 slots never read as 16 empty steps
+    if (!L && k >= 0 && k < STEP_BTNS) b.dataset.n = k + 1; else delete b.dataset.n;
     b.className = cls; delete b.dataset.tg; b.disabled = false; b.removeAttribute('aria-pressed'); b.removeAttribute('aria-expanded'); b.setAttribute('aria-label', label);
     b.title = L ? (i < lane.length ? `${label} · click: step ${i + 1}'s page` : label) : label;
   });
@@ -2139,6 +2142,7 @@ function setView(v) {
   for (const p of PARAMS) sliders[p.k]?.setLabel(knobWord(p.k, simple));
   ui.evoScope?.setOptions(evoScopeOptions());
   for (const el of document.querySelectorAll('[data-word]')) { el.dataset.full ??= el.textContent; el.textContent = paramLabel(el.dataset.word, el.dataset.full, simple); }
+  if (helpMoveUp()) drawHelpMove();   // RD-9 round 1: the "?" Move drawing wears the knobs' new words too
   if (spoken) spoken = speakable();   // the words changed, no value did: the next knob turn is still announced
   if (simple && lockStep >= 0) editLocks(lockStep);   // an open lock panel closes with the drawers
   renderQuest();
@@ -2941,7 +2945,14 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 // drawn with the current page's meanings on its controls (moveface.js) over its full table. The drawing follows the
 // hands while the overlay is up (renderPage), so a Move touch relabels the knobs in place ----
 const HELP_TABS = ['keys', 'move'];
-function drawHelpMove() { const r = knobPage.r || pageNow(); $('move-draw').innerHTML = drawMoveHelp({ row: r.row, row8: r.row8, cells: r.cells, word: r.word, live: perf.live }); }
+// RD-9 round 1: the knobs wear the words of the gauges the console's row shows for that page (simple or full view, a
+// slice set's knob 7…), never a copy; the picture is written only when it changed (renderPage runs on every Move event)
+let helpSvg = '';
+function drawHelpMove() {
+  const r = knobPage.r || pageNow(), words = pageGauges(r.row, r.row8).map(g => g?.el.querySelector('.g-label')?.textContent ?? '');
+  const svg = drawMoveHelp({ row: r.row, row8: r.row8, cells: r.cells, word: r.word, live: perf.live, words });
+  if (svg !== helpSvg) { helpSvg = svg; $('move-draw').innerHTML = svg; }
+}
 function helpMoveUp() { return $('help').open && !$('hpane-move').hidden; }   // a declaration: renderPage asks before this line runs
 function helpTab(t) {
   for (const k of HELP_TABS) { const on = k === t, b = $('htab-' + k); b.setAttribute('aria-selected', String(on)); b.tabIndex = on ? 0 : -1; $('hpane-' + k).hidden = !on; }
@@ -2952,8 +2963,10 @@ $('help').querySelector('.help-tabs').addEventListener('keydown', (e) => {
   const f = HELP_TABS.indexOf(document.activeElement?.id?.slice(5)), j = tabMove(e.key, f >= 0 ? f : 0, HELP_TABS.length);
   if (j < 0) return; e.preventDefault(); helpTab(HELP_TABS[j]); focusAs($('htab-' + HELP_TABS[j]), true);
 });
-function openHelp() { const d = $('help'); if (!$('hpane-move').hidden) drawHelpMove(); if (!d.open) d.showModal(); }
-$('btn-help').onclick = openHelp;
+// "?" opens on the keys, as it did before the Move tab came (RD-9 round 1: it reopened the last tab); the Move tab is
+// one arrow away. A tool may ask for a tab: openHelp('move').
+function openHelp(tab = 'keys') { const d = $('help'); helpTab(HELP_TABS.includes(tab) ? tab : 'keys'); if (!d.open) d.showModal(); }
+$('btn-help').onclick = () => openHelp();
 window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, setNight, get night() { return face.night; }, openHelp, helpTab, quests, setView, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 $('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)
 document.body.classList.toggle('night', face.night);   // RD-9: night as it was left

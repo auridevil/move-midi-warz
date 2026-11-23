@@ -1125,3 +1125,20 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   heap +0.3 MB in the same 150 s of techno, so it is the long-set answer until the synth voices are fixed. Find what
   keeps finished oscillators connected while playing (FM modulators into a carrier's frequency, Tone's oscillator
   restart), and give long-set tools a memory watch.
+- **Ticks inside a block after a tempo step** (RD-09 round 1: sound; from before the phase): `tickSec()` reads `tempo`
+  at the call while the transport's step lands at `now()` (104–135 ms later), so blocks already due keep the old spacing
+  but their inner ticks use the new one (≈ 0.3 ms off for ±2 bpm, up to ~10 ms early for ×2 and ~20 ms late for ÷2 on
+  ticks off the block lines; unheard on the grooves, whose steps fall on block lines). One line: `ts = 60 /
+  T.getTransport().bpm.getValueAtTime(time) / PPQ`. CLOCK could also assert +35 page ticks and +8 transport ticks a
+  block (a dropped or doubled block that throws nothing).
+- **A dropped mute press says nothing** (RD-09 round 1: kai, noor, architect): a bounce is silent on the screen and the
+  Move (a short flash of the M lamp / the Mute LED would tell a dropped press from a dead pad); it is timed by
+  `performance.now()` when handled, not the MIDI event's own time (two deliberate presses queued behind a long task could
+  read as one); Kai would like a longer lock on the kick lane only, or a grace window to take a kick mute back (Noor).
+- **The review's own tests and gates** (RD-09 round 1: architect): `moveface.test.js` and `console.test.js` still pin
+  F-mode CSS rules and `face = { log, night }` as source text (the browser gates cover the behaviour); the face audit's
+  NIGHT gate is skipped, not failed, on a page with no `__poly.setNight`, and measures the first-load face only (the
+  sheet and the help at night: ≈ 5.0:1 by arithmetic).
+- **F mode's leftovers** (RD-09 round 1: ines; from before the phase): muted lanes are drawn in one flat grey with or
+  without F (no distinct 35 % ring); the groove's description toast can sit over the slot numbers and the caption in F;
+  F hides play (by decision: the sun and the crawl say it is playing).

@@ -109,16 +109,20 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `scene.light`; `score` checks persona readers' readings token by token against the 13 px word / 15 px number floors).
 - The set (RD-9): **F** hides controls, never state: the lane list, the console (`visibility: hidden`, so the rings stay
   put), the Move pill, "?" and the sheet go; every pill, the peek and all the canvas light stay, mutes still show as rings
-  at 35 % (narrow windows pin the pills over the canvas, clear of "exit focus"). **Night** (Sheet → setup, `face.night`
-  in the settings, `__poly.setNight`) re-points `--l` / `--d` only: the controls dimmer, text still ≥ 4.5:1, the edges at
-  their 3:1 floor untouched. **"?"** has two tabs: the keys, and the Move drawn with the meanings of the page under the
-  hands (`src/poly/moveface.js drawMoveHelp`, redrawn while open) over the Move table. Hold Loop: the cells are the
-  slots and the header says "slots · held on Move" (the knobs keep their meaning). A press that would mute a lane less
+  at 35 %, and the console's red record line opts back in while recording (narrow windows pin the pills over the canvas,
+  clear of "exit focus"). **Night** (Sheet → setup, `face.night` in the settings, `__poly.setNight`) re-points `--l` /
+  `--d` only: the controls dimmer, text still ≥ 4.5:1, the edges at their 3:1 floor untouched. **"?"** opens on the
+  keys; its second tab draws the Move with the meanings of the page under the hands (`src/poly/moveface.js
+  drawMoveHelp`, redrawn while open, only when it changed) over the Move table: the knobs wear the words the console's
+  own gauges wear for that page (`pageGauges`: the simple or the full view), Capture / Delete what a tap does in live
+  mode. Hold Loop: the cells are the numbered slots, the header says "slots · held on Move" and the chip "MOVE ⇢ SLOTS"
+  (white; the knobs keep their meaning). A press that would mute a lane less
   than 0.2 s after a press unmuted it is a bounce and is dropped (`perform.js MuteBounce`, every mute path goes through
   `toggleMute`): a quick mute → unmute still works. The transport's tempo moves as a step (`bpm.value`), never a ramp:
   Tone's bpm ramps (`rampTo` → `cancelAndHoldAtTime`) can send its clock's next tick before 0 (a TypeError in
   `Clock._loop`) or hold it in place (a hung page). Browser checks: the face audit's NIGHT and FMODE gates,
-  `console-check.mjs` HELP / FMODE / CLOCK / BOUNCE, `step-check.mjs` LOOP. The final sets (A3) and the full glance run
+  `console-check.mjs` HELP (the drawing's words = the console's, both views) / FMODE (incl. the record line) / CLOCK /
+  BOUNCE, `step-check.mjs` LOOP (header, chip, numbers). The final sets (A3) and the full glance run
   (A2): `docs/reviews/RD-09.md`, records `docs/redesign/setlog/final-*.json`, `glance-rd09-*.json`; `session.mjs` notes
   the action page errors came with.
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by

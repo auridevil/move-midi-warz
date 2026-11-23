@@ -158,23 +158,31 @@ async function misclick(p, { clicks = 600, seed = 11, w = 1512, h = 860 }) {
 // RD-9 the "?" overlay: the Move drawn with the current page's meanings on its controls, following the hands while it
 // is open; the keys tab still the keyboard help; Esc (the modal's own) closes it
 async function helpOverlay(p) {
-  const fails = [], draw = () => p.eval(`document.getElementById('move-draw').innerHTML`);
+  const fails = [], draw = () => p.eval(`document.getElementById('move-draw').innerHTML`), seen = [];
   const want = async (words, why) => { const svg = await draw(); for (const w of words) if (!svg.includes(`>${w}</text>`)) fails.push(`${why}: "${w}" missing from the drawing`); return svg; };
-  await p.eval('(__poly.openHelp(), __poly.helpTab("move"))'); await sleep(80);
-  await want(['length', 'euclid hits', 'probability', 'tempo'], 'rhythm (the default)');
+  // RD-9 round 1: the drawing's eight knob words are the ones the console's row wears for that page, in either view
+  const same = async (why) => {
+    const [d, c] = await p.eval(`[[...document.querySelectorAll('#move-draw [data-knob]')].map(t => t.textContent), [...document.querySelectorAll('#knobs .g-label')].map(t => t.textContent)]`);
+    seen.push(`${why}: ${d.join(' · ')}`); if (d.length !== 8 || d.join('|') !== c.join('|')) fails.push(`${why}: the drawing says "${d.join(' · ')}", the console "${c.join(' · ')}"`);
+  };
+  await p.eval('__poly.openHelp("move")'); await sleep(80);
+  await want(['length', 'euclid hits', 'probability', 'tempo'], 'rhythm (the default)'); await same('rhythm, full view');
+  await p.eval(`__poly.setView('simple')`); await sleep(120); await same('rhythm, simple view (a first visit)');
+  await p.eval(`__poly.setView('everything')`); await sleep(120);
   await p.eval(`document.getElementById('pg-sound').click()`); await sleep(80);
-  await want(['decay', 'drive', 'pan', 'level'], 'the sound tab latched');
+  await want(['decay', 'drive', 'pan', 'level'], 'the sound tab latched'); await same('the sound tab');
   await p.eval(`document.getElementById('pg-rhythm').click()`); await sleep(80);
   // a Move step held past the look: its locks on the knobs, the condition on knob 8, the cells its loops; + Shift = repeats
   await send(p, bytes.step(0, true)); await sleep(550);
-  const held = await want(['velocity', 'condition'], 'a held Move step');
+  const held = await want(['velocity', 'condition'], 'a held Move step'); await same('a held step');
   if (!held.includes('loops')) fails.push('a held step: the cells line does not say loops');
   await send(p, bytes.btn('shift', true)); await sleep(80);
-  await want(['repeats'], 'a held step with Shift');
+  await same('a held step with Shift');
+  if (!(await draw()).includes('repeats')) fails.push('a held step with Shift: knob 8 does not say repeats');
   await send(p, bytes.btn('shift', false)); await send(p, bytes.step(0, false)); await sleep(550);
-  // Loop held: the slots on the cells, the knobs unchanged
+  // Loop held: the slots on the cells, the knobs unchanged; the display says the page
   await send(p, bytes.btn('loop', true)); await sleep(80);
-  const slots = await want(['length', 'tempo'], 'Loop held (the knobs unchanged)');
+  const slots = await want(['length', 'tempo', 'slots · held on Move'], 'Loop held (the knobs unchanged)'); await same('Loop held');
   if (!slots.includes('slots')) fails.push('Loop held: the cells line does not say slots');
   await send(p, bytes.btn('loop', false)); await sleep(80);
   // the keys tab is still the keyboard help ("must not regress"), and the dialog's own Esc closes it
@@ -183,7 +191,12 @@ async function helpOverlay(p) {
   for (const w of ['play / stop', 'focus mode', 'find any control']) if (!keys.includes(w)) fails.push(`the keys tab lost "${w}"`);
   await p.key('Escape'); await sleep(120);
   if (await p.eval(`document.getElementById('help').open`)) fails.push('Esc did not close the overlay');
-  return { fails };
+  // "?" opens on the keys even after a look at the Move tab (as before RD-9)
+  await p.eval('__poly.openHelp("move")'); await p.key('Escape'); await sleep(120); await p.key('?'); await sleep(120);
+  const tab = await p.eval(`document.getElementById('help').open && !document.getElementById('hpane-keys').hidden`);
+  if (!tab) fails.push('"?" after a look at the Move tab did not open on the keys');
+  await p.key('Escape'); await sleep(120);
+  return { seen, fails };
 }
 
 // RD-9 F mode with the Move under the hands: the peek answers an encoder touch while the controls are hidden, a pill
@@ -203,7 +216,14 @@ async function fmode(p) {
   if (await p.eval('__poly.focusMode')) fails.push('Esc did not leave F mode');
   if (await geo() !== g0) fails.push('the rings moved leaving F mode');
   await p.eval('__poly.showPills(null)');
-  return { peek, fails };
+  // RD-9 round 1: the record line (state that never repaints) stays in F while record is armed and playing
+  await p.eval(`(() => { __poly.setRec(true); if (document.getElementById('btn-play').getAttribute('aria-label') === 'play') document.getElementById('btn-play').click(); __poly.setFocusMode(true); })()`); await sleep(300);
+  const rec = await p.eval(`(() => { const t = document.getElementById('topbar'), s = getComputedStyle(t, '::before'); return { live: t.classList.contains('rec-live'), shown: s.visibility === 'visible' && s.content !== 'none' && s.height === '2px', color: s.backgroundColor, w: t.getBoundingClientRect().width }; })()`);
+  if (!rec.live || !rec.shown || !/rgb\(2[0-9]{2}, /.test(rec.color)) fails.push(`F mode while recording: the record line is not drawn (${JSON.stringify(rec)})`);
+  await p.eval('(__poly.setRec(false), __poly.setFocusMode(false))'); await sleep(120);
+  const after = await p.eval(`getComputedStyle(document.getElementById('topbar'), '::before').content`);
+  if (after !== 'none') fails.push(`record off: the F record line stays (${after})`);
+  return { peek, rec, fails };
 }
 
 // RD-9 (the final sets, A3): speed × and tempo turned while playing never break the transport's clock. Before, every
