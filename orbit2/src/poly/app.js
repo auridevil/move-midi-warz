@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, ratchetGains, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS, LOCK_RANGE, GHOST_VEL, AUTO_KEYS, AUTO_RES, AUTO_MAX, AUTO_LOOPS_MAX, laneCountOf } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS, stepLoops, cellAction, planetAction, canvasStep, canvasKey, DRIFT_KEYS, driftLeds, driftMeter } from './pages.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS, stepLoops, cellAction, planetAction, canvasStep, canvasKey, DRIFT_KEYS, DRIFT_COUNTS, MOVE_HANDS, driftLeds, driftMeter } from './pages.js';
 import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, chainSixteenths, chainMeters, hitsToMidi, encodeShareFit, decodeShare, autoRamps, autoCCs, collectChainAuto, LINK_MAX } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
@@ -640,8 +640,8 @@ const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', '
 const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: [...LOCK_KEYS.slice(0, 7), 'cond'], drift: DRIFT_KEYS };
 // RD-11 (?drift): the drift page's knobs are the sheet's own gauges (evolve drawer, groove, dice), moved in by bindRow,
 // named by DRIFT_KEYS (the one order, pages.js): coupling lift is the sheet's coupleAmount; a Move encoder click is
-// ≈ 2 % of a range, and a count moves by one
-const DRIFT_GAUGE = { coupleLift: 'coupleAmount' }, DRIFT_COUNTS = new Set(['evoEvery', 'evoHome', 'diceRepeat']);
+// ≈ 2 % of a range, and a count (DRIFT_COUNTS) moves by one
+const DRIFT_GAUGE = { coupleLift: 'coupleAmount' };
 const driftGauges = () => DRIFT_KEYS.map(k => sliders[DRIFT_GAUGE[k] || k]);
 const pageGauges = (pg, r8) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? [...LOCK_KEYS.slice(0, 7).map(k => sliders['lock:' + k]), sliders[r8 === 'repeats' ? 'lock:ratchet' : 'lock:cond']] : pg === 'drift' ? driftGauges() : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
 // latch: the page the screen chose; step: the step a cell's long-press latched (on lane `lane`), back: where it came from
@@ -652,8 +652,9 @@ const hands = { touch: new Set(), touchUntil: 0, loop: false, timer: 0 };   // t
 // shows the LED meter for TOUCH_HOLD_MS, as the row's touch tail does.
 const minusHand = { held: false, used: false, down: 0, turnIdx: -1, turnUntil: 0, timer: 0 };
 const driftHeld = () => DRIFT && minusHand.held;
-// … whatever it is: a step past the lanes, a pad, Play, a touch only (round 1: those still toggled evolve on the − release)
-if (DRIFT) for (const t of ['pad', 'step', 'encoder', 'encoderTouch', 'wheel', 'wheelPush', 'volume', 'button']) move.addEventListener(t, (e) => { const d = e.detail; if (minusHand.held && d.name !== 'minus' && (d.on ?? d.pressed ?? true)) minusHand.used = true; });
+// … whatever it is: a step past the lanes, a pad, Play, a touch only (round 1: those still toggled evolve on the − release;
+// round 2: the jog wheel's touch did) — every hand event movewire has (pages.js MOVE_HANDS)
+if (DRIFT) for (const t of MOVE_HANDS) move.addEventListener(t, (e) => { const d = e.detail; if (minusHand.held && d.name !== 'minus' && (d.on ?? d.pressed ?? true)) minusHand.used = true; });
 const touchTail = () => { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; clearTimeout(hands.timer); hands.timer = setTimeout(renderPage, TOUCH_HOLD_MS + 10); };
 /** What the hands and the latch make of the row now (pages.js). A latched step goes with its lane, or a shorter loop. */
 function pageNow() {

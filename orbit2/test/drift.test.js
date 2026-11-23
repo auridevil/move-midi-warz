@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { resolvePage, cellAction, driftLeds, driftMeter, DRIFT_KEYS, STEP_BTNS } from '../src/poly/pages.js';
+import { resolvePage, cellAction, driftLeds, driftMeter, DRIFT_KEYS, DRIFT_COUNTS, MOVE_HANDS, STEP_BTNS } from '../src/poly/pages.js';
 
 test('RD-11 the drift page: − held owns the row and the cells, over every other hand', () => {
   const want = { row: 'drift', step: -1, cells: 'drift', move: 'drift', knob8: 'drift', row8: 'drift', own: true, chip: 'MOVE ⇢ DRIFT', word: 'drift · held on Move' };
@@ -69,6 +69,22 @@ test('RD-11 the touched-knob meter: counts light one LED each, percentages in 16
   assert.deepEqual(leds, [...Array(8).fill('meter'), ...Array(8).fill('off')]);
 });
 
+test('RD-11 round 2: every event movewire emits from the hands marks a chord under −; its own traffic does not', () => {
+  // round 2: the jog wheel's touch (wheelTouch) was missing from a hand-kept list, so a − tap with it still toggled
+  // evolve. The list is checked against movewire itself: a control it adds later fails this test until it is sorted
+  const device = readFileSync(new URL('../../node_modules/movewire/src/device.js', import.meta.url), 'utf8');
+  const emitted = new Set([...device.matchAll(/this\.emit\('(\w+)'/g)].map(m => m[1]));
+  const traffic = ['sent', 'connected', 'disconnected', 'activeSensing', 'unknown', 'identity', 'mode', 'reply'];
+  const held = ['aftertouch'];   // a pad already down pressing on: its press counted if it came under −
+  assert.ok(emitted.size >= MOVE_HANDS.length + 4, `read movewire's events: ${[...emitted]}`);
+  for (const e of emitted) assert.ok(MOVE_HANDS.includes(e) || traffic.includes(e) || held.includes(e), `movewire's '${e}' is neither the hands nor its own traffic`);
+  for (const e of MOVE_HANDS) assert.ok(emitted.has(e), `'${e}' is an event movewire emits`);
+  assert.ok(MOVE_HANDS.includes('wheelTouch') && !MOVE_HANDS.includes('aftertouch'));
+  // the counts (one LED and one click each) are one set, shared by the meter and the Move's click size
+  assert.deepEqual([...DRIFT_COUNTS].sort(), ['diceRepeat', 'evoEvery', 'evoHome']);
+  for (const k of DRIFT_COUNTS) assert.equal(driftMeter(k, 5), 5);
+});
+
 test('RD-11 the drift cells are read-only: a click (or a long press) edits nothing', () => {
   assert.equal(cellAction('drift', 0, 16), 'none');
   assert.equal(cellAction('drift', 3, 16, true), 'none');
@@ -85,7 +101,7 @@ test('RD-11 flag-off identity in app.js: the unflagged − still toggles evolve 
   // the flag comes from the URL, like ?setlog
   assert.match(src, /const DRIFT = new URLSearchParams\(location\.search\)\.has\('drift'\)/);
   // round 1: the chord listener (anything else pressed, touched or turned under −) is registered only with the flag
-  assert.match(src, /if \(DRIFT\) for \(const t of \['pad', 'step', 'encoder', 'encoderTouch', 'wheel', 'wheelPush', 'volume', 'button'\]\) move\.addEventListener/);
+  assert.match(src, /if \(DRIFT\) for \(const t of MOVE_HANDS\) move\.addEventListener/);
   // the LEDs paint a lane lit or dark: no dim lane colour on the drift table (round 1, A10)
   const branch = src.slice(src.indexOf('if (driftHeld()) {   // RD-11'), src.indexOf('} else if (loopHeld || dupHeld)'));
   assert.ok(branch.length > 0 && !branch.includes('LANE_DIM'), 'the drift branch of paintLeds lights no LANE_DIM');

@@ -165,10 +165,16 @@ export const planetAction = (stepLatched) => (stepLatched ? 'open' : 'cycle');
 // One source for the Move's lights and the on-screen cells, so what a player reads in the dark is what the page draws ----
 /** The drift knobs 1–8 in order: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat. */
 export const DRIFT_KEYS = ['evoEvery', 'evoAmount', 'evoGravity', 'evoHome', 'evoMax', 'coupleLift', 'humanize', 'diceRepeat'];
+/** The drift knobs that are counts (bars, mutations, loops): one LED and one Move click each. The rest are percentages
+ *  (16ths, 2 % a click), and max cycle (16ths of its 64 bars, 2 bars a click). */
+export const DRIFT_COUNTS = new Set(['evoEvery', 'evoHome', 'diceRepeat']);
 /** LEDs lit (0–16) for drift knob k at its gauge value v: counts light one LED each (every = 8 bars → 8 LEDs, home,
  *  dice repeat), percentages in 16ths (amount ≈ half → 8), max cycle in 16ths of its 64 bars. */
-export const driftMeter = (k, v) => Math.max(0, Math.min(16, Math.round(
-  k === 'evoAmount' || k === 'evoGravity' || k === 'coupleLift' || k === 'humanize' ? v / 100 * 16 : k === 'evoMax' ? v / 4 : v)));
+export const driftMeter = (k, v) => Math.max(0, Math.min(16, Math.round(DRIFT_COUNTS.has(k) ? v : k === 'evoMax' ? v / 4 : v / 100 * 16)));
+/** What the hands do on the Move, as movewire's events: any of them while − is held (a press, a touch, a turn; not a
+ *  release, and not a pad's aftertouch: the pressure of a pad already down, whose press counted if it came under −)
+ *  makes the − release a chord's (app.js). A test checks the list against every event movewire emits. */
+export const MOVE_HANDS = ['pad', 'step', 'encoder', 'encoderTouch', 'volume', 'wheel', 'wheelTouch', 'wheelPush', 'button'];
 /**
  * The 16 step LEDs while − is held. A touched (or just-turned) drift encoder `meter` (0–7) turns them all into its
  * value meter; otherwise LEDs 1–6 are the lanes that evolve, lit in their lane colour, a steady lane (and a missing

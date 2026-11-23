@@ -115,11 +115,12 @@ try {
     check('TABLE', JSON.stringify(back) !== JSON.stringify(t2), 'release: the LEDs return to the steps');
     check('TABLE', await p.eval('__poly.evo.on') === true, 'the release after lane taps (a chord) left evolve on');
     // evolve off: no mutation is coming, so the countdown is dark (on the Move and on screen); the lanes still show
-    await p.eval('__poly.setEvolve(false)'); await send(p, bytes.btn('minus', true)); await p.sleep(300);
+    await p.eval('__poly.setEvolve(false)'); await send(p, bytes.btn('minus', true)); await p.sleep(500);   // a look (past LOOK_MS)
     const offLeds = await stepRead(p), offCells = await p.eval(`[...document.querySelectorAll('#stepsui .st')].slice(8, 16).map(b => b.classList.contains('lp-on') ? 1 : 0).join('')`);
     check('TABLE', offLeds.slice(8).every(x => !x) && offLeds.slice(0, 4).every(x => x > 0), `evolve off: countdown dark, lanes lit: ${JSON.stringify(offLeds)}`);
     check('TABLE', offCells === '00000000', `evolve off: the cells' countdown dark too (${offCells})`);
     await send(p, bytes.btn('minus', false)); await p.sleep(150);
+    check('TABLE', await p.eval('__poly.evo.on') === false, 'the look\'s release leaves evolve off');
     out.table = { held: t, toggled: t2, minus, word, after, offLeds, errors: [...p.errors] };
     check('TABLE', !p.errors.length, `page errors: ${p.errors.join(' | ')}`);
   }
@@ -157,9 +158,10 @@ try {
     await send(p, bytes.btn('minus', true)); await p.sleep(100);
     // the LEDs and the cells in one read, every 40 ms for ≈ 1.3 bars at 130 bpm (a full countdown lasts 231 ms)
     const READ = `({ leds: [...__poly.move.ledState], cells: [...document.querySelectorAll('#stepsui .st')].slice(8, 16).filter(b => b.classList.contains('lp-on')).length })`;
-    const seen = [], cells = [];
-    for (const t0 = Date.now(); Date.now() - t0 < 2400; await p.sleep(40)) { const r = await p.eval(READ); seen.push(ledsOf(r.leds).steps.slice(8).filter(x => x > 0).length); cells.push(r.cells); }
-    const rises = seen.filter((x, i) => i && x > seen[i - 1]), downs = seen.filter((x, i) => i && x < seen[i - 1] && seen[i - 1] - x > 1);
+    const seen = [], cells = [], at = [];
+    for (const t0 = Date.now(); Date.now() - t0 < 2400; await p.sleep(40)) { const r = await p.eval(READ); seen.push(ledsOf(r.leds).steps.slice(8).filter(x => x > 0).length); cells.push(r.cells); at.push(Date.now()); }
+    // one LED at a time between two reads under 200 ms apart (a busy machine can stall a read past an LED's 231 ms)
+    const rises = seen.filter((x, i) => i && x > seen[i - 1]), downs = seen.filter((x, i) => i && seen[i - 1] - x > 1 && at[i] - at[i - 1] < 200);
     check('DRAIN', Math.max(...seen) === 8 && Math.min(...seen) === 1, `the countdown drains from 8 to 1 (every = 1): ${JSON.stringify(seen)}`);
     check('DRAIN', rises.length >= 1 && rises.every(x => x >= 7), `and refills at the bar line, only there: rises ${JSON.stringify(rises)}`);
     check('DRAIN', !downs.length, `one LED at a time: ${JSON.stringify(seen)}`);
@@ -187,6 +189,8 @@ try {
     await chord('step 5 (no lane 5 on 4 lanes)', bytes.step(4, true), bytes.step(4, false));
     await chord('a pad', bytes.pad(0, 3, true), bytes.pad(0, 3, false));
     await chord('a touch only (reading a meter)', bytes.touch(2, true), bytes.touch(2, false));
+    await chord('the jog wheel\'s touch (round 2)', [0x90, 9, 127], [0x80, 9, 0]);
+    await chord('the volume knob\'s touch', bytes.touch(8, true), bytes.touch(8, false));
     await send(p, bytes.btn('minus', true)); await p.sleep(600); await send(p, bytes.btn('minus', false)); await p.sleep(150);
     check('TAP', await evo() === true, 'a 0.6 s hold with nothing else (a look): the release toggles nothing');
     await send(p, bytes.btn('minus', false)); await p.sleep(150);

@@ -1210,4 +1210,9 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   `exportWav` can't see it (synth voices, outside the redesign).
 - **Drift's own tidy-ups** (RD-11 round 1: architect): `minusHand.turnIdx / turnUntil / timer` repeat the row's touch
   tail (`hands.touchUntil`, `touchTail`) for the same turn; `drift-check.mjs` sometimes fails to start the page on a
-  busy machine ("orbit2 did not start", once in five).
+  busy machine ("orbit2 did not start", once in five). Round 2: a hand already down from before − (a resting touch, a
+  held step) doesn't make a − tap a chord, so that tap toggles evolve (nils: the Move table's "while − was down" read
+  literally; counting it would stop a player with a finger resting on a knob from ever toggling); at every = 1 the
+  countdown's LEDs change up to a step early or late (`heardTick()` read at the step callbacks; none seen at every = 8;
+  RD-13's `nextEvolveTick`); the − tap is timed when the event is handled, not by the event's own `t` (as the step
+  buttons are) (architect).

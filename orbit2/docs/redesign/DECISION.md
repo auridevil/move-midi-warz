@@ -199,6 +199,11 @@ pass stays an optional extra for the conductor, never a gate.
   inside this decision can bring under one a set. Standing check: harmless no worse than the RD-1 baseline by cause, and
   none from a UI defect. RD-9's final sets: noor 7 / 7 / 3 against the baseline's 7 / 7 / 4, kai 35 / 23 / 17 against
   36 / 23 / 18, 0 destructive in all six replays.
+- **The tap on − under `?drift`** (RD-11 review round 2, 2026-11-24). "A tap on − still toggles evolve … release with no
+  knob turned" is read as a tap: − toggles evolve on the release of its own press, held under 0.45 s (the step
+  buttons' tap-or-look, `LOOK_MS`), with nothing else pressed, touched or turned on the Move while − is down. A longer
+  hold is a look at the drift page and toggles nothing, so reading the countdown or a meter never turns evolve off
+  (round 1 found that it did, and that re-took the home pattern). The Move table says the same.
 
 ## 3. Phase plan
 
