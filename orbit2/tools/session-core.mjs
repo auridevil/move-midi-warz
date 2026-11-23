@@ -291,3 +291,44 @@ export function drawMove(leds, hex) {
   o.push('</svg>');
   return o.join('');
 }
+
+// ---- A10 screen-off drift (moveview.mjs a10, RD-11): the tries and the judges' scoring ----
+/** Noor's A10 (DECISION A10, Nils §Q1): every = 8 bars, amount ≈ half, lanes 1, 2 and 4 evolving. */
+export const A10 = { every: 8, amount: 50, lanes: [1, 2, 4] };
+/** The bars left to the next mutation a try's pictures are taken at: 0.35 bar inside one countdown LED's bar (every = 8
+ *  drains one LED a bar), so a reading one LED off is more than a bar off. */
+export const A10_LEFT = [7.35, 6.65, 5.35, 4.65, 3.35, 2.65, 1.35, 0.65];
+/**
+ * n tries (at most 8) from a seed: where each starts, another hand's drift (every 2–16 bars, amount 10–80 %, which of
+ * the 4 lanes evolve, never the target's set, so a lane always needs a tap; evolve on or off), and the bars before the
+ * next mutation its pictures are taken at (A10_LEFT, each once).
+ */
+export function a10Trials(n = 5, seed = 1) {
+  const rng = mulberry32(seed * 6151 + 29), left = [...A10_LEFT];
+  for (let i = left.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); [left[i], left[j]] = [left[j], left[i]]; }
+  return Array.from({ length: Math.min(n, left.length) }, (_, i) => {
+    let lanes; do lanes = [0, 1, 2, 3].map(() => rng() < 0.5); while (lanes.every((on, li) => on === A10.lanes.includes(li + 1)));
+    return { try: i + 1, start: { every: 2 + Math.floor(rng() * 15), amount: 10 + 2 * Math.floor(rng() * 36), lanes, evolve: rng() < 0.5 }, left: left[i] };
+  });
+}
+/** A judge's lanes: [1, 2, 4], "1, 2 and 4", "1,2,4" → [1, 2, 4] (unique, sorted). */
+export const lanesOf = (x) => [...new Set((Array.isArray(x) ? x : String(x ?? '').match(/\d+/g) || []).map(Number))].sort((a, b) => a - b);
+/**
+ * key: the tries with their truth { every, amount, lanes, left } (left: bars to the mutation the clock really made);
+ * answers: [{ try, every, amount, lanes, bars, lit? }]. A try counts only when the hand reached the target (every 8, the
+ * amount meter at 8 of 16, lanes 1 2 4). It is right when the judge names every exactly, amount within one LED of it
+ * (16ths: 6.25 %), the lanes exactly and the bars to the mutation within one bar (one countdown LED at every = 8:
+ * "roughly"). A10 passes with every try right, at least 5.
+ */
+export function scoreA10(key, answers) {
+  const by = new Map(answers.map(a => [+a.try, a])), same = (a, b) => JSON.stringify(lanesOf(a)) === JSON.stringify(lanesOf(b));
+  const rows = key.map(k => {
+    const a = by.get(k.try), t = k.truth, said = a ? { every: num(a.every), amount: parseFloat(a.amount), lanes: lanesOf(a.lanes), bars: parseFloat(a.bars), ...(a.lit != null && { lit: num(a.lit) }) } : null;
+    const reached = t.every === A10.every && Math.abs(t.amount - A10.amount) <= 100 / 32 && same(t.lanes, A10.lanes);
+    const everyOk = !!said && said.every === t.every, amountOk = !!said && Math.abs(said.amount - t.amount) <= 100 / 16;
+    const lanesOk = !!said && same(said.lanes, t.lanes), barsOk = !!said && Math.abs(said.bars - t.left) <= 1;
+    return { try: k.try, truth: t, said, reached, everyOk, amountOk, lanesOk, barsOk, ok: reached && everyOk && amountOk && lanesOk && barsOk };
+  });
+  const right = rows.filter(r => r.ok).length;
+  return { right, of: rows.length, pass: rows.length >= 5 && right === rows.length, rows };
+}

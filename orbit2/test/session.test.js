@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { performer, injectSlips, tagAccidents, classOf, emptied, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS, MOUSE_GAUGE, KNOB_TARGETS, nightTokens, nightItems, scoreNight } from '../tools/session-core.mjs';
+import { performer, injectSlips, tagAccidents, classOf, emptied, bytes, trackOf, glanceTrials, scoreGlance, pageWord, ledsOf, drawMove, MOVE, SLIPS, MOUSE_GAUGE, KNOB_TARGETS, nightTokens, nightItems, scoreNight, A10, A10_LEFT, a10Trials, lanesOf, scoreA10 } from '../tools/session-core.mjs';
 
 test('RD-1 performer: seeded, timed, persona-shaped, and every action names what it means to change', () => {
   const a = performer({ seed: 3, minutes: 10, persona: 'kai' }), b = performer({ seed: 3, minutes: 10, persona: 'kai' });
@@ -202,4 +202,29 @@ test('RD-8 the night run of the label ladder: items from what the canvas drew, a
   assert.equal(part.by['number 13 px curve'].of, 3); assert.equal(part.by['number 13 px curve'].read, 0); assert.equal(part.floor.at.of + part.floor.below.of, part.of);
   assert.equal(part.by['number 13 px straight dim'].of, 14); assert.equal(part.by['number 13 px straight'].of, 3, 'the caption\'s numbers apart from the dim moons');
   assert.equal(scoreNight(items, null).read, 0);
+});
+
+test('RD-11 A10 screen-off drift: seeded tries off Noor\'s target, the shots off the LED edges, the judges scored', () => {
+  const a = a10Trials(5, 1);
+  assert.deepEqual(a, a10Trials(5, 1), 'the same seed, the same tries'); assert.notDeepEqual(a, a10Trials(5, 2));
+  assert.equal(a.length, 5); assert.equal(a10Trials(12, 1).length, A10_LEFT.length, 'one try per countdown position');
+  assert.equal(new Set(a.map(k => k.left)).size, 5, 'five different countdown positions');
+  for (const k of a10Trials(8, 3)) {
+    assert.ok(A10_LEFT.includes(k.left)); assert.ok(Math.abs(Math.abs(k.left - Math.round(k.left)) - 0.35) < 1e-9, 'a third of a bar inside an LED');
+    assert.ok(k.start.every >= 2 && k.start.every <= 16); assert.ok(k.start.amount >= 10 && k.start.amount <= 80 && k.start.amount % 2 === 0);
+    assert.ok(k.start.lanes.some((on, li) => on !== A10.lanes.includes(li + 1)), 'a lane always needs a tap');
+  }
+  assert.deepEqual(lanesOf('1, 2 and 4'), [1, 2, 4]); assert.deepEqual(lanesOf([4, '2', 1, 2]), [1, 2, 4]); assert.deepEqual(lanesOf(null), []);
+  const truth = (left, more) => ({ every: 8, amount: 50, lanes: [1, 2, 4], left, ...more });
+  const key = [1, 2, 3, 4, 5].map(t => ({ try: t, truth: truth(t + 0.35) }));
+  const right = key.map(k => ({ try: k.try, every: 8, amount: 50, lanes: [1, 2, 4], bars: Math.ceil(k.truth.left) }));
+  const s = scoreA10(key, right); assert.equal(s.right, 5); assert.equal(s.pass, true);
+  const one = (said, more = {}) => scoreA10([{ try: 1, truth: truth(4.65, more) }], [{ try: 1, every: 8, amount: 50, lanes: [1, 2, 4], bars: 5, ...said }]).rows[0];
+  assert.equal(one({ amount: '45 %' }).ok, true, 'amount within one LED (6.25 %)'); assert.equal(one({ amount: 40 }).amountOk, false);
+  assert.equal(one({ lanes: '1, 2 and 4' }).ok, true); assert.equal(one({ lanes: [1, 2, 3, 4] }).lanesOk, false, 'a steady lane named');
+  assert.equal(one({ bars: 5.6 }).ok, true, 'within a bar'); assert.equal(one({ bars: 3.7 }).ok, true); assert.equal(one({ bars: 3.6 }).barsOk, false); assert.equal(one({ bars: 5.7 }).barsOk, false); assert.equal(one({ every: '8 bars' }).ok, true); assert.equal(one({ every: 16 }).everyOk, false);
+  assert.equal(one({}, { amount: 56 }).reached, false, 'the meter at 9 of 16: the hand did not reach ≈ half'); assert.equal(one({}, { amount: 56 }).ok, false);
+  assert.equal(one({}, { lanes: [1, 2] }).ok, false, 'the target lanes not set: not a try');
+  assert.equal(scoreA10(key.slice(0, 4), right).pass, false, 'five tries at least');
+  assert.equal(scoreA10(key, right.slice(1)).right, 4, 'a try nobody answered is wrong');
 });

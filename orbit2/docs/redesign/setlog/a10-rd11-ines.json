@@ -1,0 +1,616 @@
+{
+ "format": "orbits-a10",
+ "v": 1,
+ "player": "ines",
+ "page": "orbit2/index.html?drift",
+ "commit": "add4e5a",
+ "tool": "orbit2/tools/moveview.mjs a10",
+ "judges": "one fresh sub-agent per try (model sonnet, the player persona), shown brief.txt and that try's three pictures only",
+ "run": {
+  "seed": 2,
+  "groove": "techno",
+  "target": {
+   "every": 8,
+   "amount": 50,
+   "lanes": [
+    1,
+    2,
+    4
+   ]
+  },
+  "errors": []
+ },
+ "brief": "You are holding the − button of an Ableton Move (a hardware groovebox) that plays a drum-machine web app,\n\"Orbits\". The room is dark and the laptop screen is OFF: all you have is the Move's own lights. Your pattern has 4\nlanes and it is playing. The app's manual (its Move table) says:\n  −                                  evolve on/off · with ?drift: on the release, and only when nothing was turned or tapped while − was down\n  Hold − + knobs 1–8 (with ?drift)   drift: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)\n  Hold − + steps (with ?drift)       step LEDs 1–6 = the lanes that evolve (lane colour; dark = steady), tap one to toggle it · LEDs 9–16 drain toward the next mutation, one per ⅛ of \"every\"\n(Evolve mutates the pattern every \"every\" bars; amount is how much of it a mutation may change.)\n\nThree photos of the Move, each drawn from its lights at that moment. The display is dark, the 8 knobs and the wheel\nhave no lights, and the 16 step buttons are the row of small lights numbered 1–16 under the pads.\n  photo-1.png  − held, no knob touched\n  photo-2.png  − held, a finger resting on knob 1 (the leftmost of the 8 knobs), not turning it\n  photo-3.png  − held, a finger resting on knob 2, not turning it\nLook at these three images only (open them with the Read tool): do not open any other file and do not run anything.\nThen answer, as JSON on one line:\n{\"every\": N, \"amount\": P, \"lanes\": [..], \"lit\": L, \"bars\": B, \"notes\": \"...\"}\n- every: the \"every\" setting, in bars\n- amount: the \"amount\" setting, in percent\n- lanes: the numbers of the lanes that evolve\n- lit: how many of the countdown LEDs (steps 9–16) are lit in photo 1\n- bars: roughly how many bars until the next mutation (one number; decimals are fine)\n- notes: anything that was hard to read, in a sentence or two. If you cannot tell something, give your best guess.",
+ "score": {
+  "right": 0,
+  "of": 5,
+  "pass": false
+ },
+ "tries": [
+  {
+   "try": 1,
+   "start": {
+    "every": 4,
+    "amount": 62,
+    "lanes": [
+     true,
+     false,
+     false,
+     true
+    ],
+    "evolve": true
+   },
+   "meters": {
+    "every": {
+     "lit": 8,
+     "turns": 1
+    },
+    "amount": {
+     "lit": 8,
+     "turns": 1
+    }
+   },
+   "shots": {
+    "lit": {
+     "table": 7,
+     "knob1": 8,
+     "knob2": 8
+    },
+    "steps": {
+     "table": [
+      51,
+      46,
+      30,
+      50,
+      0,
+      0,
+      0,
+      0,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0
+     ],
+     "knob1": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob2": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "bar": 1.8462,
+    "mutation": {
+     "k": "evolve",
+     "line": 26880
+    }
+   },
+   "truth": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     4
+    ],
+    "left": 6.645
+   },
+   "said": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "bars": 7,
+    "lit": 7
+   },
+   "notes": "Knob 1 meter shows 8 of 16 LEDs, so every = 8 bars. Knob 2 meter shows 8 of 16 (8/16), so amount = 50%. Photo 1 has LEDs 1-4 lit and 5-6 dark, so I read the four lanes as evolving, but their colours don't match the lane colours (LED 2 is cyan and LED 3 is olive, where lanes 2 and 3 would be olive and blue). The lane assignment is a best guess by position. Countdown LEDs 9-15 are lit and 16 is dark, so 7/8 of 8 bars is about 7 bars left.",
+   "reached": true,
+   "ok": false
+  },
+  {
+   "try": 2,
+   "start": {
+    "every": 7,
+    "amount": 80,
+    "lanes": [
+     true,
+     false,
+     false,
+     true
+    ],
+    "evolve": false
+   },
+   "meters": {
+    "every": {
+     "lit": 8,
+     "turns": 1
+    },
+    "amount": {
+     "lit": 8,
+     "turns": 1
+    }
+   },
+   "shots": {
+    "lit": {
+     "table": 3,
+     "knob1": 8,
+     "knob2": 8
+    },
+    "steps": {
+     "table": [
+      51,
+      46,
+      30,
+      50,
+      0,
+      0,
+      0,
+      0,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob1": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob2": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "bar": 1.8462,
+    "mutation": {
+     "k": "evolve",
+     "line": 26880
+    }
+   },
+   "truth": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     4
+    ],
+    "left": 2.646
+   },
+   "said": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "bars": 3,
+    "lit": 3
+   },
+   "notes": "Knob 1 meter showed steps 1-8 lit (8 bars) and knob 2 showed 1-8 lit (8/16 = 50%), so the two readings are identical and both rest on counting 8 LEDs. Lanes 1-4 are lit and 5-8 dark, but the LED colours in photo 1 don't match the lane colours I'd expect, so I went by lit versus dark. Countdown LEDs 9-11 are lit, which is 3/8 of 8 bars, so about 3 bars to go.",
+   "reached": true,
+   "ok": false
+  },
+  {
+   "try": 3,
+   "start": {
+    "every": 2,
+    "amount": 18,
+    "lanes": [
+     false,
+     false,
+     true,
+     true
+    ],
+    "evolve": true
+   },
+   "meters": {
+    "every": {
+     "lit": 8,
+     "turns": 1
+    },
+    "amount": {
+     "lit": 8,
+     "turns": 1
+    }
+   },
+   "shots": {
+    "lit": {
+     "table": 4,
+     "knob1": 8,
+     "knob2": 8
+    },
+    "steps": {
+     "table": [
+      51,
+      46,
+      30,
+      50,
+      0,
+      0,
+      0,
+      0,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob1": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob2": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "bar": 1.8462,
+    "mutation": {
+     "k": "evolve",
+     "line": 26880
+    }
+   },
+   "truth": {
+    "every": 8,
+    "amount": 48,
+    "lanes": [
+     1,
+     2,
+     4
+    ],
+    "left": 3.346
+   },
+   "said": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "bars": 4,
+    "lit": 4
+   },
+   "notes": "Photo 1 steps 1-4 are lit in four different colours, which I read as all four lanes evolving, but the shades are only roughly lane colours (steps 1 and 4 are both pale lavender, and lane 4 should be white), so that is a best guess. Photo 2 shows 8 of 16 LEDs lit, so every is 8 bars. Photo 3 shows 8 of 16 lit, so amount is 8/16 = 50%. Steps 9-12 are lit in photo 1, which is 4 of 8, so about half of 'every' is left, roughly 4 bars; the ±1 LED uncertainty makes that 3.5-4.5.",
+   "reached": true,
+   "ok": false
+  },
+  {
+   "try": 4,
+   "start": {
+    "every": 10,
+    "amount": 14,
+    "lanes": [
+     true,
+     true,
+     false,
+     false
+    ],
+    "evolve": true
+   },
+   "meters": {
+    "every": {
+     "lit": 8,
+     "turns": 1
+    },
+    "amount": {
+     "lit": 8,
+     "turns": 1
+    }
+   },
+   "shots": {
+    "lit": {
+     "table": 5,
+     "knob1": 8,
+     "knob2": 8
+    },
+    "steps": {
+     "table": [
+      51,
+      46,
+      30,
+      50,
+      0,
+      0,
+      0,
+      0,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0
+     ],
+     "knob1": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob2": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "bar": 1.8462,
+    "mutation": {
+     "k": "evolve",
+     "line": 26880
+    }
+   },
+   "truth": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     4
+    ],
+    "left": 4.646
+   },
+   "said": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "bars": 5,
+    "lit": 5
+   },
+   "notes": "Knob 1 meter shows 8 LEDs lit, so every = 8 bars. Knob 2 meter also shows 8 LEDs, which is 8/16 = 50%. Photos 2 and 3 look the same (8 lit), so I can't tell the two apart by the lights. Lane LEDs 1-4 are lit (lane colours) and 5-6 are dark. Countdown LEDs 9-13 are lit in photo 1, so 5 of 8 is about 5/8 of 8 bars = 5 bars. The count could be off by one, since the LED that is draining may be on or off.",
+   "reached": true,
+   "ok": false
+  },
+  {
+   "try": 5,
+   "start": {
+    "every": 9,
+    "amount": 58,
+    "lanes": [
+     true,
+     false,
+     true,
+     false
+    ],
+    "evolve": true
+   },
+   "meters": {
+    "every": {
+     "lit": 8,
+     "turns": 1
+    },
+    "amount": {
+     "lit": 8,
+     "turns": 1
+    }
+   },
+   "shots": {
+    "lit": {
+     "table": 2,
+     "knob1": 8,
+     "knob2": 8
+    },
+    "steps": {
+     "table": [
+      51,
+      46,
+      30,
+      50,
+      0,
+      0,
+      0,
+      0,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob1": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ],
+     "knob2": [
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      120,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    "bar": 1.8462,
+    "mutation": {
+     "k": "evolve",
+     "line": 26880
+    }
+   },
+   "truth": {
+    "every": 8,
+    "amount": 52,
+    "lanes": [
+     1,
+     2,
+     4
+    ],
+    "left": 1.341
+   },
+   "said": {
+    "every": 8,
+    "amount": 50,
+    "lanes": [
+     1,
+     2,
+     3,
+     4
+    ],
+    "bars": 2,
+    "lit": 2
+   },
+   "notes": "Photos 2 and 3 both show steps 1-8 lit, so every = 8 bars (counts) and amount = 8/16 = 50%. In photo 1, LEDs 1-4 are lit in mixed colours that don't clearly match the lane colours, so I assumed all four lanes evolve. Only LEDs 9-10 are lit, so about 2/8 of 'every' remains, which is about 2 bars.",
+   "reached": true,
+   "ok": false
+  }
+ ]
+}
