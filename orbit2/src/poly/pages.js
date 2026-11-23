@@ -105,7 +105,10 @@ export const PAGES = ['rhythm', 'sound', 'step'];
  *   the chip white (the Move owns the row, or its knobs edit what is drawn) · chip: "MOVE ⇢ …" · word: the page's name
  *   in the header
  */
-export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm', shift = false, kbdShift = false, held = null, touch = false, loop = false } = {}) {
+export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm', shift = false, kbdShift = false, held = null, touch = false, loop = false, drift = false } = {}) {
+  // RD-11 (behind ?drift): − held owns the row and the cells outright, one page, momentary only (Nils §Q1: no other
+  // way in). The knobs are the drift settings and the cells Nils's LED table; a held step, Shift or Loop waits under it.
+  if (drift) return { row: 'drift', step: -1, cells: 'drift', move: 'drift', knob8: 'drift', row8: 'drift', own: true, chip: 'MOVE ⇢ DRIFT', word: 'drift · held on Move' };
   // a step held but not yet looked at (LOOK_MS, or a knob turned) may still be a tap: it owns nothing and changes nothing
   // on screen (no page flashes), whatever else the hands do; a touch alone is no turn (a finger can rest on a knob while
   // the other hand taps steps), so it keeps showing its own page (T0′) and Shift stays ignored
@@ -149,7 +152,7 @@ export function stepLoops({ cond = 'always', on, loopN = null, playing = false }
  * @returns {'cycle'|'open'|'none'}
  */
 export function cellAction(cells, i, length, long = false) {
-  if (cells === 'slots' || i >= length) return 'none';
+  if (cells === 'slots' || cells === 'drift' || i >= length) return 'none';
   return long || cells === 'loops' ? 'open' : 'cycle';
 }
 /** A tap on a planet (a step with a hit): with a step page latched by the mouse it switches the page to that step;
@@ -157,3 +160,28 @@ export function cellAction(cells, i, length, long = false) {
  *  planetStep, no choice to make.)
  *  @returns {'cycle'|'open'} */
 export const planetAction = (stepLatched) => (stepLatched ? 'open' : 'cycle');
+
+// ---- RD-11 drift (behind ?drift): the step LEDs while − is held (Nils's LED table, proposals/nils/answers.md §Q1).
+// One source for the Move's lights and the on-screen cells, so what a player reads in the dark is what the page draws ----
+/** The drift knobs 1–8 in order: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat. */
+export const DRIFT_KEYS = ['evoEvery', 'evoAmount', 'evoGravity', 'evoHome', 'evoMax', 'coupleLift', 'humanize', 'diceRepeat'];
+/** LEDs lit (0–16) for drift knob k at its gauge value v: counts light one LED each (every = 8 bars → 8 LEDs, home,
+ *  dice repeat), percentages in 16ths (amount ≈ half → 8), max cycle in 16ths of its 64 bars. */
+export const driftMeter = (k, v) => Math.max(0, Math.min(16, Math.round(
+  k === 'evoAmount' || k === 'evoGravity' || k === 'coupleLift' || k === 'humanize' ? v / 100 * 16 : k === 'evoMax' ? v / 4 : v)));
+/**
+ * The 16 step LEDs while − is held. A touched (or just-turned) drift encoder `meter` (0–7) turns them all into its
+ * value meter; otherwise LEDs 1–6 are the lanes that evolve (lane colour; a steady lane dark, no lane off), 7–8 are
+ * off, and 9–16 count down to the next mutation: 8 LEDs that drain one per ⅛ of "every" (`progress` 0..1 toward the
+ * mutation, scene.js genProgress; 0 while stopped, so the bar sits full).
+ * @param {{ evolves?: boolean[], meter?: number, value?: number, progress?: number }} s
+ * @returns {('off'|'lane'|'dim'|'count'|'meter')[]} 16 symbols; 'lane' / 'dim' at i = lane i evolving / steady
+ */
+export function driftLeds({ evolves = [], meter = -1, value = 0, progress = 0 } = {}) {
+  const out = Array(STEP_BTNS).fill('off');
+  if (meter >= 0) { const n = driftMeter(DRIFT_KEYS[meter], value); for (let i = 0; i < n; i++) out[i] = 'meter'; return out; }
+  for (let i = 0; i < 6 && i < evolves.length; i++) out[i] = evolves[i] ? 'lane' : 'dim';
+  const lit = 8 - Math.floor(Math.max(0, Math.min(progress, 0.999)) * 8);
+  for (let i = 0; i < lit; i++) out[8 + i] = 'count';
+  return out;
+}

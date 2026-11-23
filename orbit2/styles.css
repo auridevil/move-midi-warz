@@ -363,9 +363,9 @@ body.chaos::before { display: none; }
 .stepsui .st.dot.lp-pick { outline: 2px solid var(--l); outline-offset: 1px; }
 /* RD-9 round 1 (A2): Loop held, each cell is a slot wearing its number in a larger ring (the slots read as empty steps
    at a glance, 0 of 28); a saved slot is filled and its number set dark on it */
-.stepsui[data-cells="slots"] .st.dot::before { width: 24px; height: 24px; margin: -14px 0 0 -14px; }
-.stepsui[data-cells="slots"] .st.dot[data-n]::after { content: attr(data-n); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--t-s); font-weight: 500; line-height: 1; color: var(--l); pointer-events: none; }
-.stepsui[data-cells="slots"] .st.dot.lp-on[data-n]::after { color: var(--v); }
+.stepsui[data-cells="slots"] .st.dot::before, .stepsui[data-cells="drift"] .st.dot[data-n]::before { width: 24px; height: 24px; margin: -14px 0 0 -14px; }
+.stepsui[data-cells="slots"] .st.dot[data-n]::after, .stepsui[data-cells="drift"] .st.dot[data-n]::after { content: attr(data-n); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--t-s); font-weight: 500; line-height: 1; color: var(--l); pointer-events: none; }
+.stepsui[data-cells="slots"] .st.dot.lp-on[data-n]::after, .stepsui[data-cells="drift"] .st.dot.lp-on[data-n]::after { color: var(--v); }
 /* RD-9 round 2 (A2): while Loop holds the cells the page tab's outline steps back to a plain edge (it is the knob row's
    page, which Loop leaves alone; aria-pressed unchanged), so the numbered slots and "SLOTS · MOVE ⇢" lead the console */
 .console:has(#stepsui[data-cells="slots"]) .page-tabs button[aria-pressed=true] { border-color: var(--b); box-shadow: inset 0 0 0 1px var(--b); }

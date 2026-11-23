@@ -91,7 +91,10 @@ test('RD-9 help has two tabs: the keys (unchanged), the Move (the drawing over t
   const move = pane('hpane-move');
   assert.ok(move.includes('id="move-draw"'), 'the drawing above the table');
   for (const th of ['Live mode', 'Hold step + knob 8', 'Hold a step', 'Capture', 'Wheel', 'Hold +', 'Volume']) assert.ok(move.includes(`<th>${th}</th>`), `Move row ${th}`);
-  assert.equal((move.match(/<tr>/g) || []).length, 35, 'all 35 rows of the Move table');
+  assert.equal((move.match(/<tr>/g) || []).length, 37, 'all 35 RD-9 rows of the Move table + the 2 RD-11 drift rows');
+  // RD-11: the one mapping change is documented and marked as flagged (DECISION §2 "The Move mapping")
+  for (const th of ['Hold − + knobs 1–8 <small>(with ?drift)</small>', 'Hold − + steps <small>(with ?drift)</small>']) assert.ok(move.includes(`<th>${th}</th>`), `Move row ${th}`);
+  assert.ok(move.includes('with ?drift: on the release'), 'the − row says when the tap moved to the release');
   assert.ok(!html.includes('keys-pop'), 'the setup drawer is gone');
 });
 
