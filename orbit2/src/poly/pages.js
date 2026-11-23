@@ -171,17 +171,19 @@ export const driftMeter = (k, v) => Math.max(0, Math.min(16, Math.round(
   k === 'evoAmount' || k === 'evoGravity' || k === 'coupleLift' || k === 'humanize' ? v / 100 * 16 : k === 'evoMax' ? v / 4 : v)));
 /**
  * The 16 step LEDs while − is held. A touched (or just-turned) drift encoder `meter` (0–7) turns them all into its
- * value meter; otherwise LEDs 1–6 are the lanes that evolve (lane colour; a steady lane dark, no lane off), 7–8 are
- * off, and 9–16 count down to the next mutation: 8 LEDs that drain one per ⅛ of "every" (`progress` 0..1 toward the
- * mutation, scene.js genProgress; 0 while stopped, so the bar sits full).
- * @param {{ evolves?: boolean[], meter?: number, value?: number, progress?: number }} s
- * @returns {('off'|'lane'|'dim'|'count'|'meter')[]} 16 symbols; 'lane' / 'dim' at i = lane i evolving / steady
+ * value meter; otherwise LEDs 1–6 are the lanes that evolve, lit in their lane colour, a steady lane (and a missing
+ * one) dark (Nils: lit or dark is the whole read; round 1: a dim steady lane read as evolving, A10 0 / 5); 7–8 are dark,
+ * and 9–16 count down to the next mutation: 8 LEDs that drain one per ⅛ of "every" (`progress` 0..1 toward the
+ * mutation, scene.js genProgress; 0 while stopped, so the bar sits full), all dark while evolve is off (`on`: no
+ * mutation is coming).
+ * @param {{ evolves?: boolean[], meter?: number, value?: number, progress?: number, on?: boolean }} s
+ * @returns {('off'|'lane'|'count'|'meter')[]} 16 symbols; 'lane' at i = lane i evolves
  */
-export function driftLeds({ evolves = [], meter = -1, value = 0, progress = 0 } = {}) {
+export function driftLeds({ evolves = [], meter = -1, value = 0, progress = 0, on = true } = {}) {
   const out = Array(STEP_BTNS).fill('off');
   if (meter >= 0) { const n = driftMeter(DRIFT_KEYS[meter], value); for (let i = 0; i < n; i++) out[i] = 'meter'; return out; }
-  for (let i = 0; i < 6 && i < evolves.length; i++) out[i] = evolves[i] ? 'lane' : 'dim';
-  const lit = 8 - Math.floor(Math.max(0, Math.min(progress, 0.999)) * 8);
+  for (let i = 0; i < 6 && i < evolves.length; i++) if (evolves[i]) out[i] = 'lane';
+  const lit = on ? 8 - Math.floor(Math.max(0, Math.min(progress, 0.999)) * 8) : 0;
   for (let i = 0; i < lit; i++) out[8 + i] = 'count';
   return out;
 }

@@ -1184,3 +1184,30 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   padding-left 112 px, ~60 px of room today): one shared variable; the tests that pin `cvPinned`, `PHONE_HOSTS` and the
   quests' onclick as source text (the cells' take and give back could be a pure `MovePages` method with a unit test).
   Under heavy load (≈ 9, ten Chromes) the page sometimes never comes up, at `e768c09` too: re-run alone.
+- **The drift page's words and meters** (RD-11 round 1: verifier, architect, noor, ines, nils; choices for Noor and
+  Nils): the drift knob row cuts its words at 1512×860 ("32 ba", "never" under the next knob's arc, 4 of 8 labels cut:
+  "every · …", "home af…", "max cy…", "repeat · …"; the phone shows no page name: chip and header are off its face, see
+  "Words on the console row"); the meter can't tell every 16 from 32 (16 LEDs cap) and shows 0 % and the first 2 %
+  click as all dark, like no meter (a percentage under 3 % lights nothing), max cycle moves one LED per 4 bars; the two
+  meters the A10 players read look alike (8 and 8: only the hand knows which knob it touched — a per-knob cue?); the
+  step LEDs' lane colours differ from the pads' scheme (dim empty steps, bright hits, white accents), so players went by
+  position; knob 6 (coupling lift) edits `m.couple.amount` while coupling is off (no sound, no hint; the sheet hides
+  that gauge then).
+- **The 40-minute take's method** (RD-11 round 1: sound, architect): `drift-check.mjs` RENDER's click test (a one-sample
+  jump > 0.5) sits just above the music's own biggest kick attack (0.492) and can't see a cut voice or a parameter step
+  (0.05–0.11): Sofia's relative detector (> 0.03 and > 5× the largest jump in the previous 3 ms, ±4 / 15 ms around each
+  exported hit skipped, RMS before vs after to tell an onset from a cut) found 0 events on the same take; it replays
+  `m.evolve` with `repeat: 1` (the clock passes `cycleOpts().repeat`) and home 0 (the way home, `m.assign` +
+  `rebuildVoices`, never runs); its −0.13 dB "engine drift" is a fixed bias of the calibration (a 1-minute take gives
+  the same; bar 1 starts from silence), the real 40-minute drift is 0.00 dB; label it "dsp, offline". Sofia covered the
+  live path by hand (87 s, synth, every 2 / home 3, all eight drift knobs turned while playing, − held 46 s: 22 of 22
+  mutations on the bar line incl. 6 returns home, lateness max −27.4 ms, stress 0, level flat): worth a short live
+  capture in the tool. A9's clock is one 6-second run: a median of 3 would make "no worse" a measurement.
+- **The live synth engine's hard steps** (RD-11 round 1: sound; from before the phase, `68d0f3a` the same): playing,
+  about 2 one-sample steps a second (0.05–0.11 after ≤ 0.001 for 3 ms, the level 6 dB down within 2 ms), 55–90 ms after
+  each beat of the techno groove, always 64 ± 2 samples into a 128-sample block at 48 kHz: a voice parameter set at
+  `T.now()` + the look-ahead mid-note instead of at the hit. Offline renders have none, so A9's bit-identical
+  `exportWav` can't see it (synth voices, outside the redesign).
+- **Drift's own tidy-ups** (RD-11 round 1: architect): `minusHand.turnIdx / turnUntil / timer` repeat the row's touch
+  tail (`hands.touchUntil`, `touchTail`) for the same turn; `drift-check.mjs` sometimes fails to start the page on a
+  busy machine ("orbit2 did not start", once in five).

@@ -11,7 +11,7 @@
 // evolve, evolve on or off, put there through the Move), then a hand in the dark sets Noor's target through the Move
 // with only the lights to go by: evolve on (the − LED magenta), play (the play LED white), hold −, touch knob 1 and
 // count the meter's LEDs, turn, count again until 8 (every = 8 bars), the same on knob 2 (8 of 16: amount ≈ half), and
-// tap lanes 1, 2, 4 in and 3 out (the hands know which lanes they want). Playing on, it waits until the try's bars
+// tap lanes 1, 2, 4 in and 3 out where their LEDs (lit or dark) say otherwise. Playing on, it waits until the try's bars
 // before the next mutation and draws three pictures: − held (the table), − held + a finger on knob 1, − held + a finger
 // on knob 2. The truth: the model's every / amount / lanes, and the bars to the mutation the clock really makes next
 // (m.evolve / m.assign wrapped: its bar line against the heard tick of the first picture). Each try's pictures go to
@@ -49,9 +49,9 @@ export async function moveShot(p, file) { const { leds } = await moveState(p); a
 export const A10_BRIEF = `You are holding the − button of an Ableton Move (a hardware groovebox) that plays a drum-machine web app,
 "Orbits". The room is dark and the laptop screen is OFF: all you have is the Move's own lights. Your pattern has 4
 lanes and it is playing. The app's manual (its Move table) says:
-  −                                  evolve on/off · with ?drift: on the release, and only when nothing was turned or tapped while − was down
+  −                                  evolve on/off · with ?drift: on the release, for a tap (under 0.45 s) with nothing else pressed, touched or turned while − was down; a longer hold is a look and toggles nothing
   Hold − + knobs 1–8 (with ?drift)   drift: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)
-  Hold − + steps (with ?drift)       step LEDs 1–6 = the lanes that evolve (lane colour; dark = steady), tap one to toggle it · LEDs 9–16 drain toward the next mutation, one per ⅛ of "every"
+  Hold − + steps (with ?drift)       step LEDs 1–6 = the lanes that evolve (lit in the lane colour; dark = steady), tap one to toggle it · LEDs 9–16 drain toward the next mutation, one per ⅛ of "every" (all dark while evolve is off)
 (Evolve mutates the pattern every "every" bars; amount is how much of it a mutation may change.)
 
 Three photos of the Move, each drawn from its lights at that moment. The display is dark, the 8 knobs and the wheel
@@ -106,8 +106,8 @@ async function a10Try(p, k, folder) {
   };
   k.meters = { every: await meterTo(0, 8, 1), amount: await meterTo(1, 8, 3) };   // every: a click a bar (an LED); amount: 2 % a click, 6.25 % an LED
   await sleep(TOUCH_HOLD_MS + 100);   // the meter's tail: the table is back
-  const lanes = (await model()).lanes;
-  for (let i = 0; i < 4; i++) if (lanes[i] !== A10.lanes.includes(i + 1)) await tap((d) => bytes.step(i, d));
+  const lanes = (await lights()).steps;   // lit = evolving, dark = steady
+  for (let i = 0; i < 4; i++) if (!!lanes[i] !== A10.lanes.includes(i + 1)) await tap((d) => bytes.step(i, d));
   await sleep(TOUCH_HOLD_MS + 100);
   // the pictures, playing on, when the ear is the try's bars before the next mutation (every = 8: the bar lines 8, 16 …)
   await p.eval(MUT_HOOK);

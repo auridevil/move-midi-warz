@@ -29,14 +29,19 @@ test('RD-11 flag-off identity: without drift the resolver answers byte-for-byte 
   }
 });
 
-test('RD-11 the LED table (Nils §Q1): lanes 1–6, nothing on 7–8, the countdown on 9–16', () => {
-  // Noor's A10 scenario: 4 lanes, lanes 1, 2 and 4 evolving, nothing touched, just mutated (progress 0)
+test('RD-11 the LED table (Nils §Q1): lanes 1–6 lit or dark, nothing on 7–8, the countdown on 9–16', () => {
+  // Noor's A10 scenario: 4 lanes, lanes 1, 2 and 4 evolving, nothing touched, just mutated (progress 0). A steady lane
+  // is DARK, not dim (round 1: a dim lane 3 read as evolving, A10 0 / 5): lit or dark is the whole read
   const leds = driftLeds({ evolves: [true, true, false, true] });
-  assert.deepEqual(leds.slice(0, 8), ['lane', 'lane', 'dim', 'lane', 'off', 'off', 'off', 'off']);
+  assert.deepEqual(leds.slice(0, 8), ['lane', 'lane', 'off', 'lane', 'off', 'off', 'off', 'off']);
   assert.deepEqual(leds.slice(8), Array(8).fill('count'));   // full: 8 of 8 to the next mutation
   assert.equal(leds.length, STEP_BTNS);
-  // six lanes fill all six LEDs
-  assert.deepEqual(driftLeds({ evolves: [false, false, false, false, true, true] }).slice(0, 6), ['dim', 'dim', 'dim', 'dim', 'lane', 'lane']);
+  // six lanes: the evolving ones lit, the steady ones dark
+  assert.deepEqual(driftLeds({ evolves: [false, false, false, false, true, true] }).slice(0, 6), ['off', 'off', 'off', 'off', 'lane', 'lane']);
+  assert.deepEqual(new Set(driftLeds({ evolves: [true, false, true] })), new Set(['lane', 'off', 'count']), 'no third state on the lane LEDs');
+  // evolve off: no mutation is coming, so no countdown (the lanes still show what would evolve)
+  const off = driftLeds({ evolves: [true, true, false, true], on: false });
+  assert.deepEqual(off.slice(8), Array(8).fill('off')); assert.deepEqual(off.slice(0, 4), ['lane', 'lane', 'off', 'lane']);
 });
 
 test('RD-11 the countdown drains one LED per ⅛ of "every"', () => {
@@ -79,4 +84,9 @@ test('RD-11 flag-off identity in app.js: the unflagged − still toggles evolve 
   assert.match(src, /const driftHeld = \(\) => DRIFT && minusHand\.held/);
   // the flag comes from the URL, like ?setlog
   assert.match(src, /const DRIFT = new URLSearchParams\(location\.search\)\.has\('drift'\)/);
+  // round 1: the chord listener (anything else pressed, touched or turned under −) is registered only with the flag
+  assert.match(src, /if \(DRIFT\) for \(const t of \['pad', 'step', 'encoder', 'encoderTouch', 'wheel', 'wheelPush', 'volume', 'button'\]\) move\.addEventListener/);
+  // the LEDs paint a lane lit or dark: no dim lane colour on the drift table (round 1, A10)
+  const branch = src.slice(src.indexOf('if (driftHeld()) {   // RD-11'), src.indexOf('} else if (loopHeld || dupHeld)'));
+  assert.ok(branch.length > 0 && !branch.includes('LANE_DIM'), 'the drift branch of paintLeds lights no LANE_DIM');
 });

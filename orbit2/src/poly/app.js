@@ -638,18 +638,22 @@ let lastInput = 'pointer';
 const RHYTHM_KEYS = ['length', 'euclid', 'rotation', 'ratio', 'swing', 'prob', 'tune'];   // the Move's knobs 1–7 (8 = tempo)
 // RD-6: knob 8 on a step page = its condition, or its repeats while the Move holds the step with Shift (row8, pages.js)
 const ROW_KEYS = { rhythm: [...RHYTHM_KEYS, 'tempo'], sound: SOUND_KEYS, step: [...LOCK_KEYS.slice(0, 7), 'cond'], drift: DRIFT_KEYS };
-// RD-11 (?drift): the drift page's knobs are the sheet's own gauges (evolve drawer, groove, dice), moved in by bindRow
-const driftGauges = () => [sliders.evoEvery, sliders.evoAmount, sliders.evoGravity, sliders.evoHome, sliders.evoMax, sliders.coupleAmount, sliders.humanize, sliders.diceRepeat];
-const DRIFT_STEP = [1, 2, 2, 1, 2, 2, 2, 1];   // a Move encoder click per knob (≈ 2 % of each range; counts move by one)
+// RD-11 (?drift): the drift page's knobs are the sheet's own gauges (evolve drawer, groove, dice), moved in by bindRow,
+// named by DRIFT_KEYS (the one order, pages.js): coupling lift is the sheet's coupleAmount; a Move encoder click is
+// ≈ 2 % of a range, and a count moves by one
+const DRIFT_GAUGE = { coupleLift: 'coupleAmount' }, DRIFT_COUNTS = new Set(['evoEvery', 'evoHome', 'diceRepeat']);
+const driftGauges = () => DRIFT_KEYS.map(k => sliders[DRIFT_GAUGE[k] || k]);
 const pageGauges = (pg, r8) => (pg === 'sound' ? SOUND_KEYS.map(k => sliders['snd:' + k]) : pg === 'step' ? [...LOCK_KEYS.slice(0, 7).map(k => sliders['lock:' + k]), sliders[r8 === 'repeats' ? 'lock:ratchet' : 'lock:cond']] : pg === 'drift' ? driftGauges() : [...RHYTHM_KEYS.map(k => sliders[k]), sliders.tempo]);
 // latch: the page the screen chose; step: the step a cell's long-press latched (on lane `lane`), back: where it came from
 const knobPage = { latch: 'rhythm', back: 'rhythm', step: -1, lane: -1, shown: null, r8: null, r: null, forced: null, lost: null };   // forced: the lock editor before a Move look took it; lost: a knob the row took the focus from
 const hands = { touch: new Set(), touchUntil: 0, loop: false, timer: 0 };   // the Move's encoders touched, the touch's tail (one timer), Loop held
-// RD-11 (?drift): − held on the Move (used = a knob turned or a lane toggled while it was, so its release is a chord's,
-// not a tap's: only a clean tap still toggles evolve). turnIdx/turnUntil: a touchless turn shows the LED meter for
-// TOUCH_HOLD_MS, as the row's touch tail does.
-const minusHand = { held: false, used: false, turnIdx: -1, turnUntil: 0, timer: 0 };
+// RD-11 (?drift): − held on the Move (down: when; used = anything else pressed, touched or turned while it was, so its
+// release is a chord's, not a tap's: only a clean tap still toggles evolve). turnIdx/turnUntil: a touchless turn
+// shows the LED meter for TOUCH_HOLD_MS, as the row's touch tail does.
+const minusHand = { held: false, used: false, down: 0, turnIdx: -1, turnUntil: 0, timer: 0 };
 const driftHeld = () => DRIFT && minusHand.held;
+// … whatever it is: a step past the lanes, a pad, Play, a touch only (round 1: those still toggled evolve on the − release)
+if (DRIFT) for (const t of ['pad', 'step', 'encoder', 'encoderTouch', 'wheel', 'wheelPush', 'volume', 'button']) move.addEventListener(t, (e) => { const d = e.detail; if (minusHand.held && d.name !== 'minus' && (d.on ?? d.pressed ?? true)) minusHand.used = true; });
 const touchTail = () => { hands.touchUntil = performance.now() + TOUCH_HOLD_MS; clearTimeout(hands.timer); hands.timer = setTimeout(renderPage, TOUCH_HOLD_MS + 10); };
 /** What the hands and the latch make of the row now (pages.js). A latched step goes with its lane, or a shorter loop. */
 function pageNow() {
@@ -832,7 +836,7 @@ function renderSteps() {
   const su = $('stepsui'), name = mode === 'loops' ? `the loops of step ${r.step + 1}` : mode === 'slots' ? 'slots' : mode === 'drift' ? 'drift: the lanes that evolve and the countdown' : 'steps';
   if (su.dataset.cells !== mode) { if (su.dataset.cells === 'drift') stepBtns.forEach(b => b.style.removeProperty('--lane')); su.dataset.cells = mode; }   // RD-11: drift tints cells per lane inline
   if (su.getAttribute('aria-label') !== name) su.setAttribute('aria-label', name);
-  if (mode === 'drift') return renderDriftCells(hs);
+  if (mode === 'drift') return renderDriftCells();
   if (mode !== 'steps') return renderDots(mode, lane, first, hs);
   stepBtns.forEach((b, i) => {
     const s = stepState(lane, i), { inLoop, hit, acc, lk, tg, gh, mk } = s;
@@ -876,19 +880,21 @@ function renderDots(mode, lane, first, hs) {
 }
 // ---- RD-11 drift (?drift): while − is held the cells mirror the Move's LED table (pages.js driftLeds, one source for
 // both): cells 1–6 the lanes that evolve (lane ink, a steady lane outlined), 9–16 the countdown draining toward the
-// next mutation, or all 16 a touched knob's value meter. Read-only (cellAction 'drift' = none): the knobs above edit ----
+// next mutation, or all 16 a touched knob's value meter. Read-only (cellAction 'drift' = none): the knobs above edit.
+// paintLeds hands the cells the state it lit the LEDs with whenever that changes, so they drain together ----
 const driftMeterIdx = () => { if (!driftHeld()) return -1; const t = [...hands.touch]; return t.length ? t[t.length - 1] : performance.now() < minusHand.turnUntil ? minusHand.turnIdx : -1; };
 const driftProgress = () => { if (!evo.on || !playing) return 0; const gc = genClock(playing, barN, heardTick(), barAt, bars.len); return genProgress(gc.bars, evo.every, gc.frac); };
-const driftState = () => { const mi = driftMeterIdx(), g = mi >= 0 ? driftGauges()[mi] : null, leds = driftLeds({ evolves: m.lanes.map(l => !!l.evolve), meter: mi, value: g ? g.value : 0, progress: driftProgress() }); return { mi, g, leds }; };
-function renderDriftCells() {
-  const { mi, g, leds } = driftState(), lit = mi >= 0 ? driftMeter(DRIFT_KEYS[mi], g.value) : 0, left = leds.filter(s => s === 'count').length;
-  const word = mi >= 0 ? g.el.querySelector('.g-label').textContent : '';
+const driftState = () => { const mi = driftMeterIdx(), g = mi >= 0 ? driftGauges()[mi] : null, leds = driftLeds({ evolves: m.lanes.map(l => !!l.evolve), meter: mi, value: g ? g.value : 0, progress: driftProgress(), on: evo.on }); return { mi, g, leds }; };
+let driftCells = '';   // the LED table the cells last drew
+function renderDriftCells(st = driftState()) {
+  const { mi, g, leds } = st, lit = mi >= 0 ? driftMeter(DRIFT_KEYS[mi], g.value) : 0, left = leds.filter(s => s === 'count').length;
+  const word = mi >= 0 ? g.el.querySelector('.g-label').textContent : ''; driftCells = leds.join();
   stepBtns.forEach((b, i) => {
     const s = leds[i]; let cls = 'st dot', label;
     if (i >= STEP_BTNS) { label = 'unused on the drift page'; cls += ' out'; b.style.removeProperty('--lane'); delete b.dataset.n; }   // the pool past the 16 (a 32-step lane's buttons)
     else if (mi >= 0) { label = `${word} meter: ${lit} of 16`; if (s === 'meter') cls += ' lp-on'; b.style.setProperty('--lane', 'var(--l)'); delete b.dataset.n; }
     else if (i < 6 && i < m.lanes.length) { label = `lane ${i + 1} ${voiceLabel(m.lanes[i])}: ${s === 'lane' ? 'evolves' : 'steady'}`; if (s === 'lane') cls += ' lp-on'; b.style.setProperty('--lane', LANE_HEX[i]); b.dataset.n = i + 1; }
-    else if (i >= 8) { label = `next mutation: ${left} of 8 left`; if (s === 'count') cls += ' lp-on'; b.style.setProperty('--lane', 'var(--l)'); delete b.dataset.n; }
+    else if (i >= 8) { label = evo.on ? `next mutation: ${left} of 8 left` : 'evolve is off: no mutation coming'; if (s === 'count') cls += ' lp-on'; b.style.setProperty('--lane', 'var(--l)'); delete b.dataset.n; }
     // cells 7–8 (and a missing lane's) stay drawn but dark, as the device's LEDs do, so the screen maps onto the Move
     else { label = 'dark on the drift page'; b.style.removeProperty('--lane'); delete b.dataset.n; }
     b.className = cls; delete b.dataset.tg; b.disabled = false; b.removeAttribute('aria-pressed'); b.removeAttribute('aria-expanded');
@@ -1469,7 +1475,8 @@ function evolveNow(bar = 0, fromClock = false) {
 function setEvolve(on) { if (on !== evo.on) slog?.act('evolve', evo.on, on); evo.on = on; if (on) { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = ''; } $('btn-evolve').classList.toggle('armed', on); $('btn-evolve').textContent = on ? '◉ evolving' : '◌ evolve'; saveSettings(); paintLeds(); readout(); }
 function renderLanesEvolve() {
   const el = $('evo-lanes'); el.innerHTML = '';
-  m.lanes.forEach((l, i) => el.appendChild(toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }).el));
+  ui.evoLanes = m.lanes.map((l, i) => toggleChip({ label: `${i + 1} · ${voiceLabel(l)}`, on: l.evolve, color: LANE_HEX[i], title: 'lit = evolve may change this lane', onChange: (v) => { l.evolve = v; save(); } }));   // RD-11: the drift page's lane taps set them too
+  el.append(...ui.evoLanes.map(c => c.el));
   renderCouple();
 }
 /** V3 / V5 per-lane generative controls: euclid combine mode, slow modulator, timbre dice, scale snap. */
@@ -2376,8 +2383,9 @@ function paintLeds() {
   }
   const lane = m.lane, s0 = pages.stepFirst(lane, playing), cur = pages.current(lane, playing); let look = null;
   if (driftHeld()) {   // RD-11 (?drift): Nils's LED table while − is held: lanes 1–6, countdown 9–16, or a touched knob's meter
-    const { leds } = driftState();
-    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, leds[i] === 'lane' ? LANE_LED[i] : leds[i] === 'dim' ? LANE_DIM[i] : leds[i] === 'off' ? 0 : COLOR.WHITE);
+    const st = driftState(), { leds } = st;
+    for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, leds[i] === 'lane' ? LANE_LED[i] : leds[i] === 'off' ? 0 : COLOR.WHITE);
+    if (cellsMode === 'drift' && leds.join() !== driftCells) renderDriftCells(st);   // the cells drain with the LEDs (round 1: they sat still)
   } else if (loopHeld || dupHeld) {   // step buttons show the slots: white = playing, cyan = queued, magenta = picked for a chain
     for (let i = 0; i < STEP_BTNS; i++) move.setStepColor(i, chainPick.includes(i) ? MAGENTA_LED : bank.current === i ? COLOR.WHITE : bank.pending === i ? CYAN_LED : bank.filled(i) ? (dupHeld ? REC_LED : 34) : dupHeld ? 1 : 0);
   } else if ((look = pages.looked(performance.now()))) {   // P7: a step held (LOOK_MS, or edited): the step buttons are 16 of its loops (1–16, or the 16 holding the loop playing now) and light where it plays (blue = depends on fill / the step before; white = the loop playing now)
@@ -2411,9 +2419,9 @@ move.addEventListener('step', (e) => {
   const { index: btn, on } = e.detail;
   // RD-11 (?drift): while − is held, step buttons 1–6 toggle whether that lane evolves (Nils: a flagged chord, so the −
   // release won't toggle evolve). Only presses divert: a release always takes the normal path below, so a step that went
-  // down before − keeps its own ending and nothing stays held.
+  // down before − keeps its own ending and nothing stays held. The sheet's lane chip follows (round 1: it kept the old state)
   if (driftHeld() && on) {
-    if (btn < 6 && btn < m.lanes.length) { minusHand.used = true; const l = m.lanes[btn], was = !!l.evolve; l.evolve = !was; slog?.act('drift.lane', was, !was, { lane: btn + 1, absorb: true }); sync(); }
+    if (btn < 6 && btn < m.lanes.length) { const l = m.lanes[btn], was = !!l.evolve; l.evolve = !was; ui.evoLanes?.[btn]?.set(!was); slog?.act('drift.lane', was, !was, { lane: btn + 1, absorb: true }); sync(); }
     return;
   }
   // a release ends its own press, whatever happened since (the page turned, Back went down, the lane got shorter):
@@ -2428,12 +2436,12 @@ move.addEventListener('step', (e) => {
 /** RD-11 (?drift): a knob turned while − is held edits its drift setting through the sheet's own gauge (model, save and
  *  readout come with its onChange) and turns the LEDs and the cells into its meter for TOUCH_HOLD_MS, as a touch does. */
 function driftTurn(index, delta) {
-  minusHand.used = true; minusHand.turnIdx = index; minusHand.turnUntil = performance.now() + TOUCH_HOLD_MS;
-  clearTimeout(minusHand.timer); minusHand.timer = setTimeout(() => { if (driftHeld()) { paintLeds(); renderSteps(); } }, TOUCH_HOLD_MS + 20);
+  minusHand.turnIdx = index; minusHand.turnUntil = performance.now() + TOUCH_HOLD_MS;
+  clearTimeout(minusHand.timer); minusHand.timer = setTimeout(() => { if (driftHeld()) { renderSteps(); paintLeds(); } }, TOUCH_HOLD_MS + 20);
   const g = driftGauges()[index]; if (!g) return;
-  const was = g.value; g.set(was + delta * DRIFT_STEP[index], true);
+  const was = g.value; g.set(was + delta * (DRIFT_COUNTS.has(DRIFT_KEYS[index]) ? 1 : 2), true);
   if (slog && g.value !== was) slog.act('drift.' + DRIFT_KEYS[index], was, g.value, { absorb: true });
-  paintLeds(); renderSteps();
+  renderSteps(); paintLeds();
 }
 move.addEventListener('encoder', (e) => {
   const { index, delta } = e.detail;
@@ -2483,7 +2491,8 @@ move.addEventListener('encoderTouch', (e) => {
   moveTouch(index, on);   // RD-5: the row flips to the Move's page, the peek shows the knob
   // RD-11 (?drift): with − held a touch is the meter, never a lane gesture (drift knobs are no lane's parameters); a
   // gesture that began before − went down still ends on its release
-  if (driftHeld()) { if (!on) { touched.delete(index); const g = knobGest; if (g?.knob === index && g.touch && !g.latched) gestEnd(); } paintLeds(); renderSteps(); return; }
+  // let go of the knob and the table returns at once (Nils §Q1; round 1: a turn's 400 ms tail kept its meter up)
+  if (driftHeld()) { if (!on) { touched.delete(index); if (minusHand.turnIdx === index) minusHand.turnUntil = 0; const g = knobGest; if (g?.knob === index && g.touch && !g.latched) gestEnd(); } renderSteps(); paintLeds(); return; }
   if (!on) { touched.delete(index); const g = knobGest; if (g?.knob === index && g.touch && !g.latched) gestEnd(); return; }
   if (held.size) return; const pk = moveKnob(index, shift); if (!pk) return; touched.set(index, pk);
   // recording, a touch writes from what plays (touch mode: also while the knob holds still); not recording a finger
@@ -2512,10 +2521,12 @@ move.addEventListener('button', (e) => {
   if (name === 'back') { if (pressed) pages.backDown(); else pages.backUp(); paintLeds(); return; }   // L5 pages
   if ((name === 'left' || name === 'right') && pages.back) { if (pressed) { pages.pin(pages.current(m.lane, playing) + (name === 'right' ? 1 : -1), m.lanes); paintLeds(); } return; }
   // RD-11 (?drift): hold − = the drift page (knobs 1–8 the drift settings, the step LEDs Nils's table); a tap still
-  // toggles evolve, now on the release, and only when nothing was turned or tapped while − was down (the conductor
-  // approved moving it off the press, 2026-11-14). Without the flag the press toggles evolve below, as always.
+  // toggles evolve, now on the release (the conductor approved moving it off the press, 2026-11-14): its own press's
+  // release (round 1: a release after a reload toggled), a tap as a step button's (under LOOK_MS: a longer hold is a
+  // look), with nothing else pressed, touched or turned meanwhile. Without the flag the press toggles evolve below.
   if (name === 'minus' && DRIFT) {
-    minusHand.held = pressed; if (pressed) minusHand.used = false; else if (!minusHand.used) setEvolve(!evo.on);
+    if (pressed) Object.assign(minusHand, { held: true, used: false, down: performance.now() });
+    else if (minusHand.held) { minusHand.held = false; if (!minusHand.used && performance.now() - minusHand.down < LOOK_MS) setEvolve(!evo.on); }
     renderPage(); paintLeds(); return;
   }
   // hold = fill; P3 Shift + Layout = fill for the next bar (its release is not the end of a held fill)
