@@ -366,6 +366,9 @@ body.chaos::before { display: none; }
 .stepsui[data-cells="slots"] .st.dot::before { width: 24px; height: 24px; margin: -14px 0 0 -14px; }
 .stepsui[data-cells="slots"] .st.dot[data-n]::after { content: attr(data-n); position: absolute; inset: 0; display: grid; place-items: center; font-size: var(--t-s); font-weight: 500; line-height: 1; color: var(--l); pointer-events: none; }
 .stepsui[data-cells="slots"] .st.dot.lp-on[data-n]::after { color: var(--v); }
+/* RD-9 round 2 (A2): while Loop holds the cells the page tab's outline steps back to a plain edge (it is the knob row's
+   page, which Loop leaves alone; aria-pressed unchanged), so the numbered slots and "SLOTS · MOVE ⇢" lead the console */
+.console:has(#stepsui[data-cells="slots"]) .page-tabs button[aria-pressed=true] { border-color: var(--b); box-shadow: inset 0 0 0 1px var(--b); }
 /* RD-6 the touched knob's plate: the lane's colour under it while a hand is on it (+ 400 ms); the number is in the peek */
 .knobs > i { border-radius: 8px; } .knobs > i.plate { background: color-mix(in srgb, var(--lane, var(--l)) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lane, var(--l)) 55%, var(--v)); }
 /* its three words (clear · more… · done) where "steps 1–16 of 16" was, the size of the page tabs */

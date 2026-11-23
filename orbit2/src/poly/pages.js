@@ -103,18 +103,18 @@ export function resolvePage({ latch = 'rhythm', latchStep = -1, back = 'rhythm',
   const owns = holds || touch || (!quiet && shift), seen = holds ? 'step' : shift && !held ? 'sound' : 'rhythm';   // seen: the Move's page as drawn
   const mine = latch === 'step' && latchStep < 0 ? back : latch, screen = kbdShift && mine !== 'step' ? 'sound' : mine;
   const row = owns ? seen : screen, step = row === 'step' ? (owns ? held.step : latchStep) : -1;
-  // T1a / the quick tap: until the step is looked at, the chip says what it said before it went down. RD-9 round 1 (A2):
-  // Loop held names its page on the chip too, white (the hands own the cells: a glance read the slots as rhythm under
-  // "MOVE ⇢ RHYTHM", 0 of 28); the knobs keep their meaning and their own words say it
+  // T1a / the quick tap: until the step is looked at, the chip says what it said before it went down. RD-9: Loop held
+  // names the slots ahead of the arrow ("SLOTS · MOVE ⇢ RHYTHM"), and the arrow still names what the knobs edit, grey
+  // when that is not what is drawn (round 2: "MOVE ⇢ SLOTS" alone hid that the knobs edit sound under Shift)
   const slots = loop && row !== 'step';   // a step page (held, or the mouse's) keeps its own chip, word and tools
-  const label = holds ? `STEP ${held.step + 1}${shift ? ' ⇧' : ''}` : slots ? 'SLOTS' : seen === 'sound' ? 'SOUND ⇧' : 'RHYTHM';
-  const own = owns || slots || (row === seen && seen !== 'step');
+  const label = holds ? `STEP ${held.step + 1}${shift ? ' ⇧' : ''}` : seen === 'sound' ? 'SOUND ⇧' : 'RHYTHM';
+  const own = owns || (row === seen && seen !== 'step');
   // RD-9 (A2): Loop held repaints the header line too (Nils §Q3: a page repaints the 16 cells and the header)
   const word = slots ? 'slots · held on Move' : row === 'step' ? `step ${step + 1}${owns ? ` · held on Move${shift ? ' ⇧' : ''}` : ''}` : row === 'sound' && shift && owns ? 'sound ⇧' : row;
   // RD-6 the row's knob 8: on a step page its condition, or its repeats while the Move holds it with Shift (T2: only slot
   // 8 repaints); a mouse step page shows the condition (the repeats are one knob turn away in "more…")
   const row8 = row === 'step' ? (owns && shift ? 'repeats' : 'condition') : row === 'sound' ? 'level' : 'tempo';
-  return { row, step, cells: loop ? 'slots' : row === 'step' ? 'loops' : 'steps', move, knob8, row8, own, chip: `MOVE ⇢ ${label}`, word };
+  return { row, step, cells: loop ? 'slots' : row === 'step' ? 'loops' : 'steps', move, knob8, row8, own, chip: `${slots ? 'SLOTS · ' : ''}MOVE ⇢ ${label}`, word };
 }
 
 // ---- RD-6 the step page: what the 16 cells show and what a click on them, or on a planet, does ----

@@ -184,14 +184,19 @@ async function mouseLatch(p) {
 async function loopHold(p) {
   const steps = () => p.eval(`!document.getElementById('lh-steps').hidden`);
   // RD-9 round 1 (A2): the chip names the slots page (white) and each slot cell wears its number
-  const marks = () => p.eval(`(() => { const c = document.getElementById('move-chip'); return { chip: c.textContent, own: c.classList.contains('own'), nums: [...document.querySelectorAll('#stepsui .st:not(.out)')].map(b => b.dataset.n ?? '').join(','), shown: getComputedStyle(document.querySelector('#stepsui .st:not(.out)'), '::after').content }; })()`);
+  const marks = () => p.eval(`(() => { const c = document.getElementById('move-chip'), tab = (id) => getComputedStyle(document.getElementById(id)).boxShadow; return { chip: c.textContent, own: c.classList.contains('own'), nums: [...document.querySelectorAll('#stepsui .st:not(.out)')].map(b => b.dataset.n ?? '').join(','), shown: getComputedStyle(document.querySelector('#stepsui .st:not(.out)'), '::after').content, tabLit: tab('pg-rhythm') !== tab('pg-sound') }; })()`);
   await pickLane(p); const before = await p.eval(STATE);
-  await send(p, bytes.btn('loop', true)); await sleep(60); const on = await p.eval(STATE), stepsOn = await steps(), mOn = await marks();
+  await send(p, bytes.btn('loop', true)); await sleep(60); const on = await p.eval(STATE), stepsOn = await steps();
+  await sleep(200); const mOn = await marks();   // buttons ease their outline over 150 ms (a 300 ms glance sees it settled)
   const n = await p.eval(`[...document.querySelectorAll('#stepsui .st:not(.out)')].filter(b => /^slot \\d+/.test(b.getAttribute('aria-label'))).length`);
-  await send(p, bytes.btn('loop', false)); await sleep(60); const off = await p.eval(STATE), stepsOff = await steps(), mOff = await marks();
+  await send(p, bytes.btn('loop', false)); await sleep(60); const off = await p.eval(STATE), stepsOff = await steps();
+  await sleep(200); const mOff = await marks();
   const want16 = Array.from({ length: 16 }, (_, k) => k + 1).join(',');
-  const markFails = [...(mOn.chip !== 'MOVE ⇢ SLOTS' || !mOn.own ? [`Loop held: the chip says "${mOn.chip}"${mOn.own ? '' : ' (grey)'}`] : []), ...(mOn.nums !== want16 || mOn.shown !== '"1"' ? [`Loop held: the slot cells say ${mOn.nums} (drawn ${mOn.shown})`] : []),
-    ...(mOff.chip === 'MOVE ⇢ SLOTS' || mOff.nums.replace(/,/g, '') ? [`let go: the chip "${mOff.chip}", numbers "${mOff.nums}"`] : [])];
+  // round 2: the arrow still names what the knobs edit (white: rhythm is drawn), the slots ahead of it; the page tab's
+  // outline steps back while Loop holds the cells and comes back after
+  const markFails = [...(mOn.chip !== 'SLOTS · MOVE ⇢ RHYTHM' || !mOn.own ? [`Loop held: the chip says "${mOn.chip}"${mOn.own ? '' : ' (grey)'}`] : []), ...(mOn.nums !== want16 || mOn.shown !== '"1"' ? [`Loop held: the slot cells say ${mOn.nums} (drawn ${mOn.shown})`] : []),
+    ...(mOn.tabLit ? ['Loop held: the rhythm tab keeps its lit outline'] : []), ...(!mOff.tabLit ? ['let go: the rhythm tab lost its outline'] : []),
+    ...(mOff.chip !== 'MOVE ⇢ RHYTHM' || mOff.nums.replace(/,/g, '') ? [`let go: the chip "${mOff.chip}", numbers "${mOff.nums}"`] : [])];
   const fails = []; if (on.cells !== 'slots' || n !== 16) fails.push(`Loop held: cells ${on.cells}, ${n} slots`); if (on.row !== before.row) fails.push(`Loop moved the knobs: ${before.row} → ${on.row}`); if (off.cells !== 'steps') fails.push(`let go: cells ${off.cells}`);
   // RD-9 (A2: slots 0 / 14 read under "rhythm"): the header line names the page while Loop holds the cells, and gives the
   // steps' line back on release

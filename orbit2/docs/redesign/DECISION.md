@@ -185,6 +185,21 @@ name the page and the lane), and a screen-off proxy for A10 (only the Move's LED
 fresh agent). These are simulations: nothing here touches the real Move's USB link or its LEDs, so a real-device
 pass stays an optional extra for the conductor, never a gate.
 
+**Readings I ruled while the phases ran** (the lines above stay as written; each reading says how I judge one):
+- **A2, the slots page** (RD-9 review round 2, 2026-11-23). My page table keeps the knobs on the slots page ("knobs
+  unchanged"), so while Loop is held the knobs edit rhythm (or sound) and a judge who names the knob page "rhythm" is
+  right: 0 of 28 slots answers in RD-9's runs scored that row against the wrong key. A2's 18 of 20 holds for the knob
+  pages (rhythm, sound, step). The slots page is held to its own signals instead, and a script proves them: while Loop
+  holds the cells, the cells are the numbered slots (filled, playing, queued), the header says "slots · held on Move" and
+  the chip names the slots ahead of what the knobs edit ("SLOTS · MOVE ⇢ RHYTHM", `step-check.mjs` LOOP). I withdrew my
+  ask to dim the knobs: it would break A1 on knobs that still turn.
+- **A3, the harmless budget** (same round). "0 destructive" stands exactly as written. "≤ 1 harmless audible" is a
+  budget for accidents the UI causes (a bounce the page could absorb, a hit target, F, a mapping fault), not a count of
+  the slips the agent-run sets inject (0.08 an action: stray knobs, doubles, wrong rows, offset clicks), which no code
+  inside this decision can bring under one a set. Standing check: harmless no worse than the RD-1 baseline by cause, and
+  none from a UI defect. RD-9's final sets: noor 7 / 7 / 3 against the baseline's 7 / 7 / 4, kai 35 / 23 / 17 against
+  36 / 23 / 18, 0 destructive in all six replays.
+
 ## 3. Phase plan
 
 General rules for every phase:

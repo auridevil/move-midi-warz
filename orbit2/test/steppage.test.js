@@ -60,14 +60,17 @@ test('RD-6 the edge cases Nils decided', () => {
   // a touch while the mouse holds a step page: the Move's page for the touch (its knobs edit rhythm), then step 3
   assert.equal(resolvePage({ ...m3, touch: true }).row, 'rhythm'); assert.equal(resolvePage({ ...m3, shift: true, touch: true }).row, 'sound');
   // hold Loop: the cells are the slots, the knobs keep their latched or Move meaning (Loop + knobs is dropped); RD-9 the
-  // header line and the chip name the page, the chip white (Nils §Q3; A2 read 0 of 28 slot pages under "rhythm"); a
-  // step page, held or the mouse's, keeps its own word, chip and tools
-  for (const h of [S, { ...S, held: held7(true) }, { ...S, shift: true }, m3]) {
+  // header line names the page (Nils §Q3) and the chip names the slots ahead of the arrow, which still names what the
+  // knobs edit, grey when that is not drawn (round 2); a step page, held or the mouse's, keeps its own word, chip, tools
+  for (const h of [S, { ...S, held: held7(true) }, { ...S, shift: true }, m3, { latch: 'rhythm' }, { latch: 'rhythm', touch: true }]) {
     const r = resolvePage({ ...h, loop: true }), w = resolvePage(h), step = w.row === 'step';
-    const want = step ? w : { ...w, word: 'slots · held on Move', chip: 'MOVE ⇢ SLOTS', own: true };
+    const want = step ? w : { ...w, word: 'slots · held on Move', chip: `SLOTS · ${w.chip}` };
     assert.deepEqual({ ...pick(r), cells: w.cells }, pick(want), JSON.stringify(h)); assert.equal(r.cells, 'slots');
-    assert.equal([r.row, r.move, r.knob8, r.row8].join(), [w.row, w.move, w.knob8, w.row8].join(), 'the knobs keep their meaning');
+    assert.equal([r.row, r.move, r.knob8, r.row8, r.own].join(), [w.row, w.move, w.knob8, w.row8, w.own].join(), 'the knobs keep their meaning, the chip its grey / white');
   }
+  // the round-2 cases: Loop + the Move's Shift (the knobs edit sound), Loop over the mouse's sound tab (they edit rhythm)
+  assert.deepEqual([resolvePage({ latch: 'rhythm', shift: true, loop: true }).chip, resolvePage({ latch: 'rhythm', shift: true, loop: true }).own], ['SLOTS · MOVE ⇢ SOUND ⇧', true]);
+  assert.deepEqual([resolvePage({ latch: 'sound', loop: true }).chip, resolvePage({ latch: 'sound', loop: true }).own], ['SLOTS · MOVE ⇢ RHYTHM', false]);
   // ⇧ on the keyboard: the sound page on screen, the Move's knobs unchanged; never over a mouse step page
   assert.deepEqual([resolvePage({ latch: 'rhythm', kbdShift: true }).row, resolvePage({ latch: 'rhythm', kbdShift: true }).own], ['sound', false]);
   assert.equal(resolvePage({ ...m3, kbdShift: true }).row, 'step');

@@ -49,7 +49,7 @@ test('RD-9 round 1: the knobs wear the words the console gives (its own gauges),
   assert.deepEqual(knobs(drawMoveHelp({ row: 'rhythm', words: simple })), simple.map((w, k) => [k + 1, w]));
   const full = ['length', 'euclid hits', 'rotation', 'speed ×', 'swing', 'probability', 'tune', 'tempo'];
   assert.deepEqual(knobs(drawMoveHelp({ row: 'rhythm', words: full })).map(x => x[1]), full);
-  assert.deepEqual(knobs(drawMoveHelp({ row: 'step', row8: 'repeats', words: [...KNOB_WORDS.step.slice(0, 6), 'slice', 'repeats'] })).map(x => x[1])[6], 'slice', 'a slice set: knob 7 as the console says it');
+  assert.deepEqual(knobs(drawMoveHelp({ row: 'step', row8: 'repeats', words: [...KNOB_WORDS.step.slice(0, 6), 'x7', 'repeats'] })).map(x => x[1])[6], 'x7', 'whatever the console says, as given');
   // no words (or not eight): the Move table's
   assert.deepEqual(knobs(drawMoveHelp({ row: 'sound' })).map(x => x[1]), KNOB_WORDS.sound);
   assert.deepEqual(knobs(drawMoveHelp({ row: 'sound', words: ['a', 'b'] })).map(x => x[1]), KNOB_WORDS.sound);

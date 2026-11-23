@@ -166,25 +166,29 @@ async function helpOverlay(p) {
     seen.push(`${why}: ${d.join(' · ')}`); if (d.length !== 8 || d.join('|') !== c.join('|')) fails.push(`${why}: the drawing says "${d.join(' · ')}", the console "${c.join(' · ')}"`);
   };
   await p.eval('__poly.openHelp("move")'); await sleep(80);
-  await want(['length', 'euclid hits', 'probability', 'tempo'], 'rhythm (the default)'); await same('rhythm, full view');
-  await p.eval(`__poly.setView('simple')`); await sleep(120); await same('rhythm, simple view (a first visit)');
+  await want(['length', 'euclid hits', 'probability', 'tempo'], 'rhythm (the default)');
+  // every state in both views (round 2: the simple view, a first visit's, is where the copied words went wrong)
+  for (const view of ['everything', 'simple']) {
+    await p.eval(`__poly.setView(${JSON.stringify(view)})`); await sleep(120); await same(`${view}: rhythm`);
+    await p.eval(`document.getElementById('pg-sound').click()`); await sleep(80);
+    if (view === 'everything') await want(['decay', 'drive', 'pan', 'level'], 'the sound tab latched');
+    await same(`${view}: the sound tab`);
+    await p.eval(`document.getElementById('pg-rhythm').click()`); await sleep(80);
+    // a Move step held past the look: its locks on the knobs, the condition on knob 8, the cells its loops; + Shift = repeats
+    await send(p, bytes.step(0, true)); await sleep(550);
+    const held = view === 'everything' ? await want(['velocity', 'condition'], 'a held Move step') : await draw(); await same(`${view}: a held step`);
+    if (!held.includes('loops')) fails.push(`${view}: a held step: the cells line does not say loops`);
+    await send(p, bytes.btn('shift', true)); await sleep(80);
+    await same(`${view}: a held step with Shift`);
+    if (!(await draw()).includes('repeats')) fails.push(`${view}: a held step with Shift: knob 8 does not say repeats`);
+    await send(p, bytes.btn('shift', false)); await send(p, bytes.step(0, false)); await sleep(550);
+    // Loop held: the slots on the cells, the knobs unchanged; the display says the page
+    await send(p, bytes.btn('loop', true)); await sleep(80);
+    const slots = await want(['tempo', 'slots · held on Move'], `${view}: Loop held (the knobs unchanged)`); await same(`${view}: Loop held`);
+    if (!slots.includes('slots')) fails.push(`${view}: Loop held: the cells line does not say slots`);
+    await send(p, bytes.btn('loop', false)); await sleep(80);
+  }
   await p.eval(`__poly.setView('everything')`); await sleep(120);
-  await p.eval(`document.getElementById('pg-sound').click()`); await sleep(80);
-  await want(['decay', 'drive', 'pan', 'level'], 'the sound tab latched'); await same('the sound tab');
-  await p.eval(`document.getElementById('pg-rhythm').click()`); await sleep(80);
-  // a Move step held past the look: its locks on the knobs, the condition on knob 8, the cells its loops; + Shift = repeats
-  await send(p, bytes.step(0, true)); await sleep(550);
-  const held = await want(['velocity', 'condition'], 'a held Move step'); await same('a held step');
-  if (!held.includes('loops')) fails.push('a held step: the cells line does not say loops');
-  await send(p, bytes.btn('shift', true)); await sleep(80);
-  await same('a held step with Shift');
-  if (!(await draw()).includes('repeats')) fails.push('a held step with Shift: knob 8 does not say repeats');
-  await send(p, bytes.btn('shift', false)); await send(p, bytes.step(0, false)); await sleep(550);
-  // Loop held: the slots on the cells, the knobs unchanged; the display says the page
-  await send(p, bytes.btn('loop', true)); await sleep(80);
-  const slots = await want(['length', 'tempo', 'slots · held on Move'], 'Loop held (the knobs unchanged)'); await same('Loop held');
-  if (!slots.includes('slots')) fails.push('Loop held: the cells line does not say slots');
-  await send(p, bytes.btn('loop', false)); await sleep(80);
   // the keys tab is still the keyboard help ("must not regress"), and the dialog's own Esc closes it
   await p.eval('__poly.helpTab("keys")');
   const keys = await p.eval(`document.getElementById('hpane-keys').textContent`);

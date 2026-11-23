@@ -1124,7 +1124,14 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   Tone use) is outside the redesign (DECISION §3). The dsp engine (one worklet node per lane) stays flat: the whole
   heap +0.3 MB in the same 150 s of techno, so it is the long-set answer until the synth voices are fixed. Find what
   keeps finished oscillators connected while playing (FM modulators into a carrier's frequency, Tone's oscillator
-  restart), and give long-set tools a memory watch.
+  restart), and give long-set tools a memory watch. **Noor and Kai (RD-09 rounds 1–2): schedule it before release, not
+  in the long tail** ("a dense 40-minute set cannot run"; "a set-killer").
+- **A slice set's knob 7 and the open drawing** (RD-09 round 2: architect; knob 7 from RD-6): with a step held on a
+  slice set the Move's knob 7 picks the slice (`app.js` 'encoder'), but the step page's gauge (and so the "?" drawing,
+  which wears the console's words) still says "color": the lock gauges are labelled once. Live mode switched while the
+  help is open (only a tool can) redraws the drawing on the next Move event, not at once.
+- **The slots page in F** (RD-09 round 2: ines): F hides the console, so holding Loop in F shows no slots on the cells;
+  the canvas's slot moons (RD-8) still say which slot plays and which waits. Noor: is the cells' slot view state?
 - **Ticks inside a block after a tempo step** (RD-09 round 1: sound; from before the phase): `tickSec()` reads `tempo`
   at the call while the transport's step lands at `now()` (104–135 ms later), so blocks already due keep the old spacing
   but their inner ticks use the new one (≈ 0.3 ms off for ±2 bpm, up to ~10 ms early for ×2 and ~20 ms late for ÷2 on
