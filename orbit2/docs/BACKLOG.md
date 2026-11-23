@@ -1215,4 +1215,6 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   literally; counting it would stop a player with a finger resting on a knob from ever toggling); at every = 1 the
   countdown's LEDs change up to a step early or late (`heardTick()` read at the step callbacks; none seen at every = 8;
   RD-13's `nextEvolveTick`); the − tap is timed when the event is handled, not by the event's own `t` (as the step
-  buttons are) (architect).
+  buttons are) (architect). Round 3 (verifier): the hand already down includes a held pad's aftertouch during a −
+  tap (that tap toggles; take it with the rest); the movewire event test (`drift.test.js`) finds only events written
+  `this.emit('<literal>'` in `device.js`, so one emitted any other way would slip by without a failure.
