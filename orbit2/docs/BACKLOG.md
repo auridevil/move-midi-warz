@@ -206,6 +206,9 @@ the spec (concept, screen at 1512×860, Move mapping, acceptance tests A1–A10,
 - **RD-9** The set: F mode keeps state, night brightness, "?" draws the Move, final setlog sets (A3). ✅
 - **RD-10** Phone, access and clean-up: phone layout, canvas tab stop, Tab order, dead DOM removed (A4). ✅
 - **RD-11** Drift (`?drift`): hold − + knobs, LED state and meter, screen-off gate (A10).
+- **RD-12** Kit on the console: the all-lanes kit as a hairline select in the console's lane head (conductor, 2026-11-23); the sheet's duplicate removed.
+- **RD-13** Evolve in sync with the cycle: `evo.sync` bars · cycle, mutations land on the alignment the sun counts down to (conductor, 2026-11-23).
+- **RD-14** Hands-on guide, by use case: `docs/GUIDE.md` → "?" guide tab, ⌘K "how do I …", every step driven and checked (conductor, 2026-11-23).
 
 ## Deferred
 

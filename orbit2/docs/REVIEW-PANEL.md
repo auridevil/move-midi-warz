@@ -63,6 +63,8 @@ closest to the phase. The playbook names them in its header. The final phase (OR
 | 07 32 steps, 6 lanes | tomi, kai | 16 learning | maya, greta |
 | 08 voices | tomi, dex | 17 final | all ten |
 | 09 samples | dex, maya | 18 automation | kai, dex |
+| RD-12 kit on console | greta, noor, kai | RD-13 evolve · cycle | noor, ines, yuki |
+| RD-14 hands-on guide | maya, rio, noor | | |
 
 **Redesign phases (RD-1…RD-11, `orbit2/docs/redesign/DECISION.md`):** the 3 core reviewers + the 3 named in the
 phase's row of the decision (six in total). The decision is the spec: a defect against its rules or its acceptance
