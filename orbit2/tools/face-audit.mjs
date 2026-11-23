@@ -41,8 +41,9 @@ import { join } from 'node:path';
 
 export const THRESHOLDS = {
   text: 4.5, edge: 3, controlLum: 0.475,                       // A1
-  controls: 50, controlsWorst: 62,                              // A5 (at 1512×860)
-  a1Sizes: ['1512x860', '1280x720', '390x844m'], a5Size: '1512x860', a6Sizes: ['1512x860', '1512x982', '1280x720'], a7Sizes: ['1512x860', '1512x982', '1280x720'],
+  controls: 50, controlsWorst: 62,                              // A5 (at 1512×860, and RD-10's phone)
+  // RD-10 (round 1): its row holds A1, A5 and A6 at 390×844 too, so the phone is in each gate's sizes
+  a1Sizes: ['1512x860', '1280x720', '390x844m'], a5Sizes: ['1512x860', '390x844m'], a6Sizes: ['1512x860', '1512x982', '1280x720', '390x844m'], a7Sizes: ['1512x860', '1512x982', '1280x720'],
   typeSizes: [11, 13, 15, 18, 22], typeLarge: 40,               // TYPE (RD-2): three sizes; RD-5 adds the bar·beat 18 and the console's knob values 22 (DECISION "Numeral weight", 500); 300 only at 40 px and up
   pillSheet: 340, pillsMax: 4,                                  // PILLS (RD-7): 6 pills on, the sheet ≥ 340 px under them, ≤ 4 drawn
 };
@@ -303,9 +304,10 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
   const [, w, h, m] = /^(\d+)x(\d+)(m?)$/.exec(size), mobile = !!m, b = await launch({ port, debugPort, ...(root ? { root } : {}) });
   try {
     const p = await b.open(path, { width: +w, height: +h, mobile }); await ready(p); await p.eval(PAGE); await p.eval('__fa.hideText(false)');
-    // the first-visit toast (the demo's words) is transient text with pointer-events none, up for a few seconds over
-    // whatever is under it (the phone's cells, RD-10): A1 measures the face, so it is dismissed before any screenshot
-    await p.eval(`document.getElementById('toast')?.classList.remove('show')`); await settle(p, 400);
+    // the first-visit toast (the demo's words) is transient text with pointer-events none, up for a few seconds over the
+    // phone's console (RD-10): there A1 measures the face, so it is dismissed before any screenshot; a wider window keeps
+    // it, so A1 still measures the toast's own words (RD-10 round 1, architect)
+    if (mobile) { await p.eval(`document.getElementById('toast')?.classList.remove('show')`); await settle(p, 400); }
     const out = { size, errors: p.errors };
     out.controls = await p.eval('__fa.controls()'); const type0 = await p.eval('__fa.types()'), hue0 = await p.eval('__fa.hues()'); out.hits = await p.eval('__fa.hits()');
     // text: the background with every text transparent, then the page as it is
@@ -499,10 +501,10 @@ export function verdicts(report, t = THRESHOLDS) {
       if (sp.controlMax > t.controlLum) fails.push({ test: 'A1', size: k, what: `step page: a control pixel at luminance ${sp.controlMax}: ${sp.controlMaxAt}` });
     }
   }
-  { const s = by[t.a5Size]; if (s) {
-    if (s.controls.visible > t.controls) fails.push({ test: 'A5', size: t.a5Size, what: `${s.controls.visible} visible controls (> ${t.controls})` });
-    if (s.controls6 && s.controls6.visible > t.controlsWorst) fails.push({ test: 'A5', size: t.a5Size, what: `${s.controls6.visible} visible controls with 6 lanes (> ${t.controlsWorst})` });
-  } }
+  for (const k of t.a5Sizes) { const s = by[k]; if (!s) continue;
+    if (s.controls.visible > t.controls) fails.push({ test: 'A5', size: k, what: `${s.controls.visible} visible controls (> ${t.controls})` });
+    if (s.controls6 && s.controls6.visible > t.controlsWorst) fails.push({ test: 'A5', size: k, what: `${s.controls6.visible} visible controls with 6 lanes (> ${t.controlsWorst})` });
+  }
   for (const k of t.a6Sizes) { const s = by[k]; if (!s) continue;
     for (const [st, v] of [...Object.entries(s.states), ['6 lanes', s.controls6]]) { if (!v) continue; const sc = v.scroll;
       if (sc.pageScrolls) fails.push({ test: 'A6', size: k, what: `${st}: the page scrolls (${sc.scrollHeight} > ${sc.innerHeight})` });
@@ -514,10 +516,10 @@ export function verdicts(report, t = THRESHOLDS) {
   }
   for (const s of report.sizes) if (s.type?.fails.length) fails.push({ test: 'TYPE', size: s.size, what: `${s.type.fails.length} text kinds off the type rules: ${s.type.fails.slice(0, 4).map(f => f.what).join('; ')}` });
   for (const s of report.sizes) { const bad = (s.hits || []).filter(h => !h.ok); if (bad.length) fails.push({ test: 'HIT', size: s.size, what: `${bad.length} action words without a 40 px hit area: ${bad.map(h => `${h.el} ${h.w}×${h.h}`).join(', ')}` }); }
-  // RD-10: on a phone the console is play + bar·beat, the knobs and the cells (DECISION "How it degrades"), so the
-  // stripped console controls are off that face by design: still on every wider window, still run by find (ACTIONS)
-  // and by the Move's own holds
-  const PHONE_OFF = new Set(['btn-fill', 'btn-latch', 'btn-throw', 'btn-undo', 'btn-random', 'btn-jam', 'btn-share', 'btn-share-more', 'btn-all']);
+  // RD-10: on a phone the console is play + bar·beat, the knobs and the cells (DECISION "How it degrades"); the controls
+  // it leaves out live in the sheet there (app.js placePhone), so they must be drawn with their tab open like any other.
+  // Only "all ⌘K" is off the phone by design: the dock is its way into the sheet
+  const PHONE_OFF = new Set(['btn-all']);
   for (const s of report.sizes) { const phone = parseInt(s.size) <= 760; const bad = (s.reach || []).filter(r => (!r.exists || !r.drawn) && !(phone && r.exists && PHONE_OFF.has(r.id))); if (bad.length) fails.push({ test: 'IDS', size: s.size, what: `${bad.length} RD-1 control ids ${bad.some(r => !r.exists) ? 'gone or ' : ''}not drawn with their tab open: ${bad.map(r => `${r.id}${r.exists ? ` (tab ${r.tab})` : ' (gone)'}`).join(', ')}` }); }
   // RD-7: on the wide windows (A6's sizes), six pills keep the sheet ≥ 340 px and draw at most 4 (the rest "+N more")
   for (const k of t.a6Sizes) { const pl = by[k]?.pills; if (!pl?.wide) continue;
@@ -629,7 +631,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   let layoutMoved = false;
   if (arg('--diff', null)) { const { readFileSync } = await import('node:fs'); const d = positionDiff(JSON.parse(readFileSync(arg('--diff'), 'utf8')), report); console.log(`\n## positions vs ${arg('--diff')}\n${diffSummary(d)}`); layoutMoved = layoutChanged(d); }
   const errs = report.sizes.flatMap(s => s.errors).concat(report.audio?.errors || []), frozen = report.audio?.clock?.drawing.pictures < 2;
+  // RD-10 round 1 (sound): a swallowed play click leaves the transport stopped, and a clock with no Tone.Loop call is no
+  // lateness measured, not a pass
+  const silent = report.audio?.clock && !report.audio.clock.latenessMs.n;
   if (errs.length) { console.error(`page errors: ${errs.join(' | ')}`); process.exitCode = 2; }
   else if (frozen) { console.error('the A9 clock ran on a canvas that did not draw: not a measurement'); process.exitCode = 2; }
+  else if (silent) { console.error('the A9 clock heard no Tone.Loop call (the transport never played): not a measurement'); process.exitCode = 2; }
   else if (has('--assert') && (report.verdicts.length || layoutMoved)) process.exitCode = 1;   // page errors stay 2: they say more
 }

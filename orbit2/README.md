@@ -114,7 +114,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `--d` only: the controls dimmer, text still ≥ 4.5:1, the edges at their 3:1 floor untouched. **"?"** opens on the
   keys; its second tab draws the Move with the meanings of the page under the hands (`src/poly/moveface.js
   drawMoveHelp`, redrawn while open, only when it changed) over the Move table: the knobs wear the words the console's
-  own gauges wear for that page (`pageGauges`: the simple or the full view), Capture / Delete what a tap does in live
+  own gauges wear for that page (`pageGauges`), Capture / Delete what a tap does in live
   mode. Hold Loop: the cells are the numbered slots, the header says "slots · held on Move" and the chip "MOVE ⇢ SLOTS"
   (white; the knobs keep their meaning). A press that would mute a lane less
   than 0.2 s after a press unmuted it is a bounce and is dropped (`perform.js MuteBounce`, every mute path goes through
@@ -125,18 +125,28 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   BOUNCE, `step-check.mjs` LOOP (header, chip, numbers). The final sets (A3) and the full glance run
   (A2): `docs/reviews/RD-09.md`, records `docs/redesign/setlog/final-*.json`, `glance-rd09-*.json`; `session.mjs` notes
   the action page errors came with.
-- Phone, access and clean-up (RD-10): one interface everywhere. On a phone (≤ 760 px) the lanes are a row of 44 px
-  colour dots (the name stays the aria-label, a muted dot hollow; the M lamps leave the face), the console is play +
-  bar·beat with the 2×4 knobs and 2×8 cells (fill, fill next, throw, the filter and the action words leave it: find
-  still runs the actions unseen, the Move keeps every hold, play stays the floating thumb-zone ring), the rings are
-  square and full width, the pills one line, the sheet the full-height bottom sheet; the peek sits over the canvas, top
-  left, on narrow windows. The canvas is one tab stop after the console (`role="application"`,
-  `aria-roledescription="orbit"`, named per bar): ↑↓ pick a lane, ←→ walk its steps (the cells turn to that page),
-  Enter is the planet-tap cycle (off → on → accent), spoken through `#announce`, drawn as a white ring round the
-  focused tick (only for the keyboard, `:focus-visible`); locks stay on the cells' step page (Alt+Enter on a cell).
-  Tab order: play is the page's first stop, then the console in Move order. The simple / everything switch (I7) is
-  gone — one view, the full knob words, every drawer; the plain words (hits, shift, speed, chance) live on as find
-  synonyms, and an old save's `view` key is ignored. Zero orphan ids in `index.html` (`test/access.test.js` scans).
+- Phone, access and clean-up (RD-10): one interface everywhere. On a phone (≤ 760 px) the page never scrolls at
+  390×844 (A6; only the sheet scrolls inside): the square full-width rings, a row of 44 px lane-colour dots (the name
+  stays the aria-label, a muted dot hollow; the M lamps leave the face), the console in three rows (play + bar·beat
+  with the cells' header beside them — the page tabs, or a step page's "step N · clear · more… · done" — then the 2×4
+  knobs and the 2×8 cells), the pills' one line beside "?", the docked sheet. The controls the phone's console leaves
+  out move into the sheet, the same nodes (`app.js placePhone`, `PHONE_HOSTS`; back in place on wider windows): fill,
+  fill next, the filter, throw and the action words top Sheet → perform, the voice Sheet → lane, the Move's connect
+  Sheet → setup — so each stays reachable by touch (T1) and find shows them where they are ("all ⌘K" stays hidden: the
+  dock is the way in). The peek sits over the canvas, top left, on narrow windows. The canvas is one tab stop after
+  the console (`role="application"`, `aria-roledescription="orbit"`, named per bar): ↑↓ pick a lane, ←→ walk its steps
+  (the cells turn to that page while it has the focus, and follow again after; `pages.js canvasKey / canvasStep` keep
+  the wanted step through a shorter lane), Enter is the planet-tap cycle (off → on → accent; after a click put the focus
+  there, the first Enter says the step instead), spoken through `#announce` in the cells' words ("lane 3 conga, step 7
+  of 32, on, accent, plays 85 %"), drawn as a white ring round the focused tick (only for the keyboard,
+  `:focus-visible`); locks stay on the cells' step page (Alt+Enter on a cell). Tab order: play is the page's first
+  stop, then the console in Move order. The simple / everything switch (I7) is gone — one view, the full knob words,
+  every drawer; the plain words (hits, shift, speed, chance) live on as find synonyms, an old save's `view` key is
+  ignored, and hidden quests come back from Sheet → setup → settings ("show the quests again"). Find lists only what
+  it can show or run (`findHidden` reads `display: none` round a control too). Zero orphan ids in `index.html`
+  (`test/access.test.js`: a real reference — the id quoted whole, `#id`, or the page's own `for` / `aria-*` — not a
+  substring of a class or a comment). Browser check: `node orbit2/tools/access-check.mjs` (A4, the canvas, PIN, QUESTS)
+  and `--size 390x844m` for the phone (PHONE: no page scroll, every console control reachable by touch).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

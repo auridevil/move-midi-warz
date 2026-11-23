@@ -36,14 +36,14 @@
       <div id="fx-gauge" class="tstrip-fx"></div>
       <button id="btn-throw" class="aword" type="button" aria-pressed="false" title="Hold: delay throw on the whole mix (send and feedback up while held, back on release; Move: hold +)">throw hold</button>
     </div>
-    <div id="lane-face" class="lane-face" role="group" aria-label="selected lane">
+    <div class="lane-face" role="group" aria-label="selected lane">
       <div class="lane-head">
         <span id="lh-lane" class="lh-lane"></span>
         <select id="voice-select" class="hair" aria-label="voice"></select>
         <span id="lh-steps" class="lh-steps"></span>
         <span id="lh-page" class="lh-page"></span>
         <span id="move-chip" class="move-chip" title="What the Move's knobs edit now: white when the Move owns the row, grey when it edits something not drawn"></span>
-        <div id="page-tabs" class="page-tabs" role="group" aria-label="knob page">
+        <div class="page-tabs" role="group" aria-label="knob page">
           <button type="button" id="pg-rhythm" aria-pressed="true" title="The lane's rhythm: length, hits, shift, speed, swing, chance, tune and the tempo (the Move's knobs)">rhythm</button>
           <button type="button" id="pg-sound" aria-pressed="false" title="The lane's sound (the Move's Shift + knobs; hold Shift here too)">sound ⇧</button>
           <button type="button" id="pg-step" aria-pressed="false" title="A step's locks: long-press, right-click or Alt+click a cell first">step</button>
@@ -206,7 +206,7 @@
       <span id="sp-clock" class="spill seg" data-pill="clock" hidden><button id="sp-clock-go" type="button" title="Following a MIDI clock: the MIDI settings in the sheet"></button><button id="sp-clock-x" class="sp-x" type="button" aria-label="stop following the clock" title="stop following the clock">×</button></span>
       <span id="welcome" class="spill seg" data-pill="welcome" hidden><button id="wb-keep" type="button" title="Your beat is here: play the beat you left">welcome back · play</button><button id="wb-fresh" type="button" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="sp-x" type="button" aria-label="dismiss" title="dismiss">×</button></span>
       <!-- I6: the quest you are on; its first button opens the hint, show me and skip (a drop-down, not announced) -->
-      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (progress is kept)">×</button></span>
+      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (progress is kept; Sheet → setup → settings shows them again)">×</button></span>
       <span id="jam-panel" class="spill seg sp-rec jam-panel" data-pill="jam" hidden><button id="jam-go" type="button" title="The take ends on a bar line (stop it with jam)"><span id="jam-text"></span></button><button id="jam-dl" type="button" hidden>⤓ download</button><button id="jam-discard" type="button" hidden>discard</button></span>
       <button id="sp-more" class="sp-more" type="button" aria-expanded="false" aria-live="off" hidden></button>
       <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button></span></div>
@@ -235,6 +235,7 @@
         <div role="tabpanel" id="pane-lane" class="pane" data-sheet="lane" aria-labelledby="tab-lane">
     <details class="drawer lane-drawer" id="lane-drawer" open>
       <summary><span id="lane-name">Lane 1 · kick</span> <em id="shift-ind" class="shift-ind"></em></summary>
+      <div id="ph-voice" class="ph-host"></div><!-- RD-10 the phone: the console's voice picker (app.js placePhone) -->
       <!-- RD-5: the knobs the console's page shows live there; the rest of the lane's (push / pull, vel humanize, the
            swing template, and the other page's) stay here -->
       <div id="sliders" class="gauges"></div>
@@ -381,6 +382,10 @@
     </details>
         </div>
         <div role="tabpanel" id="pane-perform" class="pane" data-sheet="perform" aria-labelledby="tab-perform" hidden>
+    <!-- RD-10 the phone (≤ 760 px): the console is play + bar·beat, the knobs and the cells, and the controls it leaves out
+         live here, the same nodes (app.js placePhone moves them in and back); empty, so not drawn, on wider windows -->
+    <div id="ph-perform" class="ph-host" role="group" aria-label="fill, throw and the filter"></div>
+    <div id="ph-acts" class="ph-host"></div>
     <details class="drawer">
       <summary>Record</summary>
       <div class="row-ctl">
@@ -424,6 +429,7 @@
         <div role="tabpanel" id="pane-setup" class="pane" data-sheet="setup" aria-labelledby="tab-setup" hidden>
     <!-- the wordmark is not on the face (DECISION): it heads the setup tab, the home link with it -->
     <h1 class="wordmark"><a href="../index.html" class="home">MIDI Warz</a> <span class="sub" title="a testing copy of orbits">orbits 2 · lab</span></h1>
+    <div id="ph-move" class="ph-host"></div><!-- RD-10 the phone: the Move's connect and its state (app.js placePhone) -->
     <details class="drawer" id="settings-drawer">
       <summary>Settings</summary>
       <div class="row-ctl"><div class="ctl" title="A/B: two sound engines on the same pattern, voices and knobs"><span class="ctl-lbl">engine</span><div id="engine-select"></div></div></div>
@@ -431,6 +437,8 @@
       <div class="row-ctl">
         <button id="btn-reset" class="small" title="Put every lane back on its first step">reset phase</button>
         <button id="btn-focus" class="small" title="Hide the controls: the orbits, the pills and the peek stay (key F, Esc to come back)">focus mode</button>
+        <!-- RD-10: the quests' way back after × hid them (the simple / everything switch used to bring them back) -->
+        <button id="quests-show" class="small" type="button" title="The quest pill comes back where you left off" hidden>show the quests again</button>
       </div>
       <div class="row-ctl"><span id="live-mode"></span><span id="console-log-chip"></span><span id="night-chip"></span></div>
     </details>

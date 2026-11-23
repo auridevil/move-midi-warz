@@ -44,7 +44,7 @@ test('RD-9 drawMoveHelp: every meaning on its control, by page', () => {
 
 test('RD-9 round 1: the knobs wear the words the console gives (its own gauges), the table\'s only as a fallback', () => {
   const knobs = (svg) => [...svg.matchAll(/data-knob="(\d)">([^<]*)</g)].map(m => [+m[1], m[2]]);
-  // the simple view (a first visit) says hits / shift / speed / chance on the console: the drawing says the same
+  // whatever words the console's gauges wear (RD-9 had a simple view with hits / shift / speed / chance), the drawing says the same
   const simple = ['length', 'hits', 'shift', 'speed', 'swing', 'chance', 'tune', 'tempo'];
   assert.deepEqual(knobs(drawMoveHelp({ row: 'rhythm', words: simple })), simple.map((w, k) => [k + 1, w]));
   const full = ['length', 'euclid hits', 'rotation', 'speed ×', 'swing', 'probability', 'tune', 'tempo'];

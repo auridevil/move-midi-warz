@@ -23,12 +23,14 @@ test('RD-1 face audit: each threshold fails on its own (A1 text, edge, light; A5
   assert.deepEqual(one({ '1512x860': { light: { stopped: { controlMax: 0.4, canvasMax: 0.4 } } } }), ['A1 1512x860'], 'the canvas must be brighter than every control');
   assert.deepEqual(one({ '1512x982': { light: { stopped: { controlMax: 0.9, canvasMax: 1 } } } }), [], 'A1 is judged at 1512×860, 1280×720 and 390×844');
   assert.deepEqual(one({ '1512x860': { controls: { visible: THRESHOLDS.controls + 1, total: 60, dom: 120 } } }), ['A5 1512x860']);
-  assert.deepEqual(one({ '1280x720': { controls: { visible: 90, total: 60, dom: 120 } } }), [], 'A5 counts at 1512×860');
+  assert.deepEqual(one({ '1280x720': { controls: { visible: 90, total: 60, dom: 120 } } }), [], 'A5 counts at 1512×860 and 390×844');
   assert.deepEqual(one({ '1512x860': { controls6: { visible: THRESHOLDS.controlsWorst + 1, scroll: state().scroll } } }), ['A5 1512x860']);
   assert.deepEqual(one({ '1512x982': { states: { default: state(), drawers: state({ scroll: { scrollHeight: 990, innerHeight: 982, pageScrolls: true, inner: [] } }) } } }), ['A6 1512x982']);
   assert.deepEqual(one({ '1280x720': { states: { default: state({ scroll: { scrollHeight: 720, innerHeight: 720, pageScrolls: false, inner: [{ el: 'div.hud', sheet: false }] } }) } } }), ['A6 1280x720']);
   assert.deepEqual(one({ '1280x720': { states: { default: state({ scroll: { scrollHeight: 720, innerHeight: 720, pageScrolls: false, inner: [{ el: 'div#sheet', sheet: true }] } }) } } }), [], 'the sheet may scroll inside');
-  assert.deepEqual(one({ '390x844m': { states: { default: state({ scroll: { scrollHeight: 3000, innerHeight: 844, pageScrolls: true, inner: [] } }) } } }), [], 'A6 is desktop only');
+  // RD-10 (round 1): its row holds A5 and A6 at 390×844 too (a phone page that scrolls, or too many controls, fails)
+  assert.deepEqual(one({ '390x844m': { states: { default: state({ scroll: { scrollHeight: 1002, innerHeight: 844, pageScrolls: true, inner: [] } }) } } }), ['A6 390x844m'], 'A6 at the phone');
+  assert.deepEqual(one({ '390x844m': { controls: { visible: THRESHOLDS.controls + 1, total: 60, dom: 120 } } }), ['A5 390x844m'], 'A5 at the phone');
   assert.deepEqual(one({ '1512x860': { states: { default: state(), focus: state({ rings: { cx: 726, cy: 358, R: 330, outer: 315 } }) } } }), ['A7 1512x860']);
   assert.deepEqual(one({ '1512x860': { states: { default: state(), focus: state({ rings: { cx: 756.3, cy: 358.2, R: 330, outer: 315.1 } }) } } }), [], 'to the pixel');
 });

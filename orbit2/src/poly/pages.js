@@ -16,6 +16,18 @@ export const padPages = (lanes) => Math.max(1, ...lanes.map(l => Math.ceil(l.len
  */
 export const trackLane = (t, shift, lanes) => (shift && lanes > PAD_ROWS && t >= 3 ? 8 - t : PAD_ROWS - t);
 
+/** RD-10 the canvas focus (Yuki's one tab stop): the step it stands on in a lane of `len` steps. The wanted step is kept
+ *  apart from this, so passing through a shorter lane (↓ then ↑) does not lose it. */
+export const canvasStep = (step, len) => Math.max(0, Math.min(step, len - 1));
+/** The canvas focus `{ li, step }` after a key, over lanes of `lens` steps: ↑ ↓ the lane (wrapping, the wanted step
+ *  kept), ← → the step of that lane (wrapping, from where it stands); any other key leaves it. */
+export function canvasKey({ li, step }, key, lens) {
+  const n = lens.length, len = lens[li] || 1, at = canvasStep(step, len);
+  if (key === 'ArrowUp' || key === 'ArrowDown') return { li: (li + (key === 'ArrowDown' ? 1 : n - 1)) % n, step };
+  if (key === 'ArrowLeft' || key === 'ArrowRight') return { li, step: (at + (key === 'ArrowRight' ? 1 : len - 1)) % len };
+  return { li, step };
+}
+
 export class MovePages {
   constructor() {
     this.follow = true;       // each pad row shows the page its own lane's playhead is on (page 1 while stopped)

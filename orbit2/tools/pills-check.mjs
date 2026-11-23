@@ -21,8 +21,8 @@
 // FOCUS     (RD-07 round 1) the focus is never dropped to the page nor left on a button out of sight: Esc on "+N more"
 //           with the focus on a folded pill's × → "+N more" (and Enter there turns nothing off); a × by the keyboard →
 //           the next pill; show me by the keyboard → the quest pill; a folded take discarded → "+N more"; a click on a
-//           pill's words, then Space → play / stop (not the control the pill showed); show me on a phone scrolled down to
-//           the pills → the rings in view while the hand draws.
+//           pill's words, then Space → play / stop (not the control the pill showed); show me on a phone (scrolled down
+//           to the pills where the page scrolls; at 390×844 it doesn't since RD-10) → the rings in view while the hand draws.
 import { launch } from './cdp.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -222,7 +222,8 @@ try {
     Object.assign(phone, { after: await ringsAt(), ghost: await q.eval('__poly.scene.ghosting') });
     if (shots) await q.shot(join(shots, '390x844-show-me.png'));
     out.phoneShowMe = phone;
-    check('FOCUS', phone.before.top < 0 && phone.after.top >= 0 && phone.after.bottom <= phone.after.vh && phone.ghost, `show me on a phone: ${JSON.stringify(phone)}`);
+    // (RD-10 round 1: at 390×844 the page no longer scrolls (A6), so the rings never left; the hand must still draw in view)
+    check('FOCUS', phone.after.top >= 0 && phone.after.bottom <= phone.after.vh && phone.ghost, `show me on a phone: ${JSON.stringify(phone)}`);
     check('FOCUS', !q.errors.length, `phone page errors: ${q.errors.join(' | ')}`);
   }
 } finally { await b.close(); }

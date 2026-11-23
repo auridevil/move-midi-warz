@@ -105,9 +105,9 @@ for (const g of SYNONYMS) for (const m of g) { const ws = words(m); if (ws.lengt
 
 /** One index entry: `key` (stable: the id, else where + name; recents keep it), `name` (what the list shows), `where`
  *  (the tab · drawer · group it sits in), `action` (Enter runs it), `extra` (words it is found by but not named:
- *  select options, the action's words), `alias` (another name it has, found as its name: a lane knob's everything word
- *  in simple view, I7's "shift" is the rotation knob). It is found by its names' words, its where, and every synonym of
- *  those. */
+ *  select options, the action's words), `alias` (another name it has, found as its name; the page passes none since
+ *  RD-10 removed I7's simple view, whose "shift" was the rotation knob). It is found by its names' words, its where, and
+ *  every synonym of those. */
 export function entry({ key, name, where = '', action = false, extra = '', alias = '' }) {
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   const synOf = (ws) => { const out = new Set(); for (const w of ws) for (const s of (GROUP_OF.get(w) || [])) for (const x of words(s)) out.add(x); return out; };

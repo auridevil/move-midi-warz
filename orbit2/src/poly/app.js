@@ -3,7 +3,7 @@ import { MoveDevice, COLOR, nearestPaletteIndex } from 'movewire';
 import { Machine, RATIOS, RATIO_LABEL, ratioIndexOf, MAX_STEPS, MAX_LANES, LANE_COUNTS, SOUND_KEYS, DEFAULT_SOUND, PPQ, MIDI_DIV, BAR_TICKS, METERS, meterParts, LOCK_KEYS, CONDS, MAX_RATCHET, SWING_TEMPLATES, SWING_KEYS, OFFSET_MS, MAX_SLICES, EVOLVE_KINDS, EVOLVE_WEIGHTS, MAX_WEIGHT, weightsFrom, ratchetTimes, ratchetGains, EUCLID_MODES, MOD_TARGETS, TIMBRE_KEYS, SCALE_KEYS, LOCK_RANGE, GHOST_VEL, AUTO_KEYS, AUTO_RES, AUTO_MAX, AUTO_LOOPS_MAX, laneCountOf } from './lanes.js';
 import { Dice } from './dice.js';
 import { History } from './history.js';
-import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS, stepLoops, cellAction, planetAction } from './pages.js';
+import { MovePages, PAD_COLS, PAD_ROWS, STEP_BTNS, LOOK_MS, padPages, trackLane, resolvePage, PAGES, TOUCH_HOLD_MS, stepLoops, cellAction, planetAction, canvasStep, canvasKey } from './pages.js';
 import { hitVel, tuneLock, liveTick, liveQuiet, earlyStep, collectHits, chainSixteenths, chainMeters, hitsToMidi, encodeShareFit, decodeShare, autoRamps, autoCCs, collectChainAuto, LINK_MAX } from './export.js';
 import { putSample, getSample, fromAudioBuffer, toAudioBuffer, trimRecord, sampleWindow, padChannels, SLICES_KEY, SLICES_PING, readSlices, chopEqual } from '../samples.js';
 import { encodeWav, WAV_BITS } from '../unasm/wav.js';
@@ -814,17 +814,23 @@ function renderSteps() {
   if (su.dataset.cells !== mode) su.dataset.cells = mode; if (su.getAttribute('aria-label') !== name) su.setAttribute('aria-label', name);
   if (mode !== 'steps') return renderDots(mode, lane, first, hs);
   stepBtns.forEach((b, i) => {
-    const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i), acc = hit && lane.accentAt(i), lk = inLoop && lane.shownLock(i), tg = inLoop && lane.trigAt(i), gh = hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk = inLoop && lane.maskedOut(lane.stepIndex(i));
+    const s = stepState(lane, i), { inLoop, hit, acc, lk, tg, gh, mk } = s;
     b.className = `st${!inLoop ? ' off' : hit ? (acc ? ' acc' : gh ? ' on gh' : ' on') : ''}${mk ? ' mk' : ''}${lk ? ' lk' : ''}${tg ? ' tg' : ''}${i === lockStep ? ' sel' : ''}${hs.has(i) ? ' held' : ''}${i < first || i >= first + STEP_BTNS ? ' out' : ''}`; b.title = STEP_TITLE;
     const tgText = tg ? `${tg.cond !== 'always' ? tg.cond : ''}${tg.ratchet > 1 ? ` ×${tg.ratchet}` : ''}`.trim() : '';
     if (tgText) b.dataset.tg = tgText; else delete b.dataset.tg;
     delete b.dataset.n;   // a slot's number (renderDots) goes with the slots
     b.disabled = !inLoop; b.setAttribute('aria-pressed', !!hit);
-    b.setAttribute('aria-label', `step ${i + 1}, ${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : mk ? 'off (silenced by the euclid mask)' : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`);
+    b.setAttribute('aria-label', `step ${i + 1}, ${stepWords(s)}`);
     if (i === lockStep) b.setAttribute('aria-expanded', 'true'); else b.removeAttribute('aria-expanded');
   });
   paintPlayhead();
 }
+/** Step i of `lane` as the cells draw and say it (RD-10: the canvas focus says the same words). */
+function stepState(lane, i) {
+  const inLoop = i < lane.length, hit = inLoop && lane.hitAt(i);
+  return { inLoop, hit, acc: hit && lane.accentAt(i), lk: inLoop && lane.shownLock(i), tg: inLoop && lane.trigAt(i), gh: hit && lane.tierAt(lane.stepIndex(i)) === 'ghost', mk: inLoop && lane.maskedOut(lane.stepIndex(i)) };
+}
+const stepWords = ({ inLoop, hit, acc, gh, mk, lk, tg }) => `${!inLoop ? 'outside the loop' : hit ? (acc ? 'on, accent' : gh ? 'on, ghost' : 'on') : mk ? 'off (silenced by the euclid mask)' : 'off'}${lk ? ', locked' : ''}${tg && tg.cond !== 'always' ? `, plays ${tg.cond}` : ''}${tg?.ratchet > 1 ? `, ${tg.ratchet} repeats` : ''}`;
 const STEP_TITLE = 'tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = its step page (locks, condition, repeats) · Shift+click = accent only';
 /**
  * RD-6 the cells as dots. On a step page: the 16 loops of its step (pages.js stepLoops, the Move's LEDs while a step is
@@ -2131,9 +2137,14 @@ function renderQuest() {
   if (d) { const el = $(d); el.classList.add('quest-lit'); el.querySelector('summary')?.setAttribute('data-quest', `quest ${QUESTS.indexOf(q) + 1}`); }
   // RD-3: and the sheet tab that holds it, so a quest in a closed tab still points the way
   const pane = d && $(d).closest('[role=tabpanel]'); if (pane) $(pane.getAttribute('aria-labelledby')).classList.add('quest-lit');
+  setHidden($('quests-show'), !(q && quests.hidden));   // RD-10: the way back after ×, while a quest is left to play
 }
 $('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { quests.skipped.push(q.id); finishQuest(q); toast(`skipped: ${q.title}`); } };
 $('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
+// RD-10 round 1: the quests' way back (the removed simple / everything switch used to bring them back). The pill that
+// comes back is read by the pills' status region; the focus, which would drop to the page with this button gone, stays
+// in its drawer (its summary: nothing there that a second Enter could change)
+$('quests-show').onclick = () => { const had = document.activeElement === $('quests-show'); quests.hidden = false; saveQuests(); renderQuest(); if (had) focusAs($('settings-drawer').querySelector('summary'), lastInput !== 'pointer'); };
 // ---- RD-7 the pills (pills.js): what is on, in one status region, in a fixed order. Each pill's node stays where the
 // HTML put it (moving one would announce it again): renderPills shows or hides it, folds the fifth and later ones by a
 // class, and writes a word or an attribute only when it changed, so the region never moves with the clock (A4: each
@@ -2556,7 +2567,7 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // RD-6 the halos: the Move's held steps once looked at (a tap draws nothing), and the step a step-page knob edits while a
 // hand is on it. Asked every frame: nothing allocated while nothing is held
 const NO_HELD = [];
-const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!pages.held.size && !handOn.size) return f ? [f] : NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); if (f) out.push(f); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
+const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!pages.held.size && !handOn.size) return f ? CV_ONLY : NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); if (f) out.push(f); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
   // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
   // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
   // selected lane's words
@@ -2653,28 +2664,39 @@ function planetStep(li, i) { if (focusMode) setFocusMode(false); if (m.selected 
 // held halo with focus: true), only while the keyboard holds the focus (:focus-visible: a click or a tap draws
 // nothing). No locks here: the cells' step page and the knobs are the accessible route (Alt+Enter on a cell opens it).
 // Every page key (Space, F, the pad rows, Alt+1–6) still works with the canvas focused: controlOwnsKey says no for #cv.
-let cvStep = 0;
+// The arithmetic (wrapping, the wanted step kept through a shorter lane) is pages.js canvasKey / canvasStep.
+let cvStep = 0;          // the wanted step: where it stands is canvasStep(cvStep, the lane's length)
+let cvArmed = false;     // Enter edits only a step that was said: after a click put the focus here, the first Enter says it
+let cvPinned = null;     // the cells' page before the canvas focus turned them ({ follow, pad, mine }), given back on blur
 const cvKeyFocus = () => document.activeElement === cv && cv.matches(':focus-visible');
-/** The focused tick for the scene's halos (null when the canvas isn't keyboard-focused). Clamped: a shorter loop. */
-function cvHalo() { if (!cvKeyFocus()) return null; if (cvStep >= m.lane.length) cvStep = m.lane.length - 1; return { li: m.selected, i: cvStep, focus: true }; }
-const tierWord = { off: 'off', normal: 'on', accent: 'accent', ghost: 'ghost' };
+const cvAt = () => canvasStep(cvStep, m.lane.length);
+const CV_RING = { li: 0, i: 0, focus: true }, CV_ONLY = [CV_RING];
+/** The focused tick for the scene's halos, asked every frame (null when the canvas isn't keyboard-focused): one object,
+ *  rewritten, so a held focus allocates nothing; reading never moves the wanted step. */
+function cvHalo() { if (!cvKeyFocus()) return null; CV_RING.li = m.selected; CV_RING.i = cvAt(); return CV_RING; }
+/** Yuki's line: "lane 3 conga, step 7 of 32, on, accent, plays 85 %" (the cells' own words for the step). */
 function cvSay() {
-  const lane = m.lane; if (cvStep >= lane.length) cvStep = lane.length - 1;
-  speak(`lane ${m.selected + 1} ${voiceLabel(lane)}, step ${cvStep + 1} of ${lane.length}, ${tierWord[lane.tierAt(lane.stepIndex(cvStep))]}`);
+  const lane = m.lane, i = cvAt(), s = stepState(lane, i), ch = Math.round(lane.chanceAt(i) * 100); cvArmed = true;
+  speak(`lane ${m.selected + 1} ${voiceLabel(lane)}, step ${i + 1} of ${lane.length}, ${stepWords(s)}${s.hit && ch < 100 ? `, plays ${ch} %` : ''}`);
 }
-/** The cells follow the canvas focus (reveal does the same for a cell of the other 16). */
-function cvShow() { if (cvStep >= m.lane.length) cvStep = m.lane.length - 1; pages.pin(Math.floor(cvStep / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); poke(); }
+/** The cells (and the Move's pads) show the page holding step i of the selected lane, as Back + a step pins it. */
+function showCellPage(i) { pages.pin(Math.floor(i / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); }
+/** The cells follow the canvas focus; the page they had before comes back on blur (unless something else pinned one). */
+function cvShow() { cvPinned ??= { follow: pages.follow, pad: pages.pad }; showCellPage(cvAt()); cvPinned.mine = pages.pad; poke(); }
 cv.addEventListener('keydown', (e) => {
   if (e.altKey || e.metaKey || e.ctrlKey || e.shiftKey) return;
-  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-    e.preventDefault(); const n = m.lanes.length, li = (m.selected + (e.key === 'ArrowDown' ? 1 : n - 1)) % n;
-    m.select(li); lockStep = -1; sync(); cvShow(); cvSay();
-  } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-    e.preventDefault(); const len = m.lane.length; cvStep = (Math.min(cvStep, len - 1) + (e.key === 'ArrowRight' ? 1 : len - 1)) % len; cvShow(); cvSay();
-  } else if (e.key === 'Enter' && !e.repeat) { e.preventDefault(); canvasTap(m.selected, Math.min(cvStep, m.lane.length - 1)); cvSay(); }
+  if (e.key.startsWith('Arrow')) {
+    e.preventDefault(); const to = canvasKey({ li: m.selected, step: cvStep }, e.key, m.lanes.map(l => l.length));
+    cvStep = to.step; if (to.li !== m.selected) { m.select(to.li); lockStep = -1; sync(); } cvShow(); cvSay();
+  } else if (e.key === 'Enter' && !e.repeat) { e.preventDefault(); if (cvArmed) canvasTap(m.selected, cvAt()); else cvShow(); cvSay(); }
 });
 cv.addEventListener('focus', () => { if (cvKeyFocus()) { cvShow(); cvSay(); } });
-cv.addEventListener('blur', poke);   // the white ring goes with the focus
+cv.addEventListener('pointerdown', () => { cvArmed = false; });
+cv.addEventListener('blur', () => {   // the white ring goes with the focus, and the cells follow again as they did
+  const was = cvPinned; cvPinned = null; cvArmed = false;
+  if (was && !pages.follow && pages.pad === was.mine) { pages.follow = was.follow; pages.pad = was.pad; renderSteps(); renderPage(); paintLeds(); }
+  poke();
+});
 // ---- stress meter: canvas frame time + audio scheduler lateness → 0..1 (the scene sheds sparks/stars on its own) ----
 // C4: a diagnostic, so it shows (and runs) only with ?debug in the URL
 const DEBUG = new URLSearchParams(location.search).has('debug'); $('stress-meter').hidden = !DEBUG;
@@ -2698,8 +2720,9 @@ function readout() {
   if ($('nerd').open) $('nerd-stats').textContent = nerdLines().join('\n');   // written only while someone reads it (opening the drawer fills it)
   if (face.log) paintLog();
   // RD-10: the canvas tab stop is named per bar (Yuki: "6 lanes, aligns in 6 beats")
-  const cvName = `rings: ${m.lanes.length} lanes, aligns in ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(0)} beats`;
-  if ($('cv').getAttribute('aria-label') !== cvName) $('cv').setAttribute('aria-label', cvName);
+  // ($('cv'), not the `cv` declared further down: readout can run while the page is still being built)
+  const cvEl = $('cv'), cvName = `rings: ${m.lanes.length} lanes, aligns in ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(0)} beats`;
+  if (cvEl.getAttribute('aria-label') !== cvName) cvEl.setAttribute('aria-label', cvName);
   renderLanes(); renderPills(); announceChanges();
 }
 /** "Nerd stats": the engine line, a row per lane, the selected lane's sound row, what is queued or locked. */
@@ -2752,6 +2775,24 @@ function layoutStage() {
   scene.setStage(ringBox({ x: c.left, y: c.top, w: c.width, h: c.height }, innerWidth), { x: c.left, y: c.top, w: c.width, h: c.height }); poke();   // RD-8: the cell too, for the light's room
 }
 new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', layoutStage);
+// ---- RD-10 the phone (≤ 760 px, DECISION "How it degrades"): the console is play + bar·beat, the 2×4 knobs and the 2×8
+// cells, and the page never scrolls (A6 at 390×844). The controls the console leaves out move into the sheet, the same
+// nodes (ids, handlers, holds, state), so each stays reachable by touch (T1: fill, fill next, the filter, throw and the
+// action words in perform, the voice in lane, the Move's connect in setup) and find shows them where they are; wider
+// again, each goes back to its place (a comment node marks it). "all ⌘K" goes along hidden: the dock is the way in ----
+const PHONE = matchMedia('(max-width: 760px)');
+const PHONE_HOSTS = [[$('btn-fill'), 'ph-perform'], [$('btn-latch'), 'ph-perform'], [$('fx-gauge'), 'ph-perform'], [$('btn-throw'), 'ph-perform'], [document.querySelector('.console .acts'), 'ph-acts'], [$('voice-select'), 'ph-voice'], [$('move-status'), 'ph-move']];
+const phoneMarks = new Map();
+function placePhone() {
+  const a = document.activeElement;
+  for (const [el, host] of PHONE_HOSTS) {
+    const mark = phoneMarks.get(el);
+    if (PHONE.matches && !mark) { const c = document.createComment(`RD-10: ${el.id || el.className} on wider windows`); el.before(c); phoneMarks.set(el, c); $(host).append(el); }
+    else if (!PHONE.matches && mark) { mark.replaceWith(el); phoneMarks.delete(el); }
+  }
+  if (a && a !== document.activeElement && a.isConnected && a !== document.body) a.focus({ preventScroll: true });   // a moved node loses the focus
+}
+placePhone(); PHONE.addEventListener('change', placePhone);
 // ---- RD-3 the sheet: every drawer and the old right column in one place, six tabs (Greta's feature table). RD-4: closed
 // on load everywhere (a tab, ⌘K, /, the A on a knob opens it; Esc or a click on empty canvas closes it); on narrow
 // windows it is a bottom sheet, docked closed, full height once a tab is tapped. Only the tab is remembered: an RD-3
@@ -2786,7 +2827,7 @@ function reveal(el) {
   if (el.closest('#quest-more') && $('quest-more').hidden && !$('quest').hidden) questMore(true);
   // RD-5: a cell of the lane off the 16 the console shows (steps 17–32): its page, as Back + a step pins it on the Move
   const i = el.matches?.('#stepsui .st.out') ? stepBtns.indexOf(el) : -1;
-  if (i >= 0 && i < m.lane.length) { pages.pin(Math.floor(i / PAD_COLS), m.lanes); renderSteps(); renderPage(); paintLeds(); }
+  if (i >= 0 && i < m.lane.length) showCellPage(i);
   return el;
 }
 // a tab opens its pane (a phone: the tapped tab of an open sheet closes it again); ← → Home End move along the tabs
@@ -2819,15 +2860,18 @@ function accName(el) {
   return squash(String(n).split(',')[0]);
 }
 /** Hidden for a reason the sheet can't undo (no Web MIDI, a closed popup, the lock panel without a step, steps 17–32 of a
- *  16-step lane: display none on the control itself): out of the index. A closed tab's pane, the closed sheet and a closed
- *  drawer are not reasons: find opens them. Nor is the closed share menu for the actions in it (4 bars of audio, the
- *  postcard): Enter presses them without opening it. */
+ *  16-step lane, a control the window's layout leaves out: display none or `hidden` on the control or round it): out of
+ *  the index, so find never lists a control it can neither show nor run (RD-10 round 1). A closed tab's pane, the closed
+ *  sheet and a closed drawer are not reasons: find opens them. Nor is the closed share menu for the actions in it (4 bars
+ *  of audio, the postcard): Enter presses them without opening it. */
 const findHidden = (el) => {
   const runs = !!ACTIONS[el.id];
-  // (RD-5: a cell of the lane off the console's 16 is no reason either: reveal turns the cells' page. RD-10: an action
-  // the phone's console hides, undo say, still runs from find: Enter presses it unseen)
+  // (RD-5: a cell of the lane off the console's 16 is no reason either: reveal turns the cells' page)
   if (!runs && !el.matches('#stepsui .st.out:not(:disabled)') && getComputedStyle(el).display === 'none') return true;
-  for (let n = el; n; n = n.parentElement) if (n.hidden && !n.matches('[role=tabpanel], #sheet-body') && !(runs && n.id === 'share-menu')) return true;
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches('[role=tabpanel], #sheet-body, #sheet') || (runs && n.id === 'share-menu')) continue;
+    if (n.hidden || (n !== el && getComputedStyle(n).display === 'none')) return true;
+  }
   return false;
 };
 /** Where a control lives, as the list says it: the tab, the drawer, the group label round it (each said once: the

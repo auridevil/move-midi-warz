@@ -41,8 +41,7 @@ try {
   // shown (every pane, every drawer) and Chrome's accessibility tree read: each named interactive node must be an index
   // entry ----
   const ROLES = new Set(['button', 'checkbox', 'combobox', 'link', 'menuitem', 'radio', 'slider', 'spinbutton', 'switch', 'tab', 'textbox', 'searchbox', 'DisclosureTriangle', 'PopUpButton', 'ListBox']);
-  out.cover = {};
-  for (const view of ['all']) {
+  {
     await p.eval(`(() => { __poly.setSheet('lane', true); window.__fx = new Set(__poly.findIndex().map(e => e.el)); document.querySelectorAll('[role=tabpanel]').forEach(x => { x.hidden = false; }); document.querySelectorAll('details').forEach(d => { d.open = true; }); })()`);
     await p.sleep(300);
     const { nodes } = (await p.send('Accessibility.getFullAXTree')).result;
@@ -53,16 +52,16 @@ try {
       const r = (await p.send('Runtime.callFunctionOn', { objectId: object.objectId, returnByValue: true, functionDeclaration: `function () { if (this.closest('#find-box')) return null; return { fx: window.__fx.has(this), id: this.id, tag: this.tagName }; }` })).result?.result?.value;
       if (!r) continue; labelled++; if (!r.fx) missing.push(`${n.role.value} "${n.name.value}" ${r.id || r.tag}`);
     }
-    out.cover[view] = { labelled, indexed: await p.eval('__fx.size'), missing };
-    if (missing.length) fail('COVER', `${view}: ${missing.length} labelled controls not in the index: ${missing.slice(0, 8).join('; ')}`);
+    out.cover = { labelled, indexed: await p.eval('__fx.size'), missing };
+    if (missing.length) fail('COVER', `${missing.length} labelled controls not in the index: ${missing.slice(0, 8).join('; ')}`);
     await p.eval(`(() => { const s = __poly.sheet; __poly.setSheet(s.tab, false); document.querySelectorAll('details').forEach(d => { d.open = false; }); })()`);
   }
   // the synonyms test, top 1, judged by the element (a lane knob: in the sheet's #sliders, or RD-5's console row #knobs;
   // the stems button, the meter's 7/8)
   const SYN = [['euclid', `!!e.el.closest('#sliders, #knobs') && /hits/.test(e.name)`], ['rotation', `!!e.el.closest('#sliders, #knobs') && /shift|rotation/.test(e.name)`], ['ratio', `!!e.el.closest('#sliders, #knobs') && /speed/.test(e.name)`], ['probability', `!!e.el.closest('#sliders, #knobs') && /chance|probability/.test(e.name)`], ['stems', `e.el.id === 'exp-stems'`], ['7/8', `e.name === '7/8' && !!e.el.closest('#meter')`]];
-  for (const view of ['all']) for (const [q, ok] of SYN) {
+  for (const [q, ok] of SYN) {
     const r = await p.eval(`(async () => { const { search } = await import('./src/poly/find.js'); const e = search(__poly.findIndex(), ${JSON.stringify(q)})[0]; return e ? { name: e.name, where: e.where, ok: ${ok} } : null; })()`);
-    ((out.synonyms ??= {})[view] ??= {})[q] = r && `${r.name} · ${r.where}`; if (!r?.ok) fail('COVER', `${view}: "${q}" → ${r ? `${r.name} · ${r.where}` : 'nothing'}`);
+    (out.synonyms ??= {})[q] = r && `${r.name} · ${r.where}`; if (!r?.ok) fail('COVER', `"${q}" → ${r ? `${r.name} · ${r.where}` : 'nothing'}`);
   }
 
   // ---- KEYS: a fresh page, the sheet closed ----

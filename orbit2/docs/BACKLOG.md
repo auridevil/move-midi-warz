@@ -973,7 +973,10 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   drag, still flips. Options: fine drags on Alt, or keyboard ⇧ shows sound only while no pointer is down.
 - **Words on the console row** (RD-05 round 1: verifier, noor; RD-10 / Noor): in the everything view the rhythm row's
   names are cut at 1512×860 ("euclid h…", "probabi…"; the simple view's hits / shift / chance fit). RD-10 removes the
-  views: pick the words the row shows then.
+  views: pick the words the row shows then. **Still open after RD-10** (round 1: maya): one view now, so every visit sees
+  the cut words, the phone too ("euclid h…", "probabi…", a step page's "conditi…"); the knob label is one line beside a
+  30–34 px arc (a second line would cost the phone's A6). A choice of words for Noor: e.g. the plain words on the row
+  (hits, chance) with the full words kept as the knobs' accessible names, find's synonyms and the "?" table.
 - **Holds on the face's targets** (RD-05 round 1: verifier, noor, kai; for Noor): randomize keeps its hold (long-press /
   right-click / Shift+click = wild, as at `12a25f8`; one undo step) although principle 3 keeps randomize off holds; a
   mis-clicked M lamp mutes the kick (the run's only direct hit besides play: a hold, or Shift-only?); a lit M is an
@@ -1155,3 +1158,17 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **F mode's leftovers** (RD-09 round 1: ines; from before the phase): muted lanes are drawn in one flat grey with or
   without F (no distinct 35 % ring); the groove's description toast can sit over the slot numbers and the caption in F;
   F hides play (by decision: the sun and the crawl say it is playing).
+- **The phone after RD-10** (RD-10 round 1: verifier, maya, greta, yuki; from before the phase unless said): phone
+  targets under 44 px as at `e768c09` — the knobs 87×39 (the arc and its words), the cells 42×44 (eight across 358 px
+  with 3 px gaps; 44 wide needs the side margins at 8 px); the first-visit toast lies over the phone's cells for ~2.4 s
+  (pointer-events none); the face audit's NIGHT "all" gate cannot pass in a phone-only run (the brightest control there
+  is a lane dot, ink night leaves alone: 0.47 → 0.464); the phone's console header keeps the page tabs and a step page's
+  words but not the lane's name, its "steps 17–32 of 32" or the MOVE ⇢ chip (RD-10's A6 fit: the dots name the lane;
+  for Noor, a 32-step lane's page could come back as a short "17–32"); while a knob is touched the peek's plate lies
+  over the outer ring's top-left arc (the phone has no left column; transient, read-only).
+- **Auditions start one look-ahead late** (RD-10 round 1: sound; audio scheduling, outside the redesign): `auditionStep`
+  schedules a stopped tap / Enter at `T.now()` (the current time + Tone's look-ahead), so a stopped tap is heard ~0.1 s
+  late; an immediate start for auditions would feel snappier.
+- **Ids only tools and tests use** (RD-10 round 1: architect): `dice-drawer`, `settings-drawer`, `midi-drawer`,
+  `col-left` are referenced only by the tools and tests (a real use for the orphan scan); naming them in the test as the
+  `pg-*` family is would make a future change to them visible.
