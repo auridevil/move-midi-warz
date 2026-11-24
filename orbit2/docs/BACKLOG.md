@@ -1218,3 +1218,23 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   buttons are) (architect). Round 3 (verifier): the hand already down includes a held pad's aftertouch during a −
   tap (that tap toggles; take it with the rest); the movewire event test (`drift.test.js`) finds only events written
   `this.emit('<literal>'` in `device.js`, so one emitted any other way would slip by without a failure.
+- **The kit ▾ on a first visit** (RD-12 round 1: verifier, greta, noor): the demo's lanes (kick, rim, hat, wood) match
+  no kit, so the conductor's first look at the new control reads "custom" — true (B3), but it says nothing. Putting
+  the demo on a named kit changes the demo's sound (and the A9 render, if it plays the demo), so it is Noor's call; a
+  "nearest kit" hint is the other way.
+- **The kit's peek** (RD-12 round 1: noor): "kit · name" and its plain line make a ≈ 300 × 98 px box for 400 ms in a
+  dark room (one line?). While a kit change borrows the peek over a held knob, turning that knob shows its value only
+  after the 400 ms (a new touch takes the peek back at once).
+- **The quest pill without its × on wide windows** (RD-12 round 1: greta, noor): hiding the quests is one step more
+  there (open the drop-down, hide); Noor would show "hide" at first sight. A5 has sat at exactly 50 since RD-5, so the
+  next face control needs a trade of its own (RD-14 adds none).
+- **A9's wording and dsp + Space** (RD-12 round 1: sound): the dsp engine renders a kit with heavy sends (Space) up to
+  4 LSB apart in the same seeded page (≈ 1000 samples; the delay feedback?), at the phase start too, with the same
+  fingerprint: A9's "bit-identical" works out as "same fingerprint, null test ≤ 1 LSB", and a null test of such a kit
+  would fail for no real reason.
+- **kit.test.js reads source text** (RD-12 round 1: architect): its static guards match source and CSS lines (one undo,
+  one setlog, the fold) and test 1 runs `Machine.applyKit` (unchanged) rather than the page's path; one undo / one
+  setlog / the peek are checked by `kit-check.mjs` (not in `npm test`; the peek's timing is `peek.test.js`). A
+  page-free `applyKit` (model, history and setlog passed in) would put them in `npm test`.
+- **Arrow keys on a focused select** (RD-12 round 1: noor): ArrowDown on the focused kit ▾ (voice ▾ the same) did not
+  step it in headless Chrome on macOS, where the native menu opens; worth a check by hand on the real browser.

@@ -342,6 +342,7 @@ body.chaos::before { display: none; }
 .acts .share-wrap { justify-self: start; }
 @media not all and (max-width: 1100px) { #btn-share-more { display: none; } }   /* a long press / right-click / ↓ on share opens the menu (A5) */
 @media not all and (max-width: 1100px) { #quest-x { display: none; } }   /* RD-12: "hide" lives in the quest's drop-down; its A5 slot went to the console's kit ▾ */
+@media (max-width: 1100px) { #quest-hide { display: none; } }   /* … and where the × shows, the drop-down needs no second "hide" (one "hide quests" for ⌘K) */
 /* the right column's head: the Move pill and "?" */
 .hud-top { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
 /* the page drawn, in words ("sound", "step 7 · held on Move"); the light grey while the Move owns the row */

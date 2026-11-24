@@ -81,6 +81,15 @@ test('RD-4 ranking: name before synonym before where; ties go to actions, then r
   assert.equal(search(Array.from({ length: 20 }, (_, i) => e(`k${i}`, `step ${i}`)), 'step').length, 8, 'eight at most');
 });
 
+test('RD-12 the whole-name bonus: only a bracketed aside leaves the name; a phrase synonym counts said in full', () => {
+  assert.deepEqual(entry({ key: 'k', name: 'kit (all lanes)' }).main, ['kit']);
+  assert.deepEqual(entry({ key: 'p', name: 'share a postcard (video)' }).main, ['share', 'a', 'postcard']);
+  assert.deepEqual(entry({ key: 'x', name: 'gain (dB) trim' }).main, ['gain', 'trim'], 'words after the aside stay in the name (round 1, architect)');
+  const idx = [entry({ key: 'kit', name: 'kit (all lanes)' }), entry({ key: 'exp-kit', name: 'export kit', action: true })];
+  assert.equal(search(idx, 'drum rack')[0].key, 'kit', '"drum rack" said in full says "kit"');
+  assert.equal(search(idx, 'drum')[0].key, 'exp-kit', 'one word of a phrase alone says nothing: a tie, the action first');
+});
+
 test('RD-4 the words: lower case, accents and symbols dropped, 7/8 and 1:3 kept whole', () => {
   assert.deepEqual(words('⤓ Stems (.zip)'), ['stems', 'zip']);
   assert.deepEqual(words('meter 7/8 · plays 1:3'), ['meter', '7/8', 'plays', '1:3']);

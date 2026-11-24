@@ -102,6 +102,9 @@ export function words(s) {
 // (else "tempo" would pull in the tap group); a word may sit in several groups
 const GROUP_OF = new Map();
 for (const g of SYNONYMS) for (const m of g) { const ws = words(m); if (ws.length === 1) GROUP_OF.set(ws[0], [...(GROUP_OF.get(ws[0]) || []), ...g]); }
+// RD-12: each word's phrase synonyms as word lists ("kit" → [drum, rack], [one, shots]): a query that says one in full
+// says the word. Read once here, not per entry and keystroke
+const PHRASES_OF = new Map([...GROUP_OF].map(([w, g]) => [w, g.map(words).filter(ws => ws.length > 1)]));
 
 /** One index entry: `key` (stable: the id, else where + name; recents keep it), `name` (what the list shows), `where`
  *  (the tab · drawer · group it sits in), `action` (Enter runs it), `extra` (words it is found by but not named:
@@ -112,7 +115,8 @@ export function entry({ key, name, where = '', action = false, extra = '', alias
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   // RD-12: the name's words outside any parenthesis ("kit (all lanes)" → kit): the whole-name bonus judges these, so
   // an aside doesn't keep a control from winning its own plain name (the export kit ACTION used to outrank the kit ▾)
-  const main = [...new Set([...words(String(name).split('(')[0]), ...words(String(alias).split('(')[0])])];
+  const aside = (s) => String(s).replace(/\([^)]*\)/g, ' ');   // only the bracketed words go: "a (b) c" → a c
+  const main = [...new Set([...words(aside(name)), ...words(aside(alias))])];
   const synOf = (ws) => { const out = new Set(); for (const w of ws) for (const s of (GROUP_OF.get(w) || [])) for (const x of words(s)) out.add(x); return out; };
   const syn = [...synOf(own)].filter(w => !own.includes(w));
   return { key, name, where, action, own, main: main.length ? main : own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)) };
@@ -136,13 +140,13 @@ export function search(index, query, recents = [], max = 8) {
     for (const k of [...recents, ...FIND_DEFAULTS]) { const e = byKey.get(k); if (e && !out.includes(e)) out.push(e); }
     return out.slice(0, max);
   }
+  // the query says a name word: the word, a one-word synonym of it, or a phrase synonym said in full ("drum rack" says
+  // "kit", RD-12); one word of a phrase alone does not ("tap tempo" doesn't make "tap" a tempo)
+  const says = (w) => qs.some(q => q === w || (GROUP_OF.get(w) || []).includes(q)) || (PHRASES_OF.get(w) || []).some(ws => ws.every(x => qs.includes(x)));
   const scored = [];
   index.forEach((e, i) => {
     let s = 0; for (const q of qs) { const f = fit(e, q); if (!f) return; s += f; }
-    // the query says the whole name (each word outside a parenthesis, or a synonym of it): "tempo" and "bpm" are the
-    // knob before "tap tempo". A synonym may be a phrase: "drum rack" said in full says "kit" (RD-12); one word of it
-    // alone does not ("tap tempo" doesn't make "tap" a tempo)
-    const says = (w) => qs.some(q => q === w || (GROUP_OF.get(w) || []).includes(q)) || (GROUP_OF.get(w) || []).some(ph => { const ws = words(ph); return ws.length > 1 && ws.every(x => qs.includes(x)); });
+    // the query says the whole name (each word outside a parenthesis): "tempo" and "bpm" are the knob before "tap tempo"
     if ((e.main || e.own).every(says)) s += 1;
     scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i });
   });

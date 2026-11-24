@@ -11,7 +11,8 @@
 //   await b.close();                                                // kills Chrome + server, deletes the profile
 //
 // Every reviewer uses its own port pair (see orbit2/docs/REVIEW-PANEL.md) so parallel reviews never collide.
-// A CDP call that never answers fails after 30 s instead of hanging the script (eval: 120 s, or `eval(expr, { timeout })`).
+// A CDP call that never answers fails after 30 s instead of hanging the script (eval: 120 s, 4 × CDP_START_MS when that
+// is longer, or `eval(expr, { timeout })`).
 import { spawn } from 'node:child_process';
 import { rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -67,7 +68,9 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
       await send('Page.navigate', { url: `${base}/${path}` }); await sleep(wait);
       const page = {
         errors, send,
-        async eval(expression, { timeout = 120000 } = {}) {   // awaits promises: an offline render takes a while
+        // awaits promises: an offline render takes a while, and far longer on a busy machine (RD-12 round 1, sound: a
+        // seeded render took 261 s at load 150): the default grows with CDP_START_MS, as `ready` does
+        async eval(expression, { timeout = Math.max(120000, 4 * (+process.env.CDP_START_MS || 0)) } = {}) {
           const r = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true, userGesture: true }, timeout);
           if (r.result?.exceptionDetails) throw new Error(r.result.exceptionDetails.exception?.description || 'eval failed');
           return r.result?.result?.value;

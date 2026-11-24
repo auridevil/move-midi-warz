@@ -22,11 +22,17 @@
 //        one undo restores every lane's voice and sound and the select's word.
 // PHONE  at 390×844 the kit rides with voice ▾ into the sheet's lane drawer (ph-voice, the RD-10 pattern), and opening
 //        the lane tab draws it.
+// PEEK   (round 1) the peek's timing with the Move's bytes, timed inside the page (a round trip under load outlasts
+//        400 ms): a Shift + ▶ tap shows "kit · name" ≈ 400 ms (kai); a knob let go, then a kit change 50 ms later
+//        (verifier), and a kit change under a held knob, then the let-go (architect), show the kit and leave nothing on
+//        screen (both stuck before: one timer for the knob's hide and the kit's).
+// QUEST  (round 1) ⌘K "hide quests" on a wide window: the drop-down's hide (the × is folded there), Enter shows it in
+//        the open drop-down, a second Enter hides the quests; on a narrow window the ×, and only one hit either way.
 import { launch } from './cdp.mjs';
 import { bytes } from './session-core.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
-const only = arg('--only', 'FACE,CLICK,CMDK,MOVE,B3,UNDO,PHONE').split(','), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), root = arg('--root', undefined);
+const only = arg('--only', 'FACE,CLICK,CMDK,MOVE,B3,UNDO,PHONE,PEEK,QUEST').split(','), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), root = arg('--root', undefined);
 const out = {}, fails = [];
 const check = (sec, ok, what) => { if (!ok) fails.push(`${sec}: ${what}`); };
 const ready = async (p) => { for (let i = 0; i < 240; i++) { if (await p.eval('!!window.__poly')) return; await p.sleep(250); } throw new Error('orbit2 did not start'); };
@@ -43,7 +49,17 @@ const state = (p) => p.eval(`(() => { const m = __poly.m, ks = document.getEleme
   customShown: !ks.querySelector('option[value=custom]').hidden, past: __poly.hist.past.length }; })()`);
 // the mouse path: the setlog only logs a hand's action, so the synthetic change declares its source first (as the
 // Move wrapper does with from('move'))
-const pick = (p, key) => p.eval(`(() => { __poly.setlog?.from('pointer'); const ks = document.getElementById('kit-select'); ks.value = ${JSON.stringify(key)}; ks.dispatchEvent(new Event('change')); })()`);
+const PICK = (key) => `__poly.setlog?.from('pointer'); { const ks = document.getElementById('kit-select'); ks.value = ${JSON.stringify(key)}; ks.dispatchEvent(new Event('change')); }`;
+const pick = (p, key) => p.eval(`(() => { ${PICK(key)} })()`);
+// a timeline of Move bytes and peek samples [ms, step] run inside the page (no round trip between a byte and a read):
+// steps are keys of B, or 'S…' to sample what the peek says and how many knobs wear the plate
+const B = { sd: bytes.btn('shift', true), su: bytes.btn('shift', false), rd: bytes.btn('right', true), ru: bytes.btn('right', false), td: bytes.touch(0, true), tu: bytes.touch(0, false) };
+const timeline = (p, tl) => p.eval(`new Promise(res => {
+  const B = ${JSON.stringify(B)}, out = {}, t0 = performance.now(), end = ${Math.max(...tl.map(x => x[0])) + 30};
+  const S = (tag) => { const e = document.getElementById('peek'); out[tag] = { ms: Math.round(performance.now() - t0), says: e.hidden ? '' : document.getElementById('peek-name').textContent, plates: document.querySelectorAll('#knobs > .plate').length }; };
+  for (const [ms, w] of ${JSON.stringify(tl)}) setTimeout(() => { if (w[0] === 'S') S(w); else __poly.move.receive(new Uint8Array(B[w])); }, ms);
+  setTimeout(() => res(out), end);
+})`, { timeout: 60000 });
 const send = (p, b) => p.eval(`__poly.move.receive(new Uint8Array(${JSON.stringify(b)}))`);
 const peek = (p) => p.eval(`(() => { const e = document.getElementById('peek'); return { hidden: e.hidden, name: document.getElementById('peek-name').textContent }; })()`);
 
@@ -72,7 +88,9 @@ try {
   if (only.includes('CLICK')) {
     const p = await fresh(b);
     const s0 = await state(p);
-    await pick(p, 'space'); const s1 = await state(p), pk = await peek(p);
+    // the peek read in the same task as the change: a round trip on a busy machine can outlast its 400 ms (round 1, noor)
+    const pk = await p.eval(`(() => { ${PICK('space')} const e = document.getElementById('peek'); return { hidden: e.hidden, name: document.getElementById('peek-name').textContent }; })()`);
+    const s1 = await state(p);
     await p.sleep(600); const pk2 = await peek(p);
     const slog = await p.eval(`__poly.setlog.log.entries().filter(e => e.target === 'kit').map(e => [e.before, e.after])`).catch(() => null);
     out.CLICK = { before: s0.voices, after: s1.voices, kitKey: s1.kitKey, value: s1.value, peek: pk, peekAfter: pk2, slog };
@@ -146,6 +164,45 @@ try {
       return { home, withVoice, drawn }; })()`);
     check('PHONE', out.PHONE.home && out.PHONE.withVoice && out.PHONE.drawn, `ph-voice placement ${JSON.stringify(out.PHONE)}`);
     await p.close();
+  }
+  if (only.includes('PEEK')) {
+    const p = await fresh(b);
+    const kitSays = (s) => /^kit · /.test(s?.says || ''), gone = (s) => s && !s.says && !s.plates;
+    // kai: a Shift + ▶ tap; the peek lasts its 400 ms past the button's release
+    const tap = await timeline(p, [[0, 'sd'], [20, 'rd'], [25, 'S1'], [100, 'ru'], [140, 'su'], [150, 'S2'], [360, 'S3'], [650, 'S4']]);
+    await p.sleep(500);
+    // verifier: touch encoder 1, let go, Shift + ▶ 50 ms later
+    const rel = await timeline(p, [[0, 'td'], [150, 'tu'], [200, 'sd'], [210, 'rd'], [215, 'S1'], [260, 'ru'], [280, 'su'], [1500, 'S2'], [3000, 'S3']]);
+    await p.sleep(500);
+    // architect: a finger on encoder 1, Shift + ▶, the finger lifts 100 ms later
+    const held = await timeline(p, [[0, 'td'], [100, 'sd'], [110, 'rd'], [115, 'S1'], [150, 'ru'], [210, 'tu'], [260, 'su'], [1500, 'S2'], [4500, 'S3']]);
+    out.PEEK = { tap, rel, held, errors: p.errors.length };
+    check('PEEK', kitSays(tap.S1) && kitSays(tap.S2) && kitSays(tap.S3) && gone(tap.S4), `a Move tap: "kit · name" ≈ 400 ms ${JSON.stringify(tap)}`);
+    check('PEEK', kitSays(rel.S1) && gone(rel.S2) && gone(rel.S3), `a let-go then a kit change: the kit, then nothing stays ${JSON.stringify(rel)}`);
+    check('PEEK', kitSays(held.S1) && gone(held.S2) && gone(held.S3), `a kit change under a held knob: the kit, then nothing stays ${JSON.stringify(held)}`);
+    check('PEEK', !p.errors.length, `page errors ${p.errors.join(' | ')}`);
+    await p.close();
+  }
+  if (only.includes('QUEST')) {
+    // ⌘K "hide quests", typed and run through the find box (findRun: reveal + focus), at a wide and a narrow window
+    const hide = async (width, height) => {
+      const p = await fresh(b, { width, height });
+      const r = await p.eval(`(() => { const q = document.getElementById('quest'); __poly.openFind(); const inp = document.getElementById('find');
+        inp.value = 'hide quests'; inp.dispatchEvent(new Event('input', { bubbles: true }));
+        const hits = [...document.querySelectorAll('#find-list [role=option]')].map(li => li.textContent).filter(t => /^hide quests/.test(t));
+        return { pill: !q.hidden, first: document.getElementById('find-o0')?.textContent || '', hits: hits.length }; })()`);
+      await p.key('Enter'); await p.sleep(250);
+      r.focus = await p.eval(`document.activeElement?.id`); r.dropOpen = await p.eval(`!document.getElementById('quest-more').hidden`);
+      await p.key('Enter'); await p.sleep(250);
+      r.hidden = await p.eval(`__poly.quests.hidden`); r.errors = p.errors.length;
+      await p.close(); return r;
+    };
+    out.QUEST = { wide: await hide(1512, 860), narrow: await hide(1000, 800) };
+    const { wide, narrow } = out.QUEST;
+    check('QUEST', wide.pill && /^hide quests/.test(wide.first) && wide.hits === 1, `wide: ⌘K "hide quests" → one hit, first ${JSON.stringify(wide)}`);
+    check('QUEST', wide.focus === 'quest-hide' && wide.dropOpen && wide.hidden === true, `wide: Enter shows the drop-down's hide, Enter hides ${JSON.stringify(wide)}`);
+    check('QUEST', narrow.pill && narrow.hits === 1 && narrow.focus === 'quest-x' && narrow.hidden === true, `narrow: the × (one hit) ${JSON.stringify(narrow)}`);
+    check('QUEST', !wide.errors && !narrow.errors, 'page errors');
   }
 } finally { await b.close(); }
 

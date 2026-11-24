@@ -58,16 +58,19 @@ test('RD-12 static guards: one #kit-select, on the lane head, wired to applyKit;
   assert.ok(!html.includes('<label>kit (all lanes)'), 'the sheet\'s labelled duplicate is removed');
   const apply = app.slice(app.indexOf('function applyKit'), app.indexOf('\n', app.indexOf('function applyKit')));
   assert.equal(apply.match(/sync\(\)/g)?.length, 1, 'one sync = one undo entry per kit change');
-  assert.match(apply, /slog\?\.act\('kit', was, key, \{ absorb: true \}\)/, 'one setlog action (absorb: the lane diff is the action, not a second line)');
-  assert.match(apply, /peekKit\(KITS\[key\]\.name\)/, 'the peek says "kit · name"');
+  assert.match(apply, /slog\?\.act\('kit', [^)]*absorb: true/, 'one setlog action (absorb: the lane diff is the action, not a second line)');
+  assert.match(apply, /peek\.kitChange\(/, 'the peek says "kit · name" (its timing: peek.test.js)');
   assert.match(app, /applyKit\(ks\.value\)/, 'the select applies through the one path (Move Shift + ◀ ▶ = cycleKit → applyKit too)');
-  assert.match(app, /kit · \$\{peek\.kit\}/, 'paintPeek knows the kit words');
   assert.match(app, /\[\$\('kit-select'\), 'ph-voice'\]/, 'on phones the kit rides with voice into the sheet\'s lane drawer');
 });
 
 test('RD-12 A5 stays at 50: the quest\'s × folds into the quest drop-down on wide windows (the share-… precedent)', () => {
   assert.match(html, /id="quest-x" class="sp-x" type="button" data-folded-into="quest-go"/, 'folded, so the RD-1 id gate still finds it');
-  assert.match(html, /id="quest-hide"/, 'its job lives in the drop-down (keyboard, mouse and touch)');
-  assert.match(css, /@media not all and \(max-width: 1100px\) \{ #quest-x \{ display: none; \} \}/, 'hidden only where the drop-down serves');
+  assert.match(html, /id="quest-hide" type="button" aria-label="hide quests"/, 'its job lives in the drop-down (keyboard, mouse, touch), named as the × was for ⌘K and readers');
+  assert.match(css, /@media not all and \(max-width: 1100px\) \{ #quest-x \{ display: none; \} \}/, 'the × hidden only where the drop-down serves');
+  assert.match(css, /@media \(max-width: 1100px\) \{ #quest-hide \{ display: none; \} \}/, 'and the drop-down\'s hide only where the × is gone: one "hide quests" per window');
   assert.match(app, /\$\('quest-hide'\)\.onclick = hideQuests/, 'wired to the same hide');
+  // ⌘K finds it in the closed drop-down while the pill shows (round 1: "hide quests" found nothing on wide windows);
+  // the browser half is kit-check.mjs QUEST
+  assert.match(app, /n\.id === 'quest-more' && !\$\('quest'\)\.hidden/, 'find looks inside the quest\'s drop-down while its pill shows');
 });

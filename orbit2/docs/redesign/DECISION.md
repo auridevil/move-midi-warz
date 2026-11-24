@@ -204,6 +204,11 @@ pass stays an optional extra for the conductor, never a gate.
   buttons' tap-or-look, `LOOK_MS`), with nothing else pressed, touched or turned on the Move while − is down. A longer
   hold is a look at the drift page and toggles nothing, so reading the countdown or a meter never turns evolve off
   (round 1 found that it did, and that re-took the home pattern). The Move table says the same.
+- **The quest pill's ×, on wide windows** (RD-12 review round 1, 2026-11-24). "Pills … each a button with a ×" holds
+  for the quest pill as the drop-down it opens: wider than 1100 px its × folds into that drop-down (show me · skip ·
+  hide), as share's "…" folds into share since RD-5, because A5 has sat at exactly 50 since RD-5 and the kit ▾ (RD-12)
+  needed a slot. Hide sits in that drop-down for the keyboard, the mouse and touch, and ⌘K finds it ("hide quests");
+  Sheet → setup → settings brings the quests back; narrower windows and the phone keep the ×.
 
 ## 3. Phase plan
 
