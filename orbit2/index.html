@@ -40,6 +40,8 @@
       <div class="lane-head">
         <span id="lh-lane" class="lh-lane"></span>
         <select id="voice-select" class="hair" aria-label="voice"></select>
+        <!-- RD-12: the kit (every lane's sound at once) on the face, right of the lane's voice; id kept from the sheet -->
+        <select id="kit-select" class="hair" aria-label="kit (all lanes)" title="Every lane's sound at once; the pattern stays"></select>
         <span id="lh-steps" class="lh-steps"></span>
         <span id="lh-page" class="lh-page"></span>
         <span id="move-chip" class="move-chip" title="What the Move's knobs edit now: white when the Move owns the row, grey when it edits something not drawn"></span>
@@ -118,6 +120,7 @@
       <tr><th>Cmd/Ctrl+K or /</th><td>find any control by name or a synonym ("euclid", "stems", "7/8"); Enter runs or shows it · ↑↓ pick · empty = recent</td></tr>
       <tr><th>Esc</th><td>one thing at a time: a popup, then the step locks, then the sheet, then focus mode, then gives the keys back to the page · a click on empty canvas does the same</td></tr>
       <tr><th>knobs</th><td>drag up / down (Shift = fine), scroll, or arrow keys · double-click = back to the start value</td></tr>
+      <tr><th>voice ▾ · kit ▾</th><td>the lane head's selects: this lane's voice · the kit = every lane's sound at once, the pattern stays ("custom" = the lanes no longer match a kit; picking a kit again re-applies it) · one undo step</td></tr>
       <tr><th>rings</th><td>touch a ring to select its lane · tap a step tick = add a hit (stopped, you hear it at once; playing, on its turn) · tap a planet = on → accent → off · drag along a ring = rotate it · drag across it (or pinch) = its length · long-press or right-click a planet = its locks · each is one undo step · drop an audio file on a ring to load it as a sample</td></tr>
       <tr><th>rings focused (Tab)</th><td>↑ ↓ pick a lane · ← → walk its steps · Enter = off → on → accent · the step cells follow</td></tr>
       <tr><th>steps</th><td>tap = off → on → accent → ghost → off · long-press, right-click or Alt+click = step locks, condition, repeats · Shift+click = accent only</td></tr>
@@ -207,11 +210,12 @@
       <span id="sp-dice" class="spill seg" data-pill="dice" hidden><button id="sp-dice-go" type="button" title="Locked dice: the same chances every time (its seed in the sheet)"></button><button id="sp-dice-x" class="sp-x" type="button" aria-label="dice free" title="dice free">×</button></span>
       <span id="sp-clock" class="spill seg" data-pill="clock" hidden><button id="sp-clock-go" type="button" title="Following a MIDI clock: the MIDI settings in the sheet"></button><button id="sp-clock-x" class="sp-x" type="button" aria-label="stop following the clock" title="stop following the clock">×</button></span>
       <span id="welcome" class="spill seg" data-pill="welcome" hidden><button id="wb-keep" type="button" title="Your beat is here: play the beat you left">welcome back · play</button><button id="wb-fresh" type="button" title="Empty pattern (undo brings your beat back)">start fresh</button><button id="wb-close" class="sp-x" type="button" aria-label="dismiss" title="dismiss">×</button></span>
-      <!-- I6: the quest you are on; its first button opens the hint, show me and skip (a drop-down, not announced) -->
-      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" aria-label="hide quests" title="Hide quests (progress is kept; Sheet → setup → settings shows them again)">×</button></span>
+      <!-- I6: the quest you are on; its first button opens the hint, show me, skip and hide (a drop-down, not announced).
+           RD-12: on wide windows the × folds into that drop-down (data-folded-into), giving its A5 slot to the kit ▾ -->
+      <span id="quest" class="spill seg" data-pill="quest" hidden><button id="quest-go" type="button" aria-expanded="false" aria-controls="quest-more" title="The quest: its hint, show me, skip"><span id="quest-n"></span> · <span id="quest-title"></span></button><button id="quest-x" class="sp-x" type="button" data-folded-into="quest-go" aria-label="hide quests" title="Hide quests (progress is kept; Sheet → setup → settings shows them again)">×</button></span>
       <span id="jam-panel" class="spill seg sp-rec jam-panel" data-pill="jam" hidden><button id="jam-go" type="button" title="The take ends on a bar line (stop it with jam)"><span id="jam-text"></span></button><button id="jam-dl" type="button" hidden>⤓ download</button><button id="jam-discard" type="button" hidden>discard</button></span>
       <button id="sp-more" class="sp-more" type="button" aria-expanded="false" aria-live="off" hidden></button>
-      <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button></span></div>
+      <div id="quest-more" class="quest-more" aria-live="off" hidden><span id="quest-hint" class="quest-hint"></span><span class="quest-acts"><button id="quest-show" type="button" title="Draw the gesture once on the rings (read-only; any key or click hides it)">show me</button><button id="quest-skip" type="button" title="Skip this quest: it counts as passed and the next one comes up">skip</button><button id="quest-hide" type="button" title="Hide quests (progress is kept; Sheet → setup → settings shows them again)">hide</button></span></div>
     </div>
     <!-- RD-3 the sheet: every drawer and the old right column, re-hosted as they were (ids kept), in six tabs (Greta's
          feature table). Closed on load (RD-4); on narrow windows a bottom sheet, full height when open. Tall tabs scroll
@@ -278,9 +282,6 @@
         </div>
       </div>
       <h3 class="subh">sound</h3>
-      <div class="sliders">
-        <label>kit (all lanes) <select id="kit-select"></select></label>
-      </div>
       <div class="row-ctl">
         <button id="btn-mute" class="small" type="button" aria-pressed="false" title="Mute this lane (a performance move: undo leaves it)">mute</button><span id="mute-bar"></span>
         <button id="btn-solo" class="small" title="Only soloed lanes play">solo</button>

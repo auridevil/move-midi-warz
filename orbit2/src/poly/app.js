@@ -333,7 +333,9 @@ const voiceLabel = (lane) => lane.voice === 'sample' ? `♪ ${(lane.sample?.name
 const laneNames = (n) => Array.from({ length: n }, (_, i) => (m.lanes[i] ? voiceLabel(m.lanes[i]) : `lane ${i + 1}`));
 function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awake && !playing) hitSound(m.lanes[li], T.now(), false); sync(); }
 function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
-function applyKit(key) { if (!KITS[key]) return; m.applyKit(KITS[key], DEFAULT_SOUND); rebuildVoices(); sync(); }
+/** RD-12: every path to a kit (the console's kit ▾, Move Shift + ◀ ▶, a ⌘K pick) lands here: one sync = one undo step,
+ *  one setlog action, and the peek says what just happened (no toast: a kit change is a hand move, not an event). */
+function applyKit(key) { if (!KITS[key]) return; const was = m.kitKey() ?? 'custom'; m.applyKit(KITS[key], DEFAULT_SOUND); rebuildVoices(); sync(); slog?.act('kit', was, key); peekKit(KITS[key].name); }
 /** The kit select shows the truth: the kit every lane still matches, else "custom" (so picking any kit, even the one
  *  you started from, is a change and re-applies it). */
 function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelector('option[value=custom]').hidden = !!k; ks.value = k || 'custom'; }
@@ -745,7 +747,7 @@ addEventListener('blur', (e) => { if (e.target === window && handOn.has('drag'))
 // words. Only on a Move encoder touch (or turn), a knob drag, or keyboard focus on a knob (magnifier users): never on
 // hover. It stays PEEK_MS after the hand lets go. A8: with ?setlog, a touch marks `peek-touch` (moveTouch) and the task
 // after the frame that paints the peek measures `peek` (performance entries) ----
-const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, el: null, why: new Set(), timer: 0, mark: false };   // el: the knob a drag or the focus opened it for
+const PEEK_MS = TOUCH_HOLD_MS, peek = { slot: -1, el: null, why: new Set(), timer: 0, mark: false, kit: null };   // el: the knob a drag or the focus opened it for; kit: a kit change borrowing it (RD-12)
 const PEEK_SAYS = {
   length: v => `${v} step${v === 1 ? '' : 's'} a loop`, euclid: v => v ? `${v} hit${v === 1 ? '' : 's'}, spread evenly` : 'no hits spread',
   rotation: v => v ? `the hits start ${v} step${v === 1 ? '' : 's'} later` : 'not shifted', ratio: v => `${RATIO_LABEL[v]} step${RATIO_LABEL[v] === '1' ? '' : 's'} a beat`,
@@ -758,16 +760,22 @@ const PEEK_SAYS = {
 };
 /** A Move touch or turn peeks a slot: whatever that encoder edits now (Shift down mid-touch: the sound knob). A drag or
  *  the focus peeks its own knob (el): when the row lets that knob go, the peek goes with it. */
-function peekAt(slot, why, el = null) { clearTimeout(peek.timer); peek.slot = slot; peek.el = el; peek.why.add(why); paintPeek(); }
+function peekAt(slot, why, el = null) { clearTimeout(peek.timer); peek.kit = null; peek.slot = slot; peek.el = el; peek.why.add(why); paintPeek(); }
+/** RD-12: a kit change peeks "kit · name" the way a knob touch does (paintPeek, PEEK_MS, never hover); a touch takes over. */
+function peekKit(name) { clearTimeout(peek.timer); peek.kit = name; paintPeek(); peek.timer = setTimeout(() => { peek.kit = null; paintPeek(); }, PEEK_MS); }
 function peekOff(why) { peek.why.delete(why); if (peek.why.size) return; clearTimeout(peek.timer); peek.timer = setTimeout(() => { if (!peek.why.size) { peek.slot = -1; peek.el = null; paintPeek(); } }, PEEK_MS); }
 function paintPeek() {
   const kn = $('knobs'), el = $('peek'), g = peek.el ? (peek.el.parentElement?.parentElement === kn ? peek.el : null) : peek.slot >= 0 ? kn.children[peek.slot]?.firstElementChild : null;
   // RD-6: the touched (or dragged, or turned) knob gets a lane-colour plate while the peek shows for it (not for focus alone)
   const plate = g && !(peek.why.size === 1 && peek.why.has('focus')) ? g.parentElement : null;
   for (const s of kn.children) if (s.classList.contains('plate') !== (s === plate)) s.classList.toggle('plate', s === plate);
-  if (!g) { if (!el.hidden) el.hidden = true; return; }
-  const slot = [...kn.children].indexOf(g.parentElement), k = ROW_KEYS[knobPage.shown]?.[slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
   const put = (id, t) => { const e = $(id); if (e.textContent !== t) e.textContent = t; };   // it repaints with every move of its knob
+  if (!g) {
+    // RD-12: a kit change (no knob under it) borrows the peek for PEEK_MS: "kit · name" and what a kit is
+    if (peek.kit) { put('peek-n', ''); put('peek-name', `kit · ${peek.kit}`); put('peek-mean', 'every lane’s sound at once; the pattern stays'); el.hidden = false; return; }
+    if (!el.hidden) el.hidden = true; return;
+  }
+  const slot = [...kn.children].indexOf(g.parentElement), k = ROW_KEYS[knobPage.shown]?.[slot], v = +g.getAttribute('aria-valuenow'), label = g.querySelector('.g-label').textContent;
   put('peek-n', g.querySelector('.g-val').textContent);
   put('peek-name', `knob ${slot + 1} · ${label} · ${voiceLabel(m.lane)}`);
   put('peek-mean', PEEK_SAYS[k]?.(v) ?? `${label} ${g.getAttribute('aria-valuetext')}`);
@@ -2190,7 +2198,9 @@ function renderQuest() {
   setHidden($('quests-show'), !(q && quests.hidden));   // RD-10: the way back after ×, while a quest is left to play
 }
 $('quest-skip').onclick = () => { const q = currentQuest(quests.done); if (q) { quests.skipped.push(q.id); finishQuest(q); toast(`skipped: ${q.title}`); } };
-$('quest-x').onclick = () => { quests.hidden = true; saveQuests(); renderQuest(); };
+const hideQuests = () => { quests.hidden = true; saveQuests(); renderQuest(); };   // renderQuest closes the drop-down and hands the focus on
+$('quest-x').onclick = hideQuests;
+$('quest-hide').onclick = hideQuests;   // RD-12: the × is folded into the drop-down on wide windows (A5: its slot went to the kit ▾)
 // RD-10 round 1: the quests' way back (the removed simple / everything switch used to bring them back). The pill that
 // comes back is read by the pills' status region; the focus, which would drop to the page with this button gone, stays
 // in its drawer (its summary: nothing there that a second Enter could change)
@@ -2867,7 +2877,7 @@ new ResizeObserver(layoutStage).observe($('stage')); addEventListener('resize', 
 // action words in perform, the voice in lane, the Move's connect in setup) and find shows them where they are; wider
 // again, each goes back to its place (a comment node marks it). "all ⌘K" goes along hidden: the dock is the way in ----
 const PHONE = matchMedia('(max-width: 760px)');
-const PHONE_HOSTS = [[$('btn-fill'), 'ph-perform'], [$('btn-latch'), 'ph-perform'], [$('fx-gauge'), 'ph-perform'], [$('btn-throw'), 'ph-perform'], [document.querySelector('.console .acts'), 'ph-acts'], [$('voice-select'), 'ph-voice'], [$('move-status'), 'ph-move']];
+const PHONE_HOSTS = [[$('btn-fill'), 'ph-perform'], [$('btn-latch'), 'ph-perform'], [$('fx-gauge'), 'ph-perform'], [$('btn-throw'), 'ph-perform'], [document.querySelector('.console .acts'), 'ph-acts'], [$('voice-select'), 'ph-voice'], [$('kit-select'), 'ph-voice'], [$('move-status'), 'ph-move']];
 const phoneMarks = new Map();
 function placePhone() {
   const a = document.activeElement;

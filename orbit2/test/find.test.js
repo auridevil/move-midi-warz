@@ -26,7 +26,7 @@ const page = () => [
   ...['4/4', '3/4', '5/4', '6/8', '7/8', '12/8'].map(name => ({ key: `meter-${name}`, name, where: 'pattern · Patterns · meter' })),
   { key: 'tempo', name: 'tempo', where: 'transport' },
   { key: 'exp-dry', name: 'dry stems', where: 'export · Export' },
-  { key: 'kit-select', name: 'kit (all lanes)', where: lane, extra: '808 909 acoustic' },
+  { key: 'kit-select', name: 'kit (all lanes)', where: 'selected lane', extra: '808 909 acoustic' },   // RD-12: on the console's lane head
   ...Object.entries(ACTIONS).map(([key, [name, extra]]) => ({ key, name, where: key.startsWith('exp-') ? 'export · Export' : '', action: true, extra })),
 ].map(entry);
 
