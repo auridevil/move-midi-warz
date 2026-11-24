@@ -1224,10 +1224,19 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   "nearest kit" hint is the other way.
 - **The kit's peek** (RD-12 round 1: noor): "kit · name" and its plain line make a ≈ 300 × 98 px box for 400 ms in a
   dark room (one line?). While a kit change borrows the peek over a held knob, turning that knob shows its value only
-  after the 400 ms (a new touch takes the peek back at once).
+  after the 400 ms (a new touch takes the peek back at once). Round 2 (kai): a Move tap is ≈ 80 ms, so a performer who
+  never looks gets 400 ms from the last byte; a longer peek on the Move route is Noor's call. The module's boundary
+  goes halfway (architect): `app.js` still reads `peek.why` (focus-only plate), `peek.slot` (the MutationObserver) and
+  `peek.mark` (A8); `peekAt` / `peekOff` are pass-throughs — `shows` could say "focus only" and A8 stay with the caller.
 - **The quest pill without its × on wide windows** (RD-12 round 1: greta, noor): hiding the quests is one step more
   there (open the drop-down, hide); Noor would show "hide" at first sight. A5 has sat at exactly 50 since RD-5, so the
-  next face control needs a trade of its own (RD-14 adds none).
+  next face control needs a trade of its own (RD-14 adds none). Round 2 (architect, cosmetic, from `7ca622c`): wider
+  than 1100 px the drop-down takes the narrower pill's width (−32 px, the ×) and holds three buttons, so "show me" wraps
+  onto two lines (78 × 32 → 66 × 40 px, the drop-down 150 → 158 px tall): `white-space: nowrap` on `.quest-acts
+  button` or a `max-content` width (RD-14's "show me" links touch this drop-down).
+- **kit-check's start wait** (RD-12 round 2: verifier): `kit-check.mjs`'s own `ready` waits 60 s and ignores
+  `CDP_START_MS` (run beside another tool's Chrome it once died starting FACE; alone it passed in 66 s), as
+  face-audit's `ready` does (it failed to start once in round 1's checks at load ≈ 11).
 - **A9's wording and dsp + Space** (RD-12 round 1: sound): the dsp engine renders a kit with heavy sends (Space) up to
   4 LSB apart in the same seeded page (≈ 1000 samples; the delay feedback?), at the phase start too, with the same
   fingerprint: A9's "bit-identical" works out as "same fingerprint, null test ≤ 1 LSB", and a null test of such a kit
