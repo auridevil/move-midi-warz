@@ -110,9 +110,12 @@ for (const g of SYNONYMS) for (const m of g) { const ws = words(m); if (ws.lengt
  *  every synonym of those. */
 export function entry({ key, name, where = '', action = false, extra = '', alias = '' }) {
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
+  // RD-12: the name's words outside any parenthesis ("kit (all lanes)" → kit): the whole-name bonus judges these, so
+  // an aside doesn't keep a control from winning its own plain name (the export kit ACTION used to outrank the kit ▾)
+  const main = [...new Set([...words(String(name).split('(')[0]), ...words(String(alias).split('(')[0])])];
   const synOf = (ws) => { const out = new Set(); for (const w of ws) for (const s of (GROUP_OF.get(w) || [])) for (const x of words(s)) out.add(x); return out; };
   const syn = [...synOf(own)].filter(w => !own.includes(w));
-  return { key, name, where, action, own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)) };
+  return { key, name, where, action, own, main: main.length ? main : own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)) };
 }
 
 /** How well one query word fits an entry: on its name 6 (whole word) / 5 (start of a word), on a synonym of its name 4 / 3
@@ -136,8 +139,11 @@ export function search(index, query, recents = [], max = 8) {
   const scored = [];
   index.forEach((e, i) => {
     let s = 0; for (const q of qs) { const f = fit(e, q); if (!f) return; s += f; }
-    // the query says the whole name (each word, or a synonym of it): "tempo" and "bpm" are the knob before "tap tempo"
-    if (e.own.every(w => qs.some(q => q === w || (GROUP_OF.get(w) || []).includes(q)))) s += 1;   // one-word synonyms only ("tap tempo" doesn't make "tap" a tempo)
+    // the query says the whole name (each word outside a parenthesis, or a synonym of it): "tempo" and "bpm" are the
+    // knob before "tap tempo". A synonym may be a phrase: "drum rack" said in full says "kit" (RD-12); one word of it
+    // alone does not ("tap tempo" doesn't make "tap" a tempo)
+    const says = (w) => qs.some(q => q === w || (GROUP_OF.get(w) || []).includes(q)) || (GROUP_OF.get(w) || []).some(ph => { const ws = words(ph); return ws.length > 1 && ws.every(x => qs.includes(x)); });
+    if ((e.main || e.own).every(says)) s += 1;
     scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i });
   });
   scored.sort((x, y) => y.s - x.s || y.a - x.a || y.r - x.r || x.e.name.length - y.e.name.length || x.i - y.i);

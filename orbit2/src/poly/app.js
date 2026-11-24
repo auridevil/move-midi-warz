@@ -335,7 +335,7 @@ function setVoice(li, key) { m.lanes[li].setVoice(key); buildVoice(li); if (awak
 function cycleVoice(li, dir) { const keys = m.lanes[li].sample ? [...VOICE_KEYS, 'sample'] : VOICE_KEYS, i = keys.indexOf(m.lanes[li].voice); setVoice(li, keys[((i + dir) % keys.length + keys.length) % keys.length]); }
 /** RD-12: every path to a kit (the console's kit ▾, Move Shift + ◀ ▶, a ⌘K pick) lands here: one sync = one undo step,
  *  one setlog action, and the peek says what just happened (no toast: a kit change is a hand move, not an event). */
-function applyKit(key) { if (!KITS[key]) return; const was = m.kitKey() ?? 'custom'; m.applyKit(KITS[key], DEFAULT_SOUND); rebuildVoices(); sync(); slog?.act('kit', was, key); peekKit(KITS[key].name); }
+function applyKit(key) { if (!KITS[key]) return; const was = m.kitKey() ?? 'custom'; slog?.begin(); m.applyKit(KITS[key], DEFAULT_SOUND); rebuildVoices(); sync(); slog?.act('kit', was, key, { absorb: true }); peekKit(KITS[key].name); }
 /** The kit select shows the truth: the kit every lane still matches, else "custom" (so picking any kit, even the one
  *  you started from, is a change and re-applies it). */
 function renderKit() { const k = m.kitKey(), ks = $('kit-select'); ks.querySelector('option[value=custom]').hidden = !!k; ks.value = k || 'custom'; }
