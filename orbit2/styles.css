@@ -970,3 +970,7 @@ body.focus-mode:has(#sheet) #cv { position: fixed; inset: 0; width: 100vw; heigh
 .drawer.quest-lit { box-shadow: inset 0 0 0 1px var(--l); }
 .drawer.quest-lit > summary[data-quest]::after { content: attr(data-quest); margin-left: 8px; padding: 0 6px; border-radius: 6px; border: 1px solid var(--b); color: var(--l); font-size: 11px; }
 @media (pointer: coarse) { .quest-acts button { min-height: 44px; min-width: 44px; } }
+
+/* RD-13: evolve in cycle mode: the every gauge gives way to one read-only line, in the gauges' grid */
+.evo-cycle { grid-column: 1 / -1; margin: 6px 0; font: 400 var(--t-s) var(--font-body); color: var(--muted); }
+.evo-cycle[hidden] { display: none; }

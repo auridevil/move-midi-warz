@@ -162,7 +162,7 @@
       <tr><th>Hold Mute + track / pad</th><td>mute or unmute that lane (a track button, or any pad of its row) without selecting it; the track buttons show the mutes while Mute is held · with "on next bar" (lane drawer) the change lands on the next bar line (blue until then; a slot coming in on that line gets it too) · mutes are never undo steps</td></tr>
       <tr><th>Capture</th><td>randomize all · Shift = evolve on/off · live mode: Shift + Capture, or hold it 0.6 s (it blinks red first), randomizes</td></tr>
       <tr><th>−</th><td>evolve on/off · with ?drift: on the release, for a tap (under 0.45 s) with nothing else pressed, touched or turned while − was down; a longer hold is a look and toggles nothing</td></tr>
-      <tr><th>Hold − + knobs 1–8 <small>(with ?drift)</small></th><td>drift: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)</td></tr>
+      <tr><th>Hold − + knobs 1–8 <small>(with ?drift)</small></th><td>drift: every (its lowest detent is cycle: evolve on the alignment) · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)</td></tr>
       <tr><th>Hold − + steps <small>(with ?drift)</small></th><td>step LEDs 1–6 = the lanes that evolve (lit in the lane colour; dark = steady), tap one to toggle it · LEDs 9–16 drain toward the next mutation, one per ⅛ of "every" (all dark while evolve is off)</td></tr>
       <tr><th>Undo</th><td>undo · Shift = redo</td></tr>
       <tr><th>Record</th><td>arm live record · Shift = tap tempo · while touching a knob: knob recording off → touch → latch</td></tr>
@@ -363,7 +363,9 @@
         </div>
       <div class="row-ctl"><div class="ctl" title="What evolve may change"><span class="ctl-lbl">touches</span><div id="evo-scope"></div></div>
       </div>
+      <div class="row-ctl"><div class="ctl" title="Change the pattern each time every ring lines up again, the moment the sun reaches 0."><span class="ctl-lbl">every</span><div id="evo-sync"></div></div></div>
       <div id="evo-gauges" class="gauges three"></div>
+      <p id="evo-cycle" class="evo-cycle" hidden></p>
       <div id="evo-more" class="gauges two"></div>
       <details class="evo-sub"><summary>how often each change</summary><div id="evo-weights" class="gauges three"></div></details>
       <div id="evo-lanes" class="evo-lanes"></div>

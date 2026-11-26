@@ -163,7 +163,7 @@ export const planetAction = (stepLatched) => (stepLatched ? 'open' : 'cycle');
 
 // ---- RD-11 drift (behind ?drift): the step LEDs while − is held (Nils's LED table, proposals/nils/answers.md §Q1).
 // One source for the Move's lights and the on-screen cells, so what a player reads in the dark is what the page draws ----
-/** The drift knobs 1–8 in order: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat. */
+/** The drift knobs 1–8 in order: every (lowest detent = cycle, RD-13) · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat. */
 export const DRIFT_KEYS = ['evoEvery', 'evoAmount', 'evoGravity', 'evoHome', 'evoMax', 'coupleLift', 'humanize', 'diceRepeat'];
 /** The drift knobs that are counts (bars, mutations, loops): one LED and one Move click each. The rest are percentages
  *  (16ths, 2 % a click), and max cycle (16ths of its 64 bars, 2 bars a click). */

@@ -50,7 +50,7 @@ export const A10_BRIEF = `You are holding the − button of an Ableton Move (a h
 "Orbits". The room is dark and the laptop screen is OFF: all you have is the Move's own lights. Your pattern has 4
 lanes and it is playing. The app's manual (its Move table) says:
   −                                  evolve on/off · with ?drift: on the release, for a tap (under 0.45 s) with nothing else pressed, touched or turned while − was down; a longer hold is a look and toggles nothing
-  Hold − + knobs 1–8 (with ?drift)   drift: every · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)
+  Hold − + knobs 1–8 (with ?drift)   drift: every (its lowest detent is cycle: evolve on the alignment) · amount · gravity · home after · max cycle · coupling lift · humanize · dice repeat · a touched knob turns all 16 step LEDs into its meter (counts light one LED each, percentages in 16ths)
   Hold − + steps (with ?drift)       step LEDs 1–6 = the lanes that evolve (lit in the lane colour; dark = steady), tap one to toggle it · LEDs 9–16 drain toward the next mutation, one per ⅛ of "every" (all dark while evolve is off)
 (Evolve mutates the pattern every "every" bars; amount is how much of it a mutation may change.)
 
