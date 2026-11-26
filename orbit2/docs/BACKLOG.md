@@ -1256,6 +1256,15 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   memory of the last count turned past would give the 8 back.
 - **"evolve in N beats" repeats the sun** (RD-13 round 1: ines): in cycle mode the caption's evolve line is the sun's
   own number ("each fact once"); "evolve at the sun's 0", or no line, would say it without the repeat. For Noor / Yuki.
+- **Chained slots under evolve · cycle** (RD-13 round 2: verifier, for Noor): a chain [0, 2] at one bar each, restart
+  on: when each of a slot's wraps is the chain's next switch, that slot never evolves (the 4-beat slot: 0 of 4 visits;
+  the 3-beat one once a visit), where bars mode would have mutated it. It is the reading "the slot is the change"
+  (DECISION, RD-13), worth a line in the guide or the tooltip.
+- **A scripted Play after `loadGroove` in a later tab** (RD-13 round 2: verifier, architect): in one Chrome session a
+  later tab that calls `__poly.loadGroove('techno')` and then clicks `#btn-play` leaves the transport stopped
+  (`clock().tick` 0, the button "play", no page error), 6 of 6 tabs, at the phase start too; the first tab always plays,
+  and a later tab without `loadGroove` plays. Not tried with a real click; `sync-check.mjs` runs each part in its own
+  browser and fails loudly when Play never starts.
 - **The export length "cycle" from a script** (RD-13 round 1: sound): `.click()` on `#exp-len`'s "cycle" left it
   unchecked and `exportWav` at 4 bars, at the phase start and at HEAD alike; the cause wasn't found (not tried by hand).
 - **The cycle line's size, the crawl's snap** (RD-13 round 1: yuki): "every cycle · N beats" is 11 px muted, the
