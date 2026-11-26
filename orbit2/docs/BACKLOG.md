@@ -1265,6 +1265,13 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   (`clock().tick` 0, the button "play", no page error), 6 of 6 tabs, at the phase start too; the first tab always plays,
   and a later tab without `loadGroove` plays. Not tried with a real click; `sync-check.mjs` runs each part in its own
   browser and fails loudly when Play never starts.
+- **sync-check, a browser per part** (RD-13 round 3: architect, verifier): `part()` closes the last part's browser
+  outside its try, and `cdp.mjs close()` deletes the profile 300 ms after SIGKILL with no retry, so one run of 12 died
+  on `ENOTEMPTY` (`/tmp/orbit2-cdp-9602`) between DICE and DRIFT (a try / catch round the close, or `rmSync(…, {
+  maxRetries: 5, retryDelay: 100 })`); every part starts a cold Chrome, so at load 20–30 a part can fail "never got
+  ready" (a header line on `CDP_START_MS`); ORIGIN's frame check counts a frame early only when it shows exactly the new
+  count (check that the frames before a move keep the old countdown); the "a browser of its own" header line belongs
+  after the parts' list.
 - **The export length "cycle" from a script** (RD-13 round 1: sound): `.click()` on `#exp-len`'s "cycle" left it
   unchecked and `exportWav` at 4 bars, at the phase start and at HEAD alike; the cause wasn't found (not tried by hand).
 - **The cycle line's size, the crawl's snap** (RD-13 round 1: yuki): "every cycle · N beats" is 11 px muted, the
