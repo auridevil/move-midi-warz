@@ -147,6 +147,12 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   (`test/access.test.js`: a real reference — the id quoted whole, `#id`, or the page's own `for` / `aria-*` — not a
   substring of a class or a comment). Browser check: `node orbit2/tools/access-check.mjs` (A4, the canvas, PIN, QUESTS)
   and `--size 390x844m` for the phone (PHONE: no page scroll, every console control reachable by touch).
+- Evolve in sync with the cycle (RD-13): Sheet → groove → evolve, every **bars · cycle** (`evo.sync`, saved; old
+  settings load as bars). Cycle mutates on the tick the whole pattern lines up again, the sun's 0 and the bloom, never on
+  a tick where a pattern starts (Play, a slot coming in, a new meter's first bar). The clock and every countdown ask one
+  pure function (`src/poly/evolve-sync.js nextEvolveTick`); `HeardCycle` keeps the countdown on the cycle the ear is in
+  while the clock runs ahead, read through `app.js alignNow()`. The drift page's knob 1 reaches cycle at its lowest
+  detent. Browser check: `node orbit2/tools/sync-check.mjs --assert` (UI, CLOCK, SWITCH, DICE, DRIFT, ORIGIN, RESYNC).
 - Redesign gates: `orbit2/tools/face-audit.mjs` (A1 contrast and light, A5 control count, A6 scroll and nothing cut by
   a column, A7 rings, IDS every RD-1 control id drawn once its tab is open, A9
   audio; TYPE the three sizes, HIT the action words' 40 px, HUE lane hues and greys only, red only while recording;

@@ -209,6 +209,15 @@ pass stays an optional extra for the conductor, never a gate.
   hide), as share's "…" folds into share since RD-5, because A5 has sat at exactly 50 since RD-5 and the kit ▾ (RD-12)
   needed a slot. Hide sits in that drop-down for the keyboard, the mouse and touch, and ⌘K finds it ("hide quests");
   Sheet → setup → settings brings the quests back; narrower windows and the phone keep the ×.
+- **Evolve · cycle when a pattern starts, and the re-sync** (RD-13 review round 1, 2026-11-26). "On the tick where the
+  full cycle wraps … never on bar lines" counts from the origin every lane counts from: a mutation lands only on a wrap
+  of the cycle that has run since the pattern started. Play's downbeat, a slot coming in (any switch, with or without
+  "restart on change") and a new meter's first bar line start a pattern: evolve leaves that tick alone, and the pattern
+  plays to its first alignment before it changes (round 1: a slot coming in mid-count was mutated on its first tick
+  with the sun at 225, and a "full cycle" slot was never heard as saved). At a "full cycle" switch the sun's 0 still
+  changes the pattern: the slot is the change. "The next alignment of the NEW pattern, measured from the mutation
+  tick" is counted from that origin too, as the lanes, the bloom and the slots count, so the first gap after a
+  mutation that changes the cycle can be shorter than one new cycle, never longer; the sun shows it.
 
 ## 3. Phase plan
 

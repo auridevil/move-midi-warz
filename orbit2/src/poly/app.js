@@ -20,7 +20,7 @@ import { KITS, KIT_KEYS } from './kits.js';
 import { getTempo, setTempo, onTempo, makeTapTempo } from '../tempo.js';
 import { makeGauge, bindRow } from '../gauge.js';
 import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../ui.js';
-import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind, genClock, genProgress } from './scene.js';
+import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind, genClock, genProgress, cycleBeats } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
 import { drawMoveHelp } from './moveface.js';
 import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
@@ -29,7 +29,7 @@ import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, l
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, hintDrawer } from './quests.js';
 import { attachSetlog, patternWords } from './setlog.js';
 import { Peek } from './peek.js';
-import { syncFrom, evolveDue, cycleProgress } from './evolve-sync.js';
+import { syncFrom, evolveDue, cycleProgress, HeardCycle } from './evolve-sync.js';
 import { PILL_ORDER, pillsOn, pillLayout, pillOff, focusAfter } from './pills.js';
 
 const $ = (id) => document.getElementById(id);
@@ -81,6 +81,7 @@ let knobGest = null, handNow = null, stripKey = null;
 // (pull back toward home instead of the hard reset), maxBars = the longest cycle a move may make (0 = no limit)
 const evo = { on: false, sync: 'bars', every: 4, amount: 40, scope: 'hits', home: 0, gravity: 0, maxBars: 32, weights: { ...EVOLVE_WEIGHTS } };
 let evoSnap = null, evoCount = 0;   // evoSnap: evolve's home, always m.snapshot() (a copy: gravity pulls toward it)
+let evoCycleLine = null, evoCycleBeats = -1;   // RD-13: the sheet's "every cycle · N beats" (readout() repaints it)
 const bank = new SlotBank(localStorage);
 const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
 // E1–E3, E6 export format: bit depth (16 / 24 / 32 float), sample rate of offline renders, jam ring-out files, dry
@@ -396,8 +397,18 @@ const cycleOpts = () => ({ repeat: dice.locked ? dice.repeat : 1 });
 const perfAt = (time) => performance.now() + (time - T.getContext().rawContext.currentTime) * 1000;   // audio time → Web MIDI timestamp
 /** The master tick (fractional) at audio-context time `time`, from the clock's latest block. */
 const tickAt = (time) => (clockPast.length > 1 ? blockTick(clockPast, time, tickSec()) : clockRef.tick + (time - clockRef.time) / tickSec());
-/** The master tick being heard right now (fractional): the scheduler runs ahead of the speakers, which lag a little. */
-const heardTick = () => { const raw = T.getContext().rawContext; return tickAt(raw.currentTime - (raw.outputLatency || 0)); };
+/** The audio time being heard right now, and its master tick (fractional): the scheduler runs ahead of the speakers,
+ *  which lag a little. */
+const heardTime = () => { const raw = T.getContext().rawContext; return raw.currentTime - (raw.outputLatency || 0); };
+const heardTick = () => tickAt(heardTime());
+/** RD-13: the cycle and origin the countdown counts with until the clock's latest change of them is heard. */
+const heardCyc = new HeardCycle(), liveCycle = () => ({ cycle: m.cycleTicks(cycleOpts()), origin: m.origin });
+/** RD-13: the countdown's inputs as the ear has them, one getter for every reader (the sun, the arc, the caption, the
+ *  drift LEDs): the heard tick counted from the origin, the cycle, and the bar / beat the captions are worded in. */
+function alignNow() {
+  const now = heardTime(), h = playing ? heardCyc.read(now, liveCycle) : liveCycle();
+  return { tick: playing ? Math.max(0, tickAt(now) - h.origin) : 0, cycle: h.cycle, bar: bars.len, beat: PPQ };
+}
 function buildLoops() { loop?.dispose(); loop = new T.Loop((time) => onBlock(time), `${T.getTransport().PPQ / 24}i`); loop.start(0); }
 function onBlock(time) {
   if (resetPending) { tick = 0; resetPending = false; skip.clear(); early.length = 0; pending.clear(); resetBars(); m.resetAll(); }   // all keyed on the old ticks; loops count from 0 again
@@ -409,6 +420,7 @@ function onBlock(time) {
   for (let t = t0; t < t0 + MIDI_DIV; t++) cyc = onTick(t, time + (t - t0) * ts, cyc, ts);
 }
 function onTick(t, time, cyc, ts) {
+  const c0 = cyc, o0 = m.origin;   // RD-13: the countdown keeps these until this tick is heard, if the clock changes them here
   trackMeter(t);
   // a slot in another meter starts its bars (and lanes) here; P4 with "restart on change" any slot does: step 1, loop 1
   const si = bank.due(t, cyc, bars, m.origin); if (si >= 0) { loadSlot(si, true); if (bank.restart) m.setOrigin(t); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
@@ -421,8 +433,11 @@ function onTick(t, time, cyc, ts) {
   if (m.meter !== barBeats.meter) barBeats = { meter: m.meter, num: meterParts(m.meter).num };
   const bt = bars.len / barBeats.num, inBar = (((t - bars.at) % bars.len) + bars.len) % bars.len; if (inBar % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor(inBar / bt) + 1}`; T.getDraw().schedule(() => { if (playing) barBeat.textContent = bb; }, time); }
   // RD-13: 'cycle' = on the tick the whole pattern lines up again (the sun's 0, the bloom above), never on a bar line
-  // as such; the same nextEvolveTick the sun and the arc count to. evolveNow's number only seeds the dice: the beat here
-  if (evo.on && (evo.sync === 'cycle' ? evolveDue(t, cyc, m.origin) : line && barN % evo.every === 0)) { evolveNow(evo.sync === 'cycle' ? Math.floor(t / PPQ) : barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  // as such; the same nextEvolveTick the sun and the arc count to. Not on the tick a slot comes in (it is the change
+  // there: it plays up to its own first alignment), nor on an origin just set (evolveDue). evolveNow's number only seeds
+  // the dice: the tick here (two mutations never share one, however short the cycle)
+  if (evo.on && (evo.sync === 'cycle' ? si < 0 && evolveDue(t, cyc, m.origin) : line && barN % evo.every === 0)) { evolveNow(evo.sync === 'cycle' ? t : barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  if (cyc !== c0 || m.origin !== o0) heardCyc.hold({ cycle: c0, origin: o0 }, time);
   if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
   // waiting mute lands on the lanes that play from here): queued mutes land, the fill latch turns on (or off) for the bar
@@ -460,7 +475,7 @@ function onTick(t, time, cyc, ts) {
 // (the page hung) in the final sets. The delays are plain params: they still glide.
 function retime({ transport = true } = {}) { if (!awake) return; if (transport) T.getTransport().bpm.value = tempo; const d = 60 / tempo * 0.75; for (const c of kit.chains) c.delay.delayTime.rampTo(d, 0.1); kit.master.fx?.delay.delayTime.rampTo(d, 0.1); }
 async function togglePlay() {
-  slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); neverPlayed = false; hideWelcome();
+  slog?.begin(); await wake(); playing = !playing; $('btn-play').classList.remove('pulse'); neverPlayed = false; hideWelcome(); heardCyc.clear();
   // clockRef restarts with the transport (the countdown and live record read it before the first tick comes): at the time
   // the transport starts, now() + 0.05 (now() is currentTime + the lookahead; RD-8: a guess 0.1 s early ran the heard
   // tick ahead until the first block put it back, and the crawl stepped back after Play)
@@ -605,7 +620,6 @@ function buildSliders() {
 }
 const pages = new MovePages();   // the Move's pages and pad window (pages.js, used by the Move section below)
 function sync() {
-  if (evo.sync === 'cycle') paintEvoCycle();   // RD-13: the cycle may have changed (a lane, a slot, evolve)
   pages.window(m.selected, m.lanes.length);   // the pad window follows every selection, Move or not: the computer keys mirror the pads
   const handG = handGauge();   // A3: the knob a hand turns shows the hand (autoFrame), not the lane value under it
   for (const p of PARAMS) if (sliders[p.k] !== handG) sliders[p.k].set(p.get(m.lane));
@@ -759,7 +773,7 @@ const PEEK_SAYS = {
   rotation: v => v ? `the hits start ${v} step${v === 1 ? '' : 's'} later` : 'not shifted', ratio: v => `${RATIO_LABEL[v]} step${RATIO_LABEL[v] === '1' ? '' : 's'} a beat`,
   swing: v => v ? `every other step ${v}% late` : 'straight', prob: v => `plays ${v} of 100 loops`, tune: v => tuneSay(v), tempo: v => `${v} beats a minute`,
   // RD-11 (?drift): the drift page's knobs in plain words
-  evoEvery: v => `a mutation every ${v} bar${v === 1 ? '' : 's'}`, evoAmount: v => `${v}% of the lanes nudged each time`,
+  evoEvery: v => v ? `a mutation every ${v} bar${v === 1 ? '' : 's'}` : 'a mutation each time every ring lines up again', evoAmount: v => `${v}% of the lanes nudged each time`,
   evoGravity: v => v ? `${v}% of nudges head home` : 'wanders freely', evoHome: v => v ? `back home after ${v} mutation${v === 1 ? '' : 's'}` : 'drifts forever',
   evoMax: v => v ? `the whole repeats within ${v} bars` : 'no cycle limit', coupleLift: v => v ? `a hit lifts its partner ${v}%` : 'no coupling lift',
   humanize: v => v ? `${v}% timing jitter` : 'machine-tight', diceRepeat: v => `locked rolls repeat every ${v} loop${v === 1 ? '' : 's'}`,
@@ -894,7 +908,7 @@ function renderDots(mode, lane, first, hs) {
 // next mutation, or all 16 a touched knob's value meter. Read-only (cellAction 'drift' = none): the knobs above edit.
 // paintLeds hands the cells the state it lit the LEDs with whenever that changes, so they drain together ----
 const driftMeterIdx = () => { if (!driftHeld()) return -1; const t = [...hands.touch]; return t.length ? t[t.length - 1] : performance.now() < minusHand.turnUntil ? minusHand.turnIdx : -1; };
-const driftProgress = () => { if (!evo.on || !playing) return 0; if (evo.sync === 'cycle') return cycleProgress(heardTick() - m.origin, m.cycleTicks(cycleOpts())); const gc = genClock(playing, barN, heardTick(), barAt, bars.len); return genProgress(gc.bars, evo.every, gc.frac); };
+const driftProgress = () => { if (!evo.on || !playing) return 0; if (evo.sync === 'cycle') { const a = alignNow(); return cycleProgress(a.tick, a.cycle); } const gc = genClock(playing, barN, heardTick(), barAt, bars.len); return genProgress(gc.bars, evo.every, gc.frac); };
 const driftState = () => { const mi = driftMeterIdx(), g = mi >= 0 ? driftGauges()[mi] : null, leds = driftLeds({ evolves: m.lanes.map(l => !!l.evolve), meter: mi, value: g ? g.value : 0, progress: driftProgress(), on: evo.on }); return { mi, g, leds }; };
 let driftCells = '';   // the LED table the cells last drew
 function renderDriftCells(st = driftState()) {
@@ -1524,26 +1538,31 @@ function renderCouple() {
     }
   }
 }
-/** The evolve scope's choices in the knobs' own words. */
-let evoCycleLine = null;
-/** RD-13: the every mode (bars | cycle): saved, shown by the switch and the gauge (0 = cycle), and in cycle mode a read-only
- *  line "every cycle · N beats" (kept up to date from the clock side: paintEvoCycle) replaces the gauge. */
+/** RD-13: the every mode (bars | cycle): saved, shown by the switch and the gauge (0 = cycle). In cycle mode the sheet's
+ *  gauge gives way to a read-only line "every cycle · N beats": `#evo-gauges.cycle` hides it only while it sits in the
+ *  sheet, and only once a drag on it lets go (onEnd); on the drift page's row (bindRow moves it there) knob 1 stays and
+ *  reads "cycle" (round 1: hiding the element took knob 1 off the drift row). */
 function setEvoSync(mode, save = true) {
-  evo.sync = syncFrom(mode); const cy = evo.sync === 'cycle';
-  ui.evoSync.set(evo.sync); if (cy !== !sliders.evoEvery.value) sliders.evoEvery.set(cy ? 0 : evo.every);
-  sliders.evoEvery.el.hidden = cy; evoCycleLine.hidden = !cy; paintEvoCycle();
+  evo.sync = syncFrom(mode); const cy = evo.sync === 'cycle', ge = sliders.evoEvery, g = $('evo-gauges'), hide = cy && !ge.held;
+  ui.evoSync.set(evo.sync); if (cy !== !ge.value) ge.set(cy ? 0 : evo.every);
+  ge.setLabel(cy ? 'every' : 'every · bars');   // "cycle" over "every · bars" read wrong on the drift row
+  // Home on the sheet's gauge: the keys go on to the switch, not to the page (a hidden element can't keep the focus)
+  if (hide && document.activeElement === ge.el && g.contains(ge.el)) $('evo-sync').querySelector('[aria-checked="true"]')?.focus();
+  g.classList.toggle('cycle', hide); evoCycleLine.hidden = !cy; paintEvoCycle();
   if (save) { saveSettings(); readout(); }
 }
-/** The cycle line's number follows the sun (the same cycle, in beats). */
-let evoCycleBeats = -1;
-function paintEvoCycle() { if (evo.sync !== 'cycle') { evoCycleBeats = -1; return; } const n = Math.max(1, Math.ceil(m.cycleTicks(cycleOpts()) / PPQ)); if (n !== evoCycleBeats) { evoCycleBeats = n; evoCycleLine.textContent = `every cycle · ${n} beat${n === 1 ? '' : 's'}`; } }
+/** The cycle line's number is the sun's stopped number (cycleBeats of the same cycle). readout() repaints it: every path
+ *  that can change the cycle ends there (a lane, a slot, evolve, the dice's lock or repeat; round 1: the dice's didn't). */
+function paintEvoCycle(cyc = m.cycleTicks(cycleOpts())) { if (!evoCycleLine || evo.sync !== 'cycle') { evoCycleBeats = -1; return; } const n = cycleBeats(cyc, PPQ); if (n !== evoCycleBeats) { evoCycleBeats = n; evoCycleLine.textContent = `every cycle · ${n} beat${n === 1 ? '' : 's'}`; } }
+/** The evolve scope's choices in the knobs' own words. */
 function evoScopeOptions() { const rot = knobWord('rotation'); return [['rotate', rot], ['hits', '+ hits'], ['all', 'all', `${rot}, hits, length, speed, chance and tune (whatever has a weight)`]]; }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = 'home set'; readout(); };
   const g = $('evo-gauges');
   // RD-13: the gauge's lowest detent (0) is "cycle" (the drift page's knob 1 reaches it by turning down); the bars · cycle
   // switch below and the gauge say the same thing, and in cycle mode the gauge gives way to a read-only line
-  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 0, max: 32, value: evo.sync === 'cycle' ? 0 : evo.every, fmt: v => v || 'cycle', say: (v) => v ? `${v} bar${v === 1 ? '' : 's'}` : 'every cycle', title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { if (v) evo.every = v; setEvoSync(v ? 'bars' : 'cycle'); } });
+  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 0, max: 32, value: evo.sync === 'cycle' ? 0 : evo.every, fmt: v => v || 'cycle', say: (v) => v ? `${v} bar${v === 1 ? '' : 's'}` : 'every cycle', title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { if (v) evo.every = v; setEvoSync(v ? 'bars' : 'cycle'); }, onEnd: () => setEvoSync(evo.sync, false) });
+  sliders.evoEvery.el.classList.add('evo-every');
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
   sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', say: v => v ? `${v} mutation${v === 1 ? '' : 's'}` : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
   ui.evoSync = mount('evo-sync', segmented({ options: [['bars', 'bars', 'a mutation every N bars'], ['cycle', 'cycle', INFO['evolve sync']]], value: evo.sync, onChange: (v) => { if (v === 'bars') sliders.evoEvery.set(evo.every); setEvoSync(v); } }));
@@ -2681,7 +2700,7 @@ window.addEventListener('beforeunload', () => { if (move.inControl) move.disconn
 // RD-6 the halos: the Move's held steps once looked at (a tap draws nothing), and the step a step-page knob edits while a
 // hand is on it. Asked every frame: nothing allocated while nothing is held
 const NO_HELD = [];
-const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!pages.held.size && !handOn.size) return f ? CV_ONLY : NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); if (f) out.push(f); return out; }, machine: () => m, align: () => ({ tick: playing ? Math.max(0, heardTick() - m.origin) : 0, cycle: m.cycleTicks(cycleOpts()), bar: bars.len, beat: PPQ }), isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
+const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!pages.held.size && !handOn.size) return f ? CV_ONLY : NO_HELD; const out = pages.lookedSteps(performance.now()).map(i => ({ li: m.selected, i })); const h = handOn.size && [...handOn.values()].pop(); if (h && lockStep >= 0 && knobPage.shown === 'step' && /^lock:|^cond$/.test(h)) out.push({ li: m.selected, i: lockStep }); if (f) out.push(f); return out; }, machine: () => m, align: alignNow, isRecording: () => rec.armed, jamProgress: () => (jam.state === 'rec' || jam.state === 'armed' ? jam.beats / JAM_BEATS : null), jamBeats: JAM_BEATS, laneHex: LANE_HEX, isPlaying: () => playing, isBusy: () => playing || performance.now() < busyUntil, stepMs: (lane) => m.stepSeconds(lane, tempo) * 1000,
   // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
   // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
   // selected lane's words
@@ -2835,8 +2854,9 @@ function readout() {
   if (face.log) paintLog();
   // RD-10: the canvas tab stop is named per bar (Yuki: "6 lanes, aligns in 6 beats")
   // ($('cv'), not the `cv` declared further down: readout can run while the page is still being built)
-  const cvEl = $('cv'), cvName = `rings: ${m.lanes.length} lanes, aligns in ${(m.cycleTicks(cycleOpts()) / PPQ).toFixed(0)} beats`;
+  const cyc = m.cycleTicks(cycleOpts()), cvEl = $('cv'), cvName = `rings: ${m.lanes.length} lanes, aligns in ${(cyc / PPQ).toFixed(0)} beats`;
   if (cvEl.getAttribute('aria-label') !== cvName) cvEl.setAttribute('aria-label', cvName);
+  paintEvoCycle(cyc);   // RD-13: the sheet's "every cycle · N beats" follows the sun's stopped number
   renderLanes(); renderPills(); announceChanges();
 }
 /** "Nerd stats": the engine line, a row per lane, the selected lane's sound row, what is queued or locked. */

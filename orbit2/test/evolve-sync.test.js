@@ -4,7 +4,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { nextEvolveTick, evolveDue, cycleProgress, syncFrom, EVOLVE_SYNCS } from '../src/poly/evolve-sync.js';
+import { nextEvolveTick, evolveDue, cycleProgress, syncFrom, EVOLVE_SYNCS, HeardCycle } from '../src/poly/evolve-sync.js';
 import { beatsLeft, cycleBeats, genWords, captionLines } from '../src/poly/scene.js';
 import { pillText } from '../src/poly/pills.js';
 import { Machine, PPQ, BAR_TICKS, RATIOS } from '../src/poly/lanes.js';
@@ -44,6 +44,48 @@ test('RD-13 evolveDue: the clock\'s question, never on Play\'s own downbeat', ()
   assert.equal(evolveDue(220, 120, 100), true, 'with an origin');
   assert.equal(evolveDue(1, 1), true, 'a 1-tick cycle: every tick after the first');
   const due = []; for (let t = 0; t < 600; t++) if (evolveDue(t, 120)) due.push(t); assert.deepEqual(due, [120, 240, 360, 480]);
+});
+
+test('RD-13 evolveDue: never on an origin set mid-play (a slot that restarts the lanes, a new meter\'s first bar)', () => {
+  assert.equal(evolveDue(5040, 2520, 5040), false, 'the origin itself (round 1: a slot with restart on fired here, the sun at 225)');
+  assert.equal(evolveDue(7560, 2520, 5040), true, 'one cycle on: that pattern\'s first alignment');
+  assert.equal(evolveDue(5040, 2520, 0), true, 'without the move 5040 is an alignment');
+  // the clock's loop with the origin moved to a bar line mid-cycle: nothing there, then the new pattern's alignments
+  const cyc = 4 * 2520, fired = []; let origin = 0;
+  for (let t = 0; t < 40000; t++) { if (t === 3360) origin = t; if (evolveDue(t, cyc, origin)) fired.push(t); }
+  assert.deepEqual(fired, [1, 2, 3].map(k => 3360 + k * cyc).filter(t => t < 40000));
+});
+
+test('RD-13 HeardCycle: the countdown keeps the cycle the ear is in until the clock\'s change of it is heard', () => {
+  const h = new HeardCycle(), live = () => ({ cycle: 300, origin: 0 });
+  assert.deepEqual(h.read(1, live), { cycle: 300, origin: 0 }, 'nothing held: the model\'s own');
+  h.hold({ cycle: 120, origin: 0 }, 2.0);   // a mutation scheduled for audio time 2.0 s took the cycle 120 → 300
+  assert.deepEqual(h.read(1.95, live), { cycle: 120, origin: 0 }, 'not heard yet: the cycle the ear is in');
+  assert.deepEqual(h.read(2.0, live), { cycle: 300, origin: 0 }, 'heard: the new one');
+  h.hold({ cycle: 120, origin: 0 }, 3.0); h.hold({ cycle: 200, origin: 0 }, 3.05);   // two in flight (a short cycle)
+  assert.equal(h.read(2.99, live).cycle, 120); assert.equal(h.read(3.01, live).cycle, 200, 'each brings in what the next replaced'); assert.equal(h.read(3.06, live).cycle, 300);
+  h.hold({ cycle: 1, origin: 5 }, 9); h.clear(); assert.equal(h.read(0, live).cycle, 300, 'Play or stop: nothing in flight');
+  for (let i = 0; i < 100; i++) h.hold({ cycle: i, origin: 0 }, 10 + i); assert.ok(h.q.length <= 32, 'bounded');
+});
+
+test('RD-13 with the clock a lookahead ahead of the ear, the countdown names the tick of the next mutation, cycle changes included', () => {
+  // the clock schedules tick t at audio time t × ts and runs 100 ms ahead; the screen reads at the heard time, each frame
+  const rng = mulberry32(2113), ts = 60 / 240 / PPQ, ahead = 0.1; let frames = 0, changes = 0;
+  for (let n = 0; n < 20; n++) {
+    const { m, repeat } = randomMachine(rng), dice = new Dice(); dice.locked = true; dice.seed = n + 1;
+    const snap = m.snapshot(), heard = new HeardCycle(), live = () => ({ cycle: m.cycleTicks({ repeat }), origin: m.origin }), fired = [];
+    let cyc = m.cycleTicks({ repeat }), t = 0;
+    for (let f = 0; f < 1800; f++) {
+      const now = f / 60 + 1e-4;   // off the tick grid: a frame landing on the mutation's very instant reads either side by float error
+      for (; t * ts <= now + ahead; t++) if (evolveDue(t, cyc, m.origin)) {   // the clock's rule (app.js onTick), ahead of the ear
+        const was = { cycle: cyc, origin: m.origin }; m.evolve({ scope: 'all', amount: 1, home: snap, maxBars: 2, repeat }, dice.stream(1000 + t)); cyc = m.cycleTicks({ repeat }); fired.push(t);
+        if (cyc !== was.cycle) { heard.hold(was, t * ts); changes++; }
+      }
+      const tau = now / ts, next = fired.find(x => x > tau); if (next == null) continue;   // the ear's next mutation, once the clock has made it
+      const a = heard.read(now, live); assert.equal(nextEvolveTick(tau, a.cycle, 'cycle', 1, 0, a.origin), next, `machine ${n}, frame ${f}: the sun counts to the mutation`); frames++;
+    }
+  }
+  assert.ok(changes >= 5 && frames >= 100, `exercised: ${changes} cycle changes, ${frames} frames read`);
 });
 
 test('RD-13 cycleProgress: 0 after a mutation, growing to 1 at the next', () => {
@@ -123,7 +165,8 @@ test('RD-13 the words: arc, caption, pill; the plain-words tooltip', () => {
 
 test('RD-13 the app: one clock rule, one countdown, the switch, the gauge\'s lowest detent', () => {
   const app = read('../src/poly/app.js'), scene = read('../src/poly/scene.js'), html = read('../index.html');
-  assert.match(app, /evo\.sync === 'cycle' \? evolveDue\(t, cyc, m\.origin\) : line && barN % evo\.every === 0/, 'the clock: cycle mode on the wrap tick, bars mode on the bar line as before');
+  assert.match(app, /evo\.sync === 'cycle' \? si < 0 && evolveDue\(t, cyc, m\.origin\) : line && barN % evo\.every === 0/, 'the clock: cycle mode on the wrap tick (not on a slot\'s own tick), bars mode on the bar line as before');
+  assert.match(app, /heardCyc\.hold\(\{ cycle: c0, origin: o0 \}, time\)/, 'the clock hands the countdown the cycle the ear is in'); assert.match(app, /align: alignNow/, 'the scene reads it');
   assert.match(app, /sync: 'bars', every: 4/, 'default bars'); assert.match(app, /evo\.sync = syncFrom\(evo\.sync\)/, 'the settings load');
   assert.match(app, /sliders\.evoEvery = makeGauge\(\{ label: 'every · bars', min: 0,/, 'knob 1\'s lowest detent (0) is cycle'); assert.match(app, /fmt: v => v \|\| 'cycle'/);
   assert.match(app, /every cycle · \$\{n\} beat/, 'the read-only line follows the sun\'s beats');

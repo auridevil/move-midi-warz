@@ -80,6 +80,11 @@ before the page's first script and seeded again, with the frames held (and hande
   an L/R swap, one channel's polarity). Bit-identical renders are out of reach for an unchanged page (both engines
   wobble by 1 LSB in a few dozen samples, around −90 dBFS), so A9's "bit-identical" is read as this; the wording is
   Noor's to change (BACKLOG Later).
+- **The synth fingerprint on this machine since 2026-11-26** (RD-13 round 1, Sofia): the same command gives synth
+  `8dbb4c2e65f1185d` at RD-13's phase start (`776063b`) and at its HEAD alike, not the table's `fee43cee9cc5fe56`
+  (dsp still `96c2672430aa9851`). The page did not change between them: Chrome / Tone on the machine did. Judge the
+  synth half of A9 against a phase-start run made the same day with the same tool (`--root` on a `git archive`), and
+  keep the dsp fingerprint against the table.
 - **Why render #1 of a fresh page** (Sofia, round 1): the synth's noise voices fill Tone's noise buffers from
   `Math.random` on the first render; a second render in the same page plays that cache, so it never matched the first
   one. The task-3 baseline rendered twice in one page and concluded the synth could not repeat: wrong, and replaced.

@@ -1247,3 +1247,17 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   page-free `applyKit` (model, history and setlog passed in) would put them in `npm test`.
 - **Arrow keys on a focused select** (RD-12 round 1: noor): ArrowDown on the focused kit ▾ (voice ▾ the same) did not
   step it in headless Chrome on macOS, where the native menu opens; worth a check by hand on the real browser.
+- **A mutation's UI work on the draw scheduler** (RD-13 round 1: sound, for the architect): `evolveNow` (and
+  `loadSlot`) run `sync()` in a microtask (`offClock`, B10's route) inside the clock's own task: 3–7 ms, 12 ms at worst,
+  against ≈ 66 ms of headroom, so nothing is heard; but evolve · cycle can fire far more often than once a bar (a 3-beat
+  cycle: every 1.2 s at 150 bpm). `T.getDraw().schedule(sync, time)` at the mutation's own time would scale.
+- **The drift knob through the bar counts** (RD-13 round 1: noor): turning knob 1 from every = 8 down to cycle passes
+  7 … 1, so `evo.every` is 1 when it comes back up (the sheet's bars · cycle switch keeps the 8). Fair for a knob; a
+  memory of the last count turned past would give the 8 back.
+- **"evolve in N beats" repeats the sun** (RD-13 round 1: ines): in cycle mode the caption's evolve line is the sun's
+  own number ("each fact once"); "evolve at the sun's 0", or no line, would say it without the repeat. For Noor / Yuki.
+- **The export length "cycle" from a script** (RD-13 round 1: sound): `.click()` on `#exp-len`'s "cycle" left it
+  unchecked and `exportWav` at 4 bars, at the phase start and at HEAD alike; the cause wasn't found (not tried by hand).
+- **The cycle line's size, the crawl's snap** (RD-13 round 1: yuki): "every cycle · N beats" is 11 px muted, the
+  drawer's smallest type (passes A1 at 5.75:1; 12–13 px would read better); when a mutation changes the cycle the arc's
+  crawl snaps to its new place on the bloom's frame, where a short fade would read better.
