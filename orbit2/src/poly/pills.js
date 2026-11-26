@@ -14,7 +14,7 @@ const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
 /**
  * A pill's words for a state snapshot, or null when it is off. s = {
  *   rec: { armed, knobs }, chain: { chain: [slot index], pending, switchAt, mutes }, solo: [lane names],
- *   evolve: { on, every }, dice: { locked, seed, repeat }, clock: { follow, inName }, welcome: bool,
+ *   evolve: { on, every, sync }, dice: { locked, seed, repeat }, clock: { follow, inName }, welcome: bool,
  *   quest: { n, of, title } | null, jam: { state, bars } }
  */
 export function pillText(k, s) {
@@ -29,7 +29,7 @@ export function pillText(k, s) {
       return parts.length ? `${parts.join(' · ')} · ${c.pending >= 0 ? at : 'next bar'}` : null;
     }
     case 'solo': return s.solo?.length ? `solo · ${s.solo.join(', ')}` : null;
-    case 'evolve': return s.evolve?.on ? 'evolve' : null;   // RD-8: the countdown is the arc on the canvas, shown once (no "every N bars" here)
+    case 'evolve': return s.evolve?.on ? (s.evolve.sync === 'cycle' ? 'evolve · cycle' : 'evolve') : null;   // RD-8: the countdown is the arc on the canvas, shown once (no "every N bars" here)
     case 'dice': return s.dice?.locked ? `dice ${s.dice.seed}${s.dice.repeat > 1 ? ` · repeat ${s.dice.repeat}` : ''}` : null;
     case 'clock': return s.clock?.follow && s.clock.follow !== 'off' && s.clock.inName ? `clock · ${s.clock.inName}` : null;
     case 'welcome': return s.welcome ? 'welcome back · play' : null;

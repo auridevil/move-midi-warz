@@ -29,6 +29,7 @@ import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, l
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, hintDrawer } from './quests.js';
 import { attachSetlog, patternWords } from './setlog.js';
 import { Peek } from './peek.js';
+import { syncFrom, evolveDue, cycleProgress } from './evolve-sync.js';
 import { PILL_ORDER, pillsOn, pillLayout, pillOff, focusAfter } from './pills.js';
 
 const $ = (id) => document.getElementById(id);
@@ -78,7 +79,7 @@ const rec = { armed: false, accentVel: 100, pitchPads: false, quant: 'nearest', 
 let knobGest = null, handNow = null, stripKey = null;
 // home: return to the snapshot after N mutations (0 = never). V1: weights per kind (lanes.js EVOLVE_WEIGHTS), gravity %
 // (pull back toward home instead of the hard reset), maxBars = the longest cycle a move may make (0 = no limit)
-const evo = { on: false, every: 4, amount: 40, scope: 'hits', home: 0, gravity: 0, maxBars: 32, weights: { ...EVOLVE_WEIGHTS } };
+const evo = { on: false, sync: 'bars', every: 4, amount: 40, scope: 'hits', home: 0, gravity: 0, maxBars: 32, weights: { ...EVOLVE_WEIGHTS } };
 let evoSnap = null, evoCount = 0;   // evoSnap: evolve's home, always m.snapshot() (a copy: gravity pulls toward it)
 const bank = new SlotBank(localStorage);
 const pmidi = new PolyMidi({ getAccess: () => midi.access, isMovePort: (p) => move.inControl && /move/i.test(p.name) });
@@ -105,7 +106,7 @@ let questLog = [], questTimer = 0, cheerTimer = 0;
 let welcomeOn = false;   // F3 welcome back: a returning visit's pill, until the beat plays, loads or it is dismissed (RD-7)
 const face = { log: false, night: false };   // RD-5: the console-log overlay (` or Sheet → setup); RD-9: night. Both off by default, remembered
 const readExp = (o) => { if (!o) return; if (WAV_BITS.includes(o.bits)) exp.bits = o.bits; if (o.rate === 44100 || o.rate === 48000) exp.rate = o.rate; for (const k of ['ring', 'dry', 'midiOne', 'printFx']) if (typeof o[k] === 'boolean') exp[k] = o[k]; };
-try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; if (typeof o.face?.night === 'boolean') face.night = o.face.night; } } catch {}
+try { const o = JSON.parse(localStorage.getItem(SETTINGS) || 'null'); if (o) { Object.assign(rec, o.rec, { armed: false }); if (!['off', 'touch', 'latch'].includes(rec.knobs)) rec.knobs = 'off'; Object.assign(evo, o.evo, { on: false }); evo.sync = syncFrom(evo.sync); evo.weights = weightsFrom(evo.weights); evo.gravity = Math.max(0, Math.min(100, +evo.gravity || 0)); evo.maxBars = Math.max(0, Math.min(64, Math.round(+evo.maxBars) || 0)); if (o.perf) { if (typeof o.perf.live === 'boolean') perf.live = o.perf.live; if (typeof o.perf.muteBar === 'boolean') perf.muteBar = o.perf.muteBar; } pmidi.fromJSON(o.midi); dice.fromJSON(o.dice); readExp(o.exp); if (typeof o.from === 'string') lineage = o.from; if (typeof o.face?.log === 'boolean') face.log = o.face.log; if (typeof o.face?.night === 'boolean') face.night = o.face.night; } } catch {}
 const saveSettings = () => { try { localStorage.setItem(SETTINGS, JSON.stringify({ rec, evo, midi: pmidi, dice, exp, perf, from: lineage, face })); } catch {} };
 const setLineage = (from) => { lineage = from || null; saveSettings(); };
 
@@ -419,7 +420,9 @@ function onTick(t, time, cyc, ts) {
   // beat by Tone.Draw (no DOM in the clock), not after a stop (a beat queued just before it would undo its "01.1")
   if (m.meter !== barBeats.meter) barBeats = { meter: m.meter, num: meterParts(m.meter).num };
   const bt = bars.len / barBeats.num, inBar = (((t - bars.at) % bars.len) + bars.len) % bars.len; if (inBar % bt === 0) { const bb = `${String(barN % 100 + 1).padStart(2, '0')}.${Math.floor(inBar / bt) + 1}`; T.getDraw().schedule(() => { if (playing) barBeat.textContent = bb; }, time); }
-  if (line && evo.on && barN % evo.every === 0) { evolveNow(barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
+  // RD-13: 'cycle' = on the tick the whole pattern lines up again (the sun's 0, the bloom above), never on a bar line
+  // as such; the same nextEvolveTick the sun and the arc count to. evolveNow's number only seeds the dice: the beat here
+  if (evo.on && (evo.sync === 'cycle' ? evolveDue(t, cyc, m.origin) : line && barN % evo.every === 0)) { evolveNow(evo.sync === 'cycle' ? Math.floor(t / PPQ) : barN, true); cyc = m.cycleTicks(cycleOpts()); trackMeter(t); }
   if (line) questEvent({ type: 'bar', evolving: evo.on });   // I6 (a log entry; the check runs off the clock)
   // P2 / P3 on every bar line, Play's downbeat included, once a slot or evolve's way home has set this line's lanes (a
   // waiting mute lands on the lanes that play from here): queued mutes land, the fill latch turns on (or off) for the bar
@@ -521,7 +524,8 @@ const INFO = {
   'automation cc': 'MIDI export: each automated parameter of a lane goes out as this CC on the lane\'s track and channel: step values (locks) just before each note, curves wherever they change. 0 = left out. Defaults: tone 74, decay 75, snap 73, color 71, tune 16, drive 17, level 7, pan 10, send 91. "One Drum-Rack track" has one channel for every lane, so it carries notes only.',
   'record knobs': 'Record knob moves into the selected lane, armed and playing. off = knobs act as always. touch = while you hold a knob (a gauge, or a Move knob you touch) its moves are recorded: chance, tune, decay, snap and color (and the step lock knobs) as step locks on the steps that play, tone, drive, send, pan and level as a smooth curve over the lane\'s loops; let go and it plays back. latch = after you let go the last value goes on until the loop is back where you started. The lane\'s own value stays; each touch is one undo step. The strip under the steps shows it; clear it there (Move: touch the knob + Delete).',
   'pitch pads': 'Live record: the 8 pads of a row play the lane at 8 pitches and write a tune lock with the hit.',
-  'evolve every': 'Evolve mode: how many bars between two mutations.',
+  'evolve every': 'Evolve mode: how many bars between two mutations. Turn it all the way down to "cycle" to change the pattern on the alignment instead.',
+  'evolve sync': 'Change the pattern each time every ring lines up again, the moment the sun reaches 0.',
   'evolve amount': 'Evolve mode: chance per lane of being nudged at each mutation.',
   'evolve scope': 'What evolve may touch: rotation only; rotation + the hits; or everything with a weight (also length, speed, chance and tune). A euclid lane you edited by hand keeps your edits: evolve adds or takes away one hit. Accents, locks and conditions travel with their hits.',
   'evolve weight': 'How often evolve picks this kind of change, against the others (0 = never). Chance and tune start at 0.',
@@ -601,6 +605,7 @@ function buildSliders() {
 }
 const pages = new MovePages();   // the Move's pages and pad window (pages.js, used by the Move section below)
 function sync() {
+  if (evo.sync === 'cycle') paintEvoCycle();   // RD-13: the cycle may have changed (a lane, a slot, evolve)
   pages.window(m.selected, m.lanes.length);   // the pad window follows every selection, Move or not: the computer keys mirror the pads
   const handG = handGauge();   // A3: the knob a hand turns shows the hand (autoFrame), not the lane value under it
   for (const p of PARAMS) if (sliders[p.k] !== handG) sliders[p.k].set(p.get(m.lane));
@@ -889,7 +894,7 @@ function renderDots(mode, lane, first, hs) {
 // next mutation, or all 16 a touched knob's value meter. Read-only (cellAction 'drift' = none): the knobs above edit.
 // paintLeds hands the cells the state it lit the LEDs with whenever that changes, so they drain together ----
 const driftMeterIdx = () => { if (!driftHeld()) return -1; const t = [...hands.touch]; return t.length ? t[t.length - 1] : performance.now() < minusHand.turnUntil ? minusHand.turnIdx : -1; };
-const driftProgress = () => { if (!evo.on || !playing) return 0; const gc = genClock(playing, barN, heardTick(), barAt, bars.len); return genProgress(gc.bars, evo.every, gc.frac); };
+const driftProgress = () => { if (!evo.on || !playing) return 0; if (evo.sync === 'cycle') return cycleProgress(heardTick() - m.origin, m.cycleTicks(cycleOpts())); const gc = genClock(playing, barN, heardTick(), barAt, bars.len); return genProgress(gc.bars, evo.every, gc.frac); };
 const driftState = () => { const mi = driftMeterIdx(), g = mi >= 0 ? driftGauges()[mi] : null, leds = driftLeds({ evolves: m.lanes.map(l => !!l.evolve), meter: mi, value: g ? g.value : 0, progress: driftProgress(), on: evo.on }); return { mi, g, leds }; };
 let driftCells = '';   // the LED table the cells last drew
 function renderDriftCells(st = driftState()) {
@@ -1520,14 +1525,30 @@ function renderCouple() {
   }
 }
 /** The evolve scope's choices in the knobs' own words. */
+let evoCycleLine = null;
+/** RD-13: the every mode (bars | cycle): saved, shown by the switch and the gauge (0 = cycle), and in cycle mode a read-only
+ *  line "every cycle · N beats" (kept up to date from the clock side: paintEvoCycle) replaces the gauge. */
+function setEvoSync(mode, save = true) {
+  evo.sync = syncFrom(mode); const cy = evo.sync === 'cycle';
+  ui.evoSync.set(evo.sync); if (cy !== !sliders.evoEvery.value) sliders.evoEvery.set(cy ? 0 : evo.every);
+  sliders.evoEvery.el.hidden = cy; evoCycleLine.hidden = !cy; paintEvoCycle();
+  if (save) { saveSettings(); readout(); }
+}
+/** The cycle line's number follows the sun (the same cycle, in beats). */
+let evoCycleBeats = -1;
+function paintEvoCycle() { if (evo.sync !== 'cycle') { evoCycleBeats = -1; return; } const n = Math.max(1, Math.ceil(m.cycleTicks(cycleOpts()) / PPQ)); if (n !== evoCycleBeats) { evoCycleBeats = n; evoCycleLine.textContent = `every cycle · ${n} beat${n === 1 ? '' : 's'}`; } }
 function evoScopeOptions() { const rot = knobWord('rotation'); return [['rotate', rot], ['hits', '+ hits'], ['all', 'all', `${rot}, hits, length, speed, chance and tune (whatever has a weight)`]]; }
 function buildEvolveUI() {
   $('btn-evolve').onclick = () => setEvolve(!evo.on); $('evo-home-now').onclick = () => { evoSnap = m.snapshot(); evoCount = 0; lastEvolve = 'home set'; readout(); };
   const g = $('evo-gauges');
-  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 1, max: 32, value: evo.every, say: (v) => `${v} bar${v === 1 ? '' : 's'}`, title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { evo.every = v; saveSettings(); readout(); } });
+  // RD-13: the gauge's lowest detent (0) is "cycle" (the drift page's knob 1 reaches it by turning down); the bars · cycle
+  // switch below and the gauge say the same thing, and in cycle mode the gauge gives way to a read-only line
+  sliders.evoEvery = makeGauge({ label: 'every · bars', min: 0, max: 32, value: evo.sync === 'cycle' ? 0 : evo.every, fmt: v => v || 'cycle', say: (v) => v ? `${v} bar${v === 1 ? '' : 's'}` : 'every cycle', title: INFO['evolve every'], color: 'var(--nebula-purple)', onChange: (v) => { if (v) evo.every = v; setEvoSync(v ? 'bars' : 'cycle'); } });
   sliders.evoAmount = makeGauge({ label: 'amount', min: 0, max: 100, value: evo.amount, fmt: v => v + '%', title: INFO['evolve amount'], color: 'var(--nebula-purple)', onChange: (v) => { evo.amount = v; saveSettings(); } });
   sliders.evoHome = makeGauge({ label: 'home after', min: 0, max: 16, value: evo.home, fmt: v => v ? v + '×' : 'never', say: v => v ? `${v} mutation${v === 1 ? '' : 's'}` : 'never', title: INFO['return home'], color: 'var(--nebula-purple)', onChange: (v) => { evo.home = v; saveSettings(); } });
-  g.append(sliders.evoEvery.el, sliders.evoAmount.el, sliders.evoHome.el);
+  ui.evoSync = mount('evo-sync', segmented({ options: [['bars', 'bars', 'a mutation every N bars'], ['cycle', 'cycle', INFO['evolve sync']]], value: evo.sync, onChange: (v) => { if (v === 'bars') sliders.evoEvery.set(evo.every); setEvoSync(v); } }));
+  evoCycleLine = document.getElementById('evo-cycle'); evoCycleLine.title = INFO['evolve sync'];
+  g.append(sliders.evoEvery.el, evoCycleLine, sliders.evoAmount.el, sliders.evoHome.el); setEvoSync(evo.sync, false);
   ui.evoScope = mount('evo-scope', segmented({ options: evoScopeOptions(), value: evo.scope, onChange: (v) => { evo.scope = v; saveSettings(); } }));
   // V1: gravity, the max cycle guard, and how often each kind of change comes up
   sliders.evoGravity = makeGauge({ label: 'gravity', min: 0, max: 100, value: evo.gravity, fmt: v => v + '%', title: INFO['evolve gravity'], color: 'var(--nebula-purple)', onChange: (v) => { evo.gravity = v; saveSettings(); } });
@@ -2214,7 +2235,7 @@ const PILL_STANDIN = { rec: '● rec armed', chain: 'chain 1 → 2', solo: 'solo
 function pillState() {
   const q = currentQuest(quests.done);
   return { rec: { armed: rec.armed, knobs: rec.knobs }, chain: { chain: bank.chain, pending: bank.pending, switchAt: bank.switchAt, mutes: muteQ.size },
-    solo: m.lanes.filter(l => l.solo).map(voiceLabel), evolve: { on: evo.on, every: evo.every }, dice: { locked: dice.locked, seed: dice.seed, repeat: dice.repeat },
+    solo: m.lanes.filter(l => l.solo).map(voiceLabel), evolve: { on: evo.on, every: evo.every, sync: evo.sync }, dice: { locked: dice.locked, seed: dice.seed, repeat: dice.repeat },
     clock: { follow: pmidi.follow, inName: pmidi.inName }, welcome: welcomeOn, quest: q && !quests.hidden ? { n: QUESTS.indexOf(q) + 1, of: QUESTS.length, title: q.title } : null,
     jam: { state: jam.state, bars: jam.bar ? Math.round(jam.beats * PPQ / jam.bar) : 0 } };
 }
@@ -2664,7 +2685,7 @@ const scene = createScene($('cv'), { held: () => { const f = cvHalo(); if (!page
   // RD-8 the light's sources, read per frame (cheap getters, no DOM): the generative layer and its clock (bars since Play,
   // how far the ear is into the bar from the last line: the crawl), the slots, fill from anywhere, the first visit, the
   // selected lane's words
-  gen: () => ({ evolve: evo.on, every: evo.every, home: evo.home > 0, ...genClock(playing, barN, playing ? heardTick() : 0, barAt, bars.len), beats: barBeats.num || Math.round(bars.len / PPQ), dice: dice.locked ? dice.seed : null, repeat: dice.repeat, coupling: m.couple?.mode || 'off', gravity: evo.gravity }),
+  gen: () => ({ evolve: evo.on, sync: evo.sync, every: evo.every, home: evo.home > 0, ...genClock(playing, barN, playing ? heardTick() : 0, barAt, bars.len), beats: barBeats.num || Math.round(bars.len / PPQ), dice: dice.locked ? dice.seed : null, repeat: dice.repeat, coupling: m.couple?.mode || 'off', gravity: evo.gravity }),
   slots: () => ({ filled: bank.slots.map(Boolean), current: bank.current, pending: bank.pending }), fill: () => fill, hint: () => neverPlayed, laneLabel: (li) => ({ name: voiceLabel(m.lanes[li]), ratio: RATIO_LABEL[m.lanes[li].ratioIndex] }) });
 addEventListener('resize', poke); document.fonts?.ready.then(poke);
 // ---- I1 playing on the canvas (pointer events: mouse, pen and touch alike). Tap a step tick = a hit (a pop; heard at

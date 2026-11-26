@@ -4,6 +4,7 @@
 
 import { frameLoop } from '../frames.js';
 import { MAX_LANES, MAX_STEPS, condParts, condPasses } from './lanes.js';
+import { nextEvolveTick, cycleProgress } from './evolve-sync.js';
 
 const TAU = Math.PI * 2;
 const MUTED = '#8b84a8';
@@ -145,7 +146,7 @@ export const LIGHT_ROOM = 40;
 /** "press play" in the sun on a visit that has never played: this long, then the numeral. */
 export const HINT_MS = 7000;
 /** The sun: beats until everything lines up again (the heard tick, fractional), 1 on the last beat. */
-export const beatsLeft = (tick, cycle, beat) => Math.max(1, Math.ceil((cycle - (((tick % cycle) + cycle) % cycle)) / beat));
+export const beatsLeft = (tick, cycle, beat) => Math.max(1, Math.ceil((nextEvolveTick(tick, cycle, 'cycle') - tick) / beat));   // RD-13: the evolve countdown's own function, so the sun and the mutation agree
 /** The sun, stopped: the cycle's length in beats (everything meets in N beats). */
 export const cycleBeats = (cycle, beat) => Math.max(1, Math.ceil(cycle / beat));
 /** The sun's sizes, largest first (300 only at 40 px; never under the 15 px number floor). */
@@ -203,7 +204,7 @@ export const genClock = (playing, barN, heard, barAt, len) => (playing ? { bars:
  */
 export function genWords(s, detail = true) {
   const w = [];
-  if (s.evolve) w.push('EVOLVE');
+  if (s.evolve) w.push(s.sync === 'cycle' ? 'EVOLVE · CYCLE' : 'EVOLVE');
   if (s.dice) w.push('DICE');
   if (s.coupling && s.coupling !== 'off') w.push(detail ? (s.coupling === 'next' ? 'COUPLING NEXT' : 'COUPLING MATRIX') : 'COUPLING');
   if (detail && s.evolve && s.gravity > 0) w.push('GRAVITY');
@@ -256,7 +257,7 @@ export const moonAngle = (k, n = 16, deg = MOON_DEG) => Math.PI + ((deg / 2 - (k
 export function captionLines(s) {
   const out = [];
   if (s.cycle) out.push(s.cycle);
-  if (s.evolve) out.push(`evolve in ${s.evolve.bars} bar${s.evolve.bars === 1 ? '' : 's'}`);
+  if (s.evolve) out.push(s.evolve.beats != null ? `evolve in ${s.evolve.beats} beat${s.evolve.beats === 1 ? '' : 's'}` : `evolve in ${s.evolve.bars} bar${s.evolve.bars === 1 ? '' : 's'}`);   // RD-13: cycle mode counts the sun's beats
   if (s.dice) out.push(`dice ${s.dice.seed}${s.dice.repeat > 1 ? ` · repeat ${s.dice.repeat}` : ''}`);
   if (s.slot) out.push(`slot ${s.slot} playing`);
   if (s.jam) out.push(`jam · beat ${s.jam.beat} of ${s.jam.of}`);
@@ -693,7 +694,7 @@ export function createScene(cv, o) {
     if (genOn) {
       const a0 = -Math.PI / 2 - (GEN_DEG / 2) * Math.PI / 180, a1 = a0 + (GEN_DEG * Math.PI) / 180;
       if (gs.evolve) {
-        const p = genProgress(gs.bars, gs.every, gs.frac, reduced ? gs.beats : 0), ah = a0 + (a1 - a0) * p; lightNow.crawl = p;
+        const p = gs.sync === 'cycle' ? (al && al.cycle > 0 ? cycleProgress(reduced ? Math.floor(al.tick / al.beat) * al.beat : al.tick, al.cycle) : 0) : genProgress(gs.bars, gs.every, gs.frac, reduced ? gs.beats : 0), ah = a0 + (a1 - a0) * p; lightNow.crawl = p;
         ctx.strokeStyle = 'rgba(236,233,247,.14)'; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, a1); ctx.stroke();
         ctx.strokeStyle = 'rgba(236,233,247,.6)'; ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.beginPath(); ctx.arc(g.cx, g.cy, rGen, a0, Math.max(a0 + 0.004, ah)); ctx.stroke(); ctx.lineCap = 'butt';
         ctx.fillStyle = BRIGHT; ctx.beginPath(); ctx.arc(g.cx + Math.cos(ah) * rGen, g.cy + Math.sin(ah) * rGen, 2.2, 0, TAU); ctx.fill();
@@ -734,7 +735,7 @@ export function createScene(cv, o) {
     // state, the canvas the count). Lines go from the end while one would touch the rings or the moons and their numbers
     // (captionFit: a phone's square canvas; never at 1512×860).
     const jp = o.jamProgress?.(), jamOf = o.jamBeats || 256;
-    const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? { bars: barsToEvolve(gs.bars, gs.every, gs.frac) } : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
+    const lines = captionLines({ cycle: al && al.cycle > 0 ? cycleLine(al.tick, al.cycle, al.bar, al.beat, playing) : '', evolve: gs?.evolve ? (gs.sync === 'cycle' ? { beats: al && al.cycle > 0 ? beatsLeft(al.tick, al.cycle, al.beat) : 0 } : { bars: barsToEvolve(gs.bars, gs.every, gs.frac) }) : null, dice: gs?.dice ? { seed: gs.dice, repeat: gs.repeat || 1 } : null, slot: moonsOn && plan.slotNumbers === 'none' && ss.current >= 0 ? ss.current + 1 : null, jam: jp != null ? { beat: Math.floor(jp * jamOf), of: jamOf } : null });
     const rb = (b) => ({ x: Math.round(b.x), y: Math.round(b.y), w: Math.round(b.w), h: Math.round(b.h) });
     lightNow.boxes = { moons: lit.map(rb), lines: [] };
     if (lines.length) {
