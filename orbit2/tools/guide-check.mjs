@@ -9,11 +9,11 @@
 //
 // The step lists below are written against the guide's table rows; the row COUNT of each use case is asserted, so a row
 // added to or removed from GUIDE.md fails here until the walk is updated. Not driveable headless, said plainly: the
-// browser's MIDI permission (Connect Move), the native file chooser (the break file is handed to the page the way the
-// chooser does) and the clipboard (share).
-import { readFileSync } from 'node:fs';
+// browser's MIDI permission (Connect Move) and the clipboard (share). The file chooser is driven for real: the click
+// opens it, CDP hands it the drum loop (Page.fileChooserOpened → DOM.setFileInputFiles).
+import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { launch } from './cdp.mjs';
-import { bytes, trackOf } from './session-core.mjs';
+import { bytes, trackOf, breakWav } from './session-core.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const only = arg('--only', '1,2,3,4,5,6,7,8,9,10').split(',').map(Number), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), shots = arg('--shots', '/tmp/orbit2-impl/guide');
@@ -76,11 +76,18 @@ const body = (p) => p.eval(`(() => { const c = document.body.cloneNode(true); c.
 const pick = (p, id, text) => p.eval(`(() => { const s = document.getElementById(${JSON.stringify(id)}), o = [...s.options].find(o => o.text === ${JSON.stringify(text)}); s.value = o.value; s.dispatchEvent(new Event('change')); return s.value; })()`);
 const sheetTab = (p, t) => p.eval(`__poly.setSheet(${JSON.stringify(t)}, true)`);
 
-// A drum-loop WAV for the break steps (8 s at 22.05 kHz, a click every half second), handed to the page as a File
-const wavFile = `(() => { const sr = 22050, n = sr * 8, b = new ArrayBuffer(44 + n * 2), v = new DataView(b), w = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) { const t = (i % (sr / 2)) / sr; v.setInt16(44 + i * 2, Math.round(Math.sin(t * 2 * Math.PI * 200) * Math.exp(-t * 30) * 20000), true); }
-  return new File([b], 'break.wav', { type: 'audio/wav' }); })()`;
+// A drum loop for the break steps (session-core breakWav: 8 s, kick and snare), on disk for the file chooser
+mkdirSync(shots, { recursive: true }); const breakPath = `${shots}/break.wav`; writeFileSync(breakPath, breakWav());
+const pickFile = async (p, name) => {   // a trusted click on the button opens the chooser; CDP hands it the file
+  let chooser = null; p.on('Page.fileChooserOpened', (e) => { chooser = e; }); await p.send('Page.setInterceptFileChooserDialog', { enabled: true });
+  const { x, y } = await rectOf(p, `__g.find(${JSON.stringify(name)})`); await p.click(x, y);
+  for (let i = 0; i < 20 && !chooser; i++) await p.sleep(100);
+  if (!chooser) throw new Error(`${name} opened no file chooser`);
+  await p.send('DOM.setFileInputFiles', { files: [breakPath], backendNodeId: chooser.backendNodeId }); await p.sleep(1500);
+};
+// a control drawn inside the window and on top at its centre (a menu that opens off the window fails here, RD-14 walk)
+const onScreen = (p, names) => p.eval(`${JSON.stringify(names)}.every(n => { const e = __g.find(n); if (!e) return false; const r = e.getBoundingClientRect(), t = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+  return r.top >= 0 && r.left >= 0 && r.bottom <= innerHeight && r.right <= innerWidth && !!t && (t === e || e.contains(t)); })`);
 const holdStep = async (p, i, ms = 900) => {
   const { x, y } = await rectOf(p, `document.querySelectorAll('#stepsui > *')[${i}]`);
   await p.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 }); await p.sleep(ms);
@@ -99,6 +106,8 @@ const hits = (p) => p.eval(`JSON.stringify(__poly.m.lanes.map(l => l.hits))`);
 // the cycle caption is drawn on the canvas: read it the way the scene does (scene.js cycleLine, the machine's cycle)
 const cyc = (p) => p.eval(`import('/orbit2/src/poly/scene.js').then(s => s.cycleLine(0, __poly.m.cycleTicks({ repeat: 1 }), 3360, 840, false))`);
 const dl = async (p) => (await p.downloads()).map(d => d.name);
+// a render takes longer on a busy machine (load 15: a WAV took over 2.5 s): wait for the download itself, up to 60 s
+const waitDl = async (p, re, ms = 60000) => { for (let t = 0; t < ms && !(await p.eval(`(window.__dl || []).some(d => ${re}.test(d.name))`)); t += 250) await p.sleep(250); return dl(p); };
 
 // ---- the ten use cases: one { go, ok } per row of the guide's table, in order (ok = the "what you see" claim) ----
 const CASES = {
@@ -115,7 +124,7 @@ const CASES = {
     R(() => p.sleep(2500), async () => (await p.eval('__poly.clock().tick')) > 0),   // the bloom is canvas: only the clock is read
     R(() => press(p, 'lane 2 rim'), async () => (await p.eval('__poly.m.selected')) === 1 && (await val(p, 'length')).includes('5')),
     R(() => wheel(p, 'length', 100, 2), async () => (await val(p, 'length')).includes('3') && (await cyc(p)) === 'cycle · 3 beats'),
-    R(async () => { p.c0 = await cyc(p); await drag(p, 'speed ×', -30); await p.sleep(300); }, async () => (await cyc(p)) !== p.c0),
+    R(async () => { await wheel(p, 'speed ×', 100, 1); await p.sleep(300); }, async () => /3/.test(await val(p, 'speed ×')) && (await cyc(p)) === 'cycle · 1 beat'),
   ],
   3: (p) => [
     R(async () => { await cmdk(p, 'techno', 2); await press(p, 'play'); await p.sleep(500); }, () => playing(p)),
@@ -131,13 +140,13 @@ const CASES = {
     R(async () => { await pressIn(p, '#pane-perform', 'touch'); await p.sleep(200); }, async () => /rec armed · touch/.test(await body(p))),
     R(async () => { await down(p, 'Escape'); await press(p, 'play'); await p.sleep(500); }, () => playing(p)),
     R(async () => { await drag(p, 'tune', -60, 250); }, () => seen(() => mark(p))),
-    R(() => cmdk(p, 'clear lane automation', 2), async () => !(await mark(p))),
-    R(async () => { await press(p, 'record off'); await p.sleep(300); }, async () => !(await p.eval(`__g.shown('rec armed')`))),
+    R(async () => { await press(p, 'record off'); await p.sleep(300); }, async () => !(await p.eval(`__g.shown('rec armed')`)) && (await mark(p))),   // the move stays
+    R(() => cmdk(p, 'clear lane automation', 2), async () => !(await mark(p)) && /this lane's automation cleared/.test(await body(p))),
   ],
   5: (p) => [
     R(async () => { await cmdk(p, 'afro', 2); await press(p, 'play'); await p.sleep(400); await p.eval('__poly.applyTempo(240)'); }, () => playing(p)),
     R(async () => { await cmdk(p, 'evolve', 0); await down(p, 'ArrowDown'); await down(p, 'Enter'); await down(p, 'Enter'); }, () => p.eval(`__g.shown('evolve off')`)),
-    R(async () => { await press(p, 'cycle'); await p.sleep(300); }, async () => /evolve · cycle/.test(await body(p))),
+    R(async () => { await press(p, 'cycle'); await p.sleep(300); }, async () => /evolve · cycle/.test(await body(p)) && /every cycle · 8 beats/.test(await body(p))),
     R(async () => { p.h0 = await hits(p); for (let i = 0; i < 60 && (await hits(p)) === p.h0; i++) await p.sleep(500); }, async () => (await hits(p)) !== p.h0),
     R(() => wheel(p, 'gravity', -100, 5), async () => /10/.test(await val(p, 'gravity'))),
     R(() => wheel(p, 'home after', -100, 2), async () => /2/.test(await val(p, 'home after'))),
@@ -159,7 +168,7 @@ const CASES = {
     R(async () => { await cmdk(p, 'boom bap', 2); await press(p, 'lane 4 crackle'); }, async () => (await p.eval('__poly.m.selected')) === 3),
     R(() => cmdk(p, 'break file', 1), () => p.eval(`document.getElementById('tab-lane').getAttribute('aria-selected') === 'true' && /break file/i.test(document.activeElement.textContent + document.activeElement.getAttribute('aria-label'))`)),
     R(async () => { await p.eval(`[...document.querySelectorAll('#pane-lane button')].find(b => b.textContent.trim() === '8').click()`); await p.eval(`[...document.querySelectorAll('#pane-lane button')].find(b => b.textContent.trim() === '16').click()`); }, () => p.eval(`[...document.querySelectorAll('#pane-lane button')].find(b => b.textContent.trim() === '16').getAttribute('aria-checked') !== 'false'`)),
-    R(async () => { await p.eval(`__poly.breakFromFile(3, ${wavFile})`); await p.sleep(1500); }, async () => /16 slices/.test(await body(p)) && /♪ break/.test(await body(p))),
+    R(() => pickFile(p, 'break file…'), async () => /16 slices/.test(await body(p)) && /♪ break/.test(await body(p))),
     R(async () => { await press(p, 'play'); await p.sleep(500); }, () => playing(p)),
     R(() => holdStep(p, 4), async () => /step 5/.test(await body(p)) && (await p.eval(`['clear', 'more…', 'done'].every(n => __g.has(n))`))),
     R(async () => { await press(p, 'more…'); await p.sleep(300); await p.eval(`[...document.querySelectorAll('#lock-slices .slice')].find(b => b.textContent.trim() === '3').click()`); await p.sleep(300); }, async () => /"slice":2/.test(await p.eval('JSON.stringify(__poly.m.lanes[3].locks)'))),
@@ -170,9 +179,9 @@ const CASES = {
     R(() => cmdk(p, 'export stems', 1), () => p.eval(`document.activeElement.id === 'exp-stems'`)),
     R(async () => { await p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').click()`); }, () => p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').getAttribute('aria-checked') === 'true'`)),
     R(async () => { await press(p, 'render as loop'); }, () => p.eval(`document.getElementById('exp-loop').getAttribute('aria-pressed') === 'false'`)),
-    R(async () => { await p.captureDownloads(); await press(p, '⤓ WAV'); await p.sleep(2500); p.d = await dl(p); }, async () => p.d.some(n => /\.wav$/.test(n)) && /24-bit/.test(await body(p))),
-    R(async () => { await press(p, '⤓ stems (.zip)'); await p.sleep(4000); p.d = await dl(p); }, async () => p.d.some(n => /\.zip$/.test(n))),
-    R(async () => { await press(p, '⤓ MIDI'); await p.sleep(800); p.d = await dl(p); }, async () => p.d.some(n => /\.mid$/.test(n)) && /a track per lane/.test(await body(p))),
+    R(async () => { await p.captureDownloads(); await press(p, '⤓ WAV'); p.d = await waitDl(p, /\.wav$/); }, async () => p.d.some(n => /\.wav$/.test(n)) && /24-bit/.test(await body(p))),
+    R(async () => { await press(p, '⤓ stems (.zip)'); p.d = await waitDl(p, /\.zip$/); }, async () => p.d.some(n => /\.zip$/.test(n))),
+    R(async () => { await press(p, '⤓ MIDI'); p.d = await waitDl(p, /\.mid$/); }, async () => p.d.some(n => /\.mid$/.test(n)) && /a track per lane/.test(await body(p))),
   ],
   9: (p, b) => [
     R(async () => { await press(p, 'share'); await p.sleep(600); }, async () => /link copied|address bar/.test(await body(p))),
@@ -181,16 +190,16 @@ const CASES = {
     R(async () => { await press(p.q, '▶ tap to hear this orbit'); await p.q.sleep(900); }, async () => (await p.q.eval(`__g.has('■ stop')`)) && (await p.q.eval(`__g.has('remix')`))),
     R(async () => { await press(p.q, 'remix'); await p.q.sleep(500); }, async () => /it is yours now/.test(await body(p.q))),
     R(async () => { await p.q.eval(`__poly.randomizeAll()`); await press(p.q, 'share'); await p.q.sleep(500); }, async () => /link copied|address bar/.test(await body(p.q))),
-    R(async () => { await p.eval(`document.getElementById('btn-share').focus()`); await down(p, 'ArrowDown'); await p.sleep(300); }, () => p.eval(`['link', '4 bars of audio', 'postcard (video)'].every(n => __g.has(n))`)),
+    R(async () => { await p.send('Page.bringToFront'); await p.eval(`document.getElementById('btn-share').focus()`); await down(p, 'ArrowDown'); await p.sleep(300); }, () => onScreen(p, ['link', '4 bars of audio', 'postcard (video)'])),   // back on your own page
   ],
   10: (p) => [
     R(async () => {}, async () => (await p.eval('document.documentElement.scrollHeight <= innerHeight + 1')) && (await p.eval(`['play', 'tempo'].every(n => __g.has(n))`))),
     R(async () => { const { x, y } = await rectOf(p, `document.getElementById('btn-play')`); await p.tap(x, y); await p.sleep(700); }, () => playing(p)),
     R(async () => { const { x, y } = await rectOf(p, `__g.find('lane 2')`); await p.tap(x, y); await p.sleep(300); }, async () => (await p.eval('__poly.m.selected')) === 1),
-    R(async () => { for (let k = 0; k < 2; k++) { const { x, y } = await rectOf(p, `document.querySelectorAll('#stepsui > *')[1]`); await p.tap(x, y); await p.sleep(250); } }, async () => /step 2, on/.test(await p.eval(`document.querySelectorAll('#stepsui > *')[1].getAttribute('aria-label') || ''`))),
+    R(async () => { for (let k = 0; k < 2; k++) { const { x, y } = await rectOf(p, `document.querySelectorAll('#stepsui > *')[1]`); await p.tap(x, y); await p.sleep(250); } }, async () => /^step 2, on, accent/.test(await p.eval(`document.querySelectorAll('#stepsui > *')[1].getAttribute('aria-label') || ''`))),
     R(() => holdStep(p, 2, 1000), async () => /step 3/.test(await body(p)) && (await p.eval(`['clear', 'more…', 'done'].every(n => __g.has(n))`))),
     R(async () => { await press(p, 'done'); p.t0 = await val(p, 'tempo'); await drag(p, 'tempo', -50); }, async () => (await val(p, 'tempo')) !== p.t0),
-    R(async () => { await sheetTab(p, 'lane'); await press(p, 'mute'); await p.sleep(300); }, () => p.eval('!!__poly.m.lanes[__poly.m.selected].muted')),
+    R(async () => { await sheetTab(p, 'lane'); await press(p, 'mute'); await p.sleep(300); }, async () => (await p.eval('!!__poly.m.lanes[__poly.m.selected].muted')) && /lane 2 · rim \(muted\)/.test(await body(p))),
     R(async () => { await press(p, 'perform'); await p.sleep(300); }, () => p.eval(`['fill hold', 'fill next', 'throw hold', 'undo', 'randomize', '● jam', 'share'].every(n => __g.has(n))`)),
   ],
 };
@@ -202,11 +211,13 @@ const MOVES = {
     ['Shift + ◀ ▶', async () => { const k = await kitKey(p); await mv(p, bytes.btn('shift', true), ...[bytes.btn('right', true), bytes.btn('right', false)], bytes.btn('shift', false)); await p.sleep(200); return (await kitKey(p)) !== k; }],
     ['Knob 8', async () => { const t = await val(p, 'tempo'); await mv(p, bytes.touch(7, true), bytes.enc(7, 5), bytes.touch(7, false)); await p.sleep(300); return (await val(p, 'tempo')) !== t; }]],
   2: (p) => [['Track 1–4', async () => { await tap(p, trackOf(1)); await p.sleep(200); return (await sel(p)) === 1; }],
-    ['Knobs 1–4', async () => { const a = await val(p, 'length'), r = await val(p, 'speed ×'); await mv(p, bytes.touch(0, true), bytes.enc(0, -1), bytes.enc(0, -1), bytes.touch(0, false), bytes.touch(3, true), bytes.enc(3, 1), bytes.touch(3, false)); await p.sleep(300); return (await val(p, 'length')) !== a && (await val(p, 'speed ×')) !== r; }]],
+    ['Knobs 1–4', async () => { await mv(p, bytes.touch(0, true), bytes.enc(0, -1), bytes.enc(0, -1), bytes.touch(0, false), bytes.touch(3, true), bytes.enc(3, -1), bytes.touch(3, false)); await p.sleep(300); return /3/.test(await val(p, 'length')) && /3/.test(await val(p, 'speed ×')) && (await cyc(p)) === 'cycle · 1 beat'; }]],
   3: (p) => [['Track 1–4', async () => { await tap(p, trackOf(0)); await p.sleep(200); return (await sel(p)) === 0; }],
     ['Shift + knobs', async () => { const s = await p.eval('JSON.stringify(__poly.m.lanes[0].sound)'); await mv(p, bytes.btn('shift', true), bytes.touch(1, true), bytes.enc(1, 4), bytes.touch(1, false), bytes.btn('shift', false)); await p.sleep(300); return (await p.eval('JSON.stringify(__poly.m.lanes[0].sound)')) !== s; }],
     ['Knobs 1–4', async () => { const r = await val(p, 'rotation'); await mv(p, bytes.touch(2, true), bytes.enc(2, 2), bytes.touch(2, false)); await p.sleep(300); return (await val(p, 'rotation')) !== r; }]],
   4: (p) => [['Record', async () => { await tap(p, 'record'); await p.sleep(300); return /rec armed/.test(await body(p)); }],
+    // a finger on knob 7 (one that records; on knob 1–5 or 8 Record arms and disarms instead): off → touch
+    ['Record', async () => { await mvSlow(p, 150, bytes.touch(6, true), bytes.btn('record', true), bytes.btn('record', false), bytes.touch(6, false)); await p.sleep(300); return /rec armed · touch/.test(await body(p)); }],
     ['Record armed + touch a knob', async () => { if (process.env.GC_DEBUG) console.log('mv4', await p.eval(`JSON.stringify({ rec: __poly.rec, play: document.getElementById('btn-play').getAttribute('aria-label') })`)); await pressIn(p, '#pane-perform', 'touch'); await press(p, 'play'); await p.sleep(400); await mvSlow(p, 250, bytes.touch(6, true), bytes.enc(6, 6), bytes.enc(6, 6), bytes.touch(6, false)); const r = await seen(() => mark(p)); if (process.env.GC_DEBUG) console.log('mv4b', r, await p.eval(`JSON.stringify({ rec: __poly.rec, play: document.getElementById('btn-play').getAttribute('aria-label'), tick: __poly.clock().tick, marks: [...document.querySelectorAll('.g-mark')].map(k => k.hidden ? 0 : 1).join('') })`)); return r; }],
     ['Touch a knob + Delete', async () => { await mv(p, bytes.touch(6, true), ...[bytes.btn('delete', true), bytes.btn('delete', false)], bytes.touch(6, false)); await p.sleep(300); return !(await mark(p)); }]],
   5: (p) => [['−', async () => { await mv(p, ...[bytes.btn('minus', true), bytes.btn('minus', false)]); await p.sleep(300); return true; }]],
@@ -216,7 +227,13 @@ const MOVES = {
     ['Hold Duplicate + step', async () => { await mv(p, bytes.btn('duplicate', true), bytes.step(0, true), bytes.step(0, false), bytes.btn('duplicate', false)); await p.sleep(300); return /slot 1/.test(await body(p)) && !(await p.eval(`document.querySelector('#slots button').getAttribute('aria-label')`)).includes('empty'); }],
     ['Hold Loop + steps', async () => { await mv(p, bytes.btn('loop', true), bytes.step(0, true), bytes.step(0, false), bytes.btn('loop', false)); await p.sleep(300); return /playing slot 1|slot 1/.test(await body(p)); }]],
   7: (p) => [['Track 1–4', async () => { await tap(p, trackOf(3)); await p.sleep(200); return (await sel(p)) === 3; }],
-    ['Hold a step', async () => { await mv(p, bytes.step(4, true)); await p.sleep(900); const on = /step 5/.test(await body(p)); await mv(p, bytes.step(4, false)); return on; }]],
+    ['Hold a step', async () => { await mv(p, bytes.step(4, true)); await p.sleep(900); const on = /step 5/.test(await body(p)); await mv(p, bytes.step(4, false)); return on; }],
+    // a break on lane 4, then step 5 held and knob 7 left eight clicks: four per slice, slice 5 → 3 (0-based 2); letting go closes the page
+    ['Hold step + knobs 1–7', async () => {
+      await cmdk(p, 'break file', 1); await pickFile(p, 'break file…');
+      await mv(p, bytes.step(4, true)); await p.sleep(600); await mv(p, bytes.touch(6, true)); for (let i = 0; i < 8; i++) { await mv(p, bytes.enc(6, -1)); await p.sleep(40); }
+      await mv(p, bytes.touch(6, false), bytes.step(4, false)); await p.sleep(400);
+      return /"slice":2/.test(await p.eval('JSON.stringify(__poly.m.lanes[3].locks)')) && !/step 5 · held on move/.test(await body(p)); }]],
 };
 const MOVE_SETUP = { 1: 'techno', 2: '3 vs 4 vs 5', 3: 'techno', 4: 'techno', 5: 'afro', 6: 'techno', 7: 'boom bap' };
 
@@ -262,7 +279,7 @@ if (only.length === 10 || only.includes(0)) for (const [w, h, mobile] of [[1512,
   check('dialog', tag, p.errors.length === 0, `page errors: ${p.errors.slice(0, 2).join(' | ')}`); p.close();
 }
 } finally { await b.close(); }
-notes.push('not driveable headless: the MIDI permission (Connect Move), the native file chooser, the clipboard; the bloom is canvas (the clock is read instead)');
+notes.push('not driveable headless: the MIDI permission (Connect Move), the clipboard; the bloom is canvas (the clock is read instead)');
 console.log(fails.length ? `\nFAIL (${fails.length})\n` + fails.map(f => ' - ' + f).join('\n') : '\nall use cases walked, no page errors, every quoted name found');
 console.log('notes: ' + notes.join('; '));
 process.exit(fails.length ? 1 : 0);

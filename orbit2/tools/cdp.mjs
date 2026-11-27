@@ -8,23 +8,27 @@
 //   await p.shot('/tmp/me/desktop.png');                            // look at it with the Read tool
 //   p.captureDownloads(); await p.eval('__poly.exportWav()'); const files = await p.downloads();   // [{ name, bytes }]
 //   console.log(p.errors);                                          // page exceptions + console.error
+//   p.on('Page.fileChooserOpened', (e) => ...);                     // any CDP event of the page
 //   await b.close();                                                // kills Chrome + server, deletes the profile
 //
 // Every reviewer uses its own port pair (see orbit2/docs/REVIEW-PANEL.md) so parallel reviews never collide.
 // A CDP call that never answers fails after 30 s instead of hanging the script (eval: 120 s, 4 × CDP_START_MS when that
 // is longer, or `eval(expr, { timeout })`).
 import { spawn } from 'node:child_process';
-import { rmSync, writeFileSync, mkdirSync } from 'node:fs';
+import { rmSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 const ROOT = resolve(new URL('../..', import.meta.url).pathname);
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// a long PATH (a shell that repeats its folders, ~1.4 KB) makes spawning python3 by name fail with ENAMETOOLONG on macOS
+// (RD-14): look it up in the PATH's unique, existing folders only
+const PATH = [...new Set((process.env.PATH || '').split(':'))].filter(d => d && existsSync(d)).join(':');
 
 export async function launch({ port, debugPort, root = ROOT } = {}) {
   if (!port || !debugPort) throw new Error('launch({ port, debugPort }): pick your own ports');
   const profile = `/tmp/orbit2-cdp-${debugPort}`;
-  const server = spawn('python3', ['serve.py', String(port)], { cwd: root, stdio: 'ignore' });
+  const server = spawn('python3', ['serve.py', String(port)], { cwd: root, stdio: 'ignore', env: { ...process.env, PATH } });
   // --disable-audio-output: a fake output stream clocks the AudioContext, so the transport runs (silently) even when the
   // Mac's own output device stalls (then currentTime freezes and nothing plays, on any commit)
   const chrome = spawn(CHROME, ['--headless=new', `--remote-debugging-port=${debugPort}`, `--user-data-dir=${profile}`, '--autoplay-policy=no-user-gesture-required', '--mute-audio', '--disable-audio-output', '--no-first-run', 'about:blank'], { stdio: 'ignore' });
@@ -44,10 +48,11 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
       const { webSocketDebuggerUrl } = await (await fetch(`http://127.0.0.1:${debugPort}/json/new?about:blank`, { method: 'PUT' })).json();
       const ws = new WebSocket(webSocketDebuggerUrl);
       await new Promise((r, j) => { ws.onopen = r; ws.onerror = () => j(new Error('cdp: the page socket failed')); setTimeout(() => j(new Error('cdp: the page socket did not open in 30 s')), 30000).unref(); });
-      let id = 0; const pending = new Map(), errors = [];
+      let id = 0; const pending = new Map(), errors = [], listeners = new Map();
       ws.onmessage = (m) => {
         const d = JSON.parse(m.data);
         if (d.id && pending.has(d.id)) { pending.get(d.id)(d); pending.delete(d.id); }
+        if (d.method) for (const f of listeners.get(d.method) || []) f(d.params);
         if (d.method === 'Runtime.exceptionThrown') errors.push(d.params.exceptionDetails.exception?.description || d.params.exceptionDetails.text);
         if (d.method === 'Runtime.consoleAPICalled' && d.params.type === 'error') errors.push(d.params.args.map(a => a.value ?? a.description).join(' '));
       };
@@ -65,9 +70,11 @@ export async function launch({ port, debugPort, root = ROOT } = {}) {
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
       if (mobile) await send('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
       if (reducedMotion) await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });   // before the page reads matchMedia
-      await send('Page.navigate', { url: `${base}/${path}` }); await sleep(wait);
+      // a whole URL opens as it is (RD-14: the same server under 127.0.0.1 is another origin, a stranger's empty storage)
+      await send('Page.navigate', { url: /^https?:\/\//.test(path) ? path : `${base}/${path}` }); await sleep(wait);
       const page = {
         errors, send,
+        on(method, f) { listeners.set(method, [...(listeners.get(method) || []), f]); },   // a CDP event, e.g. Page.fileChooserOpened
         // awaits promises: an offline render takes a while, and far longer on a busy machine (RD-12 round 1, sound: a
         // seeded render took 261 s at load 150): the default grows with CDP_START_MS, as `ready` does
         async eval(expression, { timeout = Math.max(120000, 4 * (+process.env.CDP_START_MS || 0)) } = {}) {

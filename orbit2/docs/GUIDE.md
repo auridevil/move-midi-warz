@@ -14,9 +14,9 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 1. Press **play** (or `Space`) and watch the sun count down the beats.
 2. Click a lane in the list at the top left: its knobs show along the bottom.
 3. Drag a knob up or down; hold `Shift` to go fine.
-4. Click a cell in the row of 16 to switch a step on or off.
+4. Click a cell in the row of 16 to switch a step on (it lights up); more clicks go accent, ghost, off.
 5. Click **randomize** for a new groove, and **undo** to take it back.
-6. Click **all ⌘K**, type a word, press `Enter` to find any control.
+6. Click **all ⌘K**, type a word, press `Enter`: the control it finds gets an outline, and `Enter` again uses it.
 7. Press `Esc` once to close whatever is open.
 8. Press `?` for the keys and the Move tables.
 9. Press `F` to hide the controls; **exit focus** (or `Esc`) brings them back.
@@ -54,10 +54,10 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 |---|---|
 | Click **all ⌘K**, type `3 vs 4 vs 5`, press `Enter` twice → you see four rings and the words `cycle · 5 beats` at the bottom right | — |
 | Click **play** → you hear the four patterns drift and the sun in the middle counts `5`, `4`, `3`, `2`, `1` beats until they meet | **Play** |
-| Watch the sun reach `1` and start again at `5` → you see a ripple of colour (the bloom) leave the middle: every ring just met | — |
+| Watch the sun reach `1` and start again at `5` → you see a ring of light (the bloom) flash out from the middle: every ring just met | — |
 | Click **lane 2 rim** → you see lane 2 outlined and its **length** knob read `5` | **Track 1–4**: press the second button from the bottom (the bottom one is lane 1) |
 | Scroll down twice over the **length** knob (show me: make 3 against 4) → you see `3`, the label `RIM 3 × 4` on the ring and `cycle · 3 beats`, and you hear the rim loop shorter | **Knobs 1–4**: turn `knob 1` left twice |
-| Drag the **speed ×** knob up a notch → you hear that lane run faster and the caption change, here to `cycle · 10 beats` | **Knobs 1–4**: turn `knob 4` |
+| Scroll down once over the **speed ×** knob → you see it read `3`, the label `RIM 3 × 3` and `cycle · 1 beat`: three steps at ×3 take one beat, like the other rings, so they all meet on every beat | **Knobs 1–4**: turn `knob 4` left once |
 
 **If it doesn't:**
 - The wrong lane changed: the lane with the bright outline is the one the knobs edit, so click the one you want first.
@@ -74,9 +74,9 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `techno`, press `Enter` twice, then click **play** → you hear the beat | **Play** |
-| Click **lane 1 kick 909** → you see lane 1 outlined and its name in the console header | **Track 1–4**: press the bottom button |
+| Click **lane 1 kick 909** → you see lane 1 outlined (a groove often starts there) and `1 · kick 909` in the console header | **Track 1–4**: press the bottom button |
 | Click **sound ⇧**, or hold `Shift` → you see the knobs turn into filled pies named **decay**, **tone**, **drive**, **snap**, **color**, **send**, **pan** and **level** | **Shift + knobs**: hold `Shift` |
-| Drag the **tone** knob up → you hear the kick get brighter, and a big `100` with "knob 2 · tone" shows at the left | **Shift + knobs**: hold `Shift`, turn `knob 2` |
+| Drag the **tone** knob up → you hear the kick get brighter, and a big number (the tone, up to `100`) with "knob 2 · tone" shows at the left | **Shift + knobs**: hold `Shift`, turn `knob 2` right |
 | Click **rhythm** (or let go of `Shift`) → you see the thin arcs come back: **length**, **euclid hits**, **rotation** and the rest | — |
 | Drag the **rotation** knob up a little → you see the dots on the lit ring slide along with short trails, and the note reads "the hits start 2 steps later" | **Knobs 1–4**: turn `knob 3` |
 
@@ -96,11 +96,11 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 |---|---|
 | Click **all ⌘K**, type `techno`, press `Enter` twice → you see the techno lanes | — |
 | Click **all ⌘K**, type `arm record`, press `Enter` twice → you see a red pill, **rec armed**, at the top right | **Record** |
-| Click **touch** next to "knobs" in the Record box → you see the pill read `rec armed · touch` | Touch any knob, then press **Record** |
+| Click **touch** next to "knobs" in the Record box → you see the pill read `rec armed · touch` | Keep a finger on `knob 7` (a knob that records) and press **Record** (each press: off → touch → latch) |
 | Press `Esc`, then click **play** → you see a red dashed line round the stage and a red line along the top of the console | **Play** |
 | Drag the **tune** knob up slowly and let go → you see a small `A` on the knob and hear the pitch move again on every loop | **Record armed + touch a knob**: touch `knob 7`, turn it, let go |
-| Click **all ⌘K**, type `clear lane automation`, press `Enter` twice → you see the `A` vanish and a note: this lane's automation cleared | **Touch a knob + Delete** |
-| Click **record off** (the × on the red pill) → you see the pill and the red lines go, and the move keeps playing | **Record** |
+| Click **record off** (the × on the red pill) → you see the pill and the red lines go, and the recorded move keeps playing | **Record** |
+| Click **all ⌘K**, type `clear lane automation`, press `Enter` twice → you see the `A` vanish and a note: `this lane's automation cleared`; the pitch stops moving | **Touch a knob + Delete**: touch `knob 7` and press **Delete** (the note: `tune: automation cleared on lane 1`) |
 
 **If it doesn't:**
 - No `A` appeared: knob recording starts at `off`, so click **touch** before you drag.
@@ -117,17 +117,17 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `afro`, press `Enter` twice, then click **play** → you hear the afro groove | **Play** |
-| Click **all ⌘K**, type `evolve`, press `↓` once, press `Enter` twice (show me: let it evolve 8 bars) → you see the **evolve** pill at the top right | **−** |
-| Click **cycle** beside **every** → you see the pill read `evolve · cycle` and a note at the bottom right counting `evolve in 7 beats` | — |
+| Click **all ⌘K**, type `evolve`, press `↓` once, press `Enter` twice (show me: let it evolve 8 bars) → you see the **evolve** pill at the top right | **−** (the minus button) |
+| Click **cycle** beside **every** → you see the pill read `evolve · cycle`, `every cycle · 8 beats` where the **every** knob was, and the bottom right counting down with the sun: `evolve in 6 beats`, `5`, `4` … | — |
 | Watch the sun count down to `1` → you hear the pattern change on the very beat the sun would reach `0`, and the dots on the rings move | — |
 | Scroll up over **gravity** five times → you see its number climb to `10%`, so each change is more likely to head back home | — |
 | Scroll up over **home after** twice → you see it read `2×`, so after two changes the beat snaps back home | — |
-| Click **home = now** → you see nothing move: the beat on screen is now the home it drifts back to | — |
-| Click **evolve off** (the × on the pill) → you hear the pattern stop changing | **−** |
+| Click **home = now** → nothing moves and no note shows: from now on, the beat you hear is the home it drifts back to | — |
+| Click **evolve off** (the × on the pill) → you see the pill go and hear the pattern stop changing | **−** (the minus button) |
 
 **If it doesn't:**
 - Nothing changes for a long time: with **bars** it waits for its number of bars, and with **cycle** it waits until the sun reaches `0`, so a long cycle can take a while.
-- The pill is missing: the button reads **◉ evolving** when it is on, so click it once more to switch it on.
+- The pill is missing: evolve is off and its button reads **◌ evolve**, so click it once (it then reads **◉ evolving**).
 
 **Go further:** [Play a 40-minute set with the Move](#guide-play-a-40-minute-set-with-the-move)
 
@@ -140,14 +140,14 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **Connect Move** and allow MIDI in the browser → the pill beside it stops saying `Move: not connected` | — |
-| Click **all ⌘K**, type `live mode`, press `Enter` once → you see the **live mode** chip lit: it is on by default, so the pads only play sounds and the risky buttons need a hold | **Live mode** |
-| Click **M** on a lane, for example **mute lane 3** → you see its dot turn hollow and the lane go quiet (`Shift`+click makes it a solo) | **Mute** |
-| Hold **fill hold** → you hear the steps set to fill play while you hold | **Hold Layout** |
-| Click **fill next** → you see the label turn to `fill next…` and hear the next whole bar play as a fill | **Shift + Layout** |
+| Click **all ⌘K**, type `live mode`, press `Enter` once → you see the **live mode** chip lit: it is on by default, so the pads only play sounds and the risky buttons need a hold | — (nothing to press: live mode is already on) |
+| Click **M** on a lane, for example **mute lane 3** → you see its dot turn hollow and the lane go quiet (`Shift`+click makes it a solo) | **Mute** for the selected lane, or **Hold Mute + track / pad** for another one |
+| Hold **fill hold** → you see rays flare round the sun while you hold, and hear the steps that are set to fill (a groove may have none) | **Hold Layout** |
+| Click **fill next** → you see the label turn to `fill next…` until the bar line, then `fill this bar` while the next whole bar plays as a fill | **Shift + Layout** |
 | Click **all ⌘K**, type `slot 1`, press `Enter`, then `Shift`+click **slot 1** → you see `playing slot 1` under the grid (show me: save your first slot) | **Hold Duplicate + step** |
 | Change the beat, `Shift`+click **slot 2**, then click **slot 1** while it plays → you see `slot 1 waits for the next bar` and hear the old beat come back on the bar line | **Hold Loop + steps** |
-| Play slot 1, then `⌘`+click or `Ctrl`+click **slot 2** → you see `chain 1 → 2 · 4 bars each` and a chain pill; **stop chain** ends it | **Hold Loop + steps**: press several steps |
-| Press `Esc` twice (the first shuts the sheet, the second lets go of a button you reached by keyboard), then press `F` → you see the controls go while the rings, the pills and the peek stay; the backquote key shows the console log (the status and every lane's numbers as text) | — |
+| Play slot 1, then `⌘`+click or `Ctrl`+click **slot 2** → you see `chain 1 → 2 · 4 bars each` and a chain pill; **stop chain** ends it | **Hold Loop + steps**: hold Loop, press step 1, then step 2 |
+| Press `Esc` twice (the first shuts the sheet, the second lets go of a button you reached by keyboard), then press `F` → you see the controls go while the rings and the pills stay; the backquote key shows the console log (the status and every lane's numbers as text) | — |
 
 **If it doesn't:**
 - Capture or Delete does nothing: in live mode they need `Shift` or a hold of about `0.6` seconds (the button blinks red first).
@@ -166,11 +166,11 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **all ⌘K**, type `boom bap`, press `Enter` twice, then click **lane 4 crackle** → you see lane 4 outlined | **Track 1–4**: press the top button (the fourth from the bottom) |
 | Click **all ⌘K**, type `break file`, press `Enter` once → you see the **lane** tab open with **break file…** outlined and **8** and **16** beside **slices** | — |
 | Click **8** or **16** to pick the number of pieces (`16` is the default) → you see your choice lit | — |
-| Press `Enter` and pick your file → you see the lane renamed `♪ break` and the note `16 slices, a slice per step`, with every step lit | — |
+| Click **break file…** and pick your file → you see the lane renamed `♪ break` and the note `16 slices, a slice per step`, with every step lit | — |
 | Click **play** → you hear the break cut up, step 1 playing slice 1, step 2 slice 2 and so on | **Play** |
 | Press and hold the fifth cell for about a second → you see the knobs turn into rings, the header read `step 5`, and **clear**, **more…** and **done** appear | **Hold a step** |
-| Click **more…**, then the tile `3` in the "slice" row → you hear step 5 play slice 3 instead of slice 5 | **Hold step + knobs 1–7**: turn `knob 7`, four clicks per slice |
-| Click **done** → you see the step page close and the rhythm knobs return | — |
+| Click **more…**, then the tile `3` in the "slice" row → you hear step 5 play slice 3 instead of slice 5 | **Hold step + knobs 1–7**: keep step 5 held and turn `knob 7` left eight clicks, four per slice (on a break the knob still reads color) |
+| Click **done** → you see the step page close and the rhythm knobs return | Let go of the step |
 
 **If it doesn't:**
 - The lane is silent: the lane's **voice** must read `♪ break`, and picking another voice replaces it.
@@ -209,10 +209,10 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **share** → you see the note `link copied · paste it anywhere` | — |
-| Paste the link into a chat or an e-mail and send it → you see a long link ending in `#p=` and some letters | — |
-| The other person opens the link → they see the gift card: "someone sent you a beat", the rings drawn small and `118 bpm · 4 rings` | — |
+| Paste the link into a chat or an e-mail and send it → you see a long link with `#p=` and a long run of letters at its end | — |
+| The other person opens the link → they see the gift card: "someone sent you a beat", the rings drawn small and the beat's tempo and rings, for example `100 bpm · 4 rings` | — |
 | They click **▶ tap to hear this orbit** → they hear the beat, the button turns to **■ stop** and **remix** appears | — |
-| They click **remix** → the card closes and a note says `it is yours now · change anything, then share it back` | — |
+| They click **remix** → the card closes, the beat keeps playing and a note says `it is yours now · change anything, then share it back` | — |
 | They change something and click **share** → they see `link copied` again, ready to send back | — |
 | Long-press **share** (or right-click it, or press `↓` on it) → you see **link**, **4 bars of audio** and **postcard (video)** | — |
 
@@ -230,17 +230,17 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 
 | Mouse & keys | Move |
 |---|---|
-| Open the page on the phone → you see square rings across the width, a row of four colour dots, **play**, eight knobs and 16 cells, and the page never scrolls | — |
-| Tap **play** → you hear the beat and the button becomes **stop** | — |
+| Open the page on the phone → you see square rings across the width, a row of four colour dots, **play**, eight knobs in two rows, 16 cells in two rows of 8 and the sheet's tabs (lane, pattern, groove, perform, export, setup) along the bottom; the page never scrolls | — |
+| Tap **play** → you hear the beat and the button shows a square (■, **stop**) | — |
 | Tap a colour dot, for example **lane 2 rim** → you see that dot outlined and its knobs take over | — |
-| Tap a cell twice → you see `step 2, on` and then `step 2, on, accent` (a tap goes off, on, accent) | — |
+| Tap the second cell twice → it lights up (`step 2, on`), then brighter (`step 2, on, accent`): each tap goes one further, off → on → accent → ghost (dim) → off | — |
 | Press and hold a cell for a second (a long-press does what `Shift`, `Alt` and right-click do on a computer) → you see the header read `step 3` with **clear**, **more…** and **done** | — |
 | Slide a finger up or down on a knob, for example **tempo** → you see a big number at the top left while you touch it and the beat speeds up | — |
-| Tap **lane**, then tap **mute** → you hear the outlined lane go quiet and its dot turns hollow | — |
+| Tap **lane**, then tap **mute** → you hear the outlined lane go quiet, its dot turns hollow and the tab's title reads `Lane 2 · rim (muted)` | — |
 | Tap **perform** → you see **fill hold**, **fill next**, **throw hold**, **undo**, **randomize**, **● jam** and **share** | — |
 
 **If it doesn't:**
-- A tap on a cell did the wrong thing: one tap steps through off, on and accent, so tap again to reach the one you want.
+- A tap on a cell did the wrong thing: each tap steps through off, on, accent and ghost, so tap again to reach the one you want.
 - A dot did not mute its lane: on the phone the lane dots only select, so mute from the **lane** tab.
 
 **Go further:** the **setup** tab, where night, the console log and focus mode live.

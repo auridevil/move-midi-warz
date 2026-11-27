@@ -1277,3 +1277,16 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
 - **The cycle line's size, the crawl's snap** (RD-13 round 1: yuki): "every cycle · N beats" is 11 px muted, the
   drawer's smallest type (passes A1 at 5.75:1; 12–13 px would read better); when a mutation changes the cycle the arc's
   crawl snaps to its new place on the bloom's frame, where a short fade would read better.
+- **The step page's header with a Move step held, 1512×860** (RD-14 walk: kai; from before RD-14): while a Move step is
+  held the lane head reads "step 5 · held on Move", "MOVE ⇢ STEP 5", the three page tabs and clear · more… · done, and
+  runs under the actions column: more… and done sit under undo and a click there lands on the actions group (nothing
+  happens). The mouse-latched page ("step 5" alone) fits. Letting go of the step closes the page, which is what the guide
+  says; a shorter held header (or the kit ▾ stepping aside on the step page) would free them.
+- **"home = now" gives no sign** (RD-14 walk: noor, and Tess while writing the guide): the click takes the home pattern
+  and nothing on screen says so; a toast ("home = this beat") or a flash on the button would. For Noor.
+- **Knob 7 on a slice set reads "color"** (RD-14: Tess, kai): on a break lane knob 7 of the step page picks the slice
+  (the Move table says so) but the knob, the peek and the Move drawing still name it color.
+- **Record with a finger on a knob that doesn't record** (RD-14 walk: kai, guide-check): Record cycles knob recording
+  (off → touch → latch) only while a knob that records is touched (6, 7, or a knob with Shift); with a finger on knobs
+  1–5 or 8 it arms and disarms instead. The Move table's Record row says "while touching a knob"; "a knob that records"
+  would say it.

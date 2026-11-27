@@ -332,3 +332,18 @@ export function scoreA10(key, answers) {
   const right = rows.filter(r => r.ok).length;
   return { right, of: rows.length, pass: rows.length >= 5 && right === rows.length, rows };
 }
+
+// ---- a drum loop for the file pickers (RD-14: hands.mjs `choose`, guide-check's break use case) ----
+/** 8 s of mono 16-bit WAV at 22.05 kHz, 120 bpm: a kick on 1 and 3, a noise snare on 2 and 4 (seeded, so the same bytes). */
+export function breakWav() {
+  const sr = 22050, n = sr * 8, b = new Uint8Array(44 + n * 2), v = new DataView(b.buffer), w = (o, s) => [...s].forEach((c, i) => { b[o + i] = c.charCodeAt(0); });
+  w(0, 'RIFF'); v.setUint32(4, 36 + n * 2, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+  v.setUint32(24, sr, true); v.setUint32(28, sr * 2, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, n * 2, true);
+  const rnd = mulberry32(7);
+  for (let i = 0; i < n; i++) {
+    const beat = sr / 2, t = (i % beat) / sr, snare = Math.floor(i / beat) % 2 === 1;
+    const x = snare ? (rnd() * 2 - 1) * Math.exp(-t * 25) * 0.5 + Math.sin(2 * Math.PI * 190 * t) * Math.exp(-t * 30) * 0.3 : Math.sin(2 * Math.PI * (55 + 90 * Math.exp(-t * 40)) * t) * Math.exp(-t * 9) * 0.9;
+    v.setInt16(44 + i * 2, Math.round(Math.max(-1, Math.min(1, x)) * 30000), true);
+  }
+  return b;
+}

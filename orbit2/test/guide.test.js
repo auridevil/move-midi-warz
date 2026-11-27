@@ -65,6 +65,17 @@ test('⌘K: every section has a "how do I" phrase and is found by its title and 
   assert.match(app, /h\.guide[\s\S]{0,260}openHelp\('guide', h\.guide\)/);
 });
 
+// RD-14 walk (maya, use case 9): long-press share opened its menu DOWN, off the window at 1512×860 (the wide rule lost to
+// the later base rule of the same weight), and once up, its top items sat under the right column (.hud, z 3, later in the
+// page) and took no clicks. Browser side: guide-check use case 9 row 7 (each item inside the window and on top).
+test('wide windows: the share menu opens upward, over the right column', () => {
+  const css = read('../styles.css'), wide = css.slice(css.indexOf('@media not all and (max-width: 1100px) {\n  body.chaos:has(#stage)'));
+  assert.match(wide.slice(0, 2000), /#topbar \.share-menu \{ top: auto; bottom: calc\(100% \+ 6px\); \}/);
+  assert.match(wide.slice(0, 2000), /#topbar:has\(#share-menu:not\(\[hidden\]\)\) \{ z-index: 4; \}/);
+  assert.match(css, /\n\.hud \{ z-index: 3;/, 'the right column sits at z 3: the open menu lifts the console above it');
+  assert.match(css, /\n\.share-menu \{ position: absolute; top: calc\(100% \+ 6px\)/, 'the base rule (narrow windows, the sheet) opens down');
+});
+
 // RD-14: the guide names controls exactly as the screen does. Left column: every bold name is in the page's markup or in a
 // string the page builds (a gauge label, a pill, a lane's name); right column: every bold name is a row of the Move table.
 // The live version of this (accessible names read off the running page, per step) is tools/guide-check.mjs.
