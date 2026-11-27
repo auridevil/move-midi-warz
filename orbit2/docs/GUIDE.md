@@ -7,7 +7,7 @@ tags: [orbits, guide]
 
 # Orbits, hands-on
 
-Ten short jobs you can finish in one to three minutes each, with the mouse and keys on the left and the Move on the right.
+Ten short jobs you can finish in one to three minutes each, with the mouse and keys on the left and the Move on the right. On a phone, start with [The phone](#guide-the-phone).
 
 ## First five minutes
 
@@ -16,7 +16,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 3. Drag a knob up or down; hold `Shift` to go fine.
 4. Click a cell in the row of 16 to switch a step on (it lights up); more clicks go accent, ghost, off.
 5. Click **randomize** for a new groove, and **undo** to take it back.
-6. Click **all ⌘K**, type a word, press `Enter`: the control it finds gets an outline, and `Enter` again uses it.
+6. Click **all ⌘K**, type a word, press `Enter`: a control gets an outline (`Enter` again uses it); an action, like an export, runs.
 7. Press `Esc` once to close whatever is open.
 8. Press `?` for the keys and the Move tables.
 9. Press `F` to hide the controls; **exit focus** (or `Esc`) brings them back.
@@ -34,7 +34,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 |---|---|
 | Click **all ⌘K**, type `techno` in **find any control**, press `Enter` twice (the first press finds the chip, the second loads it) → you see the four lanes become kick 909, rim, hat and sub, and a note: techno, `130` bpm | — |
 | Click **play** (or press `Space`) → you hear the beat, the ring shows a square and the counter beside it runs `01.1`, `01.2`, `01.3` | **Play** |
-| Click **kit (all lanes)** and pick `Trap` → you hear every lane change its sound while the pattern stays the same | **Shift + ◀ ▶** |
+| Click **kit (all lanes)** and pick `Trap` → you see and hear the kit's own drums take over (kick 808, snare 808, finger snap) while the pattern stays the same | **Shift + ◀ ▶** |
 | Drag the **tempo** knob up → you hear it speed up, and a big number with "knob 8 · tempo" shows at the left while you hold it | **Knob 8** |
 | Click **stop** → you hear it stop and the ring shows a triangle again | **Play** |
 
@@ -139,7 +139,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 
 | Mouse & keys | Move |
 |---|---|
-| Click **Connect Move** and allow MIDI in the browser → the pill beside it stops saying `Move: not connected` | — |
+| Click **Connect Move** and allow MIDI in the browser → the pill beside it stops saying `Move: not connected` (if the browser says no, the pill says why) | — |
 | Click **all ⌘K**, type `live mode`, press `Enter` once → you see the **live mode** chip lit: it is on by default, so the pads only play sounds and the risky buttons need a hold | — (nothing to press: live mode is already on) |
 | Click **M** on a lane, for example **mute lane 3** → you see its dot turn hollow and the lane go quiet (`Shift`+click makes it a solo) | **Mute** for the selected lane, or **Hold Mute + track / pad** for another one |
 | Hold **fill hold** → you see rays flare round the sun while you hold, and hear the steps that are set to fill (a groove may have none) | **Hold Layout** |
@@ -187,10 +187,10 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `house`, press `Enter` twice → you see the house lanes | — |
-| Click **all ⌘K**, type `export stems`, press `Enter` once → you see the export tab open with **⤓ stems (.zip)** outlined | — |
+| Click **all ⌘K**, then the **export** tab (show me: export a loop) → you see **⤓ WAV**, **⤓ stems (.zip)** and **⤓ MIDI**, and the settings under them; nothing is exported yet | — |
 | Click **24** beside **format** → you see **24** lit: the files will be 24-bit, a finer sound than `16` | — |
 | Click **render as loop** to switch it off (on = a loop that repeats cleanly, off = a one-shot, a sound you place once) → you see the chip go dark | — |
-| Click **⤓ WAV** (show me: export a loop) → you get the mix, and the note reads `4 bars + 2 bars ring-out at 124 bpm, one-shot · 24-bit 44.1 kHz` | — |
+| Click **⤓ WAV** → you get the mix, and the note reads `4 bars + 2 bars ring-out at 124 bpm, one-shot · 24-bit 44.1 kHz` | — |
 | Click **⤓ stems (.zip)** → you get a zip with one WAV per lane plus the raw mix; each file carries its tempo and length inside (an ACID tag), so most DAWs line it up on their own | — |
 | Click **⤓ MIDI** → you get a MIDI file, and the note reads `a track per lane` (click **one track** for a single drum-rack track) | — |
 

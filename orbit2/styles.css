@@ -889,19 +889,23 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
 .help:has(#hpane-move:not([hidden])) { width: min(1016px, calc(100vw - 32px)); }
 /* RD-14 the guide tab: use cases as collapsible sections inside the dialog (it scrolls, the page never does, A6) */
 .help:has(#hpane-guide:not([hidden])) { width: min(820px, calc(100vw - 32px)); }
+/* the Move table's "(with ?drift)" asides: the th's own 11 px, never small's 9 px (RD-2 sizes; the RD-14 audit reads every tab) */
+#hpane-move th small { font-size: inherit; }
 .guide-intro { margin: 0 0 8px; }
 .guide-case { border-top: 1px solid var(--hairline-soft); padding: 2px 0; }
-.guide-case > summary { cursor: pointer; padding: 10px 0; font-size: var(--t-m); min-height: 24px; }
-.guide-case[open] > summary { font-weight: 600; }
+/* the titles are 44 px touch targets (the phone's rule) at the one body weight (RD-2: 400, 500 only for values); the
+   open one is told by its marker. A code chip is a hairline box with no fill: its words stay on the dialog's own
+   background at the type's sizes (round 1: a filled 12 px chip put the table's grey at 3.91:1, under A1) */
+.guide-case > summary { cursor: pointer; padding: 12px 0; font-size: var(--t-m); line-height: 20px; min-height: 44px; }
 .guide-case p, .guide-case ul, .guide-case ol { margin: 6px 0; font-size: var(--t-m); line-height: 20px; }
 .guide-case ul, .guide-case ol { padding-left: 22px; }
-.guide-case code { font: 12px ui-monospace, monospace; background: var(--cell-beat); border-radius: 4px; padding: 1px 4px; }
+.guide-case code { font-family: ui-monospace, monospace; font-size: var(--t-m); border: 1px solid var(--hairline-soft); border-radius: 4px; padding: 0 4px; }
 .guide-steps { width: 100%; border-collapse: collapse; margin: 8px 0; table-layout: fixed; }
 .guide-steps th, .guide-steps td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--hairline-soft); font-size: var(--t-m); line-height: 20px; overflow-wrap: anywhere; }
 .guide-steps th { font-size: var(--t-s); color: var(--muted); font-weight: 400; }
 .guide-steps th:first-child, .guide-steps td:first-child { width: 68%; }
 .guide-show { margin: 0 2px; padding: 1px 8px; vertical-align: baseline; }
-.guide-case a { color: var(--l); }
+.guide-case a { color: var(--l); display: inline-block; padding: 12px 2px; margin: -12px -2px; }   /* a 44 px tall target that keeps the line's height */
 .move-draw { overflow-x: auto; margin: 4px 0 10px; }
 .move-draw svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--font-body); }
 .mf-body { fill: rgba(12, 9, 25, 0.6); stroke: var(--b); stroke-width: 1.5; }

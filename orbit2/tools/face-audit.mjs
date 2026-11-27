@@ -160,10 +160,10 @@ const PAGE = String.raw`(() => {
   }
   // RD-2 type: every drawn text's computed family, size and weight (an element's own text, a field's value, a
   // ::before / ::after with text), and whether it is the wordmark (h1)
-  function types() {
+  function types(root = document.body) {
     const out = [], fam = (s) => s.fontFamily.split(',')[0].replace(/["']/g, '').trim();
     const run = (e, s, pseudo = '') => out.push({ el: tag(e) + pseudo, family: fam(s), size: parseFloat(s.fontSize), weight: +s.fontWeight || 400, mark: !!e.closest('h1') });
-    for (const e of document.querySelectorAll('body *')) {
+    for (const e of root.querySelectorAll('*')) {
       if (['SCRIPT', 'STYLE', 'OPTION', 'CANVAS'].includes(e.tagName) || !shown(e)) continue;
       const field = /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) && !['checkbox', 'radio', 'range', 'color', 'file'].includes(e.type);
       if (field || [...e.childNodes].some(n => n.nodeType === 3 && n.textContent.trim())) run(e, getComputedStyle(e));
@@ -195,10 +195,13 @@ const PAGE = String.raw`(() => {
     return out;
   }
   function rings() { const g = __poly.scene.geo(), c = document.getElementById('cv').getBoundingClientRect(); return { cx: Math.round((c.left + g.cx) * 10) / 10, cy: Math.round((c.top + g.cy) * 10) / 10, R: Math.round(g.R * 10) / 10, outer: Math.round(g.outer * 10) / 10, diameter: Math.round(g.outer * 20) / 10, lanes: g.lanes }; }
-  // the text runs: an element's own text nodes, tight boxes
-  function texts() {
+  // the text runs: an element's own text nodes, tight boxes (inside root only: RD-14 measures the "?" dialog on its own)
+  function texts(root = document.body) {
     const out = [];
-    for (const e of document.querySelectorAll('body *')) {
+    // inside a scrolling root (the dialog) only the runs wholly in its padding box: one its scroll edge cuts sits on the
+    // border and the page behind, and is measured whole on the next screen (the screens overlap)
+    const q0 = root === document.body ? null : root.getBoundingClientRect(), pb = q0 && { left: q0.left + root.clientLeft, top: q0.top + root.clientTop, right: q0.left + root.clientLeft + root.clientWidth, bottom: q0.top + root.clientTop + root.clientHeight };
+    for (const e of root.querySelectorAll('*')) {
       if (['SCRIPT', 'STYLE', 'OPTION', 'CANVAS'].includes(e.tagName) || !shown(e)) continue;
       const field = /^(INPUT|SELECT|TEXTAREA)$/.test(e.tagName) && e.type !== 'checkbox' && e.type !== 'radio' && e.type !== 'range';
       const nodes = [...e.childNodes].filter(n => n.nodeType === 3 && n.textContent.trim());
@@ -209,8 +212,9 @@ const PAGE = String.raw`(() => {
         box = { left: q.left + side('Left'), top: q.top + side('Top'), right: q.right - side('Right'), bottom: q.bottom - side('Bottom') };
       }
       else for (const n of nodes) { const rg = document.createRange(); rg.selectNodeContents(n); for (const q of rg.getClientRects()) box = box ? { left: Math.min(box.left, q.left), top: Math.min(box.top, q.top), right: Math.max(box.right, q.right), bottom: Math.max(box.bottom, q.bottom) } : { left: q.left, top: q.top, right: q.right, bottom: q.bottom }; }
-      if (!box) continue; const r = seen(e, box); if (!r) continue;
-      const s = getComputedStyle(e), m = rgbOf(s.color); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;
+      if (!box || (pb && (box.left < pb.left || box.top < pb.top || box.right > pb.right || box.bottom > pb.bottom))) continue; const r = seen(e, box); if (!r) continue;
+      // an SVG word (the Move drawing in "?") is painted by its fill, not its color
+      const s = getComputedStyle(e), m = rgbOf(e instanceof SVGElement ? s.fill : s.color); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;
       if (op * (m[3] ?? 1) < 0.02) continue;   // text that is not drawn
       out.push({ el: tag(e), text: (field ? e.value || e.placeholder || '' : nodes.map(n => n.textContent).join(' ')).replace(/\s+/g, ' ').trim().slice(0, 40), rgb: m.slice(0, 3), a: (m[3] ?? 1) * op, size: parseFloat(s.fontSize), weight: +s.fontWeight || 400, r });
     }
@@ -245,9 +249,9 @@ const PAGE = String.raw`(() => {
   }
   window.__fa = {
     controls, scroll, rings, types, hits, hues, reach, allPanes, tabs: TABS,
-    hideText(on) { let s = document.getElementById('fa-hide'); if (!s) { s = document.createElement('style'); s.id = 'fa-hide'; document.head.append(s); } s.textContent = '*, *::before, *::after { transition: none !important; }' + (on ? ' *, *::before, *::after, *::placeholder, *::marker { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; }' : ''); },
-    async measure(bg64, full64) {
-      const bg = await image(bg64), full = await image(full64), runs = texts(), text = [];
+    hideText(on) { let s = document.getElementById('fa-hide'); if (!s) { s = document.createElement('style'); s.id = 'fa-hide'; document.head.append(s); } s.textContent = '*, *::before, *::after { transition: none !important; }' + (on ? ' *, *::before, *::after, *::placeholder, *::marker { color: transparent !important; -webkit-text-fill-color: transparent !important; text-shadow: none !important; caret-color: transparent !important; } svg text, svg tspan { fill: transparent !important; stroke: transparent !important; }' : ''); },
+    async measure(bg64, full64, rootSel = null) {
+      const bg = await image(bg64), full = await image(full64), runs = texts(rootSel ? document.querySelector(rootSel) : undefined), text = [];
       for (const t of runs) {
         const rs = []; each(bg, t.r, ([r, g, b]) => { const L = lum(r, g, b), c = lum(...t.rgb.map((v, k) => v * t.a + [r, g, b][k] * (1 - t.a))); rs.push(ratio(c, L)); });
         if (rs.length) text.push({ el: t.el, text: t.text, size: t.size, weight: t.weight, contrast: Math.round(pct(rs, 10) * 100) / 100, x: Math.round(t.r.x), y: Math.round(t.r.y) });
@@ -383,6 +387,26 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
       out.stepPage = { step: stepAt + 1, text: { n: sm.text.length, min: sm.text.length ? Math.min(...sm.text.map(t => t.contrast)) : null, fails: sm.text.filter(t => t.contrast < THRESHOLDS.text) }, edges: { n: sm.edges.length, min: sm.edges.length ? Math.min(...sm.edges.map(e => e.edge)) : null, fails: sm.edges.filter(e => e.edge < THRESHOLDS.edge) }, controlMax: sm.ctlMax, controlMaxAt: sm.ctlMaxAt };
       await p.eval(`(() => { __poly.editLocks(${stepAt}); })()`); await settle(p);
     }
+    // RD-14 the "?" dialog: each tab (keys & mouse, Move, the guide with every use case open), A1 on its words measured as
+    // the first load is, the dialog scrolled through a screen at a time (round 1: the guide's code chips sat at 3.91:1 and
+    // nothing measured them; the type pass below opens only the keys tab). A page from before RD-9 has no tabs: skipped
+    const helpTabs = await p.eval(`window.__poly.openHelp && document.getElementById('help') ? [...document.querySelectorAll('#help [role=tab]')].map(t => t.id.replace(/^htab-/, '')) : []`);
+    if (helpTabs.length) {
+      out.help = {};
+      for (const tab of helpTabs) {
+        await p.eval(`(() => { __poly.openHelp(${JSON.stringify(tab)}); document.querySelectorAll('#help details').forEach(d => { d.open = true; }); document.getElementById('help').scrollTop = 0; })()`); await settle(p, 250);
+        const runs = [];
+        for (let screen = 0; screen < 40; screen++) {
+          await p.eval('__fa.hideText(true)'); await settle(p); const hb = await shot64(p); await p.eval('__fa.hideText(false)'); await settle(p); const hf = await shot64(p);
+          if (shots && !screen) writeFileSync(join(shots, `${size}-help-${tab}.png`), Buffer.from(hf, 'base64'));
+          runs.push(...(await p.eval(`__fa.measure(${JSON.stringify(hb)}, ${JSON.stringify(hf)}, '#help')`)).text);
+          if (!(await p.eval(`(() => { const d = document.getElementById('help'), y = d.scrollTop; d.scrollTop = y + Math.round(d.clientHeight * 0.85); return d.scrollTop > y; })()`))) break;
+        }
+        const fails = [...new Map(runs.filter(t => t.contrast < THRESHOLDS.text).map(t => [`${t.text}|${t.el}`, t])).values()].sort((a, b) => a.contrast - b.contrast);
+        out.help[tab] = { n: runs.length, min: runs.length ? Math.min(...runs.map(t => t.contrast)) : null, fails };
+      }
+      await p.eval(`document.getElementById('help').close()`); await settle(p);
+    }
     // playing: rings, frame time, light while the planets flash
     await play(p); await p.sleep(800); await state('playing');
     await p.eval('window.__faStop = __fa.frames()'); let canvasMax = 0;
@@ -402,7 +426,9 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
     await p.eval('__poly.setLaneCount(6)'); await settle(p, 250); out.controls6 = { visible: (await p.eval('__fa.controls()')).visible, scroll: await p.eval('__fa.scroll()') };
     // RD-2 type and hue: the first load and everything there is (every drawer open, a step's lock panel, the help dialog)
     await p.eval(`(() => { document.querySelectorAll('details').forEach(d => { d.open = true; }); __poly.editLocks(0); __fa.allPanes(true); __poly.openHelp(); })()`); await settle(p, 250);
-    out.type = typeCheck([...type0, ...await p.eval('__fa.types()')]);
+    // RD-14: the other tabs of "?" too (the guide's titles and code chips), their words only (the page is counted above)
+    const typeHelp = []; for (const tab of helpTabs.filter(t => t !== 'keys')) { await p.eval(`(() => { __poly.openHelp(${JSON.stringify(tab)}); document.querySelectorAll('#help details').forEach(d => { d.open = true; }); })()`); await settle(p, 150); typeHelp.push(...await p.eval(`__fa.types(document.getElementById('help'))`)); }
+    out.type = typeCheck([...type0, ...await p.eval('__fa.types()'), ...typeHelp]);
     const hues = new Map(); for (const h of [...hue0, ...await p.eval('__fa.hues()')]) hues.set(`${h.el} ${h.prop} ${h.rgb}`, h); out.hues = [...hues.values()];
     // RD-3: every control id of the RD-1 baseline still there and drawn once its tab is open
     await p.eval(`(() => { document.getElementById('help').close(); __fa.allPanes(false); })()`); await settle(p);
@@ -500,6 +526,8 @@ export function verdicts(report, t = THRESHOLDS) {
       if (sp.edges.fails.length) fails.push({ test: 'A1', size: k, what: `step page: ${sp.edges.fails.length} control edges under ${t.edge}:1 (min ${sp.edges.min}): ${sp.edges.fails.slice(0, 4).map(e => e.el ?? e.name).join(', ')}` });
       if (sp.controlMax > t.controlLum) fails.push({ test: 'A1', size: k, what: `step page: a control pixel at luminance ${sp.controlMax}: ${sp.controlMaxAt}` });
     }
+    for (const [tab, h] of Object.entries(s.help || {})) if (h.fails.length)   // RD-14: the "?" dialog's tabs
+      fails.push({ test: 'A1', size: k, what: `help · ${tab}: ${h.fails.length} text runs under ${t.text}:1 (min ${h.min}: ${h.fails.slice(0, 3).map(f => `"${f.text}"`).join(', ')})` });
   }
   for (const k of t.a5Sizes) { const s = by[k]; if (!s) continue;
     if (s.controls.visible > t.controls) fails.push({ test: 'A5', size: k, what: `${s.controls.visible} visible controls (> ${t.controls})` });
@@ -558,7 +586,8 @@ export function summary(report) {
     L.push(`text: ${s.text.n} runs, min ${s.text.min}:1, ${s.text.fails.length} under ${THRESHOLDS.text}:1${s.text.fails.length ? ` (worst: ${s.text.fails.slice(0, 5).map(f => `${f.contrast} "${f.text}"`).join(', ')})` : ''}`);
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     if (s.stepPage) { const sp = s.stepPage; L.push(`step page (step ${sp.step}): text ${sp.text.n} runs min ${sp.text.min}:1 (${sp.text.fails.length} under) · edges ${sp.edges.n} min ${sp.edges.min}:1 (${sp.edges.fails.length} under) · brightest control ${sp.controlMax}`); }
-    if (s.pills) L.push(`pills: ${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
+    if (s.help) L.push(`help dialog: ${Object.entries(s.help).map(([tab, h]) => `${tab} ${h.n} runs min ${h.min}:1 (${h.fails.length} under)`).join(' · ')}`);
+    if (s.pills) L.push(`pills:${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
     if (s.night) L.push(`night: text ${s.night.text.n} runs min ${s.night.text.min}:1 (${s.night.text.fails.length} under) · edges min ${s.night.edges.min}:1 (${s.night.edges.fails.length} under) · brightest control ${s.night.controlMax} (day ${s.night.day})`);
     if (s.fmode) L.push(`F mode: ${s.fmode.pills} pills drawn · hidden: legend ${!s.fmode.legend}, console ${!s.fmode.console}, Move pill ${!s.fmode.movePill}, "?" ${!s.fmode.help}, sheet ${!s.fmode.sheet} · peek ${s.fmode.peek ? 'kept' : 'GONE'} · exit ${s.fmode.exit ? 'drawn' : 'GONE'}`);
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);

@@ -12,14 +12,13 @@
 // browser's MIDI permission (Connect Move) and the clipboard (share). The file chooser is driven for real: the click
 // opens it, CDP hands it the drum loop (Page.fileChooserOpened → DOM.setFileInputFiles).
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { launch } from './cdp.mjs';
+import { launch, parseWav, unzipStored } from './cdp.mjs';
 import { bytes, trackOf, breakWav } from './session-core.mjs';
+import { readGuide } from './guide-check-names.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf(k); return i > 0 ? process.argv[i + 1] : d; };
 const only = arg('--only', '1,2,3,4,5,6,7,8,9,10').split(',').map(Number), port = +arg('--port', 5400), debugPort = +arg('--debug-port', 9400), shots = arg('--shots', '/tmp/orbit2-impl/guide');
 const md = readFileSync(new URL('../docs/GUIDE.md', import.meta.url), 'utf8');
-
-import { readGuide } from './guide-check-names.mjs';
 
 const fails = [], notes = [];
 const check = (uc, row, ok, what) => { if (!ok) fails.push(`use case ${uc}${row ? `, row ${row}` : ''}: ${what}`); return ok; };
@@ -105,9 +104,8 @@ const seen = async (f, ms = 8000) => { for (let t = 0; t < ms; t += 400) { if (a
 const hits = (p) => p.eval(`JSON.stringify(__poly.m.lanes.map(l => l.hits))`);
 // the cycle caption is drawn on the canvas: read it the way the scene does (scene.js cycleLine, the machine's cycle)
 const cyc = (p) => p.eval(`import('/orbit2/src/poly/scene.js').then(s => s.cycleLine(0, __poly.m.cycleTicks({ repeat: 1 }), 3360, 840, false))`);
-const dl = async (p) => (await p.downloads()).map(d => d.name);
-// a render takes longer on a busy machine (load 15: a WAV took over 2.5 s): wait for the download itself, up to 60 s
-const waitDl = async (p, re, ms = 60000) => { for (let t = 0; t < ms && !(await p.eval(`(window.__dl || []).some(d => ${re}.test(d.name))`)); t += 250) await p.sleep(250); return dl(p); };
+// a render takes longer on a busy machine (load 15: a WAV took over 2.5 s): wait for the download itself, up to 60 s → [{ name, bytes }]
+const waitDl = async (p, re, ms = 60000) => { for (let t = 0; t < ms && !(await p.eval(`(window.__dl || []).some(d => ${re}.test(d.name))`)); t += 250) await p.sleep(250); return p.downloads(); };
 
 // ---- the ten use cases: one { go, ok } per row of the guide's table, in order (ok = the "what you see" claim) ----
 const CASES = {
@@ -176,12 +174,16 @@ const CASES = {
   ],
   8: (p) => [
     R(() => cmdk(p, 'house', 2), async () => (await p.eval('__poly.m.lanes.length')) >= 4),
-    R(() => cmdk(p, 'export stems', 1), () => p.eval(`document.activeElement.id === 'exp-stems'`)),
+    // round 1 (sound): ⌘K "export stems" + Enter RAN the stems export (an action); the tab itself exports nothing
+    R(async () => { await p.captureDownloads(); await press(p, 'all ⌘K'); await press(p, 'export'); await p.sleep(400); },
+      async () => (await p.eval(`document.getElementById('tab-export').getAttribute('aria-selected') === 'true' && __g.shown('⤓ stems (.zip)')`)) && (await p.eval('(window.__dl || []).length')) === 0),
     R(async () => { await p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').click()`); }, () => p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').getAttribute('aria-checked') === 'true'`)),
     R(async () => { await press(p, 'render as loop'); }, () => p.eval(`document.getElementById('exp-loop').getAttribute('aria-pressed') === 'false'`)),
-    R(async () => { await p.captureDownloads(); await press(p, '⤓ WAV'); p.d = await waitDl(p, /\.wav$/); }, async () => p.d.some(n => /\.wav$/.test(n)) && /24-bit/.test(await body(p))),
-    R(async () => { await press(p, '⤓ stems (.zip)'); p.d = await waitDl(p, /\.zip$/); }, async () => p.d.some(n => /\.zip$/.test(n))),
-    R(async () => { await press(p, '⤓ MIDI'); p.d = await waitDl(p, /\.mid$/); }, async () => p.d.some(n => /\.mid$/.test(n)) && /a track per lane/.test(await body(p))),
+    // the files themselves (round 1, sound): 24-bit, an ACID tag, a one-shot with its ring-out; the zip a WAV per lane + the raw mix
+    R(async () => { await press(p, '⤓ WAV'); p.d = await waitDl(p, /\.wav$/); }, async () => { const w = p.d.find(d => /\.wav$/.test(d.name)), f = w && parseWav(w.bytes); return !!f && f.bits === 24 && !!f.acid && /oneshot/.test(w.name) && /24-bit/.test(await body(p)); }),
+    R(async () => { await press(p, '⤓ stems (.zip)'); p.d = await waitDl(p, /\.zip$/); }, async () => { const z = p.d.find(d => /\.zip$/.test(d.name)), fs = z ? unzipStored(z.bytes) : [], n = await p.eval('__poly.m.lanes.length');
+      return fs.length === n + 1 && fs.some(f => /mix-raw/.test(f.name)) && fs.every(f => parseWav(f.bytes).bits === 24); }),
+    R(async () => { await press(p, '⤓ MIDI'); p.d = await waitDl(p, /\.mid$/); }, async () => p.d.some(d => /\.mid$/.test(d.name)) && /a track per lane/.test(await body(p))),
   ],
   9: (p, b) => [
     R(async () => { await press(p, 'share'); await p.sleep(600); }, async () => /link copied|address bar/.test(await body(p))),
@@ -244,10 +246,10 @@ try {
     const steps = CASES[uc.n](p, b);
     check(uc.n, 0, steps.length === uc.rows.length, `the walk has ${steps.length} steps, GUIDE.md has ${uc.rows.length} rows: update tools/guide-check.mjs`);
     for (let i = 0; i < Math.min(steps.length, uc.rows.length); i++) {
-      const row = uc.rows[i], seen = new Set(), look = async () => { (await nameFound(p, row.names)).forEach((f, j) => f && seen.add(row.names[j])); };
+      const row = uc.rows[i], found = new Set(), look = async () => { (await nameFound(p, row.names)).forEach((f, j) => f && found.add(row.names[j])); };
       try { await look(); await steps[i].go(); await p.sleep(150); await look(); const ok = await steps[i].ok(); check(uc.n, i + 1, ok !== false, `what you see: ${row.left.replace(/\*\*/g, '').slice(0, 110)}`); }
       catch (e) { check(uc.n, i + 1, false, `step failed: ${String(e.message).split('\n')[0]} — ${row.left.replace(/\*\*/g, '').slice(0, 80)}`); }
-      for (const n of row.names) check(uc.n, i + 1, seen.has(n), `control name "${n}" not found among the page's accessible names`);
+      for (const n of row.names) check(uc.n, i + 1, found.has(n), `control name "${n}" not found among the page's accessible names`);
       const mf = row.moves.length ? await moveFound(p, row.moves) : []; row.moves.forEach((n, j) => check(uc.n, i + 1, mf[j], `Move name "${n}" is not a row of the Move table`));
     }
     await p.shot(`${shots}/use-case-${String(uc.n).padStart(2, '0')}.png`);
@@ -277,6 +279,27 @@ if (only.length === 10 || only.includes(0)) for (const [w, h, mobile] of [[1512,
   check('dialog', tag, r.sideways <= 1 && r.wide === 0 && r.tables === 10, `a table spills out sideways (${r.sideways}px, ${r.wide} wide, ${r.tables} tables)`); check('dialog', tag, r.tab === 'true', 'the guide tab is not selected');
   await p.eval(`document.getElementById('help').scrollTop = 1200`); await p.sleep(150); await p.shot(`${shots}/dialog-${tag}.png`);
   check('dialog', tag, p.errors.length === 0, `page errors: ${p.errors.slice(0, 2).join(' | ')}`); p.close();
+}
+// ⌘K on the page's own index (round 1, verifier + architect): every case by its title (unless a control has that very
+// name: "3 vs 4 vs 5" is the groove) and by "how do i …"; no word of the index puts a case over a control that fits it
+// ("slices", "knob", "page" did); and Enter on "how do i chop a break" opens "?" on that case, in view, the page still
+if (only.length === 10 || only.includes(0)) {
+  const p = await fresh(b);
+  const r = await p.eval(`import('/orbit2/src/poly/find.js').then(f => { const idx = __poly.findIndex(), guide = idx.filter(e => e.guide), out = [], g = (e) => !!e?.guide;
+    for (const e of guide) {
+      const t = f.search(idx, e.name)[0]; if (t?.key !== e.key && !(t && !g(t) && f.words(t.name).join(' ') === f.words(e.name).join(' '))) out.push('title "' + e.name + '" → ' + (t?.name ?? 'nothing'));
+      const how = 'how do i ' + (f.GUIDE_HOW[e.guide] || ''), h = f.search(idx, how)[0]; if (h?.key !== e.key) out.push('"' + how + '" → ' + (h?.name ?? 'nothing'));
+    }
+    const ws = new Set(idx.filter(e => !g(e)).flatMap(e => [...f.words(e.name), ...f.words(e.where)]));
+    for (const w of ws) { const s = f.search(idx, w); if (g(s[0]) && s.some(e => !g(e))) out.push('"' + w + '" → the guide over ' + s.find(e => !g(e)).name); }
+    return { out, words: ws.size, cases: guide.length }; })`);
+  r.out.forEach(o => check('⌘K', 0, false, o));
+  await cmdk(p, 'how do i chop a break', 1); await p.sleep(400);
+  const o = await p.eval(`(() => { const d = document.getElementById('help'), s = document.getElementById('guide-chop-a-break'), q = s.getBoundingClientRect(), h = d.getBoundingClientRect();
+    return { open: d.open, tab: document.getElementById('htab-guide').getAttribute('aria-selected'), sec: s.open, inView: q.top >= h.top - 1 && q.top < h.bottom, page: document.scrollingElement.scrollHeight - innerHeight }; })()`);
+  check('⌘K', 'Enter', o.open && o.tab === 'true' && o.sec && o.inView && o.page <= 1, `"how do i chop a break" + Enter did not open "?" on the case (${JSON.stringify(o)})`);
+  check('⌘K', 0, p.errors.length === 0, `page errors: ${p.errors.slice(0, 2).join(' | ')}`); p.close();
+  console.log(`⌘K: ${r.cases} cases by title and "how do i", ${r.words} index words`);
 }
 } finally { await b.close(); }
 notes.push('not driveable headless: the MIDI permission (Connect Move), the clipboard; the bloom is canvas (the clock is read instead)');

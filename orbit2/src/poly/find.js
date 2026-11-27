@@ -90,7 +90,7 @@ export const ACTIONS = {
 /** RD-14: how a player asks for each use case of the guide (section id → words after "how do I"): ⌘K finds the case by its
  *  title or by this, and opens "?" on it. A test checks every section of docs/GUIDE.md has one. */
 export const GUIDE_HOW = {
-  'guide-first-five-minutes': 'start get going first steps learn the basics',
+  'guide-first-five-minutes': 'start get started going begin first steps tutorial learn the basics',
   'guide-a-beat-in-60-seconds': 'make a beat quickly with a groove',
   'guide-3-vs-4-vs-5': 'make polyrhythm 3 against 4 loops of different lengths',
   'guide-shape-one-sound': 'change how a drum sounds with the sound page',
@@ -128,9 +128,9 @@ const PHRASES_OF = new Map([...GROUP_OF].map(([w, g]) => [w, g.map(words).filter
  *  RD-10 removed I7's simple view, whose "shift" was the rotation knob). It is found by its names' words, its where, and
  *  every synonym of those. */
 export function entry({ key, name, where = '', action = false, extra = '', alias = '', weak = false }) {
-  if (weak) {   // RD-14: a guide case is found by its words but never outranks a control of that name ("stems" is the export, not the guide)
-    const near = [...new Set([...words(name), ...words(where), ...words(extra)])];
-    return { key, name, where, action, own: [], main: [], syn: [], near };
+  if (weak) {   // RD-14: a guide case is found by its words but ranks under every control that fits ("stems" is the export, not the guide); among the cases its title's words count over its "how do I" words
+    const syn = [...new Set(words(name))];
+    return { key, name, where, action, weak, own: [], main: [], syn, near: [...new Set([...words(where), ...words(extra)])].filter(w => !syn.includes(w)) };
   }
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   // RD-12: the name's words outside any parenthesis ("kit (all lanes)" → kit): the whole-name bonus judges these, so
@@ -152,7 +152,10 @@ function fit(e, q) {
 
 /** The entries for a query, best first: every query word must fit, a query that says the whole name counts one more; ties
  *  go to actions, then to recents (newest first),
- *  then to the shorter name, then to page order. An empty query gives the recents, then the defaults. */
+ *  then to the shorter name, then to page order. A weak entry (a guide case, RD-14) comes after every other entry that
+ *  fits, whatever their scores (round 1: "slices", "knob" and "page" found by a control's where words had tied with a case
+ *  and lost on its action flag), and weak ties keep page order (the guide's own). An empty query gives the recents, then
+ *  the defaults. */
 export function search(index, query, recents = [], max = 8) {
   const qs = words(query), rec = (e) => { const i = recents.indexOf(e.key); return i < 0 ? 0 : RECENTS_MAX - i; };
   if (!qs.length) {
@@ -168,9 +171,9 @@ export function search(index, query, recents = [], max = 8) {
     let s = 0; for (const q of qs) { const f = fit(e, q); if (!f) return; s += f; }
     // the query says the whole name (each word outside a parenthesis): "tempo" and "bpm" are the knob before "tap tempo"
     if ((e.main || e.own).length && (e.main || e.own).every(says)) s += 1;
-    scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i });
+    scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i, w: e.weak ? 1 : 0 });
   });
-  scored.sort((x, y) => y.s - x.s || y.a - x.a || y.r - x.r || x.e.name.length - y.e.name.length || x.i - y.i);
+  scored.sort((x, y) => x.w - y.w || y.s - x.s || y.a - x.a || y.r - x.r || (x.w ? 0 : x.e.name.length - y.e.name.length) || x.i - y.i);
   return scored.slice(0, max).map(x => x.e);
 }
 

@@ -63,6 +63,16 @@ test('⌘K: every section has a "how do I" phrase and is found by its title and 
   assert.equal(search([...index, stems], 'stems')[0].key, 'exp-stems');
   assert.equal(search([...index, stems], 'export stems')[0].key, 'exp-stems');
   assert.match(app, /h\.guide[\s\S]{0,260}openHelp\('guide', h\.guide\)/);
+  // round 1 (verifier, architect): a control found only by its where words ties a case's words; it must still come first
+  // ("slices" was the guide over the slices 8 segment, "knob" / "page" over the step page tab)
+  const seg = entry({ key: 'slices-8', name: '8', where: 'lane · Lane 1 · kick · slices' }), tab = entry({ key: 'pg-step', name: 'step', where: 'console · page knob' });
+  assert.equal(search([...index, seg], 'slices')[0].key, 'slices-8');
+  for (const q of ['knob', 'page']) assert.equal(search([...index, tab], q)[0].key, 'pg-step', q);
+  assert.equal(search([...index, seg, tab, stems], 'how do i chop a break')[0].key, 'guide-chop-a-break', 'a "how do I" query fits no control');
+  // among the cases: a title word over a "how do I" word ("beat"), and the guide's order on a tie ("guide")
+  assert.equal(search(index, 'beat')[0].key, 'guide-a-beat-in-60-seconds');
+  assert.equal(search(index, 'guide')[0].key, 'guide-first-five-minutes');
+  assert.equal(search(index, 'how do i get started')[0]?.key, 'guide-first-five-minutes');
 });
 
 // RD-14 walk (maya, use case 9): long-press share opened its menu DOWN, off the window at 1512×860 (the wide rule lost to

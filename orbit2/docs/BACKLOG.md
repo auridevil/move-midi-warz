@@ -1290,3 +1290,26 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   (off → touch → latch) only while a knob that records is touched (6, 7, or a knob with Shift); with a finger on knobs
   1–5 or 8 it arms and disarms instead. The Move table's Record row says "while touching a knob"; "a knob that records"
   would say it.
+- **The guide on the phone** (RD-14 round 1: verifier, maya): in use cases 8–10 a third of the 358 px dialog is a Move
+  column of "—", so a row wraps to ~9 lines (stack the Move cell under its row, or drop the column when it is all "—",
+  on narrow windows); "the list at the top left" (first five minutes, line 2) is a row of dots on a phone; a phone
+  reader can really follow only use case 10 (the intro now says so).
+- **The guide's words** (RD-14 round 1: maya, sound, noor): bpm, euclid hits, slices, stems, automation, latch, the sun
+  and the rings have no parenthesis on first use; use case 1 could say "nothing plays yet" at the load; the tone demo
+  (use case 3, 75 → 100 %) is subtle on laptop speakers (drag it down first); use case 6 packs slots, chains and focus
+  into one table (a "slots and chain" case of its own would suit a set).
+- **⌘K into the guide** (RD-14 round 1: maya, rio): the section opens with the focus on its title, so a second Enter
+  (the "Enter twice" habit of grooves) folds it shut; the dialog lands scrolled to the case with the tabs half above the
+  top; cases opened from ⌘K stay open (six after five searches: collapse the others?); "3 vs 4 vs 5" finds the groove
+  of that name (as decided: a control wins its own name; an alias such as "guide: 3 vs 4 vs 5" would reach the case).
+- **More "show me", a job list** (RD-14 round 1: rio): 4 of 10 cases have a "show me" (none in use case 1); a short
+  row of the ten titles at the top would read as jobs before the dense first-five-minutes list.
+- **One guide reader** (RD-14 round 1: architect): `guide-check-names.mjs readGuide` and `build-guide.mjs parseGuide`
+  read the same tables with different header rules (export one); the Move-name match is copied in `guide.test.js` and
+  `guide-check.mjs`; three in-page name readers (the test's `norm`, guide-check's `__g`, hands' `__h`); `GUIDE_HOW` in
+  `find.js` is a second source keyed by slugs of GUIDE.md titles (a "how do I" line per case in GUIDE.md, generated as
+  `data-how`, would keep one source); the tests match source text where a behaviour check would do; `cdp.mjs on()` has
+  no off; guide-check's name match accepts a prefix (`startsWith`), looser than "exactly as the screen" (verifier: no
+  real mismatch found with a strict match).
+- **MIDI per lane says "each on its own channel"** (RD-14 round 1: sound; from before RD-14, the export owner): every
+  lane track of the per-lane MIDI is on channel 10.

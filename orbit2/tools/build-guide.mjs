@@ -4,6 +4,8 @@
 // guide uses is read: front matter, # / ## headings, paragraphs, numbered and bullet lists, pipe tables, **bold**
 // (= an exact control name), *italic*, `code`, [text](#guide-slug), and "(show me: <quest title>)" → a "show me" button.
 import { readFileSync, writeFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { QUESTS } from '../src/poly/quests.js';
 
 export const GUIDE_BEGIN = '<!-- GUIDE:BEGIN -->';
@@ -71,7 +73,8 @@ export function withGuide(html, md) {
   return html.slice(0, a) + GUIDE_BEGIN + '\n' + renderGuide(md) + '\n' + html.slice(b);
 }
 
-if (process.argv[1] && new URL(import.meta.url).pathname === process.argv[1]) {
+// run as a script (a path with a space or a % is still this file: fileURLToPath, not the URL's escaped pathname)
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const html = readFileSync(INDEX_URL, 'utf8'), next = withGuide(html, readFileSync(GUIDE_URL, 'utf8'));
   if (next !== html) writeFileSync(INDEX_URL, next);
   console.log(next === html ? 'guide: index.html already in sync' : 'guide: index.html updated');
