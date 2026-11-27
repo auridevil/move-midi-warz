@@ -21,6 +21,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
   `node tools/smoke.mjs` loads `orbit2/index.html` with the other pages.
 - After editing `orbit2/src/poly/dsp-core.js`, regenerate the worklet: `node orbit2/tools/build-worklet.mjs`.
 - After editing `orbit2/docs/GUIDE.md`, regenerate the "?" → guide tab: `node orbit2/tools/build-guide.mjs` (a test checks `index.html` is in sync).
+- `node orbit2/tools/guide-check.mjs` walks every use case of the guide in the muted headless browser (needs no server of yours; it starts its own on 5400/9400).
 - Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
 - The look (RD-2, dark room): tokens at the top of `styles.css` (`--v` void, `--l` light = the 0.475 luminance cap,
   `--d` labels, `--b` edges, `--track` knob tracks, `--rec` record red, `--ink` a lane's colour on a control; sizes

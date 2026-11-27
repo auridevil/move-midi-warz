@@ -55,7 +55,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **all ⌘K**, type `3 vs 4 vs 5`, press `Enter` twice → you see four rings and the words `cycle · 5 beats` at the bottom right | — |
 | Click **play** → you hear the four patterns drift and the sun in the middle counts `5`, `4`, `3`, `2`, `1` beats until they meet | **Play** |
 | Watch the sun reach `1` and start again at `5` → you see a ripple of colour (the bloom) leave the middle: every ring just met | — |
-| Click **lane 2 rim** → you see lane 2 outlined and its **length** knob read `5` | **Track 1–4**: press the second one |
+| Click **lane 2 rim** → you see lane 2 outlined and its **length** knob read `5` | **Track 1–4**: press the second button from the bottom (the bottom one is lane 1) |
 | Scroll down twice over the **length** knob (show me: make 3 against 4) → you see `3`, the label `RIM 3 × 4` on the ring and `cycle · 3 beats`, and you hear the rim loop shorter | **Knobs 1–4**: turn `knob 1` left twice |
 | Drag the **speed ×** knob up a notch → you hear that lane run faster and the caption change, here to `cycle · 10 beats` | **Knobs 1–4**: turn `knob 4` |
 
@@ -74,7 +74,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `techno`, press `Enter` twice, then click **play** → you hear the beat | **Play** |
-| Click **lane 1 kick 909** → you see lane 1 outlined and its name in the console header | **Track 1–4**: press the first one |
+| Click **lane 1 kick 909** → you see lane 1 outlined and its name in the console header | **Track 1–4**: press the bottom button |
 | Click **sound ⇧**, or hold `Shift` → you see the knobs turn into filled pies named **decay**, **tone**, **drive**, **snap**, **color**, **send**, **pan** and **level** | **Shift + knobs**: hold `Shift` |
 | Drag the **tone** knob up → you hear the kick get brighter, and a big `100` with "knob 2 · tone" shows at the left | **Shift + knobs**: hold `Shift`, turn `knob 2` |
 | Click **rhythm** (or let go of `Shift`) → you see the thin arcs come back: **length**, **euclid hits**, **rotation** and the rest | — |
@@ -120,7 +120,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **all ⌘K**, type `evolve`, press `↓` once, press `Enter` twice (show me: let it evolve 8 bars) → you see the **evolve** pill at the top right | **−** |
 | Click **cycle** beside **every** → you see the pill read `evolve · cycle` and a note at the bottom right counting `evolve in 7 beats` | — |
 | Watch the sun count down to `1` → you hear the pattern change on the very beat the sun would reach `0`, and the dots on the rings move | — |
-| Scroll up over **gravity** a few times → you see its number climb to `10%`, so each change is more likely to head back home | — |
+| Scroll up over **gravity** five times → you see its number climb to `10%`, so each change is more likely to head back home | — |
 | Scroll up over **home after** twice → you see it read `2×`, so after two changes the beat snaps back home | — |
 | Click **home = now** → you see nothing move: the beat on screen is now the home it drifts back to | — |
 | Click **evolve off** (the × on the pill) → you hear the pattern stop changing | **−** |
@@ -147,7 +147,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **all ⌘K**, type `slot 1`, press `Enter`, then `Shift`+click **slot 1** → you see `playing slot 1` under the grid (show me: save your first slot) | **Hold Duplicate + step** |
 | Change the beat, `Shift`+click **slot 2**, then click **slot 1** while it plays → you see `slot 1 waits for the next bar` and hear the old beat come back on the bar line | **Hold Loop + steps** |
 | Play slot 1, then `⌘`+click or `Ctrl`+click **slot 2** → you see `chain 1 → 2 · 4 bars each` and a chain pill; **stop chain** ends it | **Hold Loop + steps**: press several steps |
-| Press `F` → you see the controls go while the rings, the pills and the peek stay; the backquote key shows the console log (the status and every lane's numbers as text) | — |
+| Press `Esc` twice (the first shuts the sheet, the second lets go of a button you reached by keyboard), then press `F` → you see the controls go while the rings, the pills and the peek stay; the backquote key shows the console log (the status and every lane's numbers as text) | — |
 
 **If it doesn't:**
 - Capture or Delete does nothing: in live mode they need `Shift` or a hold of about `0.6` seconds (the button blinks red first).
@@ -163,7 +163,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 
 | Mouse & keys | Move |
 |---|---|
-| Click **all ⌘K**, type `boom bap`, press `Enter` twice, then click **lane 4 crackle** → you see lane 4 outlined | **Track 1–4**: press the fourth one |
+| Click **all ⌘K**, type `boom bap`, press `Enter` twice, then click **lane 4 crackle** → you see lane 4 outlined | **Track 1–4**: press the top button (the fourth from the bottom) |
 | Click **all ⌘K**, type `break file`, press `Enter` once → you see the **lane** tab open with **break file…** outlined and **8** and **16** beside **slices** | — |
 | Click **8** or **16** to pick the number of pieces (`16` is the default) → you see your choice lit | — |
 | Press `Enter` and pick your file → you see the lane renamed `♪ break` and the note `16 slices, a slice per step`, with every step lit | — |
@@ -232,7 +232,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 |---|---|
 | Open the page on the phone → you see square rings across the width, a row of four colour dots, **play**, eight knobs and 16 cells, and the page never scrolls | — |
 | Tap **play** → you hear the beat and the button becomes **stop** | — |
-| Tap a colour dot, for example **lane 2 clave** → you see that dot outlined and its knobs take over | — |
+| Tap a colour dot, for example **lane 2 rim** → you see that dot outlined and its knobs take over | — |
 | Tap a cell twice → you see `step 2, on` and then `step 2, on, accent` (a tap goes off, on, accent) | — |
 | Press and hold a cell for a second (a long-press does what `Shift`, `Alt` and right-click do on a computer) → you see the header read `step 3` with **clear**, **more…** and **done** | — |
 | Slide a finger up or down on a knob, for example **tempo** → you see a big number at the top left while you touch it and the beat speeds up | — |

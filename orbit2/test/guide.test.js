@@ -64,3 +64,26 @@ test('⌘K: every section has a "how do I" phrase and is found by its title and 
   assert.equal(search([...index, stems], 'export stems')[0].key, 'exp-stems');
   assert.match(app, /h\.guide[\s\S]{0,260}openHelp\('guide', h\.guide\)/);
 });
+
+// RD-14: the guide names controls exactly as the screen does. Left column: every bold name is in the page's markup or in a
+// string the page builds (a gauge label, a pill, a lane's name); right column: every bold name is a row of the Move table.
+// The live version of this (accessible names read off the running page, per step) is tools/guide-check.mjs.
+import { readdirSync } from 'node:fs';
+import { readGuide } from '../tools/guide-check-names.mjs';
+
+const norm = (s) => String(s).toLowerCase().replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim().replace(/^[^a-z0-9]+/, '');
+const page = html.slice(0, html.indexOf('<!-- GUIDE:BEGIN -->')) + html.slice(html.indexOf('<!-- GUIDE:END -->'));
+const srcAll = ['../src/ui.js', '../src/gauge.js', ...readdirSync(new URL('../src/poly/', import.meta.url)).filter(f => f.endsWith('.js')).map(f => '../src/poly/' + f)].map(read).join('\n');
+const hay = norm(page + '\n' + srcAll);
+// names the page makes up as it runs, with the template that makes them (a lane's name comes from its voice, a slot's from its number)
+const BUILT = [/^lane \d (kick|rim|hat|wood|crackle|clave|sub)\b/, /^mute lane \d$/, /^slot \d+$/, /^lane \d\b/, /^knob \d$/];
+const moveRows = [...page.slice(page.indexOf('id="hpane-move"')).matchAll(/<tr><th>([^<]+)<\/th>/g)].map(m => norm(m[1]));
+
+test('every control name the guide puts in bold exists on the screen (markup or a string the page builds) and every Move name is a row of the Move table', () => {
+  const missing = [];
+  for (const uc of readGuide(md)) for (const [i, r] of uc.rows.entries()) {
+    for (const n of r.names) { const k = norm(n); if (!hay.includes(k) && !BUILT.some(re => re.test(k))) missing.push(`${uc.n}.${i + 1} "${n}"`); }
+    for (const n of r.moves) { const k = norm(n); if (!moveRows.some(x => x === k || x.startsWith(k) || x.split(/ [+] | · | /).includes(k))) missing.push(`${uc.n}.${i + 1} Move "${n}"`); }
+  }
+  assert.deepEqual(missing, [], 'names the guide quotes that the page does not have');
+});
