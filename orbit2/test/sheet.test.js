@@ -28,7 +28,7 @@ test('RD-3 the 12 drawers all live in the sheet, in the tab Greta\'s table gives
   };
   // a drawer by its id, else the evolve sub-drawer by its class, else by its summary's words
   const drawers = (s) => tags(s, 'details').map(t => t.a.id || (String(t.a.class).includes('evo-sub') ? 'evo-sub' : s.slice(t.end).match(/^\s*<summary\b[^>]*>([^<]*)/)?.[1].trim()));
-  assert.equal(tags(html, 'details').length, 12, '12 drawers on the page');
+  assert.equal(tags(html, 'details').filter(t => !String(t.a.class).includes('guide-case')).length, 12, '12 drawers on the page (RD-14: the help guide\'s collapsible use cases are not drawers)');
   assert.equal(drawers(sheet).length, 12, 'all of them in the sheet');
   for (const t of TABS) assert.deepEqual(drawers(panes[t]), where[t], `tab ${t}`);
 });

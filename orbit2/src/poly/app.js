@@ -23,7 +23,7 @@ import { segmented, toggleChip, mount, longPress, LONG_MS, LONG_SLOP } from '../
 import { createScene, ringBox, ringAngle, angleDelta, turnRotation, outward, pullLength, pinchLength, dragKind, genClock, genProgress, cycleBeats } from './scene.js';
 import { SHEET_KEY, SHEET_TABS, sheetFrom, tabMove } from './sheet.js';
 import { drawMoveHelp } from './moveface.js';
-import { FIND_KEY, ACTIONS, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
+import { FIND_KEY, ACTIONS, GUIDE_HOW, entry, search, recentsFrom, pushRecent, opensFind, escStep } from './find.js';
 import { GROOVES, DEMO_GROOVE, grooveByKey, bootMode } from './grooves.js';
 import { utcDay, dayLabel, seedOfDay, shapesOf, drawRings, thumbURL, UNTITLED, linkName, lineageOf, postcardWindow } from './share.js';
 import { QUESTS, QUESTS_KEY, questsFrom, currentQuest, hintDrawer } from './quests.js';
@@ -2310,8 +2310,8 @@ function pillGo(el) {
 /** Quest "show me" (Rio): the gesture drawn once on the rings as a ghost hand (scene.js, read-only; any key or click
  *  hides it); a quest played in the sheet shows its control instead. A phone is a page with the pills under the rings:
  *  the rings come into view first, or the hand is drawn where nobody sees it (RD-07 round 1, Maya). */
-function showMe() {
-  const q = currentQuest(quests.done), g = q?.show?.(m); questMore(false); if (!g) return;
+function showMe(q = currentQuest(quests.done)) {
+  const g = q?.show?.(m); questMore(false); if (!g) return;
   if (g.id) return pillGo(g.id);
   if (focusMode) setFocusMode(false);
   const geo = scene.geo(), c = $('cv').getBoundingClientRect(), top = c.top + geo.cy - geo.outer, bottom = c.top + geo.cy + geo.outer;
@@ -2328,7 +2328,7 @@ $('sp-evolve-go').onclick = () => pillGo('btn-evolve'); $('sp-evolve-x').onclick
 $('sp-dice-go').onclick = () => pillGo('btn-dice'); $('sp-dice-x').onclick = () => { setPillsOpen(false); dice.locked = false; saveSettings(); renderDice(); readout(); };
 $('sp-clock-go').onclick = () => pillGo($('midi-follow').querySelector('button') || 'midi-follow');
 $('sp-clock-x').onclick = () => { setPillsOpen(false); pmidi.setFollow('off'); ui.follow?.set('off'); retime(); saveSettings(); renderMidi(); };
-$('quest-go').onclick = () => questMore($('quest-more').hidden); $('quest-show').onclick = showMe;
+$('quest-go').onclick = () => questMore($('quest-more').hidden); $('quest-show').onclick = () => showMe();
 $('sp-more').onclick = () => setPillsOpen(!pillsOpen);
 buildSliders(); buildSteps(); buildLockGauges(); buildSlotsUI(); buildRecUI(); buildAutoUI(); buildEvolveUI(); buildGenUI(); buildMidiUI(); buildMixUI(); buildSampleUI(); buildDiceUI(); buildExportUI(); buildEngineUI(); buildEditUI(); buildJamUI(); sync(); renderQuest();
 // a shared link wins; a first visit gets the demo groove and a pulsing play button, and its history starts there (no
@@ -3023,7 +3023,8 @@ function buildFindIndex() {
     const act = ACTIONS[el.id], where = findWhere(el);
     const e = entry({ key: el.id || `${where}|${name}`, name: act ? act[0] : name, where, action: !!act || el.matches('[role=tab]'), extra: [act?.[1], act && name, el.tagName === 'SELECT' && [...el.options].map(o => o.text).join(' ')].filter(Boolean).join(' ') });
     return [Object.assign(e, { el })];
-  });
+  }).concat([...$('hpane-guide').querySelectorAll('.guide-case')].map(sec => Object.assign(
+    entry({ key: 'guide|' + sec.id, name: sec.querySelector('summary').textContent, where: 'help · guide', action: true, weak: true, extra: GUIDE_HOW[sec.id] ? 'how do i ' + GUIDE_HOW[sec.id] : '' }), { guide: sec.id })));
 }
 function findList(show) {
   const list = $('find-list'), inp = $('find'); list.hidden = !show; inp.setAttribute('aria-expanded', String(show)); if (!show) { inp.removeAttribute('aria-activedescendant'); return; }
@@ -3052,7 +3053,12 @@ function openFind() {
  *  its drawers) and focused, the keys its own. */
 function findRun(h) {
   const el = h.el, inp = $('find'); findRecents = pushRecent(findRecents, h.key); try { localStorage.setItem(FIND_KEY, JSON.stringify(findRecents)); } catch {}
-  inp.value = ''; findList(false); if (!el?.isConnected) return;
+  inp.value = ''; findList(false);
+  if (h.guide) {   // RD-14: a use case of the guide: the sheet goes back as it was, then "?" opens on that section
+    const back = findOpened; findOpened = false; keyFocused.delete(inp); inp.blur(); if (back) setSheet(sheet.tab, false);
+    openHelp('guide', h.guide); return;
+  }
+  if (!el?.isConnected) return;
   const inSheet = $('sheet').contains(el), back = findOpened; findOpened = false;   // a result decides the sheet: shut again, or the player's
   if (el.matches('[role=tab]')) { setSheet(el.id.slice(4), true, true); focusAs(el, true); return; }   // shown, never toggled shut (a phone's tab click would)
   if (h.action) {
@@ -3137,7 +3143,7 @@ $('btn-focus').onclick = () => setFocusMode(true); $('focus-exit').onclick = () 
 // ---- C3 / RD-9 help: two tabs in one overlay (button "?" or the ? key) — the keys and mouse tricks, and the Move
 // drawn with the current page's meanings on its controls (moveface.js) over its full table. The drawing follows the
 // hands while the overlay is up (renderPage), so a Move touch relabels the knobs in place ----
-const HELP_TABS = ['keys', 'move'];
+const HELP_TABS = ['keys', 'move', 'guide'];
 // RD-9 round 1: the knobs wear the words of the gauges the console's row shows for that page (a slice set's knob 7…),
 // never a copy; the picture is written only when it changed (renderPage runs on every Move event)
 let helpSvg = '';
@@ -3158,7 +3164,22 @@ $('help').querySelector('.help-tabs').addEventListener('keydown', (e) => {
 });
 // "?" opens on the keys, as it did before the Move tab came (RD-9 round 1: it reopened the last tab); the Move tab is
 // one arrow away. A tool may ask for a tab: openHelp('move').
-function openHelp(tab = 'keys') { const d = $('help'); helpTab(HELP_TABS.includes(tab) ? tab : 'keys'); if (!d.open) d.showModal(); }
+function openHelp(tab = 'keys', section) {
+  const d = $('help'); helpTab(HELP_TABS.includes(tab) ? tab : 'keys'); if (!d.open) d.showModal();
+  if (tab === 'guide' && section) guideGo(section);
+}
+// RD-14 the guide tab: use cases as collapsible sections (generated from docs/GUIDE.md, tools/build-guide.mjs). A link to
+// a section opens it and scrolls the dialog (never the page, A6) to it; "show me" closes the dialog and draws the
+// quest's ghost hand on the rings (the quest's own show(), the same as the card's)
+function guideGo(id) {
+  const sec = document.getElementById(id); if (!sec?.matches('.guide-case')) return;
+  sec.open = true; sec.scrollIntoView({ block: 'start' }); sec.querySelector('summary').focus({ preventScroll: true });
+}
+$('hpane-guide').addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-guide]'), b = e.target.closest('.guide-show');
+  if (a) { e.preventDefault(); guideGo(a.dataset.guide); }
+  else if (b) { $('help').close(); showMe(QUESTS.find(q => q.id === b.dataset.quest)); }
+});
 $('btn-help').onclick = () => openHelp();
 window.__poly = { move, get m() { return m; }, sync, applySound, get knobGest() { return knobGest; }, setKnobs, renderAuto, autoEdit, heardStep, setLaneCount, get bars() { return bars; }, setEngine, makeKit, wake, dspFlush, get engine() { return engine; }, get kit() { return kit; }, hitSound, ensureDsp, applyTempo, bank, rec, evo, pmidi, liveHit, setRec, setEvolve, recallSlot, saveSlot, chainSlots, editLocks, clock: () => ({ tick, clockRef }), undo, redo, hist, dice, toggleSolo, setFill, perf, pfx, setFilter, setThrow, renderPattern, latch, muteQ, toggleMute, armLatch, get fill() { return fill; }, assignSample, assignSlices, breakFromFile, exportWav, exportMidi, exportAll, exportKit, exportHits, tickSec, shareLink, shareUrl, shareAudio, recordPostcard, loadDaySeed, get lineage() { return lineage; }, exp, renderSlices, sampleBufs, stress, jam, toggleJam, stopJam, downloadJam, exportStems, lib, loadSetup, saveSetup, initPattern, loadGroove, clearLane, randomizeAll, setEvolve, scene, setFocusMode, get focusMode() { return focusMode; }, setNight, get night() { return face.night; }, openHelp, helpTab, quests, questEvent, setSheet, reveal, renderPills, showMe, setPillsOpen, get pillsOpen() { return pillsOpen; }, showPills: (keys) => { pillsForce = keys?.length ? [...keys] : null; renderPills(); }, hideWelcome, get welcomeOn() { return welcomeOn; }, get sheet() { return { ...sheet }; }, openFind, findIndex: buildFindIndex, escapeOnce, escState, get page() { return pageNow(); }, renderPage, get questLog() { return questLog; }, get setlog() { return slog; } };
 $('console-log').hidden = !face.log;   // RD-5: as it was left (off the first time)

@@ -20,6 +20,7 @@ https://auridevil.github.io/move-midi-warz/orbit2/index.html).
 - Tests: `orbit2/test/*.test.js` (run by `npm test` from the root). `npm run check` syntax-checks `orbit2/src/**`.
   `node tools/smoke.mjs` loads `orbit2/index.html` with the other pages.
 - After editing `orbit2/src/poly/dsp-core.js`, regenerate the worklet: `node orbit2/tools/build-worklet.mjs`.
+- After editing `orbit2/docs/GUIDE.md`, regenerate the "?" → guide tab: `node orbit2/tools/build-guide.mjs` (a test checks `index.html` is in sync).
 - Browsers are always muted: `orbit2/tools/cdp.mjs` or `tools/headless-chrome.sh <port>`, never Chrome by hand.
 - The look (RD-2, dark room): tokens at the top of `styles.css` (`--v` void, `--l` light = the 0.475 luminance cap,
   `--d` labels, `--b` edges, `--track` knob tracks, `--rec` record red, `--ink` a lane's colour on a control; sizes

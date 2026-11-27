@@ -87,6 +87,22 @@ export const ACTIONS = {
   'share-audio': ['share 4 bars of audio', ''],
   'share-postcard': ['share a postcard (video)', 'webm'],
 };
+/** RD-14: how a player asks for each use case of the guide (section id → words after "how do I"): ⌘K finds the case by its
+ *  title or by this, and opens "?" on it. A test checks every section of docs/GUIDE.md has one. */
+export const GUIDE_HOW = {
+  'guide-first-five-minutes': 'start get going first steps learn the basics',
+  'guide-a-beat-in-60-seconds': 'make a beat quickly with a groove',
+  'guide-3-vs-4-vs-5': 'make polyrhythm 3 against 4 loops of different lengths',
+  'guide-shape-one-sound': 'change how a drum sounds with the sound page',
+  'guide-record-a-knob-move-into-the-pattern': 'record a knob move automation into the pattern',
+  'guide-let-it-evolve-and-bring-it-home': 'let the beat change itself and bring it back home',
+  'guide-play-a-40-minute-set-with-the-move': 'play a live set with the Move mute fills and slots',
+  'guide-chop-a-break': 'chop a break into slices a sample',
+  'guide-stems-and-midi-into-a-daw': 'export stems and midi to my daw',
+  'guide-share-a-loop': 'share a loop send my beat as a link',
+  'guide-the-phone': 'use it on my phone with touch',
+};
+
 /** What an empty search offers after the recents: the things people reach for (Rio: "the keyboard user's map"). RD-7:
  *  nothing destructive (A3: stop, randomize, init) in it: the list drops open under the field on a click, so a stray
  *  second click there must not stop or wipe the beat (Vera's mis-click run found it); those are one word away. */
@@ -111,7 +127,11 @@ const PHRASES_OF = new Map([...GROUP_OF].map(([w, g]) => [w, g.map(words).filter
  *  select options, the action's words), `alias` (another name it has, found as its name; the page passes none since
  *  RD-10 removed I7's simple view, whose "shift" was the rotation knob). It is found by its names' words, its where, and
  *  every synonym of those. */
-export function entry({ key, name, where = '', action = false, extra = '', alias = '' }) {
+export function entry({ key, name, where = '', action = false, extra = '', alias = '', weak = false }) {
+  if (weak) {   // RD-14: a guide case is found by its words but never outranks a control of that name ("stems" is the export, not the guide)
+    const near = [...new Set([...words(name), ...words(where), ...words(extra)])];
+    return { key, name, where, action, own: [], main: [], syn: [], near };
+  }
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   // RD-12: the name's words outside any parenthesis ("kit (all lanes)" → kit): the whole-name bonus judges these, so
   // an aside doesn't keep a control from winning its own plain name (the export kit ACTION used to outrank the kit ▾)
@@ -147,7 +167,7 @@ export function search(index, query, recents = [], max = 8) {
   index.forEach((e, i) => {
     let s = 0; for (const q of qs) { const f = fit(e, q); if (!f) return; s += f; }
     // the query says the whole name (each word outside a parenthesis): "tempo" and "bpm" are the knob before "tap tempo"
-    if ((e.main || e.own).every(says)) s += 1;
+    if ((e.main || e.own).length && (e.main || e.own).every(says)) s += 1;
     scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i });
   });
   scored.sort((x, y) => y.s - x.s || y.a - x.a || y.r - x.r || x.e.name.length - y.e.name.length || x.i - y.i);
