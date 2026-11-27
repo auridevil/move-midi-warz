@@ -1321,3 +1321,7 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   (only cases have "how do i"); with no hit, search again without it and the control comes up.
 - **The face audit's help state costs** (RD-14 round 2: architect): one desktop size 21 → 34 s, the phone's guide ~20
   screens; a `--tests` switch to skip it outside phases that touch "?" would keep quick runs quick.
+- **guide-check's last script clicks** (RD-14 round 3: sound): `press` is hit-tested and trusted, but use case 8's
+  **24**, use case 7's slice count and slice tile, the `pressIn` helper and every ⌘K step's `cmdk` (find opened and its
+  text set by script, not **all ⌘K** clicked and the words typed) skip that check; through `press` and a typed query
+  they would catch a future overlay (nothing is covered today, trusted clicks land at four sizes).
