@@ -48,7 +48,16 @@ const fresh = async (b, { width = 1512, height = 860, mobile = false } = {}) => 
   await p.eval(SIM + INJECT); await p.eval('window.__g.sheetsSeen = 0');
   return p;
 };
-const press = (p, name) => p.eval(`__g.press(${JSON.stringify(name)})`);
+// a person's click: the control scrolled into view and clicked at its centre, which must be the control itself (round 2,
+// sound: a script click went through the ⌘K list lying over the export tab; there a real click ran "export all")
+const press = async (p, name) => {
+  const r = await p.eval(`(() => { const e = __g.find(${JSON.stringify(name)}); if (!e) return null; e.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const q = e.getBoundingClientRect(), x = q.x + q.width / 2, y = q.y + q.height / 2, t = document.elementFromPoint(x, y), c = t?.closest('button, a, select, input, summary, [role]');
+    return { x, y, top: !!t && (t === e || e.contains(t)), on: (c?.getAttribute('aria-label') || c?.textContent || t?.id || t?.tagName || 'nothing').trim().slice(0, 40) }; })()`);
+  if (!r) throw new Error('no control named ' + name);
+  if (!r.top) throw new Error(`"${name}" is covered at its centre: a click there lands on "${r.on}"`);
+  await p.click(r.x, r.y);
+};
 const cmdk = async (p, text, enters = 1) => {
   await p.eval(`(() => { __poly.openFind(); const i = document.getElementById('find'); i.value = ${JSON.stringify(text)}; i.dispatchEvent(new Event('input')); })()`);
   for (let i = 0; i < enters; i++) { await p.key('Enter'); await p.sleep(250); }
@@ -175,7 +184,7 @@ const CASES = {
   8: (p) => [
     R(() => cmdk(p, 'house', 2), async () => (await p.eval('__poly.m.lanes.length')) >= 4),
     // round 1 (sound): ⌘K "export stems" + Enter RAN the stems export (an action); the tab itself exports nothing
-    R(async () => { await p.captureDownloads(); await press(p, 'all ⌘K'); await press(p, 'export'); await p.sleep(400); },
+    R(async () => { await p.captureDownloads(); await press(p, 'export'); await p.sleep(400); },
       async () => (await p.eval(`document.getElementById('tab-export').getAttribute('aria-selected') === 'true' && __g.shown('⤓ stems (.zip)')`)) && (await p.eval('(window.__dl || []).length')) === 0),
     R(async () => { await p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').click()`); }, () => p.eval(`[...document.querySelectorAll('#pane-export button')].find(b => b.textContent.trim() === '24').getAttribute('aria-checked') === 'true'`)),
     R(async () => { await press(p, 'render as loop'); }, () => p.eval(`document.getElementById('exp-loop').getAttribute('aria-pressed') === 'false'`)),
@@ -198,7 +207,8 @@ const CASES = {
     R(async () => {}, async () => (await p.eval('document.documentElement.scrollHeight <= innerHeight + 1')) && (await p.eval(`['play', 'tempo'].every(n => __g.has(n))`))),
     R(async () => { const { x, y } = await rectOf(p, `document.getElementById('btn-play')`); await p.tap(x, y); await p.sleep(700); }, () => playing(p)),
     R(async () => { const { x, y } = await rectOf(p, `__g.find('lane 2')`); await p.tap(x, y); await p.sleep(300); }, async () => (await p.eval('__poly.m.selected')) === 1),
-    R(async () => { for (let k = 0; k < 2; k++) { const { x, y } = await rectOf(p, `document.querySelectorAll('#stepsui > *')[1]`); await p.tap(x, y); await p.sleep(250); } }, async () => /^step 2, on, accent/.test(await p.eval(`document.querySelectorAll('#stepsui > *')[1].getAttribute('aria-label') || ''`))),
+    // the label is read until it says so (round 2, verifier: one read 400 ms after the taps failed once at load 30)
+    R(async () => { for (let k = 0; k < 2; k++) { const { x, y } = await rectOf(p, `document.querySelectorAll('#stepsui > *')[1]`); await p.tap(x, y); await p.sleep(250); } }, () => seen(async () => /^step 2, on, accent/.test(await p.eval(`document.querySelectorAll('#stepsui > *')[1].getAttribute('aria-label') || ''`)), 4000)),
     R(() => holdStep(p, 2, 1000), async () => /step 3/.test(await body(p)) && (await p.eval(`['clear', 'more…', 'done'].every(n => __g.has(n))`))),
     R(async () => { await press(p, 'done'); p.t0 = await val(p, 'tempo'); await drag(p, 'tempo', -50); }, async () => (await val(p, 'tempo')) !== p.t0),
     R(async () => { await sheetTab(p, 'lane'); await press(p, 'mute'); await p.sleep(300); }, async () => (await p.eval('!!__poly.m.lanes[__poly.m.selected].muted')) && /lane 2 · rim \(muted\)/.test(await body(p))),

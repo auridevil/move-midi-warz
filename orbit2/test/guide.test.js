@@ -73,6 +73,14 @@ test('⌘K: every section has a "how do I" phrase and is found by its title and 
   assert.equal(search(index, 'beat')[0].key, 'guide-a-beat-in-60-seconds');
   assert.equal(search(index, 'guide')[0].key, 'guide-first-five-minutes');
   assert.equal(search(index, 'how do i get started')[0]?.key, 'guide-first-five-minutes');
+  // round 2 (architect): a case is found through the synonyms table like any entry ("bounce" is export) …
+  assert.equal(search(index, 'how do i bounce stems')[0]?.key, 'guide-stems-and-midi-into-a-daw');
+  // … and eight controls that fit fill the list but its last row: the case whose title says the word
+  const eight = Array.from({ length: 9 }, (_, i) => entry({ key: 'rec-' + i, name: 'record ' + i, where: 'perform' }));
+  const got = search([...eight, ...index], 'record');
+  assert.equal(got.length, 8); assert.ok(got.slice(0, 7).every(e => !e.weak), 'controls first');
+  assert.equal(got[7].key, 'guide-record-a-knob-move-into-the-pattern');
+  assert.ok(search([...eight, ...index], 'record 1').every(e => !e.weak), 'a case keeps the row only when its title says every word');
 });
 
 // RD-14 walk (maya, use case 9): long-press share opened its menu DOWN, off the window at 1512×860 (the wide rule lost to

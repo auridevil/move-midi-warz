@@ -128,10 +128,8 @@ const PHRASES_OF = new Map([...GROUP_OF].map(([w, g]) => [w, g.map(words).filter
  *  RD-10 removed I7's simple view, whose "shift" was the rotation knob). It is found by its names' words, its where, and
  *  every synonym of those. */
 export function entry({ key, name, where = '', action = false, extra = '', alias = '', weak = false }) {
-  if (weak) {   // RD-14: a guide case is found by its words but ranks under every control that fits ("stems" is the export, not the guide); among the cases its title's words count over its "how do I" words
-    const syn = [...new Set(words(name))];
-    return { key, name, where, action, weak, own: [], main: [], syn, near: [...new Set([...words(where), ...words(extra)])].filter(w => !syn.includes(w)) };
-  }
+  // RD-14 `weak`: a guide case. Found like any entry (its title its name, its "how do I" words near, the synonyms of both:
+  // "bounce stems" finds the DAW case), it only ranks under every other entry that fits (search)
   const own = [...new Set([...words(name), ...words(alias)])], near = [...words(where), ...words(extra)];
   // RD-12: the name's words outside any parenthesis ("kit (all lanes)" → kit): the whole-name bonus judges these, so
   // an aside doesn't keep a control from winning its own plain name (the export kit ACTION used to outrank the kit ▾)
@@ -139,7 +137,7 @@ export function entry({ key, name, where = '', action = false, extra = '', alias
   const main = [...new Set([...words(aside(name)), ...words(aside(alias))])];
   const synOf = (ws) => { const out = new Set(); for (const w of ws) for (const s of (GROUP_OF.get(w) || [])) for (const x of words(s)) out.add(x); return out; };
   const syn = [...synOf(own)].filter(w => !own.includes(w));
-  return { key, name, where, action, own, main: main.length ? main : own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)) };
+  return { key, name, where, action, own, main: main.length ? main : own, syn, near: [...new Set([...near, ...synOf(near)])].filter(w => !own.includes(w) && !syn.includes(w)), ...(weak ? { weak } : {}) };
 }
 
 /** How well one query word fits an entry: on its name 6 (whole word) / 5 (start of a word), on a synonym of its name 4 / 3
@@ -154,8 +152,8 @@ function fit(e, q) {
  *  go to actions, then to recents (newest first),
  *  then to the shorter name, then to page order. A weak entry (a guide case, RD-14) comes after every other entry that
  *  fits, whatever their scores (round 1: "slices", "knob" and "page" found by a control's where words had tied with a case
- *  and lost on its action flag), and weak ties keep page order (the guide's own). An empty query gives the recents, then
- *  the defaults. */
+ *  and lost on its action flag), and weak ties keep page order (the guide's own); a full list of controls keeps its last
+ *  row for a case its title fits. An empty query gives the recents, then the defaults. */
 export function search(index, query, recents = [], max = 8) {
   const qs = words(query), rec = (e) => { const i = recents.indexOf(e.key); return i < 0 ? 0 : RECENTS_MAX - i; };
   if (!qs.length) {
@@ -174,7 +172,11 @@ export function search(index, query, recents = [], max = 8) {
     scored.push({ e, s, a: e.action ? 1 : 0, r: rec(e), i, w: e.weak ? 1 : 0 });
   });
   scored.sort((x, y) => x.w - y.w || y.s - x.s || y.a - x.a || y.r - x.r || (x.w ? 0 : x.e.name.length - y.e.name.length) || x.i - y.i);
-  return scored.slice(0, max).map(x => x.e);
+  // controls that fill the whole list leave its last row to the case whose title says every query word ("record",
+  // "evolve", "midi", "set" lost their case under eight controls, round 2)
+  const top = scored.slice(0, max);
+  if (top.length === max && !top.some(x => x.w)) { const c = scored.find(x => x.w && qs.every(q => x.e.own.some(w => w === q || w.startsWith(q)))); if (c) top[max - 1] = c; }
+  return top.map(x => x.e);
 }
 
 /** The saved recents (localStorage text) → keys, newest first. Anything but a list of strings counts as none. */

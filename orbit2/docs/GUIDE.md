@@ -117,7 +117,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `afro`, press `Enter` twice, then click **play** → you hear the afro groove | **Play** |
-| Click **all ⌘K**, type `evolve`, press `↓` once, press `Enter` twice (show me: let it evolve 8 bars) → you see the **evolve** pill at the top right | **−** (the minus button) |
+| Click **all ⌘K**, type `evolve`, press the `Down` arrow once, press `Enter` twice (show me: let it evolve 8 bars) → you see the **evolve** pill at the top right | **−** (the minus button) |
 | Click **cycle** beside **every** → you see the pill read `evolve · cycle`, `every cycle · 8 beats` where the **every** knob was, and the bottom right counting down with the sun: `evolve in 6 beats`, `5`, `4` … | — |
 | Watch the sun count down to `1` → you hear the pattern change on the very beat the sun would reach `0`, and the dots on the rings move | — |
 | Scroll up over **gravity** five times → you see its number climb to `10%`, so each change is more likely to head back home | — |
@@ -146,7 +146,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **fill next** → you see the label turn to `fill next…` until the bar line, then `fill this bar` while the next whole bar plays as a fill | **Shift + Layout** |
 | Click **all ⌘K**, type `slot 1`, press `Enter`, then `Shift`+click **slot 1** → you see `playing slot 1` under the grid (show me: save your first slot) | **Hold Duplicate + step** |
 | Change the beat, `Shift`+click **slot 2**, then click **slot 1** while it plays → you see `slot 1 waits for the next bar` and hear the old beat come back on the bar line | **Hold Loop + steps** |
-| Play slot 1, then `⌘`+click or `Ctrl`+click **slot 2** → you see `chain 1 → 2 · 4 bars each` and a chain pill; **stop chain** ends it | **Hold Loop + steps**: hold Loop, press step 1, then step 2 |
+| Play slot 1, then `Cmd`+click or `Ctrl`+click **slot 2** → you see `chain 1 → 2 · 4 bars each` and a chain pill; **stop chain** ends it | **Hold Loop + steps**: hold Loop, press step 1, then step 2 |
 | Press `Esc` twice (the first shuts the sheet, the second lets go of a button you reached by keyboard), then press `F` → you see the controls go while the rings and the pills stay; the backquote key shows the console log (the status and every lane's numbers as text) | — |
 
 **If it doesn't:**
@@ -187,7 +187,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Mouse & keys | Move |
 |---|---|
 | Click **all ⌘K**, type `house`, press `Enter` twice → you see the house lanes | — |
-| Click **all ⌘K**, then the **export** tab (show me: export a loop) → you see **⤓ WAV**, **⤓ stems (.zip)** and **⤓ MIDI**, and the settings under them; nothing is exported yet | — |
+| Click the **export** tab at the top of the sheet, still open from the last step (show me: export a loop) → you see **⤓ WAV**, **⤓ stems (.zip)** and **⤓ MIDI**, and the settings under them; nothing is exported yet | — |
 | Click **24** beside **format** → you see **24** lit: the files will be 24-bit, a finer sound than `16` | — |
 | Click **render as loop** to switch it off (on = a loop that repeats cleanly, off = a one-shot, a sound you place once) → you see the chip go dark | — |
 | Click **⤓ WAV** → you get the mix, and the note reads `4 bars + 2 bars ring-out at 124 bpm, one-shot · 24-bit 44.1 kHz` | — |
@@ -195,7 +195,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | Click **⤓ MIDI** → you get a MIDI file, and the note reads `a track per lane` (click **one track** for a single drum-rack track) | — |
 
 **If it doesn't:**
-- The stems end too early: with **render as loop** on, the tail wraps onto the start, so switch it off for the full tail.
+- The stems end too early: with **render as loop** on, the tail wraps onto the start, so switch it off for the full tail (it is back on at every visit).
 - Your DAW says 16-bit: the format is remembered, so click **24** before you export.
 
 **Go further:** [Share a loop](#guide-share-a-loop)
@@ -214,7 +214,7 @@ Ten short jobs you can finish in one to three minutes each, with the mouse and k
 | They click **▶ tap to hear this orbit** → they hear the beat, the button turns to **■ stop** and **remix** appears | — |
 | They click **remix** → the card closes, the beat keeps playing and a note says `it is yours now · change anything, then share it back` | — |
 | They change something and click **share** → they see `link copied` again, ready to send back | — |
-| Long-press **share** (or right-click it, or press `↓` on it) → you see **link**, **4 bars of audio** and **postcard (video)** | — |
+| Long-press **share** (or right-click it, or press the `Down` arrow on it) → you see **link**, **4 bars of audio** and **postcard (video)** | — |
 
 **If it doesn't:**
 - The note says the link is in the address bar: the browser blocked the clipboard, so copy the link from the address bar.

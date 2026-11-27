@@ -905,7 +905,7 @@ body:has(#sheet) button:not(.st), body:has(#sheet) select, body:has(#sheet) inpu
 .guide-steps th { font-size: var(--t-s); color: var(--muted); font-weight: 400; }
 .guide-steps th:first-child, .guide-steps td:first-child { width: 68%; }
 .guide-show { margin: 0 2px; padding: 1px 8px; vertical-align: baseline; }
-.guide-case a { color: var(--l); display: inline-block; padding: 12px 2px; margin: -12px -2px; }   /* a 44 px tall target that keeps the line's height */
+#hpane-guide a { color: var(--l); display: inline-block; padding: 12px 2px; margin: -12px -2px; }   /* a 44 px tall target that keeps the line's height (the intro's link too: round 2) */
 .move-draw { overflow-x: auto; margin: 4px 0 10px; }
 .move-draw svg { display: block; width: 100%; min-width: 760px; height: auto; font-family: var(--font-body); }
 .mf-body { fill: rgba(12, 9, 25, 0.6); stroke: var(--b); stroke-width: 1.5; }

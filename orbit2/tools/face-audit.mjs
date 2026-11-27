@@ -197,9 +197,10 @@ const PAGE = String.raw`(() => {
   function rings() { const g = __poly.scene.geo(), c = document.getElementById('cv').getBoundingClientRect(); return { cx: Math.round((c.left + g.cx) * 10) / 10, cy: Math.round((c.top + g.cy) * 10) / 10, R: Math.round(g.R * 10) / 10, outer: Math.round(g.outer * 10) / 10, diameter: Math.round(g.outer * 20) / 10, lanes: g.lanes }; }
   // the text runs: an element's own text nodes, tight boxes (inside root only: RD-14 measures the "?" dialog on its own)
   function texts(root = document.body) {
-    const out = [];
+    const out = []; texts.cut = [];
     // inside a scrolling root (the dialog) only the runs wholly in its padding box: one its scroll edge cuts sits on the
-    // border and the page behind, and is measured whole on the next screen (the screens overlap)
+    // border and the page behind, and is measured whole on another screen (the screens overlap by the tallest run);
+    // texts.cut names the cut ones, so a run never measured whole is counted, not lost (round 2, architect)
     const q0 = root === document.body ? null : root.getBoundingClientRect(), pb = q0 && { left: q0.left + root.clientLeft, top: q0.top + root.clientTop, right: q0.left + root.clientLeft + root.clientWidth, bottom: q0.top + root.clientTop + root.clientHeight };
     for (const e of root.querySelectorAll('*')) {
       if (['SCRIPT', 'STYLE', 'OPTION', 'CANVAS'].includes(e.tagName) || !shown(e)) continue;
@@ -212,11 +213,13 @@ const PAGE = String.raw`(() => {
         box = { left: q.left + side('Left'), top: q.top + side('Top'), right: q.right - side('Right'), bottom: q.bottom - side('Bottom') };
       }
       else for (const n of nodes) { const rg = document.createRange(); rg.selectNodeContents(n); for (const q of rg.getClientRects()) box = box ? { left: Math.min(box.left, q.left), top: Math.min(box.top, q.top), right: Math.max(box.right, q.right), bottom: Math.max(box.bottom, q.bottom) } : { left: q.left, top: q.top, right: q.right, bottom: q.bottom }; }
-      if (!box || (pb && (box.left < pb.left || box.top < pb.top || box.right > pb.right || box.bottom > pb.bottom))) continue; const r = seen(e, box); if (!r) continue;
+      const label = (field ? e.value || e.placeholder || '' : nodes.map(n => n.textContent).join(' ')).replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (box && pb && (box.left < pb.left || box.top < pb.top || box.right > pb.right || box.bottom > pb.bottom)) { if (box.bottom > pb.top && box.top < pb.bottom) texts.cut.push(tag(e) + '|' + label); continue; }
+      if (!box) continue; const r = seen(e, box); if (!r) continue;
       // an SVG word (the Move drawing in "?") is painted by its fill, not its color
       const s = getComputedStyle(e), m = rgbOf(e instanceof SVGElement ? s.fill : s.color); let op = 1; for (let a = e; a; a = a.parentElement) op *= +getComputedStyle(a).opacity;
       if (op * (m[3] ?? 1) < 0.02) continue;   // text that is not drawn
-      out.push({ el: tag(e), text: (field ? e.value || e.placeholder || '' : nodes.map(n => n.textContent).join(' ')).replace(/\s+/g, ' ').trim().slice(0, 40), rgb: m.slice(0, 3), a: (m[3] ?? 1) * op, size: parseFloat(s.fontSize), weight: +s.fontWeight || 400, r });
+      out.push({ el: tag(e), text: label, rgb: m.slice(0, 3), a: (m[3] ?? 1) * op, size: parseFloat(s.fontSize), weight: +s.fontWeight || 400, r });
     }
     return out;
   }
@@ -279,7 +282,7 @@ const PAGE = String.raw`(() => {
         const cr = seen(e); if (!cr) continue; let mx = 0; each(full, cr, ([a, b, c]) => { const L = lum(a, b, c); if (L > mx) mx = L; });
         light.push({ el: tag(e), name: name(e), lum: Math.round(mx * 1000) / 1000 }); if (mx > ctlMax) { ctlMax = mx; ctlMaxAt = tag(e) + ' ' + name(e); }
       }
-      return { text, edges, light, ctlMax: Math.round(ctlMax * 1000) / 1000, ctlMaxAt, canvasMax: this.canvasMax() };
+      return { text, edges, light, ctlMax: Math.round(ctlMax * 1000) / 1000, ctlMaxAt, canvasMax: this.canvasMax(), cut: texts.cut };
     },
     canvasMax() { const cv = document.getElementById('cv'), d = cv.getContext('2d').getImageData(0, 0, cv.width, cv.height).data; let mx = 0; for (let i = 0; i < d.length; i += 4) { if (d[i + 3] < 8) continue; const L = lum(d[i], d[i + 1], d[i + 2]) * d[i + 3] / 255; if (L > mx) mx = L; } return Math.round(mx * 1000) / 1000; },
     // the canvas in one number (every 7th pixel hashed): pictures that differ while playing = the scene is drawing
@@ -296,9 +299,10 @@ const PAGE = String.raw`(() => {
 async function settle(p, ms = 120) { await p.eval('new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))'); await p.sleep(ms); }
 // a busy machine can take longer than open()'s 3.5 s to run the page's modules (and once took over 20 s): wait up to a
 // minute, then say so, rather than measure a page that never started
-async function ready(p) {
-  for (let i = 0; i < 240; i++) { if (await p.eval('!!window.__poly && !window.__faOld')) return; await p.sleep(250); }
-  throw new Error(`orbit2 did not start within a minute (page errors: ${p.errors.join(' | ') || 'none'})`);
+async function ready(p) {   // a busy machine gets as long as cdp.mjs gives Chrome to start (CDP_START_MS; RD-14 round 2: load 100)
+  const ms = Math.max(60000, +process.env.CDP_START_MS || 0);
+  for (const t0 = Date.now(); Date.now() - t0 < ms; await p.sleep(250)) if (await p.eval('!!window.__poly && !window.__faOld')) return;
+  throw new Error(`orbit2 did not start within ${ms / 1000} s (page errors: ${p.errors.join(' | ') || 'none'})`);
 }
 async function shot64(p) { const { result } = await p.send('Page.captureScreenshot', { format: 'png' }); return result.data; }
 const play = (p) => p.eval(`document.getElementById('btn-play').click()`);
@@ -395,15 +399,18 @@ export async function auditSize(size, { port = 5400, debugPort = 9400, path = 'o
       out.help = {};
       for (const tab of helpTabs) {
         await p.eval(`(() => { __poly.openHelp(${JSON.stringify(tab)}); document.querySelectorAll('#help details').forEach(d => { d.open = true; }); document.getElementById('help').scrollTop = 0; })()`); await settle(p, 250);
-        const runs = [];
-        for (let screen = 0; screen < 40; screen++) {
+        // the screens overlap by the tallest run (a phone's table cell wraps to ~180 px), so every run fits whole in one
+        const tall = await p.eval(`(() => { let m = 0; for (const e of document.querySelectorAll('#help *')) { let t = Infinity, b = -Infinity; for (const n of e.childNodes) if (n.nodeType === 3 && n.textContent.trim()) { const g = document.createRange(); g.selectNodeContents(n); for (const q of g.getClientRects()) { t = Math.min(t, q.top); b = Math.max(b, q.bottom); } } if (b > t) m = Math.max(m, b - t); } return Math.ceil(m); })()`);
+        const runs = [], cut = new Set();
+        for (let screen = 0; screen < 60; screen++) {
           await p.eval('__fa.hideText(true)'); await settle(p); const hb = await shot64(p); await p.eval('__fa.hideText(false)'); await settle(p); const hf = await shot64(p);
           if (shots && !screen) writeFileSync(join(shots, `${size}-help-${tab}.png`), Buffer.from(hf, 'base64'));
-          runs.push(...(await p.eval(`__fa.measure(${JSON.stringify(hb)}, ${JSON.stringify(hf)}, '#help')`)).text);
-          if (!(await p.eval(`(() => { const d = document.getElementById('help'), y = d.scrollTop; d.scrollTop = y + Math.round(d.clientHeight * 0.85); return d.scrollTop > y; })()`))) break;
+          const m = await p.eval(`__fa.measure(${JSON.stringify(hb)}, ${JSON.stringify(hf)}, '#help')`); runs.push(...m.text); m.cut.forEach(k => cut.add(k));
+          if (!(await p.eval(`(() => { const d = document.getElementById('help'), y = d.scrollTop; d.scrollTop = y + Math.max(Math.round(d.clientHeight / 4), d.clientHeight - ${tall} - 8); return d.scrollTop > y; })()`))) break;
         }
         const fails = [...new Map(runs.filter(t => t.contrast < THRESHOLDS.text).map(t => [`${t.text}|${t.el}`, t])).values()].sort((a, b) => a.contrast - b.contrast);
-        out.help[tab] = { n: runs.length, min: runs.length ? Math.min(...runs.map(t => t.contrast)) : null, fails };
+        const whole = new Set(runs.map(t => `${t.el}|${t.text}`)), skipped = [...cut].filter(k => !whole.has(k));   // taller or wider than the dialog
+        out.help[tab] = { n: runs.length, min: runs.length ? Math.min(...runs.map(t => t.contrast)) : null, fails, skipped };
       }
       await p.eval(`document.getElementById('help').close()`); await settle(p);
     }
@@ -586,8 +593,8 @@ export function summary(report) {
     L.push(`text: ${s.text.n} runs, min ${s.text.min}:1, ${s.text.fails.length} under ${THRESHOLDS.text}:1${s.text.fails.length ? ` (worst: ${s.text.fails.slice(0, 5).map(f => `${f.contrast} "${f.text}"`).join(', ')})` : ''}`);
     L.push(`edges: ${s.edges.n} controls, min ${s.edges.min}:1, ${s.edges.fails.length} under ${THRESHOLDS.edge}:1`);
     if (s.stepPage) { const sp = s.stepPage; L.push(`step page (step ${sp.step}): text ${sp.text.n} runs min ${sp.text.min}:1 (${sp.text.fails.length} under) · edges ${sp.edges.n} min ${sp.edges.min}:1 (${sp.edges.fails.length} under) · brightest control ${sp.controlMax}`); }
-    if (s.help) L.push(`help dialog: ${Object.entries(s.help).map(([tab, h]) => `${tab} ${h.n} runs min ${h.min}:1 (${h.fails.length} under)`).join(' · ')}`);
-    if (s.pills) L.push(`pills:${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
+    if (s.help) L.push(`help dialog: ${Object.entries(s.help).map(([tab, h]) => `${tab} ${h.n} runs min ${h.min}:1 (${h.fails.length} under${h.skipped?.length ? `; ${h.skipped.length} never whole in the dialog: ${h.skipped.slice(0, 2).map(k => `"${k.split('|')[1]}"`).join(', ')}` : ''})`).join(' · ')}`);
+    if (s.pills) L.push(`pills: ${s.pills.on} on, ${s.pills.drawn} drawn${s.pills.more ? ` + "${s.pills.more}"` : ''} · the sheet under them ${s.pills.sheet} px (top ${s.pills.sheetTop}, last pill ends at ${s.pills.pillsBottom})`);
     if (s.night) L.push(`night: text ${s.night.text.n} runs min ${s.night.text.min}:1 (${s.night.text.fails.length} under) · edges min ${s.night.edges.min}:1 (${s.night.edges.fails.length} under) · brightest control ${s.night.controlMax} (day ${s.night.day})`);
     if (s.fmode) L.push(`F mode: ${s.fmode.pills} pills drawn · hidden: legend ${!s.fmode.legend}, console ${!s.fmode.console}, Move pill ${!s.fmode.movePill}, "?" ${!s.fmode.help}, sheet ${!s.fmode.sheet} · peek ${s.fmode.peek ? 'kept' : 'GONE'} · exit ${s.fmode.exit ? 'drawn' : 'GONE'}`);
     if (s.hues) L.push(`hues: ${s.hues.length ? `${s.hues.length} stray (${s.hues.slice(0, 4).map(h => `${h.el} ${h.prop} rgb(${h.rgb})`).join(', ')})` : 'lane hues and greys only, red only on a recording'}`);

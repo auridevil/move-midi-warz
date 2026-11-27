@@ -1313,3 +1313,11 @@ defer". Each links its `ORBIT2-NN-FOLLOWUP` playbook.)
   real mismatch found with a strict match).
 - **MIDI per lane says "each on its own channel"** (RD-14 round 1: sound; from before RD-14, the export owner): every
   lane track of the per-lane MIDI is on channel 10.
+- **The empty ⌘K list over the sheet's tabs** (RD-14 round 2: sound; from RD-4 / RD-7, for Noor): all ⌘K drops the
+  list right over the sheet's tab row at every desktop size, so a click meant for a tab lands on a row; its suggested
+  rows "export all" / "export stems" run on one click (at 1280×720 a click on the export tab's spot made a 16-bit loop
+  zip). The guide no longer sends anyone there; the list could open under the tabs, or leave them clickable.
+- **"how do i …" with no case** (RD-14 round 2: verifier): "how do i change the tempo", "how do i save" find nothing
+  (only cases have "how do i"); with no hit, search again without it and the control comes up.
+- **The face audit's help state costs** (RD-14 round 2: architect): one desktop size 21 → 34 s, the phone's guide ~20
+  screens; a `--tests` switch to skip it outside phases that touch "?" would keep quick runs quick.
